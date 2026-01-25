@@ -2,8 +2,11 @@
 
 A static type checker for Emacs Lisp.
 
-Tart provides Hindley-Milner type inference for Elisp code, catching type errors
-at edit time via LSP integration with Eglot.
+Tart catches type errors at edit time via LSP. There's no runtime component—your
+Elisp runs exactly as before, but with compile-time safety.
+
+Type your implementation details for internal safety, then declare a public API
+in a `.tart` signature file. Only what you export is visible to consumers.
 
 > [!WARNING]
 > Tart is under active development and is not yet usable. See
