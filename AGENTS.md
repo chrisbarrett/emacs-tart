@@ -1,10 +1,26 @@
-ALWAYS write .mli files for lib modules.
+# AGENTS.md
 
-Distil completed specs into DESIGN.md using writing-specs skill--living document
-capturing design decisions. Ensures agents are aligned on architecture and
-decisions made.
+Agent workflow for tart—Elisp type checker in OCaml.
 
-Reference documents are under ./research
+## Required Skills
 
-Load the emacs skill if you need to interact with Emacs. You can use emacsclient
-to look up the locations of lisp libraries.
+| Condition | Skill |
+|-----------|-------|
+| Git commits | `Skill(skill="git:committing")` |
+| Emacs interaction | `Skill(skill="emacs:emacsclient")` |
+| Writing specs | `Skill(skill="claude:writing-specs")` |
+
+## Constraints
+
+> [!CRITICAL]
+> - Write `.mli` for every `lib/**/*.ml`
+> - Update `DESIGN.md` when completing specs
+
+## Reference
+
+| Resource | Location |
+|----------|----------|
+| Design decisions | `DESIGN.md` |
+| Specs | `specs/` |
+| Research | `research/` |
+| Progress log | `progress.txt` |
