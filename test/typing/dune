@@ -9,3 +9,7 @@
 (test
  (name unify_test)
  (libraries tart alcotest))
+
+(test
+ (name generalize_test)
+ (libraries tart alcotest))

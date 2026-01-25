@@ -25,3 +25,4 @@ module Type_env = Core.Type_env
 module Constraint = Typing.Constraint
 module Infer = Typing.Infer
 module Unify = Typing.Unify
+module Generalize = Typing.Generalize

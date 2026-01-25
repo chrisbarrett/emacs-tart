@@ -11,6 +11,7 @@
 open Core.Types
 module Env = Core.Type_env
 module C = Constraint
+module G = Generalize
 
 (** Result of inference: the inferred type and generated constraints *)
 type result = {
@@ -248,38 +249,49 @@ and infer_if_no_else env cond then_branch span =
      but for now we just use the then type. *)
   { ty = result_ty; constraints = all_constraints }
 
-(** Infer the type of a let expression.
+(** Infer the type of a let expression with generalization.
 
-    For now, bindings are monomorphic. Generalization (R5) adds
-    polymorphism for syntactic values.
+    Let bindings use levels-based generalization:
+    1. Enter a new level for the binding scope
+    2. Infer each binding's type at the higher level
+    3. Solve constraints for each binding
+    4. Generalize type variables at level > outer level (if syntactic value)
+    5. Add generalized bindings to environment and infer body
 *)
 and infer_let env bindings body span =
   let open Syntax.Sexp in
-  (* Process all bindings in the outer environment *)
-  let binding_results = List.map (fun binding ->
+  let outer_level = Env.current_level env in
+  let inner_env = Env.enter_level env in
+
+  (* Process all bindings, inferring and solving each one *)
+  let binding_schemes = List.map (fun binding ->
     match binding with
     | List ([Symbol (name, _); expr], _) ->
-        let result = infer env expr in
-        (name, result)
+        let result = infer inner_env expr in
+        (* Solve constraints immediately for this binding *)
+        let _ = Unify.solve result.constraints in
+        (* Generalize if it's a syntactic value *)
+        let scheme = G.generalize_if_value outer_level result.ty expr in
+        (name, scheme, result.constraints)
     | List ([Symbol (name, _)], _) ->
-        (* Binding without value: nil *)
-        (name, pure Prim.nil)
+        (* Binding without value: nil (not generalizable) *)
+        (name, Env.Mono Prim.nil, C.empty)
     | _ ->
         (* Malformed binding *)
-        ("_", pure (fresh_tvar (Env.current_level env)))
+        ("_", Env.Mono (fresh_tvar (Env.current_level inner_env)), C.empty)
   ) bindings in
 
   (* Collect constraints from all bindings *)
   let binding_constraints =
     List.fold_left
-      (fun acc (_, result) -> C.combine acc result.constraints)
-      C.empty binding_results
+      (fun acc (_, _, constraints) -> C.combine acc constraints)
+      C.empty binding_schemes
   in
 
-  (* Extend environment with all bindings *)
+  (* Extend environment with all bindings (now potentially polymorphic) *)
   let body_env = List.fold_left
-    (fun env (name, result) -> Env.extend_mono name result.ty env)
-    env binding_results
+    (fun env (name, scheme, _) -> Env.extend name scheme env)
+    env binding_schemes
   in
 
   (* Infer body *)
@@ -288,21 +300,29 @@ and infer_let env bindings body span =
   { ty = body_result.ty;
     constraints = C.combine binding_constraints body_result.constraints }
 
-(** Infer the type of a let* expression.
+(** Infer the type of a let* expression with generalization.
 
-    Each binding sees previous bindings (sequential).
+    Each binding sees previous bindings (sequential), and each is
+    generalized independently.
 *)
 and infer_let_star env bindings body span =
   let open Syntax.Sexp in
+  let outer_level = Env.current_level env in
+
   (* Process bindings sequentially, each in the extended environment *)
   let rec process_bindings env bindings constraints =
     match bindings with
     | [] -> (env, constraints)
     | binding :: rest -> (
+        let inner_env = Env.enter_level env in
         match binding with
         | List ([Symbol (name, _); expr], _) ->
-            let result = infer env expr in
-            let env' = Env.extend_mono name result.ty env in
+            let result = infer inner_env expr in
+            (* Solve constraints immediately *)
+            let _ = Unify.solve result.constraints in
+            (* Generalize if syntactic value *)
+            let scheme = G.generalize_if_value outer_level result.ty expr in
+            let env' = Env.extend name scheme env in
             process_bindings env' rest (C.combine constraints result.constraints)
         | List ([Symbol (name, _)], _) ->
             let env' = Env.extend_mono name Prim.nil env in
