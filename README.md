@@ -6,8 +6,8 @@ Tart provides Hindley-Milner type inference for Elisp code, catching type errors
 at edit time via LSP integration with Eglot.
 
 > [!WARNING]
-> Tart is under active development. The parser and interpreter are functional,
-> but type inference and LSP features are not yet implemented.
+> Tart is under active development. The parser, interpreter, and type inference
+> engine are functional, but LSP integration is not yet complete.
 
 ## Features
 
@@ -133,10 +133,17 @@ Add to your Emacs configuration:
 - Special forms: `quote`, `if`, `let`, `let*`, `lambda`, `progn`, `setq`,
   `defun`, `defmacro`, `function`, `cond`, `or`, `and`, `while`
 - Backquote/unquote evaluation
+- Type inference engine with:
+  - Union-find type variables
+  - Constraint-based HM inference
+  - Levels-based let-generalization
+  - Value restriction for soundness
+  - 40+ typed built-in functions
+  - Structured diagnostics with source locations
 
 ### In Progress
 
-- Type inference engine (Spec 06)
+- Occurrence typing for type predicates (Spec 06 R11)
 
 ### Planned
 
@@ -148,20 +155,31 @@ Add to your Emacs configuration:
 
 ```
 tart/
-├── bin/main.ml           # CLI entry point
+├── bin/main.ml              # CLI entry point
 ├── lib/
-│   ├── syntax/           # Parser and lexer
-│   │   ├── lexer.mll     # Ocamllex lexer
-│   │   ├── parser.mly    # Menhir parser
-│   │   ├── sexp.ml       # S-expression AST
-│   │   └── location.ml   # Source locations
-│   └── interp/           # Interpreter
-│       ├── value.ml      # Runtime values
-│       ├── env.ml        # Environments
-│       ├── builtin.ml    # Built-in functions
-│       ├── eval.ml       # Core evaluator
-│       └── expand.ml     # Macro expansion
-└── test/                 # Test suites
+│   ├── syntax/              # Parser and lexer
+│   │   ├── lexer.mll        # Ocamllex lexer
+│   │   ├── parser.mly       # Menhir parser
+│   │   ├── sexp.ml          # S-expression AST
+│   │   └── location.ml      # Source locations
+│   ├── interp/              # Interpreter
+│   │   ├── value.ml         # Runtime values
+│   │   ├── env.ml           # Environments
+│   │   ├── builtin.ml       # Built-in functions
+│   │   ├── eval.ml          # Core evaluator
+│   │   └── expand.ml        # Macro expansion
+│   ├── core/                # Type system core
+│   │   ├── types.ml         # Type representation
+│   │   └── type_env.ml      # Type environment
+│   └── typing/              # Type inference
+│       ├── constraint.ml    # Constraint representation
+│       ├── infer.ml         # Constraint generation
+│       ├── unify.ml         # Unification
+│       ├── generalize.ml    # Let-generalization
+│       ├── builtin_types.ml # Built-in function signatures
+│       ├── check.ml         # Top-level type checking API
+│       └── diagnostic.ml    # Error diagnostics
+└── test/                    # Test suites
 ```
 
 ## Development
