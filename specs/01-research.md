@@ -1,6 +1,6 @@
 # Spec 01: Research Phase
 
-Literature review for elisp-refined, a static type analysis system for Emacs
+Literature review for tart, a static type analysis system for Emacs
 Lisp based on System F with Hindley-Milner inference.
 
 ## Goal
