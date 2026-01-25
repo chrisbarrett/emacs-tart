@@ -439,7 +439,7 @@ Presence of `foo.eli` triggers type checking of `foo.el`.
 (defvar my-default String)
 
 ;; Type alias
-(type IntList = (List Int))
+(deftype IntList (List Int))
 
 ;; Algebraic data type
 (data Result (a e)

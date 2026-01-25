@@ -86,7 +86,7 @@ go at the start of arrow types, or after the name in `defun`.
 
 ### R5: Type alias definitions
 
-**Given** `(type IntList = (List Int))`
+**Given** `(deftype IntList (List Int))`
 **When** loaded
 **Then** `IntList` can be used in signatures and expands to `(List Int)`
 

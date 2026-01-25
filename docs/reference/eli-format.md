@@ -18,7 +18,7 @@ type checking of `foo.el`.
 
 (defun name [quantifiers]? params -> ret)  ; Function (callable)
 (defvar variable-name type)                ; Variable declaration
-(type TypeName = type)                     ; Type alias
+(deftype TypeName type)                    ; Type alias
 (data TypeName (params) ...)               ; Algebraic data type
 (import-struct name)                       ; Import cl-defstruct
 ```
@@ -36,7 +36,7 @@ declaration  ::= func_decl | var_decl | type_alias | adt_decl | struct_import
 
 func_decl    ::= '(defun' symbol ('[' tvar+ ']')? params '->' type ')'
 var_decl     ::= '(defvar' symbol type ')'
-type_alias   ::= '(type' symbol '=' type ')'
+type_alias   ::= '(deftype' symbol type ')'
 struct_import ::= '(import-struct' symbol ')'
 
 adt_decl     ::= '(data' symbol '(' tvar* ')' variant+ ')'
@@ -187,9 +187,9 @@ a function **value** that must be called with `funcall` inside the implementatio
 ### Type Aliases
 
 ```elisp
-(type IntList = (List Int))
-(type StringOption = (Option String))
-(type Callback = (String -> Nil))
+(deftype IntList (List Int))
+(deftype StringOption (Option String))
+(deftype Callback (String -> Nil))
 ```
 
 ### ADT Definitions
@@ -251,7 +251,7 @@ Import types for external untyped modules:
   (defun seq-map [a b] ((a -> b) (List a)) -> (List b)))
 
 ;; Type alias
-(type IntList = (List Int))
+(deftype IntList (List Int))
 
 ;; ADT
 (data Result (a e)
