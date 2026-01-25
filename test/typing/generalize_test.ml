@@ -162,6 +162,22 @@ let test_value_restriction_application () =
   let ty_str = to_string result.ty in
   Alcotest.(check string) "value restriction" "Int" ty_str
 
+let test_value_restriction_reverse () =
+  (* Spec R6 test: (let ((xs (reverse '()))) xs) has monomorphic type.
+     reverse : forall a. (List a) -> (List a)
+     Since (reverse '()) is a function application (not a syntactic value),
+     xs should NOT be generalized - it stays at (List Any). *)
+  setup ();
+  let env = Env.of_list [
+    ("reverse", Env.Poly (["a"], TArrow ([PPositional (list_of (TCon "a"))], list_of (TCon "a"))))
+  ] in
+  let sexp = parse "(let ((xs (reverse '()))) xs)" in
+  let result = Infer.infer env sexp in
+  let _ = Unify.solve result.constraints in
+  (* xs should be monomorphic (List Any), not polymorphic *)
+  let ty_str = to_string result.ty in
+  Alcotest.(check string) "reverse result monomorphic" "(List Any)" ty_str
+
 (* =============================================================================
    Test Suite
    ============================================================================= *)
@@ -197,5 +213,6 @@ let () =
       ( "value restriction",
         [
           Alcotest.test_case "application not generalized" `Quick test_value_restriction_application;
+          Alcotest.test_case "reverse monomorphic" `Quick test_value_restriction_reverse;
         ] );
     ]
