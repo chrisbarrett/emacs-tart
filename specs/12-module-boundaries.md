@@ -34,7 +34,7 @@ and what constitutes the public interface of a module.
 
 **Given** `foo.eli` declares:
 ```elisp
-(defun foo-add (Int Int) Int)
+(defun foo-add (Int Int) -> Int)
 ```
 **And** `foo.el` defines:
 ```elisp
@@ -51,7 +51,7 @@ and what constitutes the public interface of a module.
 ```elisp
 ;; my-app.eli
 (require/typed external-lib
-  (defun external-lib-process (String) String))
+  (defun external-lib-process String -> String))
 ```
 **And** `my-app.el` calls `external-lib-process`
 **When** type-checked
@@ -71,7 +71,7 @@ and what constitutes the public interface of a module.
 
 **Given** `foo.eli` lists:
 ```elisp
-(defun foo-public-api (String) String)
+(defun foo-public-api String -> String)
 ;; foo--internal not listed
 ```
 **And** `foo.el` defines both `foo-public-api` and `foo--internal`
@@ -91,7 +91,7 @@ and what constitutes the public interface of a module.
 ```
 **And** `my-utils.eli` exists with:
 ```elisp
-(defun my-utils-foo (Int) String)
+(defun my-utils-foo Int -> String)
 ```
 **When** type-checked
 **Then** `my-utils-foo` is available as a directly callable function
@@ -108,7 +108,7 @@ and what constitutes the public interface of a module.
 ```
 **And** `my-package.eli` declares:
 ```elisp
-(defun my-package-autoload-fn (Int) String)
+(defun my-package-autoload-fn Int -> String)
 ```
 **When** another module calls this function before load
 **Then** the signature from `.eli` is used for type checking

@@ -59,17 +59,18 @@ tart/
 **Then** they produce the type representation from Spec 06:
 - Base types: `Int`, `String`, `Nil`, `T`, `Truthy`, `Bool`, `Any`, `Never`
 - Type variables: lowercase identifiers
-- Function types: `(-> (params...) return)` or `(-> [vars] (params...) return)`
+- Function types: `params -> return` (infix arrow)
 - Applications: `(List Int)`, `(Option String)`
 - Unions: `(Or Int String)`
 
-Quantifiers `[vars]` go right after `->` in arrow types, or after the name in `defun`.
+Single params need no parens; multiple params require grouping. Quantifiers `[vars]`
+go at the start of arrow types, or after the name in `defun`.
 
 **Verify:** Type parsing tests cover all grammar productions
 
 ### R3: Function signature declarations
 
-**Given** `(defun foo (Int String) Bool)`
+**Given** `(defun foo (Int String) -> Bool)`
 **When** loaded
 **Then** `foo` is bound as a directly callable function in the module's type environment
 
@@ -89,7 +90,7 @@ Quantifiers `[vars]` go right after `->` in arrow types, or after the name in `d
 **When** loaded
 **Then** `IntList` can be used in signatures and expands to `(List Int)`
 
-**Verify:** `(defun foo (IntList) Int)` equivalent to `(defun foo ((List Int)) Int)`
+**Verify:** `(defun foo IntList -> Int)` equivalent to `(defun foo (List Int) -> Int)`
 
 ### R6: ADT definitions
 
@@ -102,8 +103,8 @@ Quantifiers `[vars]` go right after `->` in arrow types, or after the name in `d
 **When** loaded
 **Then** it generates:
 - Type constructor `Result` with arity 2
-- Constructor functions `Ok : [a e] (a) (Result a e)`
-- Constructor functions `Err : [a e] (e) (Result a e)`
+- Constructor functions `Ok : [a e] a -> (Result a e)`
+- Constructor functions `Err : [a e] e -> (Result a e)`
 - Predicates `result-ok-p`, `result-err-p`
 - Accessors `result-ok-value`, `result-err-value`
 
@@ -126,7 +127,7 @@ Quantifiers `[vars]` go right after `->` in arrow types, or after the name in `d
 **Given** a require/typed declaration:
 ```
 (require/typed seq
-  (defun seq-map [a b] ((-> (a) b) (List a)) (List b)))
+  (defun seq-map [a b] ((a -> b) (List a)) -> (List b)))
 ```
 **When** loaded
 **Then** `seq-map` is available with the declared type

@@ -13,14 +13,14 @@ type checking of `foo.el`.
 (module module-name)              ; Optional, defaults to filename
 
 (require/typed module             ; Import types from untyped code
-  (defun name [quantifiers]? (args) ret)
+  (defun name [quantifiers]? params -> ret)
   ...)
 
-(defun name [quantifiers]? (args) ret)  ; Function (callable, implicit ->)
-(defvar variable-name type)             ; Variable declaration
-(type TypeName = type)                  ; Type alias
-(data TypeName (params) ...)            ; Algebraic data type
-(import-struct name)                    ; Import cl-defstruct
+(defun name [quantifiers]? params -> ret)  ; Function (callable)
+(defvar variable-name type)                ; Variable declaration
+(type TypeName = type)                     ; Type alias
+(data TypeName (params) ...)               ; Algebraic data type
+(import-struct name)                       ; Import cl-defstruct
 ```
 
 ## Grammar
@@ -34,7 +34,7 @@ require_typed ::= '(require/typed' symbol defun* ')'
 
 declaration  ::= func_decl | var_decl | type_alias | adt_decl | struct_import
 
-func_decl    ::= '(defun' symbol ('[' tvar+ ']')? '(' param* ')' type ')'
+func_decl    ::= '(defun' symbol ('[' tvar+ ']')? params '->' type ')'
 var_decl     ::= '(defvar' symbol type ')'
 type_alias   ::= '(type' symbol '=' type ')'
 struct_import ::= '(import-struct' symbol ')'
@@ -42,7 +42,8 @@ struct_import ::= '(import-struct' symbol ')'
 adt_decl     ::= '(data' symbol '(' tvar* ')' variant+ ')'
 variant      ::= '(' constructor type* ')'
 
-arrow_type   ::= '(->' ('[' tvar+ ']')? '(' param* ')' type ')'
+params       ::= type | '(' type+ ')'     ; single or grouped
+arrow_type   ::= '(' ('[' tvar+ ']')? params '->' type ')'
 ```
 
 ## Lisp-2 Calling Convention
@@ -51,20 +52,20 @@ Elisp separates functions and values into different namespaces:
 
 | Declaration | Calling convention | Example |
 |-------------|-------------------|---------|
-| `defun`     | Direct: `(f args...)` | `(defun add (Int Int) Int)` |
-| `defvar` with `(->)` | Indirect: `(funcall f args...)` | `(defvar handler (-> (String) Nil))` |
+| `defun`     | Direct: `(f args...)` | `(defun add (Int Int) -> Int)` |
+| `defvar` with `->` | Indirect: `(funcall f args...)` | `(defvar handler (String -> Nil))` |
 
-In `defun`, the outer `->` is implicit—it's always declaring a callable function.
-Use `defvar` with an explicit `(->)` type for function values.
+The `->` is infix, separating parameters from return type. Single params need no
+grouping; multiple params require parens.
 
 ```elisp
 ;; Function slot (callable)
-(defun add (Int Int) Int)            ; monomorphic
-(defun identity [a] (a) a)           ; polymorphic
+(defun add (Int Int) -> Int)         ; multiple params, grouped
+(defun identity [a] a -> a)          ; single param, no parens needed
 
 ;; Value slot (requires funcall)
-(defvar handler (-> (String) Nil))       ; monomorphic function value
-(defvar id-fn (-> [a] (a) a))            ; polymorphic function value
+(defvar handler (String -> Nil))     ; monomorphic function value
+(defvar id-fn ([a] a -> a))          ; polymorphic function value
 ```
 
 ## Type Syntax
@@ -94,20 +95,23 @@ Lowercase identifiers: `a`, `b`, `elem`, `key`, `value`
 
 Elisp functions are **not curried**; parameters are grouped.
 
-Arrow types `(-> ...)` represent **function values** (require `funcall`).
-Quantifiers go right after `->`:
+Arrow types use infix `->`. Single params need no parens; multiple params require grouping:
 
 ```elisp
-(-> (Int Int) Int)                     ; Two args, monomorphic
-(-> [a] (a) a)                         ; Polymorphic function value
-(-> () String)                         ; No args
-(-> (String &optional Int) String)     ; Optional parameter
-(-> (&rest String) String)             ; Rest parameter
-(-> (&key :name String :age Int) Nil)  ; Keyword parameters
-(-> (Int) (-> (Int) Int))              ; Returns function value
+Int -> Int                             ; Single param
+(Int Int) -> Int                       ; Multiple params, grouped
+(String &optional Int) -> String       ; Optional parameter
+(&rest String) -> String               ; Rest parameter
+(&key :name String :age Int) -> Nil    ; Keyword parameters
+Int -> (Int -> Int)                    ; Returns function value
 ```
 
-For directly callable functions, use `defun` (implicit outer `->`).
+Nested function types are readable:
+
+```elisp
+(a -> b)                               ; Function taking a, returning b
+((a -> b) (List a)) -> (List b)        ; First param is a function
+```
 
 ### Parameter Kinds
 
@@ -120,18 +124,17 @@ For directly callable functions, use `defun` (implicit outer `->`).
 
 ### Polymorphic Types
 
-Quantifiers `[vars]` go right after `->` in arrow types, or right after the name
-in `defun` (since `defun` has an implicit outer `->`)：
+Quantifiers `[vars]` go at the start of arrow types, or right after the name in `defun`:
 
 ```elisp
-;; As function values (explicit ->)
-(-> [a] (a) a)                        ; Polymorphic identity value
-(-> [a b] (a b) a)                    ; Polymorphic const value
+;; As function values
+([a] a -> a)                          ; Polymorphic identity value
+([a b] (a b) -> a)                    ; Polymorphic const value
 
-;; As callable functions (implicit ->)
-(defun identity [a] (a) a)            ; Callable as (identity x)
-(defun const [a b] (a b) a)           ; Callable as (const x y)
-(defun length [a] ((List a)) Int)     ; Callable as (length xs)
+;; As callable functions
+(defun identity [a] a -> a)           ; Callable as (identity x)
+(defun const [a b] (a b) -> a)        ; Callable as (const x y)
+(defun length [a] (List a) -> Int)    ; Callable as (length xs)
 ```
 
 ### Type Constructors
@@ -163,16 +166,15 @@ in `defun` (since `defun` has an implicit outer `->`)：
 
 ### Function Declarations
 
-Functions declared with `defun` are directly callable as `(name args...)`.
-The outer `->` is implicit:
+Functions declared with `defun` are directly callable as `(name args...)`:
 
 ```elisp
-(defun my-add (Int Int) Int)
-(defun my-identity [a] (a) a)
-(defun my-map [a b] ((-> (a) b) (List a)) (List b))
+(defun my-add (Int Int) -> Int)
+(defun my-identity [a] a -> a)
+(defun my-map [a b] ((a -> b) (List a)) -> (List b))
 ```
 
-Note: The first parameter to `my-map` is an arrow type `(-> (a) b)`, meaning it's
+Note: The first parameter to `my-map` is an arrow type `(a -> b)`, meaning it's
 a function **value** that must be called with `funcall` inside the implementation.
 
 ### Variable Declarations
@@ -187,7 +189,7 @@ a function **value** that must be called with `funcall` inside the implementatio
 ```elisp
 (type IntList = (List Int))
 (type StringOption = (Option String))
-(type Callback = (-> (String) Nil))
+(type Callback = (String -> Nil))
 ```
 
 ### ADT Definitions
@@ -230,9 +232,9 @@ Import types for external untyped modules:
 
 ```elisp
 (require/typed seq
-  (defun seq-map [a b] ((-> (a) b) (List a)) (List b))
-  (defun seq-filter [a] ((-> (a) Bool) (List a)) (List a))
-  (defun seq-reduce [a b] ((-> (b a) b) b (List a)) b))
+  (defun seq-map [a b] ((a -> b) (List a)) -> (List b))
+  (defun seq-filter [a] ((a -> Bool) (List a)) -> (List a))
+  (defun seq-reduce [a b] (((b a) -> b) b (List a)) -> b))
 
 (require/typed subr-x
   (when-let : special-form)
@@ -246,7 +248,7 @@ Import types for external untyped modules:
 (module my-utils)
 
 (require/typed seq
-  (defun seq-map [a b] ((-> (a) b) (List a)) (List b)))
+  (defun seq-map [a b] ((a -> b) (List a)) -> (List b)))
 
 ;; Type alias
 (type IntList = (List Int))
@@ -256,18 +258,18 @@ Import types for external untyped modules:
   (Ok a)
   (Err e))
 
-;; Function declarations (directly callable, implicit ->)
-(defun my-utils-trim (String) String)
-(defun my-utils-split (String String) (List String))
-(defun my-utils-identity [a] (a) a)
-(defun my-utils-safe-div (Int Int) (Result Int String))
+;; Function declarations (directly callable)
+(defun my-utils-trim String -> String)
+(defun my-utils-split (String String) -> (List String))
+(defun my-utils-identity [a] a -> a)
+(defun my-utils-safe-div (Int Int) -> (Result Int String))
 
 ;; Variable (non-function)
 (defvar my-utils-default-separator String)
 
-;; Variable holding a function value (requires funcall, explicit ->)
-(defvar my-utils-error-handler (-> (String) Nil))
-(defvar my-utils-transform (-> [a] (a) a))
+;; Variable holding a function value (requires funcall)
+(defvar my-utils-error-handler (String -> Nil))
+(defvar my-utils-transform ([a] a -> a))
 ```
 
 ## Module Discovery
