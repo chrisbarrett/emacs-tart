@@ -1,0 +1,6 @@
+(library
+ (name tart)
+ (public_name tart)
+ (libraries yojson)
+ (preprocess
+  (pps ppx_deriving.show ppx_deriving.eq)))

@@ -1,0 +1,23 @@
+repos:
+  - repo: local
+    hooks:
+      - id: dune-build
+        name: dune build
+        entry: nix develop -c dune build
+        language: system
+        pass_filenames: false
+        files: \.(ml|mli|mll|mly)$
+
+      - id: dune-test
+        name: dune test
+        entry: nix develop -c dune test
+        language: system
+        pass_filenames: false
+        files: \.(ml|mli|mll|mly)$
+
+      - id: dune-fmt
+        name: dune fmt
+        entry: nix develop -c dune fmt
+        language: system
+        pass_filenames: false
+        files: \.(ml|mli)$

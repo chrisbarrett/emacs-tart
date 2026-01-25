@@ -88,10 +88,10 @@ tart/
 ## Tasks
 
 - [x] [R4] flake.nix configured with dependencies
-- [ ] [R1] Create dune-project with lang 3.0+
-- [ ] [R2] Set up lib/ and bin/ with dune files
-- [ ] [R3] Add test/ with alcotest
-- [ ] [R5] Add .ocamlformat
-- [ ] [R6] Add .pre-commit-config.yaml with build/test/format hooks
+- [x] [R1] Create dune-project with lang 3.0+
+- [x] [R2] Set up lib/ and bin/ with dune files
+- [x] [R3] Add test/ with alcotest
+- [x] [R5] Add .ocamlformat
+- [x] [R6] Add .pre-commit-config.yaml with build/test/format hooks
 
 Run `nix develop -c sh -c 'dune build && dune test'` before proceeding to Spec 04.

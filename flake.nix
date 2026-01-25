@@ -11,9 +11,6 @@
     , nixpkgs
     , ...
     }:
-    let
-      package = "tart";
-    in
     flake-utils.lib.eachDefaultSystem (
       system:
       let
@@ -38,23 +35,16 @@
         query = devPackagesQuery // {
           ocaml-base-compiler = "*";
         };
-        scope = on.buildOpamProject' { } self query;
-        overlay = final: prev: {
-          ${package} = prev.${package}.overrideAttrs (_: {
-            doNixSupport = false;
-          });
-        };
-        scope' = scope.overrideScope overlay;
-        main = scope'.${package};
-        devPackages = builtins.attrValues (pkgs.lib.getAttrs (builtins.attrNames devPackagesQuery) scope');
+        scope = on.buildDuneProject { } "tart" self query;
+        devPackages = builtins.attrValues (pkgs.lib.getAttrs (builtins.attrNames devPackagesQuery) scope);
       in
       {
-        legacyPackages = scope';
+        legacyPackages = scope;
 
-        packages.default = main;
+        packages.default = scope.tart;
 
         devShells.default = pkgs.mkShell {
-          inputsFrom = [ main ];
+          inputsFrom = [ scope.tart ];
           buildInputs = devPackages ++ [
             pkgs.pre-commit
           ];
