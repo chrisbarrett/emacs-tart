@@ -17,6 +17,22 @@ Lisp. The design prioritizes:
 3. **LSP-first delivery** for immediate IDE value
 4. **Pragmatic boundaries** with untyped code via `.eli` signature files
 
+### Key Design Principles
+
+**Truthiness model**: Elisp's boolean semantics are captured via primitive types:
+
+- `Nil` — unit type with sole inhabitant `nil`
+- `T` — unit type with sole inhabitant `t`
+- `Truthy` — primitive type: anything that is not `Nil`
+- `Bool` = `T | Nil` — strict boolean for predicates
+- `Any` = `Truthy | Nil` — top type (all values)
+
+**Non-curried functions**: Elisp functions take all arguments at once, so
+function types use grouped parameters: `(-> (A B) C)` rather than `(-> A B C)`.
+
+**Option constraint**: `(Option a)` requires `a : Truthy`, ensuring the "some"
+and "none" cases are always distinguishable by truthiness.
+
 ---
 
 ## 1. Type Syntax Grammar [R1]
@@ -36,17 +52,31 @@ base_type ::= 'Int'           ; integers
             | 'Float'         ; floating-point
             | 'Num'           ; Int | Float
             | 'String'        ; strings
-            | 'Bool'          ; t | nil
             | 'Symbol'        ; symbols
             | 'Keyword'       ; keywords (:foo)
-            | 'Nil'           ; nil only
-            | 'Any'           ; top type (escape hatch, discouraged)
+            | 'Nil'           ; unit type, sole inhabitant: nil
+            | 'T'             ; unit type, sole inhabitant: t
+            | 'Truthy'        ; anything that is not Nil (primitive)
+            | 'Bool'          ; T | Nil
+            | 'Any'           ; Truthy | Nil (top type)
             | 'Never'         ; bottom type (errors, non-termination)
 
 type_var ::= lowercase_ident   ; e.g., a, b, elem
 
-func_type ::= '(->' type+ type ')'
-            ; e.g., (-> Int Int Int) means Int -> Int -> Int
+func_type ::= '(->' param_list type ')'
+            ; e.g., (-> (Int Int) Int) takes two Ints, returns Int
+            ; Elisp functions are NOT curried; all args taken at once
+
+param_list ::= '(' param* ')'
+
+param ::= type                              ; positional parameter
+        | '&optional' type                  ; optional (must be Option type)
+        | '&rest' type                      ; rest args (desugars to List)
+        | '&key' keyword_param+             ; keyword parameters
+        | '&allow-other-keys'               ; extra keys as (Plist Any)
+        | '&allow-other-keys' type          ; extra keys with explicit type
+
+keyword_param ::= keyword type              ; e.g., :name String
 
 forall_type ::= '(forall' '(' type_var+ ')' type ')'
               ; e.g., (forall (a) (-> a a))
@@ -76,21 +106,28 @@ sum_type ::= '(Or' type type+ ')'
 ;; Primitive types
 Int
 String
-Bool
+Nil                              ; unit type (only nil)
+T                                ; unit type (only t)
+Truthy                           ; anything not nil
+Bool                             ; T | Nil
+Any                              ; Truthy | Nil (top type)
 
-;; Function types (right-associative)
-(-> Int Int)                     ; Int -> Int
-(-> Int Int Int)                 ; Int -> Int -> Int
-(-> a b a)                       ; a -> b -> a (polymorphic)
+;; Function types (grouped parameters - Elisp is NOT curried)
+(-> (Int) Int)                   ; one arg
+(-> (Int Int) Int)               ; two args
+(-> (a b) a)                     ; polymorphic, two args
+
+;; Returning a function (manual currying)
+(-> (Int) (-> (Int) Int))        ; takes Int, returns function
 
 ;; Polymorphic types
-(forall (a) (-> a a))            ; identity function
-(forall (a b) (-> a b a))        ; const function
-(forall (a) (-> (List a) Int))   ; list length
+(forall (a) (-> (a) a))          ; identity function
+(forall (a b) (-> (a b) a))      ; const function
+(forall (a) (-> ((List a)) Int)) ; list length
 
 ;; Type constructors
 (List Int)                       ; list of integers
-(Option String)                  ; String | Nil
+(Option String)                  ; String | Nil (note: String must be Truthy)
 (Pair String Int)                ; cons cell
 (Tuple String Int Bool)          ; fixed 3-tuple
 (HashTable Symbol String)        ; hash table
@@ -100,17 +137,43 @@ Bool
 (Or Nil (List a))                ; nullable list
 ```
 
-### 1.3 Optional and Rest Arguments
+### 1.3 Optional, Rest, and Keyword Arguments
 
 ```elisp
-;; Optional arguments: modeled as Option in a tuple
-(-> String (Option Int) (Option Int) String)  ; (substring STR &optional FROM TO)
+;; Optional arguments: explicit &optional with Option type
+(-> (String &optional (Option Int) &optional (Option Int)) String)
+;; (substring STR &optional FROM TO)
 
-;; Rest arguments: modeled as List
-(-> String (List String) String)              ; (concat &rest STRINGS)
+;; Rest arguments: &rest desugars to (List a)
+(-> (&rest String) String)                    ; (concat &rest STRINGS)
 
-;; Keyword arguments (v2): deferred to row polymorphism
+;; Keyword arguments: explicit &key with types
+(-> (&key :name (Option String) :age (Option Int)) Person)
+;; (make-person &key name age)
+
+;; Allow extra keywords: defaults to (Plist Any)
+(-> (&key :name (Option String) &allow-other-keys) Person)
+
+;; Allow extra keywords with explicit type
+(-> (&key :name (Option String) &allow-other-keys (Plist Symbol)) Person)
+
+;; Combined example
+(-> (String &optional (Option Int) &rest String) String)
+;; (format FMT &optional WIDTH &rest ARGS)
 ```
+
+### 1.4 Option Type Constraint
+
+The `Option` type constructor requires its argument to be `Truthy`:
+
+```elisp
+(Option String)    ; valid: String is Truthy
+(Option Int)       ; valid: Int is Truthy
+(Option Nil)       ; INVALID: Nil is not Truthy
+(Option (List a))  ; valid: (List a) is Truthy
+```
+
+This ensures "some" and "none" cases are always distinguishable by truthiness.
 
 ---
 
@@ -265,13 +328,13 @@ struct_import ::= '(import-struct' symbol ')'
 (module my-utils)
 
 ;; Function signatures
-(sig my-utils-trim (-> String String))
-(sig my-utils-split (-> String String (List String)))
-(sig my-utils-join (-> String (List String) String))
+(sig my-utils-trim (-> (String) String))
+(sig my-utils-split (-> (String String) (List String)))
+(sig my-utils-join (-> (String (List String)) String))
 
 ;; Polymorphic function
-(sig my-utils-identity (forall (a) (-> a a)))
-(sig my-utils-compose (forall (a b c) (-> (-> b c) (-> a b) (-> a c))))
+(sig my-utils-identity (forall (a) (-> (a) a)))
+(sig my-utils-compose (forall (a b c) (-> ((-> (b) c) (-> (a) b)) (-> (a) c))))
 
 ;; Dynamic variable
 (defvar my-utils-default-separator String)
@@ -284,9 +347,9 @@ struct_import ::= '(import-struct' symbol ')'
 (module my-app)
 
 (require/typed seq
-  (seq-map : (forall (a b) (-> (-> a b) (List a) (List b))))
-  (seq-filter : (forall (a) (-> (-> a Bool) (List a) (List a))))
-  (seq-reduce : (forall (a b) (-> (-> b a b) b (List a) b))))
+  (seq-map : (forall (a b) (-> ((-> (a) b) (List a)) (List b))))
+  (seq-filter : (forall (a) (-> ((-> (a) Bool) (List a)) (List a))))
+  (seq-reduce : (forall (a b) (-> ((-> (b a) b) b (List a)) b))))
 
 (require/typed subr-x
   (when-let : special-form)
@@ -303,9 +366,9 @@ struct_import ::= '(import-struct' symbol ')'
   (Ok a)
   (Err e))
 
-(sig result-map (forall (a b e) (-> (-> a b) (Result a e) (Result b e))))
-(sig result-bind (forall (a b e) (-> (Result a e) (-> a (Result b e)) (Result b e))))
-(sig result-unwrap-or (forall (a e) (-> (Result a e) a a)))
+(sig result-map (forall (a b e) (-> ((-> (a) b) (Result a e)) (Result b e))))
+(sig result-bind (forall (a b e) (-> ((Result a e) (-> (a) (Result b e))) (Result b e))))
+(sig result-unwrap-or (forall (a e) (-> ((Result a e) a) a)))
 ```
 
 **Importing cl-defstruct**:
@@ -318,10 +381,10 @@ struct_import ::= '(import-struct' symbol ')'
 (import-struct person)
 ;; Auto-generates:
 ;;   person : Type
-;;   make-person : (-> String Int Person)
-;;   person-p : (-> Any Bool)
-;;   person-name : (-> Person String)
-;;   person-age : (-> Person Int)
+;;   make-person : (-> (String Int) Person)
+;;   person-p : (-> (Any) Bool)
+;;   person-name : (-> (Person) String)
+;;   person-age : (-> (Person) Int)
 ```
 
 ### 3.5 Built-in Type References
@@ -332,33 +395,37 @@ Tart ships with signatures for Emacs built-ins:
 ;; builtins.eli (shipped with tart)
 (module emacs-builtins)
 
-;; Arithmetic
-(sig + (-> Num Num Num))
-(sig - (-> Num Num Num))
-(sig * (-> Num Num Num))
-(sig / (-> Num Num Num))
+;; Arithmetic (variadic)
+(sig + (-> (&rest Num) Num))
+(sig - (-> (Num &rest Num) Num))
+(sig * (-> (&rest Num) Num))
+(sig / (-> (Num &rest Num) Num))
 
 ;; Strings
-(sig concat (-> (List String) String))
-(sig substring (-> String Int (Option Int) String))
-(sig upcase (-> String String))
-(sig downcase (-> String String))
-(sig string-match (-> String String (Option Int)))
+(sig concat (-> (&rest String) String))
+(sig substring (-> (String &optional (Option Int) &optional (Option Int)) String))
+(sig upcase (-> (String) String))
+(sig downcase (-> (String) String))
+(sig string-match (-> (String String) (Option Int)))
 
 ;; Lists
-(sig car (forall (a) (-> (List a) (Option a))))
-(sig cdr (forall (a) (-> (List a) (List a))))
-(sig cons (forall (a) (-> a (List a) (List a))))
-(sig length (forall (a) (-> (List a) Int)))
-(sig reverse (forall (a) (-> (List a) (List a))))
-(sig mapcar (forall (a b) (-> (-> a b) (List a) (List b))))
-(sig nth (forall (a) (-> Int (List a) (Option a))))
+(sig car (forall (a) (-> ((List a)) (Option a))))
+(sig cdr (forall (a) (-> ((List a)) (List a))))
+(sig cons (forall (a) (-> (a (List a)) (List a))))
+(sig length (forall (a) (-> ((List a)) Int)))
+(sig reverse (forall (a) (-> ((List a)) (List a))))
+(sig mapcar (forall (a b) (-> ((-> (a) b) (List a)) (List b))))
+(sig nth (forall (a) (-> (Int (List a)) (Option a))))
 
 ;; Type predicates (with occurrence typing propositions)
-(sig stringp (-> Any Bool :refines String))
-(sig integerp (-> Any Bool :refines Int))
-(sig listp (-> Any Bool :refines (List Any)))
-(sig null (forall (a) (-> (Option a) Bool :refines Nil)))
+(sig stringp (-> (Any) Bool :refines String))
+(sig integerp (-> (Any) Bool :refines Int))
+(sig listp (-> (Any) Bool :refines (List Any)))
+(sig null (forall (a) (-> ((Option a)) Bool :refines Nil)))
+
+;; Error handling (returns Never)
+(sig error (-> (String &rest Any) Never))
+(sig signal (-> (Symbol Any) Never))
 ```
 
 ---
@@ -442,20 +509,20 @@ Constructors are functions with generated signatures:
 ```elisp
 ;; (data Option (a) (Some a) (None))
 ;; Generates:
-(sig Some (forall (a) (-> a (Option a))))
-(sig None (forall (a) (-> (Option a))))
-(sig option-some-p (forall (a) (-> (Option a) Bool)))
-(sig option-none-p (forall (a) (-> (Option a) Bool)))
-(sig option-some-value (forall (a) (-> (Option a) a)))  ; partial, or with default
+(sig Some (forall (a) (-> (a) (Option a))))
+(sig None (forall (a) (-> () (Option a))))
+(sig option-some-p (forall (a) (-> ((Option a)) Bool)))
+(sig option-none-p (forall (a) (-> ((Option a)) Bool)))
+(sig option-some-value (forall (a) (-> ((Option a)) a)))  ; partial, or with default
 
 ;; (data Result (a e) (Ok a) (Err e))
 ;; Generates:
-(sig Ok (forall (a e) (-> a (Result a e))))
-(sig Err (forall (a e) (-> e (Result a e))))
-(sig result-ok-p (forall (a e) (-> (Result a e) Bool)))
-(sig result-err-p (forall (a e) (-> (Result a e) Bool)))
-(sig result-ok-value (forall (a e) (-> (Result a e) a)))
-(sig result-err-value (forall (a e) (-> (Result a e) e)))
+(sig Ok (forall (a e) (-> (a) (Result a e))))
+(sig Err (forall (a e) (-> (e) (Result a e))))
+(sig result-ok-p (forall (a e) (-> ((Result a e)) Bool)))
+(sig result-err-p (forall (a e) (-> ((Result a e)) Bool)))
+(sig result-ok-value (forall (a e) (-> ((Result a e)) a)))
+(sig result-err-value (forall (a e) (-> ((Result a e)) e)))
 ```
 
 ### 4.5 Pattern Exhaustiveness
@@ -919,15 +986,19 @@ let format_hover ty doc =
 
 ## 10. Open Questions [R10]
 
-### 10.1 Design Questions Needing Resolution
+### 10.1 Resolved Design Decisions
 
-| Question | Options | Recommendation | Resolution Strategy |
-|----------|---------|----------------|---------------------|
-| nil representation | (a) Contextual, (b) Explicit `Option` | Contextual for v1 | Prototype both; measure ergonomics |
-| Optional arguments | (a) `Option` wrapper, (b) Separate form | `Option` wrapper | Follow existing type systems |
-| Keyword arguments | (a) Defer, (b) Row types | Defer to v2 | Implement after core is stable |
-| Struct subtyping | (a) Structural, (b) Nominal | Nominal | Aligns with `cl-defstruct` semantics |
-| Error representation | (a) `Never`, (b) Union | `Never` for `error` | Prototype with real code |
+| Question | Resolution | Notes |
+|----------|------------|-------|
+| nil/truthiness | `Nil` and `T` are unit types; `Truthy` = not Nil; `Any` = `Truthy \| Nil`; `Bool` = `T \| Nil` | Captures Elisp semantics |
+| `(Option a)` constraint | `a` must be `Truthy` | Ensures distinguishability |
+| Function types | Grouped parameters: `(-> (A B) C)` | Elisp is not curried |
+| Optional arguments | Explicit `&optional` with `(Option a)` type | Mirrors defun syntax |
+| Rest arguments | Explicit `&rest` desugars to `(List a)` | Mirrors defun syntax |
+| Keyword arguments | Explicit `&key :name Type` with explicit `(Option ...)` | v1 scope |
+| `&allow-other-keys` | Defaults to `(Plist Any)`, overridable | Flexibility for strict sigs |
+| Error representation | `error`/`signal` return `Never` | Debugger intervention is out of model |
+| Struct subtyping | Deferred to future version | Keep v1 simple |
 
 ### 10.2 Questions Requiring Prototyping
 
@@ -1054,10 +1125,10 @@ tart/
 ;; Module declaration (optional, defaults to filename)
 (module my-module)
 
-;; Function signatures
+;; Function signatures (note: grouped parameters)
 (sig function-name type)
-(sig my-add (-> Int Int Int))
-(sig my-identity (forall (a) (-> a a)))
+(sig my-add (-> (Int Int) Int))
+(sig my-identity (forall (a) (-> (a) a)))
 
 ;; Variable declarations
 (defvar var-name type)
@@ -1089,16 +1160,36 @@ tart/
   (symbol : type)
   ...)
 
-;; Type syntax
-Int, Float, Num, String, Bool, Symbol, Keyword, Nil, Any, Never
-(-> arg-type result-type)           ; functions
+;; Base types
+Nil                                 ; unit type (only nil)
+T                                   ; unit type (only t)
+Truthy                              ; anything that is not Nil
+Bool                                ; T | Nil
+Any                                 ; Truthy | Nil (top type)
+Never                               ; bottom type (errors)
+Int, Float, Num, String, Symbol, Keyword
+
+;; Function types (grouped parameters - Elisp is NOT curried)
+(-> (arg-types...) return-type)
+(-> (Int Int) Int)                  ; two args, returns Int
+(-> (a) (-> (b) c))                 ; returns a function (manual curry)
+
+;; Optional, rest, keyword arguments
+(-> (String &optional (Option Int)) String)
+(-> (&rest String) String)
+(-> (&key :name (Option String) :age (Option Int)) Person)
+(-> (&key :name String &allow-other-keys) Result)
+(-> (&key :name String &allow-other-keys (Plist Symbol)) Result)
+
+;; Type constructors
 (forall (vars...) type)             ; polymorphic
 (List elem-type)                    ; lists
 (Vector elem-type)                  ; vectors
-(Option type)                       ; nullable
+(Option type)                       ; Truthy | Nil (type must be Truthy)
 (Pair a b)                          ; cons cell
 (Tuple types...)                    ; fixed tuple
 (Or type1 type2)                    ; union
 (HashTable key-type value-type)     ; hash tables
+(Plist key-type value-type)         ; property lists
 user-defined-type                   ; from data/import-struct
 ```
