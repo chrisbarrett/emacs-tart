@@ -4,11 +4,11 @@ Agent workflow for tart—Elisp type checker in OCaml.
 
 ## Required Skills
 
-| Condition         | Skill                                 |
-| ----------------- | ------------------------------------- |
-| Git commits       | `Skill(skill="git:committing")`       |
-| Emacs interaction | `Skill(skill="emacs:emacsclient")`    |
-| Writing specs     | `Skill(skill="claude:writing-specs")` |
+| Condition                         | Skill                                 |
+| --------------------------------- | ------------------------------------- |
+| Git commits                       | `Skill(skill="git:committing")`       |
+| Emacs interaction                 | `Skill(skill="emacs:emacsclient")`    |
+| Writing specs, updating DESIGN.md | `Skill(skill="claude:writing-specs")` |
 
 ## Constraints
 
