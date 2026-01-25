@@ -49,7 +49,7 @@ tart lsp [OPTIONS]               Start LSP server
 
 ### R1: Default command (type-check)
 
-**Given** one or more `.el` or `.eli` files as arguments
+**Given** one or more `.el` or `.tart` files as arguments
 **When** `tart file.el` is invoked (no subcommand)
 **Then** each file is parsed, macro-expanded, and type-checked
 **And** diagnostics are printed to stderr in compiler-style format
@@ -62,13 +62,13 @@ Diagnostic format: `file:line:col: error: message`
 
 ### R2: Multiple file handling
 
-**Given** multiple files: `tart a.el b.el c.eli`
+**Given** multiple files: `tart a.el b.el c.tart`
 **When** executed
 **Then** files are processed in order
 **And** definitions from earlier files are visible to later files
-**And** `.eli` signature files provide types without requiring implementations
+**And** `.tart` signature files provide types without requiring implementations
 
-**Verify:** `tart prelude.eli main.el` uses types from prelude.eli
+**Verify:** `tart prelude.tart main.el` uses types from prelude.tart
 
 ### R3: Eval subcommand
 

@@ -68,7 +68,7 @@ lisp/
 ### R5: Eglot integration
 
 **Given** `tart lsp` is available
-**When** user opens an `.el` file with a sibling `.eli` file
+**When** user opens an `.el` file with a sibling `.tart` file
 **Then** eglot can be started with `M-x eglot`
 **And** tart is registered as the LSP server for that buffer
 

@@ -189,7 +189,7 @@ When a function returns a function, the result is a value:
 
 ### Surface Syntax (Elisp)
 
-The `.eli` signature file syntax maps to the type theory notation:
+The `.tart` signature file syntax maps to the type theory notation:
 
 | Surface                  | Type Theory    | Example                           |
 | ------------------------ | -------------- | --------------------------------- |
@@ -420,16 +420,22 @@ Pure OCaml interpreter for macro expansion. No Emacs subprocess.
 **Opaque** (require annotation): `intern`, `make-symbol`, `eval`, `load`,
 `require`, buffer/window/process ops.
 
-## Signature Files (.eli)
+## Signature Files (.tart)
 
-Presence of `foo.eli` triggers type checking of `foo.el`.
+Type checking is available for any `.el` file via LSP. When code uses `require`
+or calls autoloaded functions, tart searches for corresponding `.tart` files.
+A sibling `foo.tart` declares the public interface of `foo.el` and enables
+signature verification.
 
 ```elisp
 (module my-utils)
 
+(open 'seq)  ; Import types for use in signatures (not re-exported)
+
 ;; Function signatures (directly callable)
 (defun my-add (Int Int) -> Int)
 (defun my-identity [a] a -> a)
+(defun my-process [a] (Seqable a) -> (List a))  ; Uses Seqable from seq
 
 ;; Variable with function type (requires funcall)
 (defvar my-handler (String -> Nil))
@@ -438,20 +444,67 @@ Presence of `foo.eli` triggers type checking of `foo.el`.
 ;; Variable with non-function type
 (defvar my-default String)
 
-;; Type alias
-(deftype IntList (List Int))
+;; Type alias (including union types)
+(type IntList (List Int))
+(type Result (Or Success Failure))
 
-;; Algebraic data type
-(data Result (a e)
-  (Ok a)
-  (Err e))
-
-;; Import types from untyped modules
-(require/typed seq
-  (defun seq-map [a b] ((a -> b) (List a)) -> (List b)))
+;; Opaque type (hidden representation)
+(opaque Handle)
 ```
 
-ADTs generate constructors, predicates (`-p`), and accessors.
+### Public vs Internal Types
+
+A `.tart` file declares the **public interface** of a module. Only what appears in
+`.tart` is visible to consumers.
+
+| Location | Visibility | Purpose |
+|----------|------------|---------|
+| `.tart` file | Public | Exported API contract |
+| `.el` file (future) | Internal | Implementation types, not exported |
+
+This enables abstraction: the implementation can use rich internal types while
+exposing a simpler or opaque public interface.
+
+```elisp
+;; my-cache.tart (public interface)
+(module my-cache)
+(opaque Cache)                    ; Hide implementation
+(defun cache-create Int -> Cache)
+(defun cache-get [a] (Cache String) -> (Option a))
+
+;; my-cache.el (implementation - future extension)
+;; Internal: Cache is actually (HashTable String (Pair Int Any))
+;; But consumers only see the opaque type
+```
+
+### Module Directives
+
+| Directive | Effect |
+|-----------|--------|
+| `(open 'module)` | Import types for use in signatures (not re-exported) |
+| `(include 'module)` | Inline all declarations (re-exported as part of interface) |
+
+`open` is for referencing external types; `include` is for extending or re-exporting modules.
+
+### Signature Search Path
+
+When a module is required, tart searches for `.tart` files in order:
+
+1. **Sibling file**: `module.tart` next to `module.el` (project-local types)
+2. **Search path**: Directories in `tart-type-path` (user/community types)
+3. **Bundled stdlib**: `stdlib/module.tart` shipped with tart
+
+This allows providing types for any module, including third-party packages:
+
+```
+~/.config/emacs/tart/          ; User's custom type definitions
+├── seq.tart              ; Types for seq.el
+├── dash.tart             ; Types for dash.el
+└── magit-section.tart    ; Types for magit-section.el
+```
+
+Each `.tart` in the search path is a standalone file with a `(module name)` declaration.
+The first match wins, allowing user overrides of bundled types.
 
 ## Design Decisions
 
@@ -460,7 +513,10 @@ ADTs generate constructors, predicates (`-p`), and accessors.
 | No `any` escape              | Sound typing within typed modules |
 | Expand-then-type             | Type expanded code, not macros   |
 | Pure OCaml interpreter       | Hermetic, no Emacs dependency    |
-| `.eli` sibling files         | Opt-in, gradual adoption         |
+| Type checking always on      | Benefit from types without writing `.tart` |
+| `.tart` search path          | Community types, user overrides  |
+| `.tart` = public interface   | Abstraction; hide implementation details |
+| Sibling `.tart` for interface | Verify implementation matches declared API |
 | Grouped params               | Matches Elisp semantics          |
 | Levels-based generalization  | Near-linear performance          |
 | `Option` requires `Truthy`   | Preserves nil-punning            |
@@ -486,7 +542,7 @@ Current implementation simplifications documented for future work:
 | ---------------- | ------ | ------------------------- |
 | Pure functions   | ✓      | Full HM inference         |
 | `cl-defstruct`   | ✓      | Direct type correspondence |
-| Dynamic vars     | ✗      | Require `.eli` annotations |
+| Dynamic vars     | ✗      | Require `.tart` annotations |
 | Buffer state     | ✗      | No effect system          |
 | Advice           | ✗      | Types change at runtime   |
 
@@ -494,7 +550,7 @@ Current implementation simplifications documented for future work:
 
 **Complete:** Parser, interpreter, type inference, generalization, builtins, diagnostics.
 
-**Planned:** LSP server, `.eli` parser, CLI, Emacs minor mode.
+**Planned:** LSP server, `.tart` parser, CLI, Emacs minor mode.
 
 ## File Locations
 

@@ -11,28 +11,28 @@ and what constitutes the public interface of a module.
 
 ## Constraints
 
-- **Opt-in**: Only files with `.eli` siblings are type-checked
-- **Gradual**: Typed code can call untyped via `require/typed`
+- **Always available**: Any `.el` file can be type-checked via LSP
+- **Gradual**: Types come from search path; untyped code is `Any`
 - **Sound within typed world**: No `any` escape hatch
 
 ## Requirements
 
-### R1: Type checking trigger
+### R1: Type checking availability
 
 **Given** an `.el` file
 **When** opened in an LSP-connected editor
-**Then** type checking is triggered iff a sibling `.eli` file exists
+**Then** type checking is always available
 
-| File exists?     | Type-checked? |
-|------------------|---------------|
-| `foo.el` only    | No            |
-| `foo.el` + `foo.eli` | Yes       |
+| Scenario | Behavior |
+|----------|----------|
+| `foo.el` only | Infer types; require/autoload triggers search for `.tart` files |
+| `foo.el` + `foo.tart` | Also verify implementation matches declared signatures |
 
-**Verify:** No diagnostics for files without `.eli`; diagnostics for files with
+**Verify:** Any `.el` file gets diagnostics for type errors in code using typed modules
 
 ### R2: Signature verification
 
-**Given** `foo.eli` declares:
+**Given** `foo.tart` declares:
 ```elisp
 (defun foo-add (Int Int) -> Int)
 ```
@@ -47,15 +47,16 @@ and what constitutes the public interface of a module.
 
 ### R3: Typed calling untyped
 
-**Given** typed module imports untyped:
+**Given** typed module uses an untyped module
+**And** a signature exists in the search path:
 ```elisp
-;; my-app.eli
-(require/typed external-lib
-  (defun external-lib-process String -> String))
+;; ~/.config/emacs/eli/external-lib.tart
+(module external-lib)
+(defun external-lib-process String -> String)
 ```
-**And** `my-app.el` calls `external-lib-process`
+**And** `my-app.el` calls `(require 'external-lib)` and uses `external-lib-process`
 **When** type-checked
-**Then** the call is checked against the declared signature
+**Then** the call is checked against the signature from the search path
 
 **Verify:** Wrong argument types produce errors
 
@@ -69,7 +70,7 @@ and what constitutes the public interface of a module.
 
 ### R5: Public vs internal
 
-**Given** `foo.eli` lists:
+**Given** `foo.tart` lists:
 ```elisp
 (defun foo-public-api String -> String)
 ;; foo--internal not listed
@@ -89,7 +90,7 @@ and what constitutes the public interface of a module.
 (require 'my-utils)
 (my-utils-foo 42)
 ```
-**And** `my-utils.eli` exists with:
+**And** `my-utils.tart` exists with:
 ```elisp
 (defun my-utils-foo Int -> String)
 ```
@@ -100,25 +101,22 @@ and what constitutes the public interface of a module.
 
 ### R7: Autoload handling
 
-**Given** an autoloaded function:
+**Given** code calls an autoloaded function `my-package-autoload-fn`
+**And** `my-package.tart` exists in the search path:
 ```elisp
-;; my-package.el
-;;;###autoload
-(defun my-package-autoload-fn (n) ...)
-```
-**And** `my-package.eli` declares:
-```elisp
+(module my-package)
 (defun my-package-autoload-fn Int -> String)
 ```
-**When** another module calls this function before load
-**Then** the signature from `.eli` is used for type checking
+**When** type-checked
+**Then** tart searches for `my-package.tart` based on the function's prefix
+**And** the signature is used for type checking
 
-**Verify:** Autoloaded functions type-check before actual loading
+**Verify:** Autoloaded functions type-check using signatures from search path
 
 ### R8: Missing signature warning
 
 **Given** `foo.el` defines `foo-public-fn`
-**And** `foo.eli` exists but doesn't list `foo-public-fn`
+**And** `foo.tart` exists but doesn't list `foo-public-fn`
 **When** type-checked
 **Then** warning: "Function `foo-public-fn` defined but not in signature file"
 (only for public-looking names, not `--internal` names)
@@ -137,12 +135,12 @@ and what constitutes the public interface of a module.
 
 ## Tasks
 
-- [ ] [R1] Implement .eli detection for type-check triggering
-- [ ] [R2] Verify implementations match signatures
-- [ ] [R3] Load require/typed declarations
+- [ ] [R1] Enable type checking for any .el file
+- [ ] [R2] Verify implementations match signatures when .tart exists
+- [ ] [R3] Load signatures from search path for required modules
 - [ ] [R4] Document untyped→typed boundary (no action needed)
 - [ ] [R5] Distinguish public vs internal functions
 - [ ] [R6] Load signatures for required modules
-- [ ] [R7] Handle autoloaded function signatures
+- [ ] [R7] Handle autoloaded function lookup via search path
 - [ ] [R8] Warn on undefined exports
 - [ ] [R9] Handle circular module dependencies

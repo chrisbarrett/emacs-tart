@@ -112,7 +112,7 @@ arguments as `List`.
 **Require annotations**:
 
 1. Hook variables (type as `(List (-> ...)`)
-2. Autoloaded functions (signature in `.eli`)
+2. Autoloaded functions (signature in `.tart`)
 
 **Exclude**:
 
@@ -254,7 +254,7 @@ operations work on "some buffer"; type checker doesn't track which.
 Dynamic variables can be rebound anywhere, making flow-sensitive typing
 difficult.
 
-**Recommendation**: Require type annotations for dynamic variables in `.eli`
+**Recommendation**: Require type annotations for dynamic variables in `.tart`
 files. Treat as having that fixed type.
 
 ### v1 Recommendations
@@ -386,7 +386,7 @@ Elisp's `require`/`provide` is weak:
 - Autoloads defer loading
 
 **Recommendation**: Use package boundaries as type boundaries. Typed packages
-provide `.eli` files; untyped packages require `require/typed` declarations.
+provide sibling `.tart` files; untyped packages get types from the search path.
 
 ### Common Libraries
 
@@ -572,7 +572,7 @@ Never    ; bottom type (errors)
 4. **Basic union/option types**
 5. **`cl-defstruct` integration**
 6. **Wrapper macro support** (built-in knowledge)
-7. **`.eli` signature files**
+7. **`.tart` signature files**
 8. **LSP diagnostics and hover**
 
 ### Should Have

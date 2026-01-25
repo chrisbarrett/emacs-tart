@@ -1,18 +1,18 @@
 # Spec 07: Signature File System
 
-Parser and loader for `.eli` signature files that declare types for Elisp code.
+Parser and loader for `.tart` signature files that declare types for Elisp code.
 
 **Dependencies:** Spec 04 parser (reuse S-exp infrastructure), Spec 06 type
 representation.
 
 ## Goal
 
-Implement the `.eli` file format that provides type signatures for modules,
+Implement the `.tart` file format that provides type signatures for modules,
 enabling type checking at module boundaries.
 
 ## Constraints
 
-- **Sibling files**: `foo.eli` provides signatures for `foo.el`
+- **Sibling files**: `foo.tart` provides signatures for `foo.el`
 - **Declarative**: No executable code; pure type declarations
 - **Extensible**: Support ADTs, type aliases, struct imports
 
@@ -23,13 +23,13 @@ tart/
 ├── lib/
 │   └── sig/
 │       ├── sig_ast.ml     ; Signature file AST
-│       ├── sig_parser.ml  ; Parse .eli to AST
+│       ├── sig_parser.ml  ; Parse .tart to AST
 │       ├── sig_loader.ml  ; Load signatures into type env
 │       └── stdlib.ml      ; Access bundled signatures
 ├── stdlib/
-│   ├── builtins.eli       ; Emacs primitives
-│   ├── cl-lib.eli         ; cl-lib signatures
-│   └── seq.eli            ; seq.el signatures
+│   ├── builtins.tart       ; Emacs primitives
+│   ├── cl-lib.tart         ; cl-lib signatures
+│   └── seq.tart            ; seq.el signatures
 └── test/
     └── sig/
         └── sig_test.ml
@@ -39,16 +39,17 @@ tart/
 
 ### R1: Signature file parsing
 
-**Given** a `.eli` file
+**Given** a `.tart` file
 **When** parsed
 **Then** it produces a signature AST containing:
 - Module declaration
+- Open directives (import types for use in signatures)
+- Include directives (inline and re-export declarations)
 - Function signatures
 - Variable declarations
-- Type aliases
-- ADT definitions
+- Type aliases (including union types)
+- Opaque type declarations
 - Struct imports
-- Require/typed imports
 
 **Verify:** `dune test`; parse all files in `stdlib/`
 
@@ -86,29 +87,26 @@ go at the start of arrow types, or after the name in `defun`.
 
 ### R5: Type alias definitions
 
-**Given** `(deftype IntList (List Int))`
+**Given** `(type IntList (List Int))`
 **When** loaded
 **Then** `IntList` can be used in signatures and expands to `(List Int)`
 
 **Verify:** `(defun foo IntList -> Int)` equivalent to `(defun foo (List Int) -> Int)`
 
-### R6: ADT definitions
+### R6: Opaque type definitions
 
-**Given** an ADT definition:
-```
-(data Result (a e)
-  (Ok a)
-  (Err e))
+**Given** an opaque type declaration:
+```elisp
+(opaque Buffer)
+(opaque Handle (a))
 ```
 **When** loaded
-**Then** it generates:
-- Type constructor `Result` with arity 2
-- Constructor functions `Ok : [a e] a -> (Result a e)`
-- Constructor functions `Err : [a e] e -> (Result a e)`
-- Predicates `result-ok-p`, `result-err-p`
-- Accessors `result-ok-value`, `result-err-value`
+**Then**:
+- `Buffer` is a distinct type with no exposed structure
+- `Handle` is a polymorphic type constructor with arity 1
+- Values can only be created/consumed via functions declared in the same module
 
-**Verify:** ADT constructors and accessors type-check correctly
+**Verify:** Opaque types are not unifiable with other types; no constructors/accessors generated
 
 ### R7: Struct imports
 
@@ -122,34 +120,72 @@ go at the start of arrow types, or after the name in `defun`.
 
 **Verify:** Struct accessor calls type-check based on slot types
 
-### R8: Require/typed imports
+### R8: Open directive (renumbered)
 
-**Given** a require/typed declaration:
+**Given** a signature file:
+```elisp
+(module my-collection)
+(open 'seq)
+
+(defun my-flatten [a] (Seqable (Seqable a)) -> (List a))
 ```
-(require/typed seq
-  (defun seq-map [a b] ((a -> b) (List a)) -> (List b)))
-```
+**And** `seq.tart` defines `(type Seqable ...)`
 **When** loaded
-**Then** `seq-map` is available with the declared type
-**And** calls are checked against this signature (trust boundary)
+**Then** `Seqable` is available for use in type expressions
+**And** `Seqable` is NOT re-exported from `my-collection`
+
+**Verify:** Type expressions can reference opened types; opened types not in exports
+
+### R9: Include directive
+
+**Given** a signature file:
+```elisp
+(module my-extended-seq)
+(include 'seq)
+
+(defun seq-partition [a] (Int (Seqable a)) -> (List (List a)))
+```
+**And** `seq.tart` defines functions and types
+**When** loaded
+**Then** all declarations from `seq.tart` are part of `my-extended-seq`'s interface
+**And** types from `seq` are available for use in signatures
+
+**Verify:** Included declarations appear in module's exports
+
+### R10: Signature search path
+
+**Given** a configuration with search path:
+```elisp
+(setq tart-type-path '("~/.config/emacs/eli/" "/nix/store/.../community-types/"))
+```
+**And** `~/.config/emacs/eli/seq.tart` contains:
+```elisp
+(module seq)
+(defun seq-map [a b] ((a -> b) (Seqable a)) -> (List b))
+```
+**When** a typed module calls `(require 'seq)` and uses `seq-map`
+**Then** `seq-map` is available with the declared type from the search path
 
 **Verify:** Call to `seq-map` with wrong types produces error
 
-### R9: Module discovery
+### R11: Module discovery order
 
 **Given** a `.el` file being type-checked
-**When** it requires another module
-**Then** the loader searches for `.eli` files:
-1. Sibling `module.eli` for `module.el`
-2. `stdlib/module.eli` for built-ins
+**When** it requires another module via `(require 'module)`
+**Then** the loader searches for `.tart` files in order:
+1. Sibling `module.tart` next to `module.el` (project-local)
+2. Each directory in `tart-type-path` (user/community types)
+3. Bundled `stdlib/module.tart` (shipped with tart)
 
-**Verify:** `(require 'cl-lib)` loads `cl-lib.eli` signatures
+The first match wins, allowing project-local overrides.
 
-### R10: Bundled stdlib signatures
+**Verify:** `(require 'cl-lib)` loads `cl-lib.tart` signatures from stdlib
+
+### R12: Bundled stdlib signatures
 
 **Given** tart is installed
 **When** builtins are referenced
-**Then** types are loaded from bundled `builtins.eli`
+**Then** types are loaded from bundled `builtins.tart`
 
 Minimum coverage:
 - Arithmetic: `+`, `-`, `*`, `/`, comparison ops
@@ -166,12 +202,14 @@ Minimum coverage:
 - [ ] [R2] Implement type syntax parser
 - [ ] [R3] Handle function signatures
 - [ ] [R4] Handle variable declarations
-- [ ] [R5] Handle type aliases
-- [ ] [R6] Handle ADT definitions with generated constructors
+- [ ] [R5] Handle type aliases (including union types)
+- [ ] [R6] Handle opaque type definitions
 - [ ] [R7] Handle struct imports
-- [ ] [R8] Handle require/typed
-- [ ] [R9] Implement module discovery
-- [ ] [R10] Write bundled stdlib signatures
+- [ ] [R8] Handle open directive (import types)
+- [ ] [R9] Handle include directive (re-export declarations)
+- [ ] [R10] Implement signature search path
+- [ ] [R11] Implement module discovery with search order
+- [ ] [R12] Write bundled stdlib signatures
 
-Run review agent after `builtins.eli` covers basic list/string functions before
+Run review agent after `builtins.tart` covers basic list/string functions before
 proceeding to Spec 08.

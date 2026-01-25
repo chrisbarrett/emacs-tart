@@ -187,7 +187,7 @@ error[E0308]: implementation does not match signature
    | signature declares: (-> (Int) String)
    | implementation has: (-> (Int) Int)
    |
-  --> lib.eli:5:1
+  --> lib.tart:5:1
    |
  5 | (sig foo (-> (Int) String))
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^ signature declared here

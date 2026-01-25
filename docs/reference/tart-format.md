@@ -1,46 +1,54 @@
-# Signature File Format (.eli)
+# Signature File Format (.tart)
 
-Canonical reference for tart's `.eli` signature file format.
+Canonical reference for tart's `.tart` signature file format.
 
 ## Overview
 
-`.eli` files declare types for Elisp modules. Presence of `foo.eli` triggers
-type checking of `foo.el`.
+`.tart` files declare the **public interface** of Elisp modules. Only what
+appears in a `.tart` file is visible to consumers—implementation details in the
+`.el` file remain hidden.
+
+Type checking is available for any `.el` file via LSP. When code uses `require`
+or autoloaded functions, tart searches for corresponding `.tart` files. A sibling
+`foo.tart` declares the public interface of `foo.el` and enables signature
+verification.
+
+**Future extension:** Internal types declared in `.el` files will not be exported.
+A `.tart` file can expose an opaque view of internal types for abstraction.
 
 ## File Structure
 
 ```elisp
-(module module-name)              ; Optional, defaults to filename
+(module module-name)                       ; Required for search path files
 
-(require/typed module             ; Import types from untyped code
-  (defun name [quantifiers]? params -> ret)
-  ...)
+(open 'module)                             ; Import types for use in signatures
+(include 'module)                          ; Inline and re-export declarations
 
 (defun name [quantifiers]? params -> ret)  ; Function (callable)
 (defvar variable-name type)                ; Variable declaration
-(deftype TypeName type)                    ; Type alias
-(data TypeName (params) ...)               ; Algebraic data type
+(type TypeName type)                       ; Type alias
+(opaque TypeName)                          ; Abstract type (hidden representation)
 (import-struct name)                       ; Import cl-defstruct
 ```
 
 ## Grammar
 
 ```
-eli_file     ::= module_decl? require_typed* declaration*
+tart_file    ::= module_decl? directive* declaration*
 
 module_decl  ::= '(module' symbol ')'
 
-require_typed ::= '(require/typed' symbol defun* ')'
+directive    ::= open_decl | include_decl
+open_decl    ::= "(open '" symbol ')'
+include_decl ::= "(include '" symbol ')'
 
-declaration  ::= func_decl | var_decl | type_alias | adt_decl | struct_import
+declaration  ::= func_decl | var_decl | type_alias | opaque_decl | struct_import
 
 func_decl    ::= '(defun' symbol ('[' tvar+ ']')? params '->' type ')'
 var_decl     ::= '(defvar' symbol type ')'
-type_alias   ::= '(deftype' symbol type ')'
+type_alias   ::= '(type' symbol type ')'
+opaque_decl  ::= '(opaque' symbol ('(' tvar* ')')? ')'
 struct_import ::= '(import-struct' symbol ')'
-
-adt_decl     ::= '(data' symbol '(' tvar* ')' variant+ ')'
-variant      ::= '(' constructor type* ')'
 
 params       ::= type | '(' type+ ')'     ; single or grouped
 arrow_type   ::= '(' ('[' tvar+ ']')? params '->' type ')'
@@ -186,32 +194,39 @@ a function **value** that must be called with `funcall` inside the implementatio
 
 ### Type Aliases
 
-```elisp
-(deftype IntList (List Int))
-(deftype StringOption (Option String))
-(deftype Callback (String -> Nil))
-```
-
-### ADT Definitions
+Use `type` to define type aliases, including union types:
 
 ```elisp
-(data Option (a)
-  (Some a)
-  (None))
-
-(data Result (a e)
-  (Ok a)
-  (Err e))
-
-(data Tree (a)
-  (Leaf a)
-  (Node (Tree a) (Tree a)))
+(type IntList (List Int))
+(type StringOption (Option String))
+(type Callback (String -> Nil))
+(type Result (Or Ok Err))             ; Union type
 ```
 
-ADTs generate:
-- Constructors: `Some`, `None`, `Ok`, `Err`
-- Predicates: `option-some-p`, `option-none-p`
-- Accessors: `option-some-value`, `result-ok-value`
+### Opaque Types
+
+Abstract types with hidden representation. Consumers can pass values around
+but cannot inspect or construct them except via declared functions.
+
+```elisp
+;; buffer-manager.tart
+(module buffer-manager)
+
+(opaque Buffer)              ; Monomorphic opaque type
+(opaque Handle (a))          ; Polymorphic opaque type
+
+(defun buffer-create String -> Buffer)
+(defun buffer-name Buffer -> String)
+(defun buffer-kill Buffer -> Nil)
+
+(defun handle-wrap [a] a -> (Handle a))
+(defun handle-unwrap [a] (Handle a) -> a)
+```
+
+Use opaque types for:
+- Wrapping external resources (buffers, processes, windows)
+- Enforcing API boundaries (consumers must use your functions)
+- Hiding implementation details that may change
 
 ### Struct Imports
 
@@ -226,43 +241,58 @@ ADTs generate:
 ;; - Accessors: person-name, person-age
 ```
 
-### Require/Typed
+### Open (Import Types)
 
-Import types for external untyped modules:
+`(open 'module)` brings type names from another module into scope for use in
+type expressions. The imported names are not re-exported.
 
 ```elisp
-(require/typed seq
-  (defun seq-map [a b] ((a -> b) (List a)) -> (List b))
-  (defun seq-filter [a] ((a -> Bool) (List a)) -> (List a))
-  (defun seq-reduce [a b] (((b a) -> b) b (List a)) -> b))
+;; my-collection.tart
+(module my-collection)
+(open 'seq)  ; Seqable now available for use in signatures
 
-(require/typed subr-x
-  (when-let : special-form)
-  (if-let : special-form))
+(defun my-flatten [a] (Seqable (Seqable a)) -> (List a))
+(defun my-frequencies [a] (Seqable a) -> (HashTable a Int))
 ```
+
+Use `open` when you need to reference types from other modules in your signatures.
+
+### Include (Re-export)
+
+`(include 'module)` inlines all declarations from another `.tart` file, making
+them part of this module's interface.
+
+```elisp
+;; my-extended-seq.tart
+(module my-extended-seq)
+(include 'seq)  ; Re-export everything from seq
+
+;; Plus additional functions
+(defun seq-partition [a] (Int (Seqable a)) -> (List (List a)))
+(defun seq-interleave [a] ((Seqable a) (Seqable a)) -> (List a))
+```
+
+Use `include` to extend or re-export another module's type interface.
 
 ## Complete Example
 
 ```elisp
-;; my-utils.eli
+;; my-utils.tart
 (module my-utils)
 
-(require/typed seq
-  (defun seq-map [a b] ((a -> b) (List a)) -> (List b)))
+(open 'seq)  ; Import Seqable for use in signatures
 
-;; Type alias
-(deftype IntList (List Int))
+;; Type aliases (including union types)
+(type IntList (List Int))
+(type Result (Or Success Failure))
 
-;; ADT
-(data Result (a e)
-  (Ok a)
-  (Err e))
+;; Opaque type
+(opaque Handle)
 
 ;; Function declarations (directly callable)
 (defun my-utils-trim String -> String)
 (defun my-utils-split (String String) -> (List String))
 (defun my-utils-identity [a] a -> a)
-(defun my-utils-safe-div (Int Int) -> (Result Int String))
 
 ;; Variable (non-function)
 (defvar my-utils-default-separator String)
@@ -272,13 +302,46 @@ Import types for external untyped modules:
 (defvar my-utils-transform ([a] a -> a))
 ```
 
-## Module Discovery
+## Signature Search Path
 
-When type-checking `foo.el`:
+When a module is required, tart searches for `.tart` files in order:
 
-1. Look for sibling `foo.eli`
-2. Look in `stdlib/` for built-in signatures
-3. Follow `require/typed` declarations for external types
+1. **Sibling file**: `module.tart` next to `module.el` (highest priority)
+2. **Search path**: Directories in `tart-type-path` (user/community types)
+3. **Bundled stdlib**: `stdlib/module.tart` shipped with tart
+
+This allows providing types for any module, including third-party packages
+that don't ship their own type definitions.
+
+### Search Path Configuration
+
+```elisp
+;; In Emacs config
+(setq tart-type-path '("~/.config/emacs/tart/" "/path/to/community-types/"))
+```
+
+### Example: Providing Types for External Packages
+
+```
+~/.config/emacs/tart/
+├── seq.tart              ; Types for seq.el
+├── dash.tart             ; Types for dash.el
+└── magit-section.tart    ; Types for magit-section.el
+```
+
+```elisp
+;; ~/.config/emacs/tart/seq.tart
+(module seq)
+
+(defun seq-map [a b] ((a -> b) (Seqable a)) -> (List b))
+(defun seq-filter [a] ((a -> Bool) (Seqable a)) -> (List a))
+(defun seq-reduce [a b] ((b a -> b) b (Seqable a)) -> b)
+(defun seq-find [a] ((a -> Bool) (Seqable a)) -> (Option a))
+```
+
+Each `.tart` file must have a `(module name)` declaration matching the feature
+name used in `(require 'name)`. The first match in the search order wins,
+allowing user overrides of bundled types.
 
 ## See Also
 
