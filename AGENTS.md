@@ -21,6 +21,8 @@ Agent workflow for tart—Elisp type checker in OCaml.
 | Resource | Location |
 |----------|----------|
 | Design decisions | `DESIGN.md` |
-| Specs | `specs/` |
-| Research | `research/` |
+| Implementation reference | `docs/reference/` |
+| Background research | `docs/research/` |
+| Active specs | `specs/` |
+| Archived specs | `specs/archive/` |
 | Progress log | `progress.txt` |

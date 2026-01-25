@@ -1,7 +1,7 @@
 # Type System Design Proposal for Tart
 
-A concrete, implementable design for a static type analysis system for Emacs Lisp
-based on System F with Hindley-Milner inference.
+A concrete, implementable design for a static type analysis system for Emacs
+Lisp based on System F with Hindley-Milner inference.
 
 **Document Status**: Design proposal for review
 
@@ -19,7 +19,8 @@ Lisp. The design prioritizes:
 
 ### Key Design Principles
 
-**Truthiness model**: Elisp's boolean semantics are captured via primitive types:
+**Truthiness model**: Elisp's boolean semantics are captured via primitive
+types:
 
 - `Nil` — unit type with sole inhabitant `nil`
 - `T` — unit type with sole inhabitant `t`
@@ -246,22 +247,24 @@ infer(Γ, e) = case e of
 **Recommendation**: Start with rank-1 (HM). Design for rank-2 extension.
 
 For v1:
+
 - All `forall` quantifiers appear at the outermost level (prenex form)
 - No explicit type annotations required
 - Inference is complete and decidable
 
 For v2 (if needed):
+
 - Add bidirectional checking for explicit `forall` annotations
 - Support rank-2 types for advanced patterns (ST monad, existentials)
 
 ### 2.5 Rejected Alternatives
 
-| Alternative | Reason for Rejection |
-|-------------|---------------------|
-| Full System F inference | Undecidable; requires annotations everywhere |
-| Subtyping | Complicates inference; union types suffice |
-| Row polymorphism (v1) | Adds complexity; defer to v2 for plists |
-| Effect types | Significant complexity; intractable for buffer state |
+| Alternative             | Reason for Rejection                                 |
+| ----------------------- | ---------------------------------------------------- |
+| Full System F inference | Undecidable; requires annotations everywhere         |
+| Subtyping               | Complicates inference; union types suffice           |
+| Row polymorphism (v1)   | Adds complexity; defer to v2 for plists              |
+| Effect types            | Significant complexity; intractable for buffer state |
 
 ---
 
@@ -270,6 +273,7 @@ For v2 (if needed):
 ### 3.1 Purpose
 
 `.eli` files provide type signatures for:
+
 1. Untyped Elisp code that tart should type-check against
 2. External libraries without inline annotations
 3. Built-in Emacs functions
@@ -281,8 +285,8 @@ my-package.el      ; Elisp source code
 my-package.eli     ; Type signatures (sibling file)
 ```
 
-The presence of a `.eli` file triggers type checking for the corresponding
-`.el` file.
+The presence of a `.eli` file triggers type checking for the corresponding `.el`
+file.
 
 ### 3.3 Signature File Grammar
 
@@ -454,14 +458,14 @@ Tart ships with signatures for Emacs built-ins:
 ADT values exist only at the type level. At runtime, they are represented using
 standard Elisp:
 
-| Type-Level | Runtime Representation |
-|------------|----------------------|
-| `(Some x)` | `x` or `(Some . x)` |
-| `(None)` | `nil` |
-| `(Ok x)` | `(ok . x)` |
-| `(Err e)` | `(err . e)` |
-| `(Leaf x)` | `(leaf . x)` |
-| `(Node l r)` | `(node l . r)` |
+| Type-Level   | Runtime Representation |
+| ------------ | ---------------------- |
+| `(Some x)`   | `x` or `(Some . x)`    |
+| `(None)`     | `nil`                  |
+| `(Ok x)`     | `(ok . x)`             |
+| `(Err e)`    | `(err . e)`            |
+| `(Leaf x)`   | `(leaf . x)`           |
+| `(Node l r)` | `(node l . r)`         |
 
 **Implementation option 1: Tagged cons cells**
 
@@ -569,11 +573,11 @@ Type checking is triggered when:
 
 ### 5.3 Untyped Code Handling
 
-| Scenario | Behavior |
-|----------|----------|
+| Scenario            | Behavior                                      |
+| ------------------- | --------------------------------------------- |
 | Typed calls untyped | Use `require/typed` to declare expected types |
-| Untyped calls typed | No checking (sound within typed world) |
-| No `.eli` file | File not type-checked |
+| Untyped calls typed | No checking (sound within typed world)        |
+| No `.eli` file      | File not type-checked                         |
 
 **Typed module calling untyped**:
 
@@ -736,15 +740,15 @@ help: a variable with a similar name exists:
 
 ### 6.4 Error Codes
 
-| Code | Category | Description |
-|------|----------|-------------|
-| E0308 | Type | Type mismatch |
-| E0317 | Type | Incompatible branch types |
-| E0425 | Name | Undefined variable |
-| E0426 | Name | Undefined function |
-| E0061 | Arity | Wrong number of arguments |
-| E0106 | Annotation | Missing type annotation required |
-| E0521 | Polymorphism | Type too specific for context |
+| Code  | Category     | Description                      |
+| ----- | ------------ | -------------------------------- |
+| E0308 | Type         | Type mismatch                    |
+| E0317 | Type         | Incompatible branch types        |
+| E0425 | Name         | Undefined variable               |
+| E0426 | Name         | Undefined function               |
+| E0061 | Arity        | Wrong number of arguments        |
+| E0106 | Annotation   | Missing type annotation required |
+| E0521 | Polymorphism | Type too specific for context    |
 
 ---
 
@@ -756,16 +760,16 @@ help: a variable with a similar name exists:
 
 ### 7.2 Rationale
 
-| Factor | OCaml | Typed Racket | Elisp |
-|--------|-------|--------------|-------|
-| Type safety | Excellent | Excellent | None |
-| Pattern matching | Native, exhaustive | Native | Via pcase |
-| ADT support | Native | Native | Manual |
-| Parser generators | Menhir (excellent) | Adequate | Manual |
-| LSP libraries | Mature (ocaml-lsp) | Basic | jsonrpc.el |
-| Performance | Fast | Slower | Slowest |
-| Ecosystem | dune, opam | raco | package.el |
-| Precedent | Flow, Hack, Rocq | None for type checkers | None |
+| Factor            | OCaml              | Typed Racket           | Elisp      |
+| ----------------- | ------------------ | ---------------------- | ---------- |
+| Type safety       | Excellent          | Excellent              | None       |
+| Pattern matching  | Native, exhaustive | Native                 | Via pcase  |
+| ADT support       | Native             | Native                 | Manual     |
+| Parser generators | Menhir (excellent) | Adequate               | Manual     |
+| LSP libraries     | Mature (ocaml-lsp) | Basic                  | jsonrpc.el |
+| Performance       | Fast               | Slower                 | Slowest    |
+| Ecosystem         | dune, opam         | raco                   | package.el |
+| Precedent         | Flow, Hack, Rocq   | None for type checkers | None       |
 
 ### 7.3 OCaml Ecosystem Analysis
 
@@ -796,11 +800,13 @@ and tvar =
 ### 7.4 Alternative Considered: Typed Racket
 
 **Pros**:
+
 - Lisp-in-Lisp synergy
 - Native S-expression parsing
 - Good pattern matching
 
 **Cons**:
+
 - Slower runtime than OCaml
 - Smaller ecosystem for tooling
 - Less mature LSP support
@@ -809,11 +815,13 @@ and tvar =
 ### 7.5 Alternative Considered: Rust
 
 **Pros**:
+
 - Excellent performance
 - Strong ecosystem (tower-lsp, salsa)
 - Memory safety without GC
 
 **Cons**:
+
 - Verbose for AST manipulation
 - Steeper learning curve
 - Less natural for tree transformations
@@ -891,22 +899,23 @@ diagnostics(file) → List<Diagnostic>    ; Memoized
 ```
 
 **Invalidation rules**:
+
 - Editing a file invalidates `source_text`
 - If `tokens` output unchanged, downstream queries preserved
 - Per-function granularity: changing one function doesn't invalidate others
 
 ### 8.4 Caching Strategy
 
-| Data | Cache Location | Invalidation |
-|------|----------------|--------------|
-| Parsed forms | In-memory | On file change |
-| Expanded forms | In-memory | On source or macro change |
-| Type information | In-memory + disk | On source change |
-| Stdlib signatures | Disk | Never during session |
+| Data              | Cache Location   | Invalidation              |
+| ----------------- | ---------------- | ------------------------- |
+| Parsed forms      | In-memory        | On file change            |
+| Expanded forms    | In-memory        | On source or macro change |
+| Type information  | In-memory + disk | On source change          |
+| Stdlib signatures | Disk             | Never during session      |
 
 ### 8.5 Hover Implementation
 
-```ocaml
+````ocaml
 let handle_hover ~file ~position =
   let form = find_form_at file position in
   match form with
@@ -918,16 +927,16 @@ let handle_hover ~file ~position =
 
 let format_hover ty doc =
   Printf.sprintf "```elisp\n%s\n```\n\n%s" (pretty_type ty) doc
-```
+````
 
 ### 8.6 Priority Capabilities
 
-| Phase | Capabilities |
-|-------|-------------|
+| Phase         | Capabilities                                          |
+| ------------- | ----------------------------------------------------- |
 | Phase 1 (MVP) | `publishDiagnostics`, `hover`, `didOpen/Change/Close` |
-| Phase 2 | `definition`, `references`, `codeAction` |
-| Phase 3 | `inlayHint`, `signatureHelp`, `completion` |
-| Phase 4 | `semanticTokens`, `rename`, `callHierarchy` |
+| Phase 2       | `definition`, `references`, `codeAction`              |
+| Phase 3       | `inlayHint`, `signatureHelp`, `completion`            |
+| Phase 4       | `semanticTokens`, `rename`, `callHierarchy`           |
 
 ---
 
@@ -935,49 +944,52 @@ let format_hover ty doc =
 
 ### 9.1 Design Trade-offs
 
-| Decision | Trade-off | Mitigation |
-|----------|-----------|------------|
-| No `any` type | Less flexibility | Explicit annotations for complex cases |
-| Expand-then-type | Post-expansion errors confusing | Source maps, macro-aware formatting |
-| Value restriction | Some code needs annotation | Familiar to ML programmers |
-| `.eli` files | Extra files to maintain | Auto-generate from `cl-defstruct` |
-| OCaml implementation | Not dogfooding | Best ecosystem for type checkers |
-| No effect types | Unsound for buffer state | Accept; focus on value types |
+| Decision             | Trade-off                       | Mitigation                             |
+| -------------------- | ------------------------------- | -------------------------------------- |
+| No `any` type        | Less flexibility                | Explicit annotations for complex cases |
+| Expand-then-type     | Post-expansion errors confusing | Source maps, macro-aware formatting    |
+| Value restriction    | Some code needs annotation      | Familiar to ML programmers             |
+| `.eli` files         | Extra files to maintain         | Auto-generate from `cl-defstruct`      |
+| OCaml implementation | Not dogfooding                  | Best ecosystem for type checkers       |
+| No effect types      | Unsound for buffer state        | Accept; focus on value types           |
 
 ### 9.2 Soundness Trade-offs
 
-| Feature | Soundness Level | Justification |
-|---------|-----------------|---------------|
-| Pure function types | Sound | Full HM inference |
-| `cl-defstruct` | Sound | Direct type correspondence |
-| Dynamic variables | Unsound | Require `.eli` annotations |
-| Buffer state | Unsound | Effect system too complex |
-| Advice system | Excluded | Types change at runtime |
-| Dynamic codegen | Excluded | Inherently untyped |
+| Feature             | Soundness Level | Justification              |
+| ------------------- | --------------- | -------------------------- |
+| Pure function types | Sound           | Full HM inference          |
+| `cl-defstruct`      | Sound           | Direct type correspondence |
+| Dynamic variables   | Unsound         | Require `.eli` annotations |
+| Buffer state        | Unsound         | Effect system too complex  |
+| Advice system       | Excluded        | Types change at runtime    |
+| Dynamic codegen     | Excluded        | Inherently untyped         |
 
 ### 9.3 Technical Risks
 
-| Risk | Likelihood | Impact | Mitigation |
-|------|------------|--------|------------|
-| Macro expansion API unreliable | Medium | High | Test with `macroexpand-all`; fallback to unexpanded |
-| Performance on large files | Medium | Medium | Incremental analysis; lazy checking |
-| Error quality post-expansion | High | Medium | Source maps; macro-aware messages |
-| Adoption (need `.eli` files) | High | High | Auto-generate; good defaults |
-| Type system expressiveness | Medium | Medium | Plan for v2 extensions |
+| Risk                           | Likelihood | Impact | Mitigation                                          |
+| ------------------------------ | ---------- | ------ | --------------------------------------------------- |
+| Macro expansion API unreliable | Medium     | High   | Test with `macroexpand-all`; fallback to unexpanded |
+| Performance on large files     | Medium     | Medium | Incremental analysis; lazy checking                 |
+| Error quality post-expansion   | High       | Medium | Source maps; macro-aware messages                   |
+| Adoption (need `.eli` files)   | High       | High   | Auto-generate; good defaults                        |
+| Type system expressiveness     | Medium     | Medium | Plan for v2 extensions                              |
 
 ### 9.4 Risk Mitigation Strategies
 
 **Macro expansion risk**:
+
 - Test `macroexpand-all` extensively with common macro patterns
 - Provide fallback: if expansion fails, treat as untyped
 - Document supported macros explicitly
 
 **Performance risk**:
+
 - Implement query-based incrementality from the start
 - Profile early and often with real codebases
 - Set latency budgets: hover <100ms, diagnostics <500ms
 
 **Adoption risk**:
+
 - Ship signatures for common packages (seq, map, cl-lib, subr-x)
 - Provide `tart generate-sig` command to bootstrap `.eli` files
 - Integrate with `cl-defstruct` for automatic type extraction
@@ -988,44 +1000,44 @@ let format_hover ty doc =
 
 ### 10.1 Resolved Design Decisions
 
-| Question | Resolution | Notes |
-|----------|------------|-------|
-| nil/truthiness | `Nil` and `T` are unit types; `Truthy` = not Nil; `Any` = `Truthy \| Nil`; `Bool` = `T \| Nil` | Captures Elisp semantics |
-| `(Option a)` constraint | `a` must be `Truthy` | Ensures distinguishability |
-| Function types | Grouped parameters: `(-> (A B) C)` | Elisp is not curried |
-| Optional arguments | Explicit `&optional` with `(Option a)` type | Mirrors defun syntax |
-| Rest arguments | Explicit `&rest` desugars to `(List a)` | Mirrors defun syntax |
-| Keyword arguments | Explicit `&key :name Type` with explicit `(Option ...)` | v1 scope |
-| `&allow-other-keys` | Defaults to `(Plist Any)`, overridable | Flexibility for strict sigs |
-| Error representation | `error`/`signal` return `Never` | Debugger intervention is out of model |
-| Struct subtyping | Deferred to future version | Keep v1 simple |
-| Stdlib signatures | Ship bundled with tart | Versioning mechanism deferred to post-v1 |
-| Macro expansion | Pure Elisp interpreter in OCaml | No Emacs subprocess; security + hermetic builds |
-| Advice system | Type-check definitions given known signatures | Same approach as hooks; `:around` takes fn + args |
-| Escape hatch | `(tart-ignore EXPR)` macro or comment annotation | Identity at runtime; type checker treats as `Any` |
-| Error messages | Simple one-line for v1; structured Elm-style later | LSP squiggles provide location; polish item |
+| Question                | Resolution                                                                                     | Notes                                             |
+| ----------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| nil/truthiness          | `Nil` and `T` are unit types; `Truthy` = not Nil; `Any` = `Truthy \| Nil`; `Bool` = `T \| Nil` | Captures Elisp semantics                          |
+| `(Option a)` constraint | `a` must be `Truthy`                                                                           | Ensures distinguishability                        |
+| Function types          | Grouped parameters: `(-> (A B) C)`                                                             | Elisp is not curried                              |
+| Optional arguments      | Explicit `&optional` with `(Option a)` type                                                    | Mirrors defun syntax                              |
+| Rest arguments          | Explicit `&rest` desugars to `(List a)`                                                        | Mirrors defun syntax                              |
+| Keyword arguments       | Explicit `&key :name Type` with explicit `(Option ...)`                                        | v1 scope                                          |
+| `&allow-other-keys`     | Defaults to `(Plist Any)`, overridable                                                         | Flexibility for strict sigs                       |
+| Error representation    | `error`/`signal` return `Never`                                                                | Debugger intervention is out of model             |
+| Struct subtyping        | Deferred to future version                                                                     | Keep v1 simple                                    |
+| Stdlib signatures       | Ship bundled with tart                                                                         | Versioning mechanism deferred to post-v1          |
+| Macro expansion         | Pure Elisp interpreter in OCaml                                                                | No Emacs subprocess; security + hermetic builds   |
+| Advice system           | Type-check definitions given known signatures                                                  | Same approach as hooks; `:around` takes fn + args |
+| Escape hatch            | `(tart-ignore EXPR)` macro or comment annotation                                               | Identity at runtime; type checker treats as `Any` |
+| Error messages          | Simple one-line for v1; structured Elm-style later                                             | LSP squiggles provide location; polish item       |
 
 ### 10.2 Questions Requiring Prototyping
 
-| Question | Prototype Approach |
-|----------|-------------------|
-| How reliable is `macroexpand-all`? | Test with 100 common macros from MELPA |
-| How fast is incremental type checking? | Implement MVP, benchmark on 10k LOC |
-| How good are post-expansion errors? | Build error corpus, measure user comprehension |
-| What fraction of MELPA can be typed? | Sample 50 packages, attempt to write `.eli` |
+| Question                               | Prototype Approach                             |
+| -------------------------------------- | ---------------------------------------------- |
+| How reliable is `macroexpand-all`?     | Test with 100 common macros from MELPA         |
+| How fast is incremental type checking? | Implement MVP, benchmark on 10k LOC            |
+| How good are post-expansion errors?    | Build error corpus, measure user comprehension |
+| What fraction of MELPA can be typed?   | Sample 50 packages, attempt to write `.eli`    |
 
 ### 10.3 Unresolved Dependencies
 
-| Dependency | Status | Fallback |
-|------------|--------|----------|
-| Elisp S-expression parser in OCaml | Needs implementation | Use Tree-sitter |
-| Pure Elisp interpreter in OCaml | Needs implementation | Core subset for macro expansion |
-| LSP library selection | lsp vs linol | Either works |
+| Dependency                         | Status               | Fallback                        |
+| ---------------------------------- | -------------------- | ------------------------------- |
+| Elisp S-expression parser in OCaml | Needs implementation | Use Tree-sitter                 |
+| Pure Elisp interpreter in OCaml    | Needs implementation | Core subset for macro expansion |
+| LSP library selection              | lsp vs linol         | Either works                    |
 
 ### 10.4 Future Considerations
 
-**Pure interpreter boundaries**: The pure Elisp interpreter handles macro expansion
-up to system access boundaries. At these boundaries:
+**Pure interpreter boundaries**: The pure Elisp interpreter handles macro
+expansion up to system access boundaries. At these boundaries:
 
 - File I/O, network, process spawning → opaque, require annotation
 - Dynamic symbol construction (`intern`, `make-symbol`) → opaque
@@ -1035,8 +1047,8 @@ For opaque boundaries, options include explicit type annotations or existential
 types. The interpreter maintains full source location and type environment
 through expansion, enabling error messages that reference pre-expanded syntax.
 
-**Signature versioning**: Bundled stdlib signatures (builtins, cl-lib, seq, etc.)
-will need a versioning/sequencing mechanism to handle:
+**Signature versioning**: Bundled stdlib signatures (builtins, cl-lib, seq,
+etc.) will need a versioning/sequencing mechanism to handle:
 
 - Incremental additions across Emacs versions (e.g., new functions in Emacs 30)
 - Removals and deprecations
@@ -1048,12 +1060,12 @@ Deferred to post-v1, but architecture should not preclude it.
 
 ### 10.5 Resolution Timeline
 
-| Phase | Questions to Resolve |
-|-------|---------------------|
-| Prototype (2 weeks) | Macro expansion reliability, parser approach |
-| MVP (4 weeks) | Incremental performance, basic error quality |
-| Beta (8 weeks) | Coverage of common patterns, `.eli` ergonomics |
-| Release | Remaining open questions based on user feedback |
+| Phase               | Questions to Resolve                            |
+| ------------------- | ----------------------------------------------- |
+| Prototype (2 weeks) | Macro expansion reliability, parser approach    |
+| MVP (4 weeks)       | Incremental performance, basic error quality    |
+| Beta (8 weeks)      | Coverage of common patterns, `.eli` ergonomics  |
+| Release             | Remaining open questions based on user feedback |
 
 ---
 

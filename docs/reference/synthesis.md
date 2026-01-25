@@ -87,11 +87,11 @@ type arbitrary Lisp macros without severe restrictions.
 
 Every production type system for Lisp-family languages uses the same approach:
 
-| System | Approach |
-|--------|----------|
+| System       | Approach               |
+| ------------ | ---------------------- |
 | Typed Racket | Expand-then-type-check |
-| Rust | Expand-then-type-check |
-| OCaml PPX | Expand-then-type-check |
+| Rust         | Expand-then-type-check |
+| OCaml PPX    | Expand-then-type-check |
 
 **Recommendation**: Follow this consensus. Expand macros fully, then type-check
 the core forms.
@@ -101,16 +101,19 @@ the core forms.
 For common Elisp macros, provide built-in typing rules:
 
 **Tractable (v1)**:
+
 - Wrapper macros: `with-temp-buffer`, `save-excursion`, etc.
 - Binding macros: `when-let`, `if-let`, `pcase-let`
 - Definition macros: `define-minor-mode`, `cl-defstruct`
 
 **Hard (v2)**:
+
 - `cl-loop` (complex DSL)
 - Custom `pcase` patterns
 - EIEIO method dispatch
 
 **Intractable**:
+
 - Dynamic code generation (`intern`, `eval`)
 - String-based symbol construction
 
@@ -130,10 +133,10 @@ Post-expansion errors reference expanded code. Mitigation:
 
 From the gradual typing research:
 
-| Approach | Runtime Cost | Guarantees |
-|----------|--------------|------------|
-| TypeScript (unsound) | Zero | Types erased |
-| Typed Racket (sound) | Up to 80x | Full contracts |
+| Approach             | Runtime Cost | Guarantees     |
+| -------------------- | ------------ | -------------- |
+| TypeScript (unsound) | Zero         | Types erased   |
+| Typed Racket (sound) | Up to 80x    | Full contracts |
 
 ### Recommendation: Pragmatic Soundness
 
@@ -267,13 +270,13 @@ Use mutable `TLink` nodes for efficient unification (union-find pattern).
 
 From the LSP patterns research:
 
-| Capability | Priority | Purpose |
-|------------|----------|---------|
-| publishDiagnostics | Essential | Type errors |
-| hover | Essential | Display inferred types |
-| definition | High | Jump to definitions |
-| codeAction | High | Quick fixes |
-| inlayHint | Medium | Inline type annotations |
+| Capability         | Priority  | Purpose                 |
+| ------------------ | --------- | ----------------------- |
+| publishDiagnostics | Essential | Type errors             |
+| hover              | Essential | Display inferred types  |
+| definition         | High      | Jump to definitions     |
+| codeAction         | High      | Quick fixes             |
+| inlayHint          | Medium    | Inline type annotations |
 
 ### Incremental Analysis
 
@@ -308,8 +311,8 @@ Design the LSP server to work well with these systems.
 
 From the error messages research:
 
-> "The error message should tell programmers what they need to know to fix
-> their error."
+> "The error message should tell programmers what they need to know to fix their
+> error."
 
 **Structure**:
 
@@ -350,16 +353,19 @@ The second argument to 'add' must be an Integer.
    - Recommendation: Require type annotations in `.eli` files
 
 4. **Advice system**: How do types interact with `advice-add`?
-   - Recommendation: Type-check advice definitions with known signatures (same as hooks)
+   - Recommendation: Type-check advice definitions with known signatures (same
+     as hooks)
    - `:around` advice takes `(-> Args Ret)` as first arg, then same args
 
 5. **Escape hatch**: How to opt out of checking for specific expressions?
-   - Recommendation: `(tart-ignore EXPR)` macro; identity at runtime, `Any` at type level
+   - Recommendation: `(tart-ignore EXPR)` macro; identity at runtime, `Any` at
+     type level
 
 ### Technical Risks
 
 1. **Macro expansion**: Need to expand macros before type checking
-   - Mitigation: Pure Elisp interpreter in OCaml (no Emacs subprocess for security)
+   - Mitigation: Pure Elisp interpreter in OCaml (no Emacs subprocess for
+     security)
 
 2. **Performance**: Type checking must be fast for interactive use
    - Mitigation: Incremental analysis, caching, lazy checking
@@ -376,42 +382,42 @@ The second argument to 'add' must be an Integer.
 
 ### Core Design
 
-| Decision | Recommendation | Rationale |
-|----------|---------------|-----------|
-| Base calculus | System F | Higher-rank when needed |
-| Inference | HM with constraints | Sound, complete, good errors |
-| Generalization | Levels-based | Near-linear performance |
-| Macro handling | Expand first | Industry consensus |
-| Gradual typing | Signature files | IDE value without overhead |
-| Occurrence typing | Phase 1 basic | Essential for Lisp |
+| Decision          | Recommendation      | Rationale                    |
+| ----------------- | ------------------- | ---------------------------- |
+| Base calculus     | System F            | Higher-rank when needed      |
+| Inference         | HM with constraints | Sound, complete, good errors |
+| Generalization    | Levels-based        | Near-linear performance      |
+| Macro handling    | Expand first        | Industry consensus           |
+| Gradual typing    | Signature files     | IDE value without overhead   |
+| Occurrence typing | Phase 1 basic       | Essential for Lisp           |
 
 ### Implementation
 
-| Decision | Recommendation | Rationale |
-|----------|---------------|-----------|
-| Language | OCaml | Ecosystem, pattern matching |
-| Parser | Menhir | Excellent Emacs integration |
-| Incrementality | Query-based | Fast interactive response |
-| LSP | Hover + diagnostics first | Immediate user value |
+| Decision       | Recommendation            | Rationale                   |
+| -------------- | ------------------------- | --------------------------- |
+| Language       | OCaml                     | Ecosystem, pattern matching |
+| Parser         | Menhir                    | Excellent Emacs integration |
+| Incrementality | Query-based               | Fast interactive response   |
+| LSP            | Hover + diagnostics first | Immediate user value        |
 
 ### Scope
 
-| Feature | v1 | v2 | Out of scope |
-|---------|----|----|--------------|
-| Basic HM inference | ✓ | | |
-| `let`-polymorphism | ✓ | | |
-| Occurrence typing (basic) | ✓ | | |
-| Common macro rules | ✓ | | |
-| `cl-defstruct` types | ✓ | | |
-| `.eli` signature files | ✓ | | |
-| Advice definitions | ✓ | | |
-| `(tart-ignore ...)` | ✓ | | |
-| Higher-rank types | | ✓ | |
-| Row polymorphism | | ✓ | |
-| Full `pcase` typing | | ✓ | |
-| Runtime contracts | | ✓ | |
-| EIEIO multi-dispatch | | | ✓ |
-| Dynamic code generation | | | ✓ |
+| Feature                   | v1 | v2 | Out of scope |
+| ------------------------- | -- | -- | ------------ |
+| Basic HM inference        | ✓  |    |              |
+| `let`-polymorphism        | ✓  |    |              |
+| Occurrence typing (basic) | ✓  |    |              |
+| Common macro rules        | ✓  |    |              |
+| `cl-defstruct` types      | ✓  |    |              |
+| `.eli` signature files    | ✓  |    |              |
+| Advice definitions        | ✓  |    |              |
+| `(tart-ignore ...)`       | ✓  |    |              |
+| Higher-rank types         |    | ✓  |              |
+| Row polymorphism          |    | ✓  |              |
+| Full `pcase` typing       |    | ✓  |              |
+| Runtime contracts         |    | ✓  |              |
+| EIEIO multi-dispatch      |    |    | ✓            |
+| Dynamic code generation   |    |    | ✓            |
 
 ---
 
