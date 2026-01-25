@@ -64,6 +64,22 @@ is optional for monomorphic types.
 | `Any`     | `Truthy \| Nil` (top type)     | ✗       |
 | `Never`   | Uninhabited (bottom type)      | ✓       |
 
+### Literal Types
+
+Singleton types representing specific values:
+
+| Syntax      | Description                    | Supertype |
+| ----------- | ------------------------------ | --------- |
+| `42`        | Integer literal                | `Int`     |
+| `"hello"`   | String literal                 | `String`  |
+| `'foo`      | Symbol literal                 | `Symbol`  |
+| `:bar`      | Keyword literal                | `Keyword` |
+
+Literal types are useful for:
+- Discriminated unions: `(Or :success :failure)`
+- Exact return values: `(defun version -> "1.0")`
+- Keyword arguments with specific values
+
 ### Type Constructors
 
 (see: [`Types.list_of`](lib/core/types.ml#L119), [`Types.option_of`](lib/core/types.ml#L121), [`Types.vector_of`](lib/core/types.ml#L120), [`Types.pair_of`](lib/core/types.ml#L122), [`Types.hash_table_of`](lib/core/types.ml#L123))
@@ -428,8 +444,7 @@ A sibling `foo.tart` declares the public interface of `foo.el` and enables
 signature verification.
 
 ```elisp
-(module my-utils)
-
+;; my-utils.tart
 (open 'seq)  ; Import types for use in signatures (not re-exported)
 
 ;; Function signatures (directly callable)
@@ -467,7 +482,6 @@ exposing a simpler or opaque public interface.
 
 ```elisp
 ;; my-cache.tart (public interface)
-(module my-cache)
 (type Cache)                      ; Opaque - hide implementation
 (defun cache-create Int -> Cache)
 (defun cache-get [a] (Cache String) -> (Option a))

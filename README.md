@@ -9,14 +9,15 @@ at edit time via LSP integration with Eglot.
 > Tart is under active development and is not yet usable. See
 > [DEVELOPMENT.md](DEVELOPMENT.md) for build instructions and project status.
 
+> [!NOTE]
+> Heavy use of AI assistance in this codebase. You have been warned. ☠️
+
 ## Signature Files
 
 Type signatures live in `.tart` files alongside your Elisp:
 
 ```elisp
 ;; my-utils.tart
-(module my-utils)
-
 (open 'seq)                                   ; import types from another module
 
 (type Handler (String -> Nil))                ; type alias
@@ -31,6 +32,3 @@ Tart searches for `.tart` files when you `require` a module, so you can provide
 types for any package—even ones you don't control.
 
 See [tart-format.md](docs/reference/tart-format.md) for the full specification.
-
-> [!NOTE]
-> Heavy use of AI assistance in this codebase. You have been warned.

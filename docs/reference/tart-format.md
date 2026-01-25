@@ -19,23 +19,21 @@ A `.tart` file can expose an opaque view of internal types for abstraction.
 ## File Structure
 
 ```elisp
-(module module-name)                       ; Required for search path files
-
 (open 'module)                             ; Import types for use in signatures
 (include 'module)                          ; Inline and re-export declarations
 
 (defun name [quantifiers]? params -> ret)  ; Function (callable)
 (defvar variable-name type)                ; Variable declaration
-(type TypeName type)                       ; Type alias (Opaque for abstract types)
+(type TypeName type)                       ; Type alias (no type = opaque)
 (import-struct name)                       ; Import cl-defstruct
 ```
+
+The module name comes from the filename: `foo.tart` provides types for `foo`.
 
 ## Grammar
 
 ```
-tart_file    ::= module_decl? directive* declaration*
-
-module_decl  ::= '(module' symbol ')'
+tart_file    ::= directive* declaration*
 
 directive    ::= open_decl | include_decl
 open_decl    ::= "(open '" symbol ')'
@@ -96,6 +94,24 @@ grouping; multiple params require parens.
 ### Type Variables
 
 Lowercase identifiers: `a`, `b`, `elem`, `key`, `value`
+
+### Literal Types
+
+Singleton types for specific values:
+
+```elisp
+42                                    ; Integer literal (subtype of Int)
+"hello"                               ; String literal (subtype of String)
+'foo                                  ; Symbol literal (subtype of Symbol)
+:bar                                  ; Keyword literal (subtype of Keyword)
+```
+
+Useful for discriminated unions and exact value types:
+
+```elisp
+(type Status (Or :pending :complete :failed))
+(defun api-version -> "2.0")
+```
 
 ### Function Types
 
@@ -209,8 +225,6 @@ them except via declared functions.
 
 ```elisp
 ;; buffer-manager.tart
-(module buffer-manager)
-
 (type Buffer)                             ; Abstract type (no definition = opaque)
 
 (defun buffer-create String -> Buffer)
@@ -251,7 +265,6 @@ type expressions. The imported names are not re-exported.
 
 ```elisp
 ;; my-collection.tart
-(module my-collection)
 (open 'seq)  ; Seqable now available for use in signatures
 
 (defun my-flatten [a] (Seqable (Seqable a)) -> (List a))
@@ -267,7 +280,6 @@ them part of this module's interface.
 
 ```elisp
 ;; my-extended-seq.tart
-(module my-extended-seq)
 (include 'seq)  ; Re-export everything from seq
 
 ;; Plus additional functions
@@ -281,8 +293,6 @@ Use `include` to extend or re-export another module's type interface.
 
 ```elisp
 ;; my-utils.tart
-(module my-utils)
-
 (open 'seq)  ; Import Seqable for use in signatures
 
 ;; Type aliases
@@ -334,17 +344,14 @@ that don't ship their own type definitions.
 
 ```elisp
 ;; ~/.config/emacs/tart/seq.tart
-(module seq)
-
 (defun seq-map [a b] ((a -> b) (Seqable a)) -> (List b))
 (defun seq-filter [a] ((a -> Bool) (Seqable a)) -> (List a))
 (defun seq-reduce [a b] ((b a -> b) b (Seqable a)) -> b)
 (defun seq-find [a] ((a -> Bool) (Seqable a)) -> (Option a))
 ```
 
-Each `.tart` file must have a `(module name)` declaration matching the feature
-name used in `(require 'name)`. The first match in the search order wins,
-allowing user overrides of bundled types.
+The filename determines the module: `seq.tart` provides types for `(require 'seq)`.
+The first match in the search order wins, allowing user overrides of bundled types.
 
 ## See Also
 

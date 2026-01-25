@@ -42,13 +42,14 @@ tart/
 **Given** a `.tart` file
 **When** parsed
 **Then** it produces a signature AST containing:
-- Module declaration
 - Open directives (import types for use in signatures)
 - Include directives (inline and re-export declarations)
 - Function signatures
 - Variable declarations
 - Type declarations (aliases with definition, opaque without)
 - Struct imports
+
+The module name is derived from the filename: `foo.tart` provides types for `foo`.
 
 **Verify:** `dune test`; parse all files in `stdlib/`
 
@@ -121,9 +122,8 @@ go at the start of arrow types, or after the name in `defun`.
 
 ### R8: Open directive (renumbered)
 
-**Given** a signature file:
+**Given** `my-collection.tart`:
 ```elisp
-(module my-collection)
 (open 'seq)
 
 (defun my-flatten [a] (Seqable (Seqable a)) -> (List a))
@@ -137,9 +137,8 @@ go at the start of arrow types, or after the name in `defun`.
 
 ### R9: Include directive
 
-**Given** a signature file:
+**Given** `my-extended-seq.tart`:
 ```elisp
-(module my-extended-seq)
 (include 'seq)
 
 (defun seq-partition [a] (Int (Seqable a)) -> (List (List a)))
@@ -155,11 +154,10 @@ go at the start of arrow types, or after the name in `defun`.
 
 **Given** a configuration with search path:
 ```elisp
-(setq tart-type-path '("~/.config/emacs/eli/" "/nix/store/.../community-types/"))
+(setq tart-type-path '("~/.config/emacs/tart/" "/nix/store/.../community-types/"))
 ```
-**And** `~/.config/emacs/eli/seq.tart` contains:
+**And** `~/.config/emacs/tart/seq.tart` contains:
 ```elisp
-(module seq)
 (defun seq-map [a b] ((a -> b) (Seqable a)) -> (List b))
 ```
 **When** a typed module calls `(require 'seq)` and uses `seq-map`
