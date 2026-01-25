@@ -9,3 +9,10 @@ module Sexp = Syntax.Sexp
 module Lexer = Syntax.Lexer
 module Parser = Syntax.Parser
 module Read = Syntax.Read
+
+(** Re-export interpreter modules *)
+module Value = Interp.Value
+module Env = Interp.Env
+module Builtin = Interp.Builtin
+module Eval = Interp.Eval
+module Expand = Interp.Expand

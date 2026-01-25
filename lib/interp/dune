@@ -1,0 +1,6 @@
+(library
+ (name interp)
+ (public_name tart.interp)
+ (libraries tart.syntax)
+ (preprocess
+  (pps ppx_deriving.show ppx_deriving.eq)))
