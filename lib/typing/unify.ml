@@ -118,6 +118,9 @@ let rec unify t1 t2 loc : unit result =
             tv := Link ty;
             Ok ())
 
+    (* Any is the top type - unifies with anything *)
+    | TCon "Any", _ | _, TCon "Any" -> Ok ()
+
     (* Type constants must match exactly *)
     | TCon n1, TCon n2 ->
         if n1 = n2 then Ok ()
@@ -132,13 +135,11 @@ let rec unify t1 t2 loc : unit result =
         else
           unify_list args1 args2 loc
 
-    (* Function types: params and return must match *)
+    (* Function types: params and return must match.
+       Handle rest/optional parameters specially. *)
     | TArrow (ps1, r1), TArrow (ps2, r2) ->
-        if List.length ps1 <> List.length ps2 then
-          Error (ArityMismatch (List.length ps1, List.length ps2, loc))
-        else
-          let* () = unify_params ps1 ps2 loc in
-          unify r1 r2 loc
+        let* () = unify_param_lists ps1 ps2 loc in
+        unify r1 r2 loc
 
     (* Forall types: for now, require same structure.
        Full higher-rank polymorphism would need more sophisticated handling. *)
@@ -174,6 +175,82 @@ and unify_list ts1 ts2 loc =
        let* () = acc in
        unify t1 t2 loc)
     (Ok ()) ts1 ts2
+
+(** Check if a param is a rest param *)
+and is_rest_param = function
+  | PRest _ -> true
+  | _ -> false
+
+(** Unify two parameter lists.
+
+    Handles the complexity of rest arguments and optional parameters.
+    The strategy is:
+    1. If both lists have the same length, unify element-wise
+    2. If one has rest args, consume extra args from the other side
+    3. Otherwise, it's an arity mismatch
+*)
+and unify_param_lists ps1 ps2 loc =
+  match (ps1, ps2) with
+  (* Both empty - success *)
+  | [], [] -> Ok ()
+
+  (* Left side has rest param at end - consume all remaining from right *)
+  | [PRest elem_ty1], params2 ->
+      (* Unify each remaining param's type with the rest element type *)
+      List.fold_left
+        (fun acc p2 ->
+           let* () = acc in
+           match p2 with
+           | PPositional t2 | POptional t2 | PKey (_, t2) -> unify elem_ty1 t2 loc
+           | PRest t2 -> unify elem_ty1 t2 loc)
+        (Ok ()) params2
+
+  (* Right side has rest param at end - consume all remaining from left *)
+  | params1, [PRest elem_ty2] ->
+      List.fold_left
+        (fun acc p1 ->
+           let* () = acc in
+           match p1 with
+           | PPositional t1 | POptional t1 | PKey (_, t1) -> unify t1 elem_ty2 loc
+           | PRest t1 -> unify t1 elem_ty2 loc)
+        (Ok ()) params1
+
+  (* Non-rest params on both sides - unify element-wise *)
+  | p1 :: rest1, p2 :: rest2 ->
+      if is_rest_param p1 || is_rest_param p2 then
+        (* Rest param not at the end - handle case by case *)
+        match (p1, p2) with
+        | PRest elem_ty1, _ ->
+            (* Left is rest, right is not - unify right with rest elem, continue *)
+            let t2 = match p2 with
+              | PPositional t | POptional t | PKey (_, t) | PRest t -> t
+            in
+            let* () = unify elem_ty1 t2 loc in
+            unify_param_lists ps1 rest2 loc  (* Keep consuming with same rest *)
+        | _, PRest elem_ty2 ->
+            (* Right is rest, left is not *)
+            let t1 = match p1 with
+              | PPositional t | POptional t | PKey (_, t) | PRest t -> t
+            in
+            let* () = unify t1 elem_ty2 loc in
+            unify_param_lists rest1 ps2 loc  (* Keep consuming with same rest *)
+        | _, _ ->
+            (* Neither is rest - unreachable given the guard, but needed for exhaustiveness *)
+            let* () = unify_param p1 p2 loc in
+            unify_param_lists rest1 rest2 loc
+      else begin
+        (* Neither is rest param - normal element-wise unification *)
+        let* () = unify_param p1 p2 loc in
+        unify_param_lists rest1 rest2 loc
+      end
+
+  (* Left exhausted but right has more (and no rest on left) *)
+  | [], _ :: _ ->
+      Error (ArityMismatch (0, List.length ps2, loc))
+
+  (* Right exhausted but left has more (and no rest on right) *)
+  | _ :: _, [] ->
+      Error (ArityMismatch (List.length ps1, 0, loc))
 
 and unify_params ps1 ps2 loc =
   List.fold_left2

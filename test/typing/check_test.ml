@@ -102,6 +102,56 @@ let test_check_program_defun_calls_previous () =
   Alcotest.(check int) "no errors" 0 (List.length result.errors)
 
 (* =============================================================================
+   R8: Built-in function types Tests
+   ============================================================================= *)
+
+(** Test that car on a quoted list returns Option Any.
+    (car '(1 2 3)) should infer (Option Any) because '(1 2 3) has type (List Any).
+*)
+let test_builtin_car_returns_option () =
+  let sexp = parse "(car '(1 2 3))" in
+  let ty, errors = Check.check_expr sexp in
+  (* Uses default environment which includes built-in types *)
+  Alcotest.(check int) "no errors" 0 (List.length errors);
+  Alcotest.(check string) "car returns Option Any" "(Option Any)" (to_string ty)
+
+(** Test that (+ 1 "x") produces a type error.
+    The built-in + expects Int arguments, not String.
+*)
+let test_builtin_plus_type_error () =
+  let sexp = parse "(+ 1 \"x\")" in
+  let _, errors = Check.check_expr sexp in
+  Alcotest.(check bool) "type error" true (List.length errors > 0)
+
+(** Test that (+ 1 2) returns Int with no errors *)
+let test_builtin_plus_ok () =
+  let sexp = parse "(+ 1 2)" in
+  let ty, errors = Check.check_expr sexp in
+  Alcotest.(check int) "no errors" 0 (List.length errors);
+  Alcotest.(check string) "plus returns Int" "Int" (to_string ty)
+
+(** Test that (concat "a" "b") returns String *)
+let test_builtin_concat () =
+  let sexp = parse "(concat \"a\" \"b\")" in
+  let ty, errors = Check.check_expr sexp in
+  Alcotest.(check int) "no errors" 0 (List.length errors);
+  Alcotest.(check string) "concat returns String" "String" (to_string ty)
+
+(** Test that (length '(1 2 3)) returns Int *)
+let test_builtin_length () =
+  let sexp = parse "(length '(1 2 3))" in
+  let ty, errors = Check.check_expr sexp in
+  Alcotest.(check int) "no errors" 0 (List.length errors);
+  Alcotest.(check string) "length returns Int" "Int" (to_string ty)
+
+(** Test that (null nil) returns Bool *)
+let test_builtin_null () =
+  let sexp = parse "(null ())" in
+  let ty, errors = Check.check_expr sexp in
+  Alcotest.(check int) "no errors" 0 (List.length errors);
+  Alcotest.(check string) "null returns Bool" "Bool" (to_string ty)
+
+(* =============================================================================
    form_result_to_string Tests
    ============================================================================= *)
 
@@ -145,5 +195,14 @@ let () =
         [
           Alcotest.test_case "defun" `Quick test_form_result_defun_string;
           Alcotest.test_case "expr" `Quick test_form_result_expr_string;
+        ] );
+      ( "builtin_types",
+        [
+          Alcotest.test_case "car returns Option" `Quick test_builtin_car_returns_option;
+          Alcotest.test_case "+ type error" `Quick test_builtin_plus_type_error;
+          Alcotest.test_case "+ ok" `Quick test_builtin_plus_ok;
+          Alcotest.test_case "concat" `Quick test_builtin_concat;
+          Alcotest.test_case "length" `Quick test_builtin_length;
+          Alcotest.test_case "null" `Quick test_builtin_null;
         ] );
     ]

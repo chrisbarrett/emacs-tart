@@ -3,11 +3,18 @@
     This module provides the entry point for type checking Elisp programs.
     It handles sequences of top-level forms, accumulating type bindings
     from defun and other definition forms.
+
+    By default, all type checking functions use an environment pre-populated
+    with types for built-in functions (car, +, concat, etc.). This can be
+    overridden by passing a custom ~env parameter.
 *)
 
 open Core.Types
 module Env = Core.Type_env
 module C = Constraint
+
+(** Default environment with built-in function types *)
+let default_env () = Builtin_types.initial_env ()
 
 (** Result of type-checking a single top-level form *)
 type form_result =
@@ -46,8 +53,9 @@ let check_form (env : Env.t) (sexp : Syntax.Sexp.t) : Env.t * form_result * Unif
 (** Check a sequence of top-level forms.
 
     Processes forms in order, accumulating type bindings from defuns.
+    Uses the default environment with built-in types unless overridden.
 *)
-let check_program ?(env = Env.empty) (forms : Syntax.Sexp.t list) : check_result =
+let check_program ?(env = default_env ()) (forms : Syntax.Sexp.t list) : check_result =
   let rec loop env forms results errors =
     match forms with
     | [] ->
@@ -62,8 +70,9 @@ let check_program ?(env = Env.empty) (forms : Syntax.Sexp.t list) : check_result
 
     This is a convenience function for checking a single expression
     without accumulating environment changes.
+    Uses the default environment with built-in types unless overridden.
 *)
-let check_expr ?(env = Env.empty) (sexp : Syntax.Sexp.t) : typ * Unify.error list =
+let check_expr ?(env = default_env ()) (sexp : Syntax.Sexp.t) : typ * Unify.error list =
   reset_tvar_counter ();
   let result = Infer.infer env sexp in
   let errors = Unify.solve_all result.Infer.constraints in
