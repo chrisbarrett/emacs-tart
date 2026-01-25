@@ -473,16 +473,18 @@ Parse `cl-defstruct` forms and extract:
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Function types | Include | Standard `(-> A B)` |
+| Function types | Include | `(-> (A B) C)` (non-curried) |
 | Let-polymorphism | Include | Generalization at let |
 | Basic union types | Include | `(Or A B)` |
-| Option types | Include | `(Option A)` |
+| Option types | Include | `(Option A)` where `A : Truthy` |
 | Lists | Include | `(List A)` |
 | Tuples | Include | `(Tuple A B C)` |
 | Structs | Include | Via `cl-defstruct` |
 | Basic occurrence typing | Include | `if`/`cond` with predicates |
 | Wrapper macros | Include | Built-in knowledge |
 | Binding macros | Include | `when-let`, etc. |
+| Advice definitions | Include | Type-check with known signatures |
+| Escape hatch | Include | `(tart-ignore EXPR)` → `Any` |
 
 ### v2 Scope (Hard)
 
@@ -500,10 +502,13 @@ Parse `cl-defstruct` forms and extract:
 | Feature | Status | Notes |
 |---------|--------|-------|
 | Dynamic code gen | Exclude | `intern`, `eval` |
-| Advice system | Exclude | Modifies types at runtime |
 | Buffer-local tracking | Exclude | Needs effect system |
 | Point/mark effects | Exclude | Pervasive state |
 | Macro definitions | Exclude | Expand first |
+
+Note: Advice system moved to v1 — advice definitions can be type-checked with
+known signatures (same approach as hooks). Use `(tart-ignore EXPR)` as escape
+hatch for expressions that cannot be typed.
 
 ---
 
@@ -516,24 +521,27 @@ Int      ; integer
 Float    ; floating-point
 Num      ; Int | Float
 String   ; string
-Bool     ; t | nil
 Symbol   ; symbol
 Keyword  ; keyword (:foo)
-Nil      ; nil only
-Any      ; top type (escape hatch)
+Nil      ; unit type, sole inhabitant: nil
+T        ; unit type, sole inhabitant: t
+Truthy   ; primitive: anything that is not Nil
+Bool     ; T | Nil
+Any      ; Truthy | Nil (top type)
 Never    ; bottom type (errors)
 ```
 
 ### Type Constructors
 
 ```
-(-> A B)           ; function from A to B
-(-> A B C D)       ; curried: A -> (B -> (C -> D))
+(-> (A) B)         ; function from A to B (non-curried)
+(-> (A B) C)       ; two args to C
+(-> (A) (-> (B) C)); manual currying: returns function
 (List A)           ; homogeneous list
 (Vector A)         ; homogeneous vector
 (Pair A B)         ; cons cell
 (Tuple A B C)      ; fixed-length heterogeneous
-(Option A)         ; A | Nil
+(Option A)         ; A | Nil (A must be Truthy)
 (Or A B)           ; union
 (HashTable K V)    ; hash table
 (Alist K V)        ; (List (Pair K V))
@@ -582,15 +590,16 @@ Never    ; bottom type (errors)
 3. **Inlay hints** in LSP
 4. **Code actions** for type annotations
 
-### Won't Have
+### Won't Have (v1)
 
 1. Row polymorphism
 2. Runtime contracts
 3. Effect types
 4. Buffer context tracking
-5. Advice-aware typing
-6. Custom `pcase` patterns
-7. Full `cl-loop` typing
+5. Custom `pcase` patterns
+6. Full `cl-loop` typing
+
+Note: Advice definitions are now v1 scope (type-checked with known signatures).
 
 ---
 

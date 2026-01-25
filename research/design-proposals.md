@@ -999,6 +999,11 @@ let format_hover ty doc =
 | `&allow-other-keys` | Defaults to `(Plist Any)`, overridable | Flexibility for strict sigs |
 | Error representation | `error`/`signal` return `Never` | Debugger intervention is out of model |
 | Struct subtyping | Deferred to future version | Keep v1 simple |
+| Stdlib signatures | Ship bundled with tart | Versioning mechanism deferred to post-v1 |
+| Macro expansion | Pure Elisp interpreter in OCaml | No Emacs subprocess; security + hermetic builds |
+| Advice system | Type-check definitions given known signatures | Same approach as hooks; `:around` takes fn + args |
+| Escape hatch | `(tart-ignore EXPR)` macro or comment annotation | Identity at runtime; type checker treats as `Any` |
+| Error messages | Simple one-line for v1; structured Elm-style later | LSP squiggles provide location; polish item |
 
 ### 10.2 Questions Requiring Prototyping
 
@@ -1014,10 +1019,34 @@ let format_hover ty doc =
 | Dependency | Status | Fallback |
 |------------|--------|----------|
 | Elisp S-expression parser in OCaml | Needs implementation | Use Tree-sitter |
-| Emacs subprocess for macroexpand | Needs design | Parse without expansion |
+| Pure Elisp interpreter in OCaml | Needs implementation | Core subset for macro expansion |
 | LSP library selection | lsp vs linol | Either works |
 
-### 10.4 Resolution Timeline
+### 10.4 Future Considerations
+
+**Pure interpreter boundaries**: The pure Elisp interpreter handles macro expansion
+up to system access boundaries. At these boundaries:
+
+- File I/O, network, process spawning → opaque, require annotation
+- Dynamic symbol construction (`intern`, `make-symbol`) → opaque
+- `eval` on computed forms → opaque
+
+For opaque boundaries, options include explicit type annotations or existential
+types. The interpreter maintains full source location and type environment
+through expansion, enabling error messages that reference pre-expanded syntax.
+
+**Signature versioning**: Bundled stdlib signatures (builtins, cl-lib, seq, etc.)
+will need a versioning/sequencing mechanism to handle:
+
+- Incremental additions across Emacs versions (e.g., new functions in Emacs 30)
+- Removals and deprecations
+- Type signature changes (rare but possible)
+- Library version differences (generalises beyond Emacs core)
+
+This likely requires a conditional signature format or version predicate system.
+Deferred to post-v1, but architecture should not preclude it.
+
+### 10.5 Resolution Timeline
 
 | Phase | Questions to Resolve |
 |-------|---------------------|

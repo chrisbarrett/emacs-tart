@@ -350,12 +350,16 @@ The second argument to 'add' must be an Integer.
    - Recommendation: Require type annotations in `.eli` files
 
 4. **Advice system**: How do types interact with `advice-add`?
-   - Recommendation: Out of scope for v1; advised functions lose types
+   - Recommendation: Type-check advice definitions with known signatures (same as hooks)
+   - `:around` advice takes `(-> Args Ret)` as first arg, then same args
+
+5. **Escape hatch**: How to opt out of checking for specific expressions?
+   - Recommendation: `(tart-ignore EXPR)` macro; identity at runtime, `Any` at type level
 
 ### Technical Risks
 
-1. **Macro expansion API**: Need Emacs to provide expansion without evaluation
-   - Mitigation: Use `macroexpand-all`
+1. **Macro expansion**: Need to expand macros before type checking
+   - Mitigation: Pure Elisp interpreter in OCaml (no Emacs subprocess for security)
 
 2. **Performance**: Type checking must be fast for interactive use
    - Mitigation: Incremental analysis, caching, lazy checking
@@ -400,6 +404,8 @@ The second argument to 'add' must be an Integer.
 | Common macro rules | ✓ | | |
 | `cl-defstruct` types | ✓ | | |
 | `.eli` signature files | ✓ | | |
+| Advice definitions | ✓ | | |
+| `(tart-ignore ...)` | ✓ | | |
 | Higher-rank types | | ✓ | |
 | Row polymorphism | | ✓ | |
 | Full `pcase` typing | | ✓ | |
