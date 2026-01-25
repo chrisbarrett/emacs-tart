@@ -1,0 +1,389 @@
+(** Tests for constraint generation (type inference) *)
+
+open Tart.Types
+module Env = Tart.Type_env
+module Infer = Tart.Infer
+
+(** Parse a string to S-expression for testing *)
+let parse str =
+  match Tart.Read.parse_one ~filename:"<test>" str with
+  | Ok sexp -> sexp
+  | Error msg -> failwith ("parse error: " ^ msg)
+
+(** Helper to run inference and return the type string *)
+let infer_type ?(env = Env.empty) str =
+  reset_tvar_counter ();
+  let sexp = parse str in
+  let result = Infer.infer env sexp in
+  to_string result.ty
+
+(** Helper to get the constraint count *)
+let constraint_count ?(env = Env.empty) str =
+  reset_tvar_counter ();
+  let sexp = parse str in
+  let result = Infer.infer env sexp in
+  List.length result.constraints
+
+(* =============================================================================
+   Literal Tests
+   ============================================================================= *)
+
+let test_int_literal () =
+  Alcotest.(check string) "int literal" "Int" (infer_type "42")
+
+let test_negative_int () =
+  Alcotest.(check string) "negative int" "Int" (infer_type "-17")
+
+let test_float_literal () =
+  Alcotest.(check string) "float literal" "Float" (infer_type "3.14")
+
+let test_string_literal () =
+  Alcotest.(check string) "string literal" "String" (infer_type "\"hello\"")
+
+let test_empty_string () =
+  Alcotest.(check string) "empty string" "String" (infer_type "\"\"")
+
+let test_keyword_literal () =
+  Alcotest.(check string) "keyword literal" "Keyword" (infer_type ":foo")
+
+let test_char_literal () =
+  (* Characters are integers in Elisp *)
+  Alcotest.(check string) "char literal" "Int" (infer_type "?a")
+
+let test_nil_literal () =
+  (* nil is the empty list *)
+  Alcotest.(check string) "nil" "Nil" (infer_type "()")
+
+(* =============================================================================
+   Variable Tests
+   ============================================================================= *)
+
+let test_bound_var () =
+  let env = Env.extend_mono "x" Prim.int Env.empty in
+  Alcotest.(check string) "bound variable" "Int"
+    (infer_type ~env "x")
+
+let test_unbound_var () =
+  (* Unbound variables get fresh type variables *)
+  let ty = infer_type "unknown" in
+  Alcotest.(check bool) "fresh tvar" true
+    (String.length ty > 0 && ty.[0] = '\'')
+
+let test_poly_var_instantiation () =
+  (* Polymorphic variable gets instantiated with fresh tvars *)
+  let env = Env.extend_poly "id" ["a"]
+    (arrow [TCon "a"] (TCon "a")) Env.empty in
+  let ty = infer_type ~env "id" in
+  (* Should be a function type with fresh type variables *)
+  Alcotest.(check bool) "instantiated poly type" true
+    (String.sub ty 0 4 = "(-> ")
+
+(* =============================================================================
+   Quote Tests
+   ============================================================================= *)
+
+let test_quoted_symbol () =
+  Alcotest.(check string) "quoted symbol" "Symbol" (infer_type "'foo")
+
+let test_quoted_list () =
+  Alcotest.(check string) "quoted list" "(List Any)" (infer_type "'(1 2 3)")
+
+let test_quoted_int () =
+  Alcotest.(check string) "quoted int" "Int" (infer_type "'42")
+
+let test_quoted_string () =
+  Alcotest.(check string) "quoted string" "String" (infer_type "'\"hello\"")
+
+(* =============================================================================
+   Lambda Tests
+   ============================================================================= *)
+
+let test_lambda_no_params () =
+  let ty = infer_type "(lambda () 42)" in
+  Alcotest.(check string) "nullary lambda" "(-> () Int)" ty
+
+let test_lambda_one_param () =
+  let ty = infer_type "(lambda (x) x)" in
+  (* Should be (-> ('a) 'a) with the same type variable *)
+  Alcotest.(check bool) "identity lambda" true
+    (String.sub ty 0 4 = "(-> ")
+
+let test_lambda_two_params () =
+  let ty = infer_type "(lambda (x y) y)" in
+  Alcotest.(check bool) "two-param lambda" true
+    (String.sub ty 0 4 = "(-> ")
+
+let test_lambda_body_uses_param () =
+  let env = Env.extend_mono "+" (arrow [Prim.int; Prim.int] Prim.int) Env.empty in
+  let ty = infer_type ~env "(lambda (x) (+ x 1))" in
+  (* Constraint: x must unify with Int due to + *)
+  Alcotest.(check bool) "lambda with body" true
+    (String.sub ty 0 4 = "(-> ")
+
+let test_lambda_constraint_count () =
+  (* Lambda itself generates no constraints, but application inside does *)
+  let count = constraint_count "(lambda (x) x)" in
+  Alcotest.(check int) "identity lambda constraints" 0 count
+
+(* =============================================================================
+   Application Tests
+   ============================================================================= *)
+
+let test_application_generates_constraint () =
+  (* Applying unknown function generates a constraint *)
+  let count = constraint_count "(f 1)" in
+  Alcotest.(check int) "application constraint" 1 count
+
+let test_application_result_type () =
+  (* Result is a fresh type variable *)
+  let ty = infer_type "(f 1)" in
+  Alcotest.(check bool) "application result is tvar" true
+    (String.length ty > 0 && ty.[0] = '\'')
+
+let test_known_function_application () =
+  (* Applying a known function *)
+  let env = Env.extend_mono "add1" (arrow [Prim.int] Prim.int) Env.empty in
+  let result = begin
+    reset_tvar_counter ();
+    let sexp = parse "(add1 42)" in
+    Infer.infer env sexp
+  end in
+  (* The constraint should relate the function types *)
+  Alcotest.(check int) "known fn constraint" 1
+    (List.length result.constraints)
+
+let test_multi_arg_application () =
+  let count = constraint_count "(f 1 2 3)" in
+  Alcotest.(check int) "multi-arg constraint" 1 count
+
+(* =============================================================================
+   If Tests
+   ============================================================================= *)
+
+let test_if_with_else () =
+  (* Both branches contribute constraints *)
+  let count = constraint_count "(if t 1 2)" in
+  (* Two constraints: result = then_type, result = else_type *)
+  Alcotest.(check int) "if-else constraints" 2 count
+
+let test_if_result_type () =
+  let ty = infer_type "(if t 1 2)" in
+  (* Result is a fresh tvar that will unify with Int *)
+  Alcotest.(check bool) "if result is tvar" true
+    (String.length ty > 0 && ty.[0] = '\'')
+
+let test_if_without_else () =
+  let count = constraint_count "(if t 1)" in
+  (* One constraint: result = then_type *)
+  Alcotest.(check int) "if-no-else constraints" 1 count
+
+(* =============================================================================
+   Let Tests
+   ============================================================================= *)
+
+let test_let_simple () =
+  let ty = infer_type "(let ((x 42)) x)" in
+  Alcotest.(check string) "simple let" "Int" ty
+
+let test_let_multiple_bindings () =
+  let ty = infer_type "(let ((x 1) (y 2)) y)" in
+  Alcotest.(check string) "let with two bindings" "Int" ty
+
+let test_let_binding_shadowing () =
+  let env = Env.extend_mono "x" Prim.string Env.empty in
+  let ty = infer_type ~env "(let ((x 42)) x)" in
+  (* Inner x shadows outer x *)
+  Alcotest.(check string) "let shadows outer" "Int" ty
+
+let test_let_nil_binding () =
+  let ty = infer_type "(let ((x)) x)" in
+  Alcotest.(check string) "nil binding" "Nil" ty
+
+let test_let_star_sequential () =
+  let ty = infer_type "(let* ((x 1) (y x)) y)" in
+  (* y sees x, should be Int *)
+  Alcotest.(check string) "let* sequential" "Int" ty
+
+(* =============================================================================
+   Progn Tests
+   ============================================================================= *)
+
+let test_progn_empty () =
+  let ty = infer_type "(progn)" in
+  Alcotest.(check string) "empty progn" "Nil" ty
+
+let test_progn_single () =
+  let ty = infer_type "(progn 42)" in
+  Alcotest.(check string) "single progn" "Int" ty
+
+let test_progn_multiple () =
+  let ty = infer_type "(progn 1 2 \"end\")" in
+  Alcotest.(check string) "multiple progn" "String" ty
+
+(* =============================================================================
+   Boolean Expression Tests
+   ============================================================================= *)
+
+let test_and_empty () =
+  let ty = infer_type "(and)" in
+  Alcotest.(check string) "empty and" "T" ty
+
+let test_or_empty () =
+  let ty = infer_type "(or)" in
+  Alcotest.(check string) "empty or" "Nil" ty
+
+let test_not_returns_bool () =
+  let ty = infer_type "(not 42)" in
+  Alcotest.(check string) "not returns bool" "Bool" ty
+
+let test_and_last_type () =
+  let ty = infer_type "(and 1 \"str\")" in
+  Alcotest.(check string) "and returns last" "String" ty
+
+let test_or_last_type () =
+  let ty = infer_type "(or 1 \"str\")" in
+  Alcotest.(check string) "or returns last" "String" ty
+
+(* =============================================================================
+   Vector Tests
+   ============================================================================= *)
+
+let test_empty_vector () =
+  let ty = infer_type "#()" in
+  (* Empty vector has fresh element type *)
+  Alcotest.(check bool) "empty vector" true
+    (String.sub ty 0 8 = "(Vector ")
+
+let test_int_vector () =
+  let ty = infer_type "#(1 2 3)" in
+  Alcotest.(check string) "int vector" "(Vector Int)" ty
+
+let test_string_vector () =
+  let ty = infer_type "#(\"a\" \"b\")" in
+  Alcotest.(check string) "string vector" "(Vector String)" ty
+
+let test_mixed_vector_constraints () =
+  (* Mixed elements generate unification constraints *)
+  let count = constraint_count "#(1 2 3)" in
+  (* Each subsequent element constrains to equal first *)
+  Alcotest.(check int) "vector constraints" 2 count
+
+(* =============================================================================
+   Cond Tests
+   ============================================================================= *)
+
+let test_cond_single_clause () =
+  let count = constraint_count "(cond (t 42))" in
+  (* One constraint: result = clause_body *)
+  Alcotest.(check int) "single cond constraint" 1 count
+
+let test_cond_multiple_clauses () =
+  let count = constraint_count "(cond (nil 1) (t 2))" in
+  (* Two constraints: result = each clause body *)
+  Alcotest.(check int) "multi cond constraints" 2 count
+
+(* =============================================================================
+   Constraint Content Tests
+   ============================================================================= *)
+
+let test_constraint_has_location () =
+  let sexp = parse "(+ 1 2)" in
+  let result = Infer.infer Env.empty sexp in
+  match result.constraints with
+  | c :: _ ->
+      let loc = c.Tart.Constraint.loc in
+      Alcotest.(check bool) "constraint has location" true
+        (loc.start_pos.offset >= 0)
+  | [] -> Alcotest.fail "expected constraint"
+
+(* =============================================================================
+   Test Suite
+   ============================================================================= *)
+
+let () =
+  Alcotest.run "infer"
+    [
+      ( "literals",
+        [
+          Alcotest.test_case "int literal" `Quick test_int_literal;
+          Alcotest.test_case "negative int" `Quick test_negative_int;
+          Alcotest.test_case "float literal" `Quick test_float_literal;
+          Alcotest.test_case "string literal" `Quick test_string_literal;
+          Alcotest.test_case "empty string" `Quick test_empty_string;
+          Alcotest.test_case "keyword literal" `Quick test_keyword_literal;
+          Alcotest.test_case "char literal" `Quick test_char_literal;
+          Alcotest.test_case "nil literal" `Quick test_nil_literal;
+        ] );
+      ( "variables",
+        [
+          Alcotest.test_case "bound variable" `Quick test_bound_var;
+          Alcotest.test_case "unbound variable" `Quick test_unbound_var;
+          Alcotest.test_case "poly instantiation" `Quick test_poly_var_instantiation;
+        ] );
+      ( "quote",
+        [
+          Alcotest.test_case "quoted symbol" `Quick test_quoted_symbol;
+          Alcotest.test_case "quoted list" `Quick test_quoted_list;
+          Alcotest.test_case "quoted int" `Quick test_quoted_int;
+          Alcotest.test_case "quoted string" `Quick test_quoted_string;
+        ] );
+      ( "lambda",
+        [
+          Alcotest.test_case "nullary lambda" `Quick test_lambda_no_params;
+          Alcotest.test_case "identity lambda" `Quick test_lambda_one_param;
+          Alcotest.test_case "two-param lambda" `Quick test_lambda_two_params;
+          Alcotest.test_case "lambda body uses param" `Quick test_lambda_body_uses_param;
+          Alcotest.test_case "lambda constraint count" `Quick test_lambda_constraint_count;
+        ] );
+      ( "application",
+        [
+          Alcotest.test_case "generates constraint" `Quick test_application_generates_constraint;
+          Alcotest.test_case "result is tvar" `Quick test_application_result_type;
+          Alcotest.test_case "known function" `Quick test_known_function_application;
+          Alcotest.test_case "multi-arg" `Quick test_multi_arg_application;
+        ] );
+      ( "if",
+        [
+          Alcotest.test_case "if with else" `Quick test_if_with_else;
+          Alcotest.test_case "if result type" `Quick test_if_result_type;
+          Alcotest.test_case "if without else" `Quick test_if_without_else;
+        ] );
+      ( "let",
+        [
+          Alcotest.test_case "simple let" `Quick test_let_simple;
+          Alcotest.test_case "multiple bindings" `Quick test_let_multiple_bindings;
+          Alcotest.test_case "shadowing" `Quick test_let_binding_shadowing;
+          Alcotest.test_case "nil binding" `Quick test_let_nil_binding;
+          Alcotest.test_case "let* sequential" `Quick test_let_star_sequential;
+        ] );
+      ( "progn",
+        [
+          Alcotest.test_case "empty progn" `Quick test_progn_empty;
+          Alcotest.test_case "single progn" `Quick test_progn_single;
+          Alcotest.test_case "multiple progn" `Quick test_progn_multiple;
+        ] );
+      ( "boolean",
+        [
+          Alcotest.test_case "empty and" `Quick test_and_empty;
+          Alcotest.test_case "empty or" `Quick test_or_empty;
+          Alcotest.test_case "not returns bool" `Quick test_not_returns_bool;
+          Alcotest.test_case "and last type" `Quick test_and_last_type;
+          Alcotest.test_case "or last type" `Quick test_or_last_type;
+        ] );
+      ( "vector",
+        [
+          Alcotest.test_case "empty vector" `Quick test_empty_vector;
+          Alcotest.test_case "int vector" `Quick test_int_vector;
+          Alcotest.test_case "string vector" `Quick test_string_vector;
+          Alcotest.test_case "mixed constraints" `Quick test_mixed_vector_constraints;
+        ] );
+      ( "cond",
+        [
+          Alcotest.test_case "single clause" `Quick test_cond_single_clause;
+          Alcotest.test_case "multiple clauses" `Quick test_cond_multiple_clauses;
+        ] );
+      ( "constraints",
+        [
+          Alcotest.test_case "has location" `Quick test_constraint_has_location;
+        ] );
+    ]

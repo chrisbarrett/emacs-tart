@@ -1,3 +1,7 @@
 (test
  (name types_test)
  (libraries tart alcotest))
+
+(test
+ (name infer_test)
+ (libraries tart alcotest))

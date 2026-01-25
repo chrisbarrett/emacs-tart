@@ -20,3 +20,7 @@ module Expand = Interp.Expand
 (** Re-export core type system modules *)
 module Types = Core.Types
 module Type_env = Core.Type_env
+
+(** Re-export typing modules *)
+module Constraint = Typing.Constraint
+module Infer = Typing.Infer

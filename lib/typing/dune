@@ -1,0 +1,6 @@
+(library
+ (name typing)
+ (public_name tart.typing)
+ (libraries tart.syntax tart.core)
+ (preprocess
+  (pps ppx_deriving.show ppx_deriving.eq)))
