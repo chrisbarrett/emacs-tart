@@ -16,6 +16,7 @@ Agent workflow for tart—Elisp type checker in OCaml.
 >
 > - Write `.mli` for every `lib/**/*.ml`
 > - Update `DESIGN.md` when completing specs
+> - Development workflow kept up-to-date in `DEVELOPMENT.md`
 
 ## Reference
 
