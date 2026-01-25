@@ -14,18 +14,17 @@ at edit time via LSP integration with Eglot.
 
 ## Signature Files
 
-Type signatures live in `.tart` files alongside your Elisp:
+Type signatures live in `.tart` files. For example, types for `seq.el`:
 
 ```elisp
-;; my-utils.tart
-(open 'seq)                                   ; import types from another module
+;; seq.tart
+(type Seqable (Or (List a) (Vector a) String))
 
-(type Handler (String -> Nil))                ; type alias
-(type Cache)                                  ; abstract type (no definition = opaque)
-
-(defun my-utils-trim String -> String)
-(defun my-utils-map [a b] ((a -> b) (List a)) -> (List b))
-(defvar my-utils-handler Handler)
+(defun seq-map [a b] ((a -> b) (Seqable a)) -> (List b))
+(defun seq-filter [a] ((a -> Bool) (Seqable a)) -> (List a))
+(defun seq-reduce [a b] ((b a -> b) b (Seqable a)) -> b)
+(defun seq-find [a] ((a -> Bool) (Seqable a)) -> (Option a))
+(defun seq-empty-p [a] (Seqable a) -> Bool)
 ```
 
 Tart searches for `.tart` files when you `require` a module, so you can provide
