@@ -206,6 +206,143 @@ let test_equal_linked_tvar () =
   Alcotest.(check bool) "linked tvar equals target" true (equal tv Prim.int)
 
 (* =============================================================================
+   Truthiness Tests
+   ============================================================================= *)
+
+let test_truthy_primitives () =
+  (* Truthy primitives *)
+  Alcotest.(check bool) "Int is truthy" true (is_truthy Prim.int);
+  Alcotest.(check bool) "Float is truthy" true (is_truthy Prim.float);
+  Alcotest.(check bool) "Num is truthy" true (is_truthy Prim.num);
+  Alcotest.(check bool) "String is truthy" true (is_truthy Prim.string);
+  Alcotest.(check bool) "Symbol is truthy" true (is_truthy Prim.symbol);
+  Alcotest.(check bool) "Keyword is truthy" true (is_truthy Prim.keyword);
+  Alcotest.(check bool) "T is truthy" true (is_truthy Prim.t);
+  Alcotest.(check bool) "Truthy is truthy" true (is_truthy Prim.truthy);
+  Alcotest.(check bool) "Never is truthy" true (is_truthy Prim.never)
+
+let test_falsy_types () =
+  (* Falsy primitives *)
+  Alcotest.(check bool) "Nil is NOT truthy" false (is_truthy Prim.nil);
+  Alcotest.(check bool) "Bool is NOT truthy" false (is_truthy Prim.bool);
+  Alcotest.(check bool) "Any is NOT truthy" false (is_truthy Prim.any)
+
+let test_truthy_containers () =
+  (* Container types are truthy *)
+  Alcotest.(check bool) "List is truthy" true (is_truthy (list_of Prim.int));
+  Alcotest.(check bool) "Vector is truthy" true (is_truthy (vector_of Prim.string));
+  Alcotest.(check bool) "Pair is truthy" true (is_truthy (pair_of Prim.int Prim.string));
+  Alcotest.(check bool) "HashTable is truthy" true
+    (is_truthy (hash_table_of Prim.symbol Prim.string))
+
+let test_option_not_truthy () =
+  (* Option types are NOT truthy (they include Nil) *)
+  Alcotest.(check bool) "Option String is NOT truthy" false
+    (is_truthy (option_of Prim.string))
+
+let test_arrow_truthy () =
+  (* Function types are truthy *)
+  let fn_type = arrow [Prim.int] Prim.string in
+  Alcotest.(check bool) "arrow is truthy" true (is_truthy fn_type)
+
+let test_tuple_truthy () =
+  (* Tuple types are truthy *)
+  let tuple_type = TTuple [Prim.int; Prim.string] in
+  Alcotest.(check bool) "tuple is truthy" true (is_truthy tuple_type)
+
+let test_forall_truthy () =
+  (* Forall types inherit truthiness from body *)
+  let truthy_forall = forall ["a"] (arrow [TCon "a"] (TCon "a")) in
+  let falsy_forall = forall ["a"] Prim.any in
+  Alcotest.(check bool) "forall with truthy body is truthy" true (is_truthy truthy_forall);
+  Alcotest.(check bool) "forall with Any body is NOT truthy" false (is_truthy falsy_forall)
+
+let test_union_truthy () =
+  (* Union is truthy only if ALL members are truthy *)
+  let all_truthy = TUnion [Prim.int; Prim.string] in
+  let has_nil = TUnion [Prim.int; Prim.nil] in
+  let has_any = TUnion [Prim.string; Prim.any] in
+  Alcotest.(check bool) "union of truthy types is truthy" true (is_truthy all_truthy);
+  Alcotest.(check bool) "union with Nil is NOT truthy" false (is_truthy has_nil);
+  Alcotest.(check bool) "union with Any is NOT truthy" false (is_truthy has_any)
+
+let test_tvar_truthy () =
+  (* Unresolved type variables are conservatively NOT truthy *)
+  reset_tvar_counter ();
+  let tv = fresh_tvar 0 in
+  Alcotest.(check bool) "unresolved tvar is NOT truthy" false (is_truthy tv)
+
+let test_linked_tvar_truthy () =
+  (* Linked type variables inherit truthiness from target *)
+  reset_tvar_counter ();
+  let tv1 = fresh_tvar 0 in
+  let tv2 = fresh_tvar 0 in
+  (match (tv1, tv2) with
+   | TVar r1, TVar r2 ->
+       r1 := Link Prim.int;
+       r2 := Link Prim.nil
+   | _ -> ());
+  Alcotest.(check bool) "tvar linked to Int is truthy" true (is_truthy tv1);
+  Alcotest.(check bool) "tvar linked to Nil is NOT truthy" false (is_truthy tv2)
+
+(* =============================================================================
+   Option Validation Tests
+   ============================================================================= *)
+
+let test_option_of_checked_string () =
+  (* String is truthy, so Option String should succeed *)
+  match option_of_checked Prim.string with
+  | Ok ty -> Alcotest.(check string) "Option String valid" "(Option String)" (to_string ty)
+  | Error _ -> Alcotest.fail "Option String should be valid"
+
+let test_option_of_checked_int () =
+  (* Int is truthy, so Option Int should succeed *)
+  match option_of_checked Prim.int with
+  | Ok ty -> Alcotest.(check string) "Option Int valid" "(Option Int)" (to_string ty)
+  | Error _ -> Alcotest.fail "Option Int should be valid"
+
+let test_option_of_checked_list () =
+  (* List is truthy, so Option (List a) should succeed *)
+  match option_of_checked (list_of Prim.int) with
+  | Ok ty -> Alcotest.(check string) "Option (List Int) valid" "(Option (List Int))" (to_string ty)
+  | Error _ -> Alcotest.fail "Option (List Int) should be valid"
+
+let test_option_of_checked_nil_fails () =
+  (* Nil is NOT truthy, so Option Nil should fail *)
+  match option_of_checked Prim.nil with
+  | Ok _ -> Alcotest.fail "Option Nil should be invalid"
+  | Error (NonTruthyOptionArg ty) ->
+      Alcotest.(check string) "error contains Nil" "Nil" (to_string ty)
+
+let test_option_of_checked_any_fails () =
+  (* Any is NOT truthy, so Option Any should fail *)
+  match option_of_checked Prim.any with
+  | Ok _ -> Alcotest.fail "Option Any should be invalid"
+  | Error (NonTruthyOptionArg ty) ->
+      Alcotest.(check string) "error contains Any" "Any" (to_string ty)
+
+let test_option_of_checked_bool_fails () =
+  (* Bool is NOT truthy (includes Nil), so Option Bool should fail *)
+  match option_of_checked Prim.bool with
+  | Ok _ -> Alcotest.fail "Option Bool should be invalid"
+  | Error (NonTruthyOptionArg ty) ->
+      Alcotest.(check string) "error contains Bool" "Bool" (to_string ty)
+
+let test_option_of_checked_option_fails () =
+  (* Option String is NOT truthy, so Option (Option String) should fail *)
+  match option_of_checked (option_of Prim.string) with
+  | Ok _ -> Alcotest.fail "Option (Option String) should be invalid"
+  | Error (NonTruthyOptionArg ty) ->
+      Alcotest.(check string) "error contains Option" "(Option String)" (to_string ty)
+
+let test_validation_error_message () =
+  (* Test error message formatting *)
+  let err = NonTruthyOptionArg Prim.nil in
+  let msg = validation_error_to_string err in
+  Alcotest.(check bool) "message mentions truthy" true
+    (String.length msg > 0 && String.sub msg 0 6 = "Option")
+
+(* =============================================================================
    Test Suite
    ============================================================================= *)
 
@@ -258,5 +395,29 @@ let () =
           Alcotest.test_case "arrow types" `Quick test_equal_arrow;
           Alcotest.test_case "type vars" `Quick test_equal_tvars;
           Alcotest.test_case "linked tvar" `Quick test_equal_linked_tvar;
+        ] );
+      ( "truthiness",
+        [
+          Alcotest.test_case "truthy primitives" `Quick test_truthy_primitives;
+          Alcotest.test_case "falsy types" `Quick test_falsy_types;
+          Alcotest.test_case "truthy containers" `Quick test_truthy_containers;
+          Alcotest.test_case "option not truthy" `Quick test_option_not_truthy;
+          Alcotest.test_case "arrow truthy" `Quick test_arrow_truthy;
+          Alcotest.test_case "tuple truthy" `Quick test_tuple_truthy;
+          Alcotest.test_case "forall truthy" `Quick test_forall_truthy;
+          Alcotest.test_case "union truthy" `Quick test_union_truthy;
+          Alcotest.test_case "tvar not truthy" `Quick test_tvar_truthy;
+          Alcotest.test_case "linked tvar truthy" `Quick test_linked_tvar_truthy;
+        ] );
+      ( "option-validation",
+        [
+          Alcotest.test_case "Option String succeeds" `Quick test_option_of_checked_string;
+          Alcotest.test_case "Option Int succeeds" `Quick test_option_of_checked_int;
+          Alcotest.test_case "Option (List Int) succeeds" `Quick test_option_of_checked_list;
+          Alcotest.test_case "Option Nil fails" `Quick test_option_of_checked_nil_fails;
+          Alcotest.test_case "Option Any fails" `Quick test_option_of_checked_any_fails;
+          Alcotest.test_case "Option Bool fails" `Quick test_option_of_checked_bool_fails;
+          Alcotest.test_case "Option (Option a) fails" `Quick test_option_of_checked_option_fails;
+          Alcotest.test_case "validation error message" `Quick test_validation_error_message;
         ] );
     ]

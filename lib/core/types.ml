@@ -187,3 +187,105 @@ and param_equal p1 p2 =
   | PRest t1, PRest t2 -> equal t1 t2
   | PKey (n1, t1), PKey (n2, t2) -> n1 = n2 && equal t1 t2
   | _ -> false
+
+(** Truthiness checking for the Option type constraint.
+
+    In Elisp, truthiness is fundamental: nil is the only falsy value.
+    The type hierarchy is:
+    - Nil: the only falsy type
+    - Truthy: anything that is not Nil (primitive supertype)
+    - Any = Truthy | Nil (top type)
+    - Bool = T | Nil
+
+    For Option types, we require the inner type to be Truthy.
+    This ensures "some" and "none" cases are always distinguishable.
+    Without this constraint, (Option Nil) would be indistinguishable
+    from Nil itself, breaking pattern matching semantics.
+*)
+
+(** Errors that can occur during type construction/validation *)
+type validation_error =
+  | NonTruthyOptionArg of typ
+  (** Option argument must be truthy - contains the offending type *)
+
+(** Check if a type is definitely truthy (cannot be nil).
+
+    A type is truthy if:
+    - It's a concrete non-nil primitive (Int, String, T, Symbol, etc.)
+    - It's the Truthy primitive type itself
+    - It's a type application other than Option (List, Vector, Pair, etc.)
+    - It's a function type (functions are always truthy)
+    - It's a tuple type (tuples are always truthy)
+    - It's a forall type where the body is truthy
+
+    A type is NOT truthy if:
+    - It's Nil
+    - It's Bool (which includes Nil)
+    - It's Any (which includes Nil)
+    - It's a union containing Nil
+    - It's an unresolved type variable (conservatively false)
+    - It's an Option type (which includes Nil by definition)
+*)
+let rec is_truthy ty =
+  match repr ty with
+  | TVar _ ->
+      (* Unresolved type variables: we don't know yet, so conservatively false.
+         During unification, this will be resolved. *)
+      false
+  | TCon name -> (
+      match name with
+      | "Nil" -> false     (* Nil is the falsy value *)
+      | "Bool" -> false    (* Bool = T | Nil, includes Nil *)
+      | "Any" -> false     (* Any = Truthy | Nil, includes Nil *)
+      (* All other primitives are truthy *)
+      | "Int" | "Float" | "Num" | "String" | "Symbol" | "Keyword"
+      | "T" | "Truthy" | "Never" -> true
+      (* Unknown type constants: conservatively assume truthy
+         (user-defined types without Nil) *)
+      | _ -> true)
+  | TApp (con, _args) -> (
+      match con with
+      | "Option" ->
+          (* Option a = a | Nil, so always includes Nil *)
+          false
+      | "List" | "Vector" | "Pair" | "HashTable" ->
+          (* Container types are truthy - empty list is still non-nil in Elisp.
+             Note: This differs from some languages where empty containers are falsy. *)
+          true
+      | _ ->
+          (* Unknown type constructors: assume truthy *)
+          true)
+  | TArrow _ ->
+      (* Functions are always truthy *)
+      true
+  | TForall (_, body) ->
+      (* A forall type is truthy if its body is truthy *)
+      is_truthy body
+  | TUnion types ->
+      (* A union is truthy only if ALL members are truthy *)
+      List.for_all is_truthy types
+  | TTuple _ ->
+      (* Tuples (vectors) are always truthy *)
+      true
+
+(** Validate that a type is suitable as an Option argument.
+
+    Returns Ok () if the type is truthy, or Error with the problematic type.
+*)
+let validate_option_arg ty =
+  if is_truthy ty then Ok ()
+  else Error (NonTruthyOptionArg ty)
+
+(** Create an Option type with validation.
+
+    Returns Error if the argument type is not truthy.
+*)
+let option_of_checked elem =
+  match validate_option_arg elem with
+  | Ok () -> Ok (option_of elem)
+  | Error e -> Error e
+
+(** Format a validation error as a string *)
+let validation_error_to_string = function
+  | NonTruthyOptionArg ty ->
+      Printf.sprintf "Option argument must be truthy, but got: %s" (to_string ty)
