@@ -12,6 +12,39 @@ at edit time via LSP integration with Eglot.
 > [!NOTE]
 > Heavy use of AI assistance in this codebase. You have been warned. ☠️
 
+## Quick Tour
+
+### Functions
+
+```elisp
+(defun add (Int Int) -> Int)
+(defun identity a -> a)                      ; Polymorphic
+(defun map ((a -> b) (List a)) -> (List b))  ; Higher-order
+```
+
+### Variables
+
+```elisp
+(defvar default-name String)
+(defvar handler (String -> Nil))             ; Function value (use with funcall)
+```
+
+### Types
+
+```elisp
+(type UserId Int)                            ; Alias
+(type Result (Or 'ok 'error))                ; Union with literal symbols
+(type Buffer)                                ; Opaque (no definition)
+```
+
+### Parameters
+
+```elisp
+(defun greet (String &optional String) -> String)
+(defun sum (&rest Int) -> Int)
+(defun make (&key :name String :age Int) -> Person)
+```
+
 ## Signature Files
 
 Type signatures live in `.tart` files. For example, types for `seq.el`:
