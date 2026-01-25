@@ -252,13 +252,6 @@ and unify_param_lists ps1 ps2 loc =
   | _ :: _, [] ->
       Error (ArityMismatch (List.length ps1, 0, loc))
 
-and unify_params ps1 ps2 loc =
-  List.fold_left2
-    (fun acc p1 p2 ->
-       let* () = acc in
-       unify_param p1 p2 loc)
-    (Ok ()) ps1 ps2
-
 and unify_param p1 p2 loc =
   match (p1, p2) with
   | PPositional t1, PPositional t2 -> unify t1 t2 loc
