@@ -95,6 +95,8 @@ grouping; multiple params require parens.
 
 Lowercase identifiers: `a`, `b`, `elem`, `key`, `value`
 
+Type variables are automatically universally quantified (see Polymorphic Types).
+
 ### Literal Types
 
 Singleton types for specific values:
@@ -146,17 +148,24 @@ Nested function types are readable:
 
 ### Polymorphic Types
 
-Quantifiers `[vars]` go at the start of arrow types, or right after the name in `defun`:
+Lowercase type variables are automatically universally quantified, ordered by
+left-to-right first occurrence:
 
 ```elisp
-;; As function values
-([a] a -> a)                          ; Polymorphic identity value
-([a b] (a b) -> a)                    ; Polymorphic const value
+;; Inferred quantifiers
+(defun identity a -> a)               ; Inferred as [a]
+(defun map ((a -> b) (List a)) -> (List b))  ; Inferred as [a b]
 
-;; As callable functions
-(defun identity [a] a -> a)           ; Callable as (identity x)
-(defun const [a b] (a b) -> a)        ; Callable as (const x y)
-(defun length [a] (List a) -> Int)    ; Callable as (length xs)
+;; Explicit quantifiers (disables inference)
+(defun make-tagged [tag] Int -> (Tagged tag Int))  ; Phantom type
+(defun foo [a] (a -> b) -> a)         ; Error: unbound 'b'
+```
+
+For function **values** (in `defvar` or as parameters), quantifiers go at the start:
+
+```elisp
+(defvar id-fn ([a] a -> a))           ; Polymorphic function value
+(defvar handler (String -> Nil))      ; Monomorphic function value
 ```
 
 ### Type Constructors
@@ -192,8 +201,8 @@ Functions declared with `defun` are directly callable as `(name args...)`:
 
 ```elisp
 (defun my-add (Int Int) -> Int)
-(defun my-identity [a] a -> a)
-(defun my-map [a b] ((a -> b) (List a)) -> (List b))
+(defun my-identity a -> a)
+(defun my-map ((a -> b) (List a)) -> (List b))
 ```
 
 Note: The first parameter to `my-map` is an arrow type `(a -> b)`, meaning it's
@@ -267,8 +276,8 @@ type expressions. The imported names are not re-exported.
 ;; my-collection.tart
 (open 'seq)  ; Seq now available for use in signatures
 
-(defun my-flatten [a] (Seq (Seq a)) -> (List a))
-(defun my-frequencies [a] (Seq a) -> (HashTable a Int))
+(defun my-flatten (Seq (Seq a)) -> (List a))
+(defun my-frequencies (Seq a) -> (HashTable a Int))
 ```
 
 Use `open` when you need to reference types from other modules in your signatures.
@@ -283,8 +292,8 @@ them part of this module's interface.
 (include 'seq)  ; Re-export everything from seq
 
 ;; Plus additional functions
-(defun seq-partition [a] (Int (Seq a)) -> (List (List a)))
-(defun seq-interleave [a] ((Seq a) (Seq a)) -> (List a))
+(defun seq-partition (Int (Seq a)) -> (List (List a)))
+(defun seq-interleave ((Seq a) (Seq a)) -> (List a))
 ```
 
 Use `include` to extend or re-export another module's type interface.
@@ -305,7 +314,7 @@ Use `include` to extend or re-export another module's type interface.
 ;; Function declarations (directly callable)
 (defun my-utils-trim String -> String)
 (defun my-utils-split (String String) -> (List String))
-(defun my-utils-identity [a] a -> a)
+(defun my-utils-identity a -> a)
 
 ;; Variable (non-function)
 (defvar my-utils-default-separator String)
@@ -344,10 +353,10 @@ that don't ship their own type definitions.
 
 ```elisp
 ;; ~/.config/emacs/tart/seq.tart
-(defun seq-map [a b] ((a -> b) (Seq a)) -> (List b))
-(defun seq-filter [a] ((a -> Bool) (Seq a)) -> (List a))
-(defun seq-reduce [a b] ((b a -> b) b (Seq a)) -> b)
-(defun seq-find [a] ((a -> Bool) (Seq a)) -> (Option a))
+(defun seq-map ((a -> b) (Seq a)) -> (List b))
+(defun seq-filter ((a -> Bool) (Seq a)) -> (List a))
+(defun seq-reduce ((b a -> b) b (Seq a)) -> b)
+(defun seq-find ((a -> Bool) (Seq a)) -> (Option a))
 ```
 
 The filename determines the module: `seq.tart` provides types for `(require 'seq)`.

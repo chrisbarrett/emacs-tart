@@ -20,12 +20,15 @@ Type signatures live in `.tart` files. For example, types for `seq.el`:
 ;; seq.tart
 (type Seq (Or (List a) (Vector a) String))
 
-(defun seq-map [a b] ((a -> b) (Seq a)) -> (List b))
-(defun seq-filter [a] ((a -> Bool) (Seq a)) -> (List a))
-(defun seq-reduce [a b] ((b a -> b) b (Seq a)) -> b)
-(defun seq-find [a] ((a -> Bool) (Seq a)) -> (Option a))
-(defun seq-empty-p [a] (Seq a) -> Bool)
+(defun seq-map ((a -> b) (Seq a)) -> (List b))
+(defun seq-filter ((a -> Bool) (Seq a)) -> (List a))
+(defun seq-reduce ((b a -> b) b (Seq a)) -> b)
+(defun seq-find ((a -> Bool) (Seq a)) -> (Option a))
+(defun seq-empty-p (Seq a) -> Bool)
 ```
+
+Lowercase identifiers like `a` and `b` are automatically universally quantified.
+Explicit quantifiers (`[a b]`) are still supported for phantom types.
 
 Tart searches for `.tart` files when you `require` a module, so you can provide
 types for any package—even ones you don't control.

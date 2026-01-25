@@ -40,10 +40,21 @@ lib/
     | :k τ                     Keyword             (PKey)
 ```
 
-**Quantifier syntax:** `[α₁...αₙ]` binds type variables for the rest of the type
-expression. Scope extends to the end of the enclosing s-expression. Explicit
-quantification required in v1 (no implicit generalization). The quantifier group
-is optional for monomorphic types.
+**Quantifier syntax:** `[α₁...αₙ]` binds type variables. Scope extends to end of
+enclosing s-expression.
+
+**Quantifier inference:** Lowercase identifiers in type position are inferred as
+universally quantified, ordered by left-to-right first occurrence:
+
+```elisp
+;; Implicit: inferred as [a b]
+(defun seq-map ((a -> b) (Seq a)) -> (List b))
+
+;; Explicit: only listed vars bound; unlisted = error
+(defun foo [a] (a -> b) -> a)  ; Error: unbound type variable 'b'
+```
+
+Explicit quantification required for phantom types (var in quantifier but not body).
 
 ### Primitive Types
 
@@ -536,6 +547,7 @@ The first match wins, allowing user overrides of bundled types.
 | `Option` requires `Truthy`   | Preserves nil-punning            |
 | `defun` vs `defvar`          | Tracks Lisp-2 calling convention |
 | `[vars]` after `->` or name  | Quantifiers scoped to their arrow |
+| Forall inference             | Reduce boilerplate; explicit for phantoms/HKT |
 
 ## Limitations and Simplifications
 
