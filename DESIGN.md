@@ -19,76 +19,333 @@ lib/
 └── typing/     Constraint-based HM inference
 ```
 
-## Type System
+## Type System Reference
+
+### Type Syntax
+
+(see: [`Types.typ`](lib/core/types.ml#L36), [`Types.param`](lib/core/types.ml#L49))
+
+```
+τ ::= α                        Type variable       (TVar)
+    | C                        Type constant       (TCon)
+    | F τ₁ ... τₙ              Type application    (TApp)
+    | (π₁ ... πₙ) → τ          Function type       (TArrow)
+    | ∀α₁...αₙ. τ              Universal type      (TForall)
+    | τ₁ ∪ τ₂ ∪ ...            Union type          (TUnion)
+    | τ₁ × τ₂ × ...            Tuple type          (TTuple)
+
+π ::= τ                        Positional          (PPositional)
+    | τ?                       Optional            (POptional)
+    | τ*                       Rest element        (PRest)
+    | :k τ                     Keyword             (PKey)
+```
+
+### Primitive Types
+
+(see: [`Types.Prim`](lib/core/types.ml#L103))
+
+| Type      | Description                    | Truthy? |
+| --------- | ------------------------------ | ------- |
+| `Int`     | Integer values                 | ✓       |
+| `Float`   | Floating-point numbers         | ✓       |
+| `Num`     | Numeric (no subtyping yet)     | ✓       |
+| `String`  | String values                  | ✓       |
+| `Symbol`  | Elisp symbols                  | ✓       |
+| `Keyword` | Elisp keywords (`:foo`)        | ✓       |
+| `Nil`     | The only falsy value           | ✗       |
+| `T`       | The `t` constant               | ✓       |
+| `Truthy`  | Anything except `nil`          | ✓       |
+| `Bool`    | `T \| Nil`                     | ✗       |
+| `Any`     | `Truthy \| Nil` (top type)     | ✗       |
+| `Never`   | Uninhabited (bottom type)      | ✓       |
+
+### Type Constructors
+
+(see: [`Types.list_of`](lib/core/types.ml#L119), [`Types.option_of`](lib/core/types.ml#L121), [`Types.vector_of`](lib/core/types.ml#L120), [`Types.pair_of`](lib/core/types.ml#L122), [`Types.hash_table_of`](lib/core/types.ml#L123))
+
+| Constructor    | Syntax               | Truthy? | Notes                          |
+| -------------- | -------------------- | ------- | ------------------------------ |
+| `List`         | `(List a)`           | ✓       | Homogeneous list               |
+| `Vector`       | `(Vector a)`         | ✓       | Homogeneous vector             |
+| `Option`       | `(Option a)`         | ✗       | Requires `a : Truthy`          |
+| `Pair`         | `(Pair a b)`         | ✓       | Heterogeneous cons cell        |
+| `HashTable`    | `(HashTable k v)`    | ✓       | Mutable hash table             |
+| `Or` (Union)   | `(Or a b ...)`       | *       | Truthy iff all members truthy  |
+| `Tuple`        | `(Tuple a b ...)`    | ✓       | Fixed-length heterogeneous     |
+| Arrow          | `(-> (params) ret)`  | ✓       | Function type                  |
+| Forall         | `(forall (a) type)`  | *       | Inherits from body             |
 
 ### Truthiness
 
-| Type     | Inhabitants           |
-| -------- | --------------------- |
-| `Nil`    | `nil` only            |
-| `T`      | `t` only              |
-| `Truthy` | Anything except `nil` |
-| `Bool`   | `T \| Nil`            |
-| `Any`    | `Truthy \| Nil` (top) |
-| `Never`  | ∅ (bottom)            |
+A type is **truthy** if it cannot be `nil`. This is fundamental to Elisp semantics.
 
-**Invariant:** `(Option a)` requires `a : Truthy` — ensures some/none distinguishable by truthiness.
+```
+         ⊤ (Any)
+        /   \
+    Truthy  Nil
+      |
+      T
+```
+
+**Truthiness predicate:** (see: [`Types.is_truthy`](lib/core/types.ml#L229))
+
+```
+truthy(C)           = C ∉ {Nil, Bool, Any}
+truthy(F τ̄)         = F ≠ Option
+truthy((π̄) → τ)     = true
+truthy(τ₁ × ... × τₙ) = true
+truthy(∀ᾱ. τ)       = truthy(τ)
+truthy(τ₁ ∪ ... ∪ τₙ) = ∀i. truthy(τᵢ)
+truthy(α)           = false  (conservative for unresolved)
+```
+
+**Option well-formedness:** (see: [`Types.option_of_checked`](lib/core/types.ml#L283))
+
+Option τ requires truthy(τ) to ensure some/none distinguishable:
 
 ```elisp
-(Option String)    ; Valid
-(Option Nil)       ; INVALID
+(Option String)          ; Valid
+(Option (List Int))      ; Valid
+(Option Nil)             ; INVALID - can't distinguish Some nil from None
+(Option Bool)            ; INVALID - Bool includes Nil
+(Option (Option a))      ; INVALID - nested Option
 ```
 
-### Type Grammar
+### Function Types
 
-```
-type       ::= base | tvar | (-> (params...) ret) | (forall (vars...) type)
-             | (List a) | (Option a) | (Or a b) | (Tuple a...) | user_defined
-
-base       ::= Int | Float | Num | String | Symbol | Keyword
-             | Nil | T | Truthy | Bool | Any | Never
-
-params     ::= type | &optional type | &rest type | &key :name type
-```
-
-Function args grouped (not curried):
+Parameters are grouped (not curried), matching Elisp semantics:
 
 ```elisp
-(-> (Int Int) Int)           ; Two args
-(-> (a) (-> (b) c))          ; Returns function (manual currying)
+(-> (Int Int) Int)                     ; Two positional args
+(-> (String &optional Int) String)     ; With optional
+(-> (&rest Int) Int)                   ; Variadic
+(-> (&key :name String :age Int) Nil)  ; Keyword args
+(-> (a) (-> (b) c))                    ; Manual currying
 ```
 
-## Inference
+Parameter unification rules:
+- τ₁ = τ₂ (positional with positional)
+- τ₁? = τ₂? (optional with optional)
+- τ* consumes remaining positional/optional params
+- :k τ₁ = :k τ₂ (keyword names must match)
 
-Constraint-based HM with levels:
+### Surface Syntax (Elisp)
 
-1. Traverse AST, emit `τ₁ = τ₂` constraints
-2. Solve via union-find
-3. Generalize at let-bindings using levels
+The `.eli` signature file syntax maps to the type theory notation:
 
-```ocaml
-type typ =
-  | TVar of tvar ref
-  | TCon of string
-  | TApp of string * typ list
-  | TArrow of typ list * typ
-  | TForall of string list * typ
+| Surface                  | Type Theory    | Example                           |
+| ------------------------ | -------------- | --------------------------------- |
+| `Int`, `String`, ...     | C              | Primitive constants               |
+| `a`, `b`, ...            | α              | Type variables                    |
+| `(-> (τ...) τ)`          | (π̄) → τ        | `(-> (Int Int) Int)`              |
+| `(forall (α...) τ)`      | ∀ᾱ. τ          | `(forall (a) (-> (a) a))`         |
+| `(List τ)`               | List τ         | `(List Int)`                      |
+| `(Option τ)`             | Option τ       | `(Option String)`                 |
+| `(Or τ₁ τ₂ ...)`         | τ₁ ∪ τ₂ ∪ ...  | `(Or Int String)`                 |
+| `(Tuple τ₁ τ₂ ...)`      | τ₁ × τ₂ × ...  | `(Tuple Int String Bool)`         |
+| `&optional τ`            | τ?             | Optional parameter                |
+| `&rest τ`                | τ*             | Rest parameter (element type)     |
+| `&key :k τ`              | :k τ           | Keyword parameter                 |
 
-and tvar =
-  | Unbound of int * int  (* id, level *)
-  | Link of typ
+## Inference Algorithm
+
+Constraint-based Hindley-Milner with levels-based generalization.
+
+### Algorithm Overview
+
+(see: [`Infer.infer`](lib/typing/infer.ml#L56), [`Unify.solve`](lib/typing/unify.ml#L271), [`Generalize.generalize`](lib/typing/generalize.ml#L133))
+
+1. **Constraint generation:** Traverse AST, emit `τ₁ = τ₂` constraints
+2. **Constraint solving:** Unify types via union-find with path compression
+3. **Generalization:** At let-bindings, generalize type variables with level > outer level
+
+### Unification
+
+(see: [`Unify.unify`](lib/typing/unify.ml#L103), [`Unify.occurs_check`](lib/typing/unify.ml#L52))
+
 ```
+unify : τ × τ → Result ()
+```
+
+| Constraint              | Rule                                           |
+| ----------------------- | ---------------------------------------------- |
+| α = τ                   | Occurs check, then α ↦ τ                       |
+| ⊤ = τ                   | Always succeeds (Any is top)                   |
+| C₁ = C₂                 | Succeeds iff C₁ ≡ C₂                           |
+| F τ̄₁ = F τ̄₂            | Unify arguments pairwise                       |
+| (π̄₁) → τ₁ = (π̄₂) → τ₂  | Unify param lists, then return types           |
+| ∀ᾱ.τ₁ = ∀β̄.τ₂          | Same arity, unify bodies (simplified)          |
+| τ̄₁ = τ̄₂ (unions)       | Structural equality (no subtyping yet)         |
+| τ̄₁ = τ̄₂ (tuples)       | Same length, unify pairwise                    |
+
+**Occurs check:** Prevents infinite types (α ∉ FV(τ) before α ↦ τ). Also adjusts levels for generalization.
 
 ### Generalization
 
-Only for **syntactic values**: lambda, literals, variables, constructors.
+(see: [`Generalize.generalize`](lib/typing/generalize.ml#L133), [`Generalize.is_syntactic_value`](lib/typing/generalize.ml#L27))
+
+Only **syntactic values** can be generalized:
+
+| Syntactic Value          | Generalizable? |
+| ------------------------ | -------------- |
+| Lambda expressions       | ✓              |
+| Literals (int, string)   | ✓              |
+| Variables                | ✓              |
+| Quoted expressions       | ✓              |
+| Vectors of values        | ✓              |
+| Empty list (`nil`)       | ✓              |
+| Function applications    | ✗              |
+| Cons pairs               | ✗              |
 
 ```elisp
 (let ((id (lambda (x) x)))
-  (id 1) (id "s"))  ; OK: id : (forall (a) (-> (a) a))
+  (id 1) (id "s"))          ; OK: id : (forall (a) (-> (a) a))
 
 (let ((xs (reverse '())))
-  xs)  ; xs : (List '_a) — monomorphic (application)
+  xs)                       ; xs : (List '_a) — monomorphic
+```
+
+**Level-based generalization:**
+
+```
+gen(Γ, τ, e) = ∀ᾱ.τ  where ᾱ = {α ∈ FV(τ) | level(α) > level(Γ)} ∧ syntactic_value(e)
+            = τ       otherwise
+```
+
+1. Enter new level for let-binding scope (level ← level + 1)
+2. Infer binding at higher level
+3. Solve constraints immediately
+4. Generalize: ᾱ = {α | level(α) > outer_level}
+5. If ᾱ ≠ ∅ and e is syntactic value: σ = ∀ᾱ.τ, else σ = τ
+
+### Type Schemes
+
+(see: [`Type_env.scheme`](lib/core/type_env.ml#L17), [`Type_env.instantiate`](lib/core/type_env.ml#L69))
+
+```
+σ ::= τ                        Monomorphic     (Mono)
+    | ∀α₁...αₙ. τ              Polymorphic     (Poly)
+```
+
+**Instantiation:** Given σ = ∀ᾱ.τ, instantiate by σ ↝ τ[ᾱ ↦ β̄] where β̄ are fresh at current level.
+
+### Typing Rules
+
+(see: [`Infer.infer_if`](lib/typing/infer.ml#L211), [`Infer.infer_lambda`](lib/typing/infer.ml#L180), [`Infer.infer_application`](lib/typing/infer.ml#L459), [`Infer.infer_let`](lib/typing/infer.ml#L272))
+
+```
+Γ ⊢ c : τ₁    Γ ⊢ t : τ₂    Γ ⊢ e : τ₃    τ₂ = τ₃
+────────────────────────────────────────────────── [If]
+              Γ ⊢ (if c t e) : τ₂
+
+Γ ⊢ c : τ₁    Γ ⊢ t : τ₂
+──────────────────────────────────────────────────  [If-No-Else]
+        Γ ⊢ (if c t) : τ₂  (simplified; should be τ₂ ∪ Nil)
+
+Γ, x:τ₁ ⊢ e : τ₂
+───────────────────────────────────────────────── [Lambda]
+      Γ ⊢ (lambda (x) e) : τ₁ → τ₂
+
+Γ ⊢ f : (π̄) → τ    Γ ⊢ args match π̄
+───────────────────────────────────────────────── [App]
+            Γ ⊢ (f args...) : τ
+
+Γ ⊢ e : τ    gen(Γ, τ, e) = σ    Γ, x:σ ⊢ body : τ'
+──────────────────────────────────────────────────── [Let]
+           Γ ⊢ (let ((x e)) body) : τ'
+```
+
+| Form                  | Type                                              |
+| --------------------- | ------------------------------------------------- |
+| `(and)` / `(or)`      | T / Nil                                           |
+| `(and e₁ ... eₙ)`     | τₙ (simplified; should be ⋃τᵢ)                    |
+| `(or e₁ ... eₙ)`      | τₙ (simplified; should be ⋃τᵢ)                    |
+| `(not e)`             | Bool                                              |
+| `(setq x e)`          | τ where Γ(x) = τ (if bound)                       |
+| `[e₁ ... eₙ]`         | Vector α where ∀i. eᵢ : α                         |
+| `'sym`                | Symbol                                            |
+| `'(...)`              | List ⊤                                            |
+
+## Built-in Function Types
+
+(see: [`Builtin_types.signatures`](lib/typing/builtin_types.ml#L42), [`Builtin_types.initial_env`](lib/typing/builtin_types.ml#L245))
+
+Types for built-in Elisp functions, loaded into the initial environment.
+
+### List Operations
+
+```elisp
+car     : (forall (a) (-> ((List a)) (Option a)))
+cdr     : (forall (a) (-> ((List a)) (List a)))
+cons    : (forall (a) (-> (a (List a)) (List a)))
+list    : (forall (a) (-> (&rest a) (List a)))
+length  : (forall (a) (-> ((List a)) Int))
+nth     : (forall (a) (-> (Int (List a)) (Option a)))
+nthcdr  : (forall (a) (-> (Int (List a)) (List a)))
+append  : (forall (a) (-> (&rest (List a)) (List a)))
+reverse : (forall (a) (-> ((List a)) (List a)))
+member  : (forall (a) (-> (a (List a)) (List a)))
+```
+
+### Arithmetic
+
+```elisp
++   : (-> (&rest Int) Int)
+-   : (-> (Int &rest Int) Int)
+*   : (-> (&rest Int) Int)
+/   : (-> (Int &rest Int) Int)
+mod : (-> (Int Int) Int)
+abs : (-> (Int) Int)
+1+  : (-> (Int) Int)
+1-  : (-> (Int) Int)
+```
+
+### Comparisons
+
+```elisp
+<   : (-> (Int &rest Int) Bool)
+>   : (-> (Int &rest Int) Bool)
+<=  : (-> (Int &rest Int) Bool)
+>=  : (-> (Int &rest Int) Bool)
+=   : (-> (Int &rest Int) Bool)
+```
+
+### Predicates
+
+```elisp
+null      : (-> (Any) Bool)
+atom      : (-> (Any) Bool)
+listp     : (-> (Any) Bool)
+consp     : (-> (Any) Bool)
+symbolp   : (-> (Any) Bool)
+stringp   : (-> (Any) Bool)
+numberp   : (-> (Any) Bool)
+integerp  : (-> (Any) Bool)
+floatp    : (-> (Any) Bool)
+vectorp   : (-> (Any) Bool)
+functionp : (-> (Any) Bool)
+eq        : (-> (Any Any) Bool)
+equal     : (-> (Any Any) Bool)
+not       : (-> (Any) Bool)
+```
+
+### Strings
+
+```elisp
+concat         : (-> (&rest String) String)
+substring      : (-> (String Int &optional Int) String)
+string-length  : (-> (String) Int)
+upcase         : (-> (String) String)
+downcase       : (-> (String) String)
+format         : (-> (String &rest Any) String)
+```
+
+### Vectors
+
+```elisp
+vector : (forall (a) (-> (&rest a) (Vector a)))
+aref   : (forall (a) (-> ((Vector a) Int) a))
+aset   : (forall (a) (-> ((Vector a) Int a) a))
 ```
 
 ## Interpreter
@@ -139,6 +396,19 @@ ADTs generate constructors, predicates (`-p`), and accessors.
 | Levels-based generalization  | Near-linear performance          |
 | `Option` requires `Truthy`   | Preserves nil-punning            |
 
+## Limitations and Simplifications
+
+Current implementation simplifications documented for future work:
+
+| Simplification                 | Current Behavior                              | Full Behavior                    |
+| ------------------------------ | --------------------------------------------- | -------------------------------- |
+| `if` without else              | Returns then-type                             | Should return `(Or then Nil)`    |
+| `and`/`or` types               | Type of last argument                         | Should be union of all branches  |
+| Union unification              | Requires structural equality                  | Needs subtyping                  |
+| `Num` type                     | No relation to `Int`/`Float`                  | Should be supertype              |
+| Forall unification             | Same arity, unify bodies directly             | Needs alpha-renaming             |
+| Option truthy check            | `is_truthy` returns false for tvars           | Could defer to constraint        |
+
 ## Soundness Boundaries
 
 | Feature          | Sound? | Notes                     |
@@ -155,11 +425,27 @@ ADTs generate constructors, predicates (`-p`), and accessors.
 
 **Planned:** LSP server, `.eli` parser, CLI, Emacs minor mode.
 
+## File Locations
+
+| Component            | Implementation | Interface |
+| -------------------- | -------------- | --------- |
+| Type representation  | [`types.ml`](lib/core/types.ml) | [`types.mli`](lib/core/types.mli) |
+| Type environment     | [`type_env.ml`](lib/core/type_env.ml) | [`type_env.mli`](lib/core/type_env.mli) |
+| Constraints          | [`constraint.ml`](lib/typing/constraint.ml) | [`constraint.mli`](lib/typing/constraint.mli) |
+| Inference            | [`infer.ml`](lib/typing/infer.ml) | [`infer.mli`](lib/typing/infer.mli) |
+| Unification          | [`unify.ml`](lib/typing/unify.ml) | [`unify.mli`](lib/typing/unify.mli) |
+| Generalization       | [`generalize.ml`](lib/typing/generalize.ml) | [`generalize.mli`](lib/typing/generalize.mli) |
+| Built-in signatures  | [`builtin_types.ml`](lib/typing/builtin_types.ml) | [`builtin_types.mli`](lib/typing/builtin_types.mli) |
+| Diagnostics          | [`diagnostic.ml`](lib/typing/diagnostic.ml) | [`diagnostic.mli`](lib/typing/diagnostic.mli) |
+| Type checker         | [`check.ml`](lib/typing/check.ml) | [`check.mli`](lib/typing/check.mli) |
+
 ## Invariants
 
-1. AST nodes carry source locations
-2. Type variables use union-find with path compression
-3. Generalization only at let-bindings, only for syntactic values
-4. `Option` argument must unify with `Truthy`
+1. AST nodes carry source locations (see: [`Location`](lib/syntax/location.ml))
+2. Type variables use union-find with path compression (see: [`Types.repr`](lib/core/types.ml#L84))
+3. Generalization only at let-bindings, only for syntactic values (see: [`Generalize`](lib/typing/generalize.ml))
+4. `Option` argument must be truthy (see: [`Types.is_truthy`](lib/core/types.ml#L229))
 5. Macro expansion preserves source location mapping
 6. Opaque boundaries halt and require annotation
+7. Levels are strictly increasing in nested scopes (see: [`Type_env.enter_level`](lib/core/type_env.ml#L37))
+8. Occurs check prevents infinite types and adjusts levels (see: [`Unify.occurs_check`](lib/typing/unify.ml#L52))
