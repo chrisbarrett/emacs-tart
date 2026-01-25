@@ -16,3 +16,7 @@ module Env = Interp.Env
 module Builtin = Interp.Builtin
 module Eval = Interp.Eval
 module Expand = Interp.Expand
+
+(** Re-export core type system modules *)
+module Types = Core.Types
+module Type_env = Core.Type_env

@@ -1,6 +1,6 @@
 (library
  (name tart)
  (public_name tart)
- (libraries yojson tart.syntax tart.interp)
+ (libraries yojson tart.syntax tart.interp tart.core)
  (preprocess
   (pps ppx_deriving.show ppx_deriving.eq)))
