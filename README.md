@@ -20,7 +20,7 @@ Type signatures live in `.tart` files alongside your Elisp:
 (open 'seq)                                   ; import types from another module
 
 (type Handler (String -> Nil))                ; type alias
-(opaque Cache)                                ; abstract type (hidden internals)
+(type Cache)                                  ; abstract type (no definition = opaque)
 
 (defun my-utils-trim String -> String)
 (defun my-utils-map [a b] ((a -> b) (List a)) -> (List b))

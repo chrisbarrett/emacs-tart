@@ -444,12 +444,12 @@ signature verification.
 ;; Variable with non-function type
 (defvar my-default String)
 
-;; Type alias (including union types)
+;; Type alias
 (type IntList (List Int))
 (type Result (Or Success Failure))
 
-;; Opaque type (hidden representation)
-(opaque Handle)
+;; Opaque type (no definition = abstract)
+(type Handle)
 ```
 
 ### Public vs Internal Types
@@ -468,7 +468,7 @@ exposing a simpler or opaque public interface.
 ```elisp
 ;; my-cache.tart (public interface)
 (module my-cache)
-(opaque Cache)                    ; Hide implementation
+(type Cache)                      ; Opaque - hide implementation
 (defun cache-create Int -> Cache)
 (defun cache-get [a] (Cache String) -> (Option a))
 

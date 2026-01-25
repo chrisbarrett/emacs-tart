@@ -47,8 +47,7 @@ tart/
 - Include directives (inline and re-export declarations)
 - Function signatures
 - Variable declarations
-- Type aliases (including union types)
-- Opaque type declarations
+- Type declarations (aliases with definition, opaque without)
 - Struct imports
 
 **Verify:** `dune test`; parse all files in `stdlib/`
@@ -95,18 +94,18 @@ go at the start of arrow types, or after the name in `defun`.
 
 ### R6: Opaque type definitions
 
-**Given** an opaque type declaration:
+**Given** a type declaration with no definition:
 ```elisp
-(opaque Buffer)
-(opaque Handle (a))
+(type Buffer)
+(type Handle)
 ```
 **When** loaded
 **Then**:
-- `Buffer` is a distinct type with no exposed structure
-- `Handle` is a polymorphic type constructor with arity 1
+- `Buffer` is a distinct opaque type with no exposed structure
+- `Handle` is a separate distinct opaque type
 - Values can only be created/consumed via functions declared in the same module
 
-**Verify:** Opaque types are not unifiable with other types; no constructors/accessors generated
+**Verify:** Opaque types are not unifiable with each other or other types
 
 ### R7: Struct imports
 
@@ -202,8 +201,8 @@ Minimum coverage:
 - [ ] [R2] Implement type syntax parser
 - [ ] [R3] Handle function signatures
 - [ ] [R4] Handle variable declarations
-- [ ] [R5] Handle type aliases (including union types)
-- [ ] [R6] Handle opaque type definitions
+- [ ] [R5] Handle type aliases (with definition)
+- [ ] [R6] Handle opaque types (no definition)
 - [ ] [R7] Handle struct imports
 - [ ] [R8] Handle open directive (import types)
 - [ ] [R9] Handle include directive (re-export declarations)

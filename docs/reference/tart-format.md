@@ -26,8 +26,7 @@ A `.tart` file can expose an opaque view of internal types for abstraction.
 
 (defun name [quantifiers]? params -> ret)  ; Function (callable)
 (defvar variable-name type)                ; Variable declaration
-(type TypeName type)                       ; Type alias
-(opaque TypeName)                          ; Abstract type (hidden representation)
+(type TypeName type)                       ; Type alias (Opaque for abstract types)
 (import-struct name)                       ; Import cl-defstruct
 ```
 
@@ -42,12 +41,11 @@ directive    ::= open_decl | include_decl
 open_decl    ::= "(open '" symbol ')'
 include_decl ::= "(include '" symbol ')'
 
-declaration  ::= func_decl | var_decl | type_alias | opaque_decl | struct_import
+declaration  ::= func_decl | var_decl | type_alias | struct_import
 
 func_decl    ::= '(defun' symbol ('[' tvar+ ']')? params '->' type ')'
 var_decl     ::= '(defvar' symbol type ')'
-type_alias   ::= '(type' symbol type ')'
-opaque_decl  ::= '(opaque' symbol ('(' tvar* ')')? ')'
+type_alias   ::= '(type' symbol type?  ')'   ; no type = opaque
 struct_import ::= '(import-struct' symbol ')'
 
 params       ::= type | '(' type+ ')'     ; single or grouped
@@ -205,22 +203,27 @@ Use `type` to define type aliases, including union types:
 
 ### Opaque Types
 
-Abstract types with hidden representation. Consumers can pass values around
-but cannot inspect or construct them except via declared functions.
+A `type` declaration with no definition creates an abstract type with hidden
+representation. Consumers can pass values around but cannot inspect or construct
+them except via declared functions.
 
 ```elisp
 ;; buffer-manager.tart
 (module buffer-manager)
 
-(opaque Buffer)              ; Monomorphic opaque type
-(opaque Handle (a))          ; Polymorphic opaque type
+(type Buffer)                             ; Abstract type (no definition = opaque)
 
 (defun buffer-create String -> Buffer)
 (defun buffer-name Buffer -> String)
 (defun buffer-kill Buffer -> Nil)
+```
 
-(defun handle-wrap [a] a -> (Handle a))
-(defun handle-unwrap [a] (Handle a) -> a)
+Each opaque declaration creates a distinct type—`Buffer` and `Handle` below
+are not interchangeable:
+
+```elisp
+(type Buffer)
+(type Handle)
 ```
 
 Use opaque types for:
@@ -282,12 +285,12 @@ Use `include` to extend or re-export another module's type interface.
 
 (open 'seq)  ; Import Seqable for use in signatures
 
-;; Type aliases (including union types)
+;; Type aliases
 (type IntList (List Int))
 (type Result (Or Success Failure))
 
-;; Opaque type
-(opaque Handle)
+;; Opaque type (no definition)
+(type Handle)
 
 ;; Function declarations (directly callable)
 (defun my-utils-trim String -> String)
