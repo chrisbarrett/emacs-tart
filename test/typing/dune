@@ -13,3 +13,7 @@
 (test
  (name generalize_test)
  (libraries tart alcotest))
+
+(test
+ (name check_test)
+ (libraries tart alcotest))

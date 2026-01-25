@@ -26,3 +26,4 @@ module Constraint = Typing.Constraint
 module Infer = Typing.Infer
 module Unify = Typing.Unify
 module Generalize = Typing.Generalize
+module Check = Typing.Check

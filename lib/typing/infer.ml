@@ -19,6 +19,13 @@ type result = {
   constraints : C.set;
 }
 
+(** Result of inferring a top-level definition *)
+type defun_result = {
+  name : string;
+  fn_type : typ;
+  defun_constraints : C.set;
+}
+
 (** Create a result with no constraints *)
 let pure ty = { ty; constraints = C.empty }
 
@@ -90,6 +97,10 @@ let rec infer (env : Env.t) (sexp : Syntax.Sexp.t) : result =
 
   | List (Symbol ("let*", _) :: List (bindings, _) :: body, span) ->
       infer_let_star env bindings body span
+
+  (* === Defun - returns symbol, but binds function type === *)
+  | List (Symbol ("defun", _) :: Symbol (name, _) :: List (params, _) :: body, span) ->
+      infer_defun_as_expr env name params body span
 
   (* === Progn (implicit in many forms) === *)
   | List (Symbol ("progn", _) :: exprs, span) ->
@@ -467,6 +478,65 @@ and infer_application env fn args span =
   in
 
   { ty = result_ty; constraints = all_constraints }
+
+(** Infer a defun as an expression.
+
+    As an expression, defun returns a symbol (the function name).
+    The function type is inferred like a lambda.
+
+    For the side effect of binding the name to the type, use [infer_defun].
+*)
+and infer_defun_as_expr env _name params body span =
+  (* Infer as a lambda, but return Symbol as the expression type *)
+  let _fn_result = infer_lambda env params body span in
+  (* defun returns the symbol naming the function *)
+  pure Prim.symbol
+
+(** Infer the type of a defun and return the binding information.
+
+    Unlike [infer_defun_as_expr], this returns the function name and type
+    so callers can bind it in the environment.
+*)
+and infer_defun (env : Env.t) (sexp : Syntax.Sexp.t) : defun_result option =
+  let open Syntax.Sexp in
+  match sexp with
+  | List (Symbol ("defun", _) :: Symbol (name, _) :: List (params, _) :: body, span) ->
+      let outer_level = Env.current_level env in
+      let inner_env = Env.enter_level env in
+
+      (* Create fresh type variables for each parameter *)
+      let param_info = List.map (fun p ->
+        match p with
+        | Symbol (pname, _) ->
+            let tv = fresh_tvar (Env.current_level inner_env) in
+            (pname, tv)
+        | _ ->
+            let tv = fresh_tvar (Env.current_level inner_env) in
+            ("_", tv)
+      ) params in
+
+      (* Extend environment with parameter types *)
+      let body_env = Env.extend_monos param_info inner_env in
+
+      (* Infer body as a progn *)
+      let body_result = infer_progn body_env body span in
+
+      (* Solve constraints for the defun body *)
+      let _ = Unify.solve body_result.constraints in
+
+      (* Build function type *)
+      let param_types = List.map (fun (_, ty) -> PPositional ty) param_info in
+      let fn_type = TArrow (param_types, body_result.ty) in
+
+      (* Generalize the function type (defun is always a syntactic value) *)
+      let scheme = G.generalize outer_level fn_type in
+      let generalized_ty = match scheme with
+        | Env.Mono ty -> ty
+        | Env.Poly (vars, ty) -> TForall (vars, ty)
+      in
+
+      Some { name; fn_type = generalized_ty; defun_constraints = body_result.constraints }
+  | _ -> None
 
 (** Infer the type of a vector literal.
 

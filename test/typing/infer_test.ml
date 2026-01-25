@@ -283,6 +283,50 @@ let test_cond_multiple_clauses () =
   Alcotest.(check int) "multi cond constraints" 2 count
 
 (* =============================================================================
+   Defun Tests
+   ============================================================================= *)
+
+let test_defun_returns_symbol () =
+  (* As an expression, defun returns a symbol *)
+  let ty = infer_type "(defun foo () 42)" in
+  Alcotest.(check string) "defun returns symbol" "Symbol" ty
+
+let test_defun_infer_simple () =
+  (* infer_defun extracts the function type *)
+  reset_tvar_counter ();
+  let sexp = parse "(defun add1 (x) (+ x 1))" in
+  let env = Env.extend_mono "+" (arrow [Prim.int; Prim.int] Prim.int) Env.empty in
+  match Infer.infer_defun env sexp with
+  | Some result ->
+      Alcotest.(check string) "defun name" "add1" result.name;
+      (* The parameter type should unify with Int due to + *)
+      Alcotest.(check bool) "defun fn_type" true
+        (match result.fn_type with
+         | TArrow (_, _) -> true
+         | _ -> false)
+  | None -> Alcotest.fail "expected defun result"
+
+let test_defun_infer_identity () =
+  (* Identity function should get polymorphic type *)
+  reset_tvar_counter ();
+  let sexp = parse "(defun id (x) x)" in
+  match Infer.infer_defun Env.empty sexp with
+  | Some result ->
+      Alcotest.(check string) "defun name" "id" result.name;
+      (* Should be generalized: (forall (a) (-> (a) a)) *)
+      let ty_str = to_string result.fn_type in
+      Alcotest.(check bool) "identity is forall" true
+        (String.sub ty_str 0 7 = "(forall")
+  | None -> Alcotest.fail "expected defun result"
+
+let test_defun_not_defun () =
+  (* Non-defun returns None *)
+  let sexp = parse "(lambda (x) x)" in
+  match Infer.infer_defun Env.empty sexp with
+  | Some _ -> Alcotest.fail "expected None for lambda"
+  | None -> ()
+
+(* =============================================================================
    Constraint Content Tests
    ============================================================================= *)
 
@@ -381,6 +425,13 @@ let () =
         [
           Alcotest.test_case "single clause" `Quick test_cond_single_clause;
           Alcotest.test_case "multiple clauses" `Quick test_cond_multiple_clauses;
+        ] );
+      ( "defun",
+        [
+          Alcotest.test_case "returns symbol" `Quick test_defun_returns_symbol;
+          Alcotest.test_case "infer simple" `Quick test_defun_infer_simple;
+          Alcotest.test_case "infer identity" `Quick test_defun_infer_identity;
+          Alcotest.test_case "not defun" `Quick test_defun_not_defun;
         ] );
       ( "constraints",
         [
