@@ -1,0 +1,12 @@
+# OCaml/Dune build artifacts
+_build/
+*.install
+*.merlin
+
+# Editor backup files
+*~
+\#*\#
+.\#*
+
+# opam local switch
+_opam/
