@@ -30,7 +30,7 @@ lib/
     | C                        Type constant       (TCon)
     | F τ₁ ... τₙ              Type application    (TApp)
     | (π₁ ... πₙ) → τ          Function type       (TArrow)
-    | ∀α₁...αₙ. τ              Universal type      (TForall)
+    | [α₁...αₙ] τ              Universal type      (TForall)
     | τ₁ ∪ τ₂ ∪ ...            Union type          (TUnion)
     | τ₁ × τ₂ × ...            Tuple type          (TTuple)
 
@@ -39,6 +39,11 @@ lib/
     | τ*                       Rest element        (PRest)
     | :k τ                     Keyword             (PKey)
 ```
+
+**Quantifier syntax:** `[α₁...αₙ]` binds type variables for the rest of the type
+expression. Scope extends to the end of the enclosing s-expression. Explicit
+quantification required in v1 (no implicit generalization). The quantifier group
+is optional for monomorphic types.
 
 ### Primitive Types
 
@@ -72,8 +77,8 @@ lib/
 | `HashTable`    | `(HashTable k v)`    | ✓       | Mutable hash table             |
 | `Or` (Union)   | `(Or a b ...)`       | *       | Truthy iff all members truthy  |
 | `Tuple`        | `(Tuple a b ...)`    | ✓       | Fixed-length heterogeneous     |
-| Arrow          | `(-> (params) ret)`  | ✓       | Function type                  |
-| Forall         | `(forall (a) type)`  | *       | Inherits from body             |
+| Arrow          | `(-> (params) ret)`  | ✓       | Function type (value)          |
+| Arrow+Forall   | `(-> [a] (params) ret)` | ✓    | Polymorphic function (value)   |
 
 ### Truthiness
 
@@ -120,7 +125,7 @@ Parameters are grouped (not curried), matching Elisp semantics:
 (-> (String &optional Int) String)     ; With optional
 (-> (&rest Int) Int)                   ; Variadic
 (-> (&key :name String :age Int) Nil)  ; Keyword args
-(-> (a) (-> (b) c))                    ; Manual currying
+(-> (a) (-> (b) c))                    ; Manual currying (returns callable value)
 ```
 
 Parameter unification rules:
@@ -128,6 +133,52 @@ Parameter unification rules:
 - τ₁? = τ₂? (optional with optional)
 - τ* consumes remaining positional/optional params
 - :k τ₁ = :k τ₂ (keyword names must match)
+
+### Function Slot vs Value Slot (Lisp-2)
+
+Elisp separates functions and values into different namespaces:
+
+```elisp
+(defun foo (x) x)           ; Function slot: (foo 1) works
+(setq bar (lambda (x) x))   ; Value slot: (bar 1) errors, need (funcall bar 1)
+```
+
+The type system tracks this distinction via declaration forms:
+
+| Declaration | Calling convention | Example |
+|-------------|-------------------|---------|
+| `defun`     | Direct: `(f args...)` | `(defun add (Int Int) Int)` |
+| `defvar` with `(->)` | Indirect: `(funcall f args...)` | `(defvar handler (-> (String) Nil))` |
+
+In `defun`, the outer `->` is implicit (it's always a function). Quantifiers go
+right after the name:
+
+```elisp
+(defun identity [a] (a) a)           ; callable as (identity x)
+(defun add (Int Int) Int)            ; monomorphic, no quantifiers needed
+```
+
+For explicit arrow types (in `defvar` or as parameters), quantifiers go right
+after `->`:
+
+```elisp
+(defvar id-fn (-> [a] (a) a))        ; polymorphic function value
+(defvar handler (-> (String) Nil))   ; monomorphic function value
+```
+
+Higher-order functions receive **values**, so their parameters use explicit `(->)`:
+
+```elisp
+(defun map [a b] ((-> (a) b) (List a)) (List b))
+;; The first parameter is a function value; inside map, use (funcall f elem)
+```
+
+When a function returns a function, the result is a value:
+
+```elisp
+(defun make-adder (Int) (-> (Int) Int))
+;; (make-adder 1) returns a value; caller must (funcall (make-adder 1) 2)
+```
 
 ### Surface Syntax (Elisp)
 
@@ -138,7 +189,7 @@ The `.eli` signature file syntax maps to the type theory notation:
 | `Int`, `String`, ...     | C              | Primitive constants               |
 | `a`, `b`, ...            | α              | Type variables                    |
 | `(-> (τ...) τ)`          | (π̄) → τ        | `(-> (Int Int) Int)`              |
-| `(forall (α...) τ)`      | ∀ᾱ. τ          | `(forall (a) (-> (a) a))`         |
+| `(-> [α...] (τ...) τ)`   | [ᾱ] (π̄) → τ    | `(-> [a] (a) a)`                  |
 | `(List τ)`               | List τ         | `(List Int)`                      |
 | `(Option τ)`             | Option τ       | `(Option String)`                 |
 | `(Or τ₁ τ₂ ...)`         | τ₁ ∪ τ₂ ∪ ...  | `(Or Int String)`                 |
@@ -199,7 +250,7 @@ Only **syntactic values** can be generalized:
 
 ```elisp
 (let ((id (lambda (x) x)))
-  (id 1) (id "s"))          ; OK: id : (forall (a) (-> (a) a))
+  (id 1) (id "s"))          ; OK: id : (-> [a] (a) a)
 
 (let ((xs (reverse '())))
   xs)                       ; xs : (List '_a) — monomorphic
@@ -271,81 +322,82 @@ gen(Γ, τ, e) = ∀ᾱ.τ  where ᾱ = {α ∈ FV(τ) | level(α) > level(Γ)} 
 (see: [`Builtin_types.signatures`](lib/typing/builtin_types.ml#L42), [`Builtin_types.initial_env`](lib/typing/builtin_types.ml#L245))
 
 Types for built-in Elisp functions, loaded into the initial environment.
+Shown in `defun` format (directly callable via `(name args...)`).
 
 ### List Operations
 
 ```elisp
-car     : (forall (a) (-> ((List a)) (Option a)))
-cdr     : (forall (a) (-> ((List a)) (List a)))
-cons    : (forall (a) (-> (a (List a)) (List a)))
-list    : (forall (a) (-> (&rest a) (List a)))
-length  : (forall (a) (-> ((List a)) Int))
-nth     : (forall (a) (-> (Int (List a)) (Option a)))
-nthcdr  : (forall (a) (-> (Int (List a)) (List a)))
-append  : (forall (a) (-> (&rest (List a)) (List a)))
-reverse : (forall (a) (-> ((List a)) (List a)))
-member  : (forall (a) (-> (a (List a)) (List a)))
+(defun car     [a] ((List a)) (Option a))
+(defun cdr     [a] ((List a)) (List a))
+(defun cons    [a] (a (List a)) (List a))
+(defun list    [a] (&rest a) (List a))
+(defun length  [a] ((List a)) Int)
+(defun nth     [a] (Int (List a)) (Option a))
+(defun nthcdr  [a] (Int (List a)) (List a))
+(defun append  [a] (&rest (List a)) (List a))
+(defun reverse [a] ((List a)) (List a))
+(defun member  [a] (a (List a)) (List a))
 ```
 
 ### Arithmetic
 
 ```elisp
-+   : (-> (&rest Int) Int)
--   : (-> (Int &rest Int) Int)
-*   : (-> (&rest Int) Int)
-/   : (-> (Int &rest Int) Int)
-mod : (-> (Int Int) Int)
-abs : (-> (Int) Int)
-1+  : (-> (Int) Int)
-1-  : (-> (Int) Int)
+(defun +   (&rest Int) Int)
+(defun -   (Int &rest Int) Int)
+(defun *   (&rest Int) Int)
+(defun /   (Int &rest Int) Int)
+(defun mod (Int Int) Int)
+(defun abs (Int) Int)
+(defun 1+  (Int) Int)
+(defun 1-  (Int) Int)
 ```
 
 ### Comparisons
 
 ```elisp
-<   : (-> (Int &rest Int) Bool)
->   : (-> (Int &rest Int) Bool)
-<=  : (-> (Int &rest Int) Bool)
->=  : (-> (Int &rest Int) Bool)
-=   : (-> (Int &rest Int) Bool)
+(defun <  (Int &rest Int) Bool)
+(defun >  (Int &rest Int) Bool)
+(defun <= (Int &rest Int) Bool)
+(defun >= (Int &rest Int) Bool)
+(defun =  (Int &rest Int) Bool)
 ```
 
 ### Predicates
 
 ```elisp
-null      : (-> (Any) Bool)
-atom      : (-> (Any) Bool)
-listp     : (-> (Any) Bool)
-consp     : (-> (Any) Bool)
-symbolp   : (-> (Any) Bool)
-stringp   : (-> (Any) Bool)
-numberp   : (-> (Any) Bool)
-integerp  : (-> (Any) Bool)
-floatp    : (-> (Any) Bool)
-vectorp   : (-> (Any) Bool)
-functionp : (-> (Any) Bool)
-eq        : (-> (Any Any) Bool)
-equal     : (-> (Any Any) Bool)
-not       : (-> (Any) Bool)
+(defun null      (Any) Bool)
+(defun atom      (Any) Bool)
+(defun listp     (Any) Bool)
+(defun consp     (Any) Bool)
+(defun symbolp   (Any) Bool)
+(defun stringp   (Any) Bool)
+(defun numberp   (Any) Bool)
+(defun integerp  (Any) Bool)
+(defun floatp    (Any) Bool)
+(defun vectorp   (Any) Bool)
+(defun functionp (Any) Bool)
+(defun eq        (Any Any) Bool)
+(defun equal     (Any Any) Bool)
+(defun not       (Any) Bool)
 ```
 
 ### Strings
 
 ```elisp
-concat         : (-> (&rest String) String)
-substring      : (-> (String Int &optional Int) String)
-string-length  : (-> (String) Int)
-upcase         : (-> (String) String)
-downcase       : (-> (String) String)
-format         : (-> (String &rest Any) String)
+(defun concat        (&rest String) String)
+(defun substring     (String Int &optional Int) String)
+(defun string-length (String) Int)
+(defun upcase        (String) String)
+(defun downcase      (String) String)
+(defun format        (String &rest Any) String)
 ```
 
 ### Vectors
 
 ```elisp
-vector : (forall (a) (-> (&rest a) (Vector a)))
-aref   : (forall (a) (-> ((Vector a) Int) a))
-aset   : (forall (a) (-> ((Vector a) Int a) a))
+(defun vector [a] (&rest a) (Vector a))
+(defun aref   [a] ((Vector a) Int) a)
+(defun aset   [a] ((Vector a) Int a) a)
 ```
 
 ## Interpreter
@@ -367,19 +419,28 @@ Presence of `foo.eli` triggers type checking of `foo.el`.
 ```elisp
 (module my-utils)
 
-(sig my-add (-> (Int Int) Int))
-(sig my-identity (forall (a) (-> (a) a)))
+;; Function signatures (directly callable, outer -> implicit)
+(defun my-add (Int Int) Int)
+(defun my-identity [a] (a) a)
 
+;; Variable with function type (requires funcall, explicit ->)
+(defvar my-handler (-> (String) Nil))
+(defvar my-poly-handler (-> [a] (a) a))
+
+;; Variable with non-function type
 (defvar my-default String)
 
+;; Type alias
 (type IntList = (List Int))
 
+;; Algebraic data type
 (data Result (a e)
   (Ok a)
   (Err e))
 
+;; Import types from untyped modules
 (require/typed seq
-  (seq-map : (forall (a b) (-> ((-> (a) b) (List a)) (List b)))))
+  (defun seq-map [a b] ((-> (a) b) (List a)) (List b)))
 ```
 
 ADTs generate constructors, predicates (`-p`), and accessors.
@@ -395,6 +456,8 @@ ADTs generate constructors, predicates (`-p`), and accessors.
 | Grouped params               | Matches Elisp semantics          |
 | Levels-based generalization  | Near-linear performance          |
 | `Option` requires `Truthy`   | Preserves nil-punning            |
+| `defun` vs `defvar`          | Tracks Lisp-2 calling convention |
+| `[vars]` after `->` or name  | Quantifiers scoped to their arrow |
 
 ## Limitations and Simplifications
 
