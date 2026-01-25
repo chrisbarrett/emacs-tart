@@ -7,21 +7,29 @@ at edit time via LSP integration with Eglot.
 
 > [!WARNING]
 > Tart is under active development. The parser, interpreter, and type inference
-> engine are functional, but LSP integration is not yet complete.
+> engine are functional, but the CLI and LSP integration are not yet complete.
 
 ## Features
 
 - **Type inference** — Principal types inferred without annotations
 - **Sound typing** — No `any` escape hatch; errors caught at compile time
-- **LSP integration** — Diagnostics, hover types, and more via Eglot
+- **LSP integration** — Diagnostics, hover types, and more via Eglot (planned)
 - **Signature files** — `.eli` files declare types for untyped code
 - **Macro expansion** — Built-in pure Elisp interpreter expands macros
 
 ## Installation
 
-### Prerequisites
+### Using Nix Flakes (Recommended)
 
-- [Nix][nix] with flakes enabled
+If you have [Nix][nix] with flakes enabled:
+
+```bash
+# Run directly without installing
+nix run github:chrisbarrett/emacs-tart -- --help
+
+# Or install to your profile
+nix profile install github:chrisbarrett/emacs-tart
+```
 
 ### Building from Source
 
@@ -32,18 +40,19 @@ nix develop
 dune build
 ```
 
-The `tart` executable will be available in `_build/default/bin/tart.exe`, or run
-directly with:
+The `tart` executable will be available at `_build/default/bin/tart.exe`.
+
+You can run it directly with dune:
 
 ```bash
 dune exec tart -- --help
 ```
 
-### Running Tests
+Or add the build directory to your `PATH`:
 
 ```bash
-nix develop
-dune test
+export PATH="$PWD/_build/default/bin:$PATH"
+tart --help
 ```
 
 ## Usage
@@ -141,15 +150,12 @@ Add to your Emacs configuration:
   - 40+ typed built-in functions
   - Structured diagnostics with source locations
 
-### In Progress
-
-- Occurrence typing for type predicates (Spec 06 R11)
-
 ### Planned
 
 - Signature file parser (Spec 07)
 - LSP server (Spec 08)
 - CLI subcommands: `eval`, `expand`, `repl`, `lsp` (Spec 09)
+- Emacs minor mode for REPL interaction (Spec 10)
 
 ## Architecture
 
@@ -200,6 +206,12 @@ This provides OCaml, dune, menhir, and all dependencies.
 | `dune test`       | Run all tests            |
 | `dune fmt`        | Format code              |
 | `dune exec tart`  | Run the CLI              |
+
+### Running Tests
+
+```bash
+dune test
+```
 
 ### Pre-commit Hooks
 
