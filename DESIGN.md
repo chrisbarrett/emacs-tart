@@ -450,7 +450,7 @@ signature verification.
 ;; Function signatures (directly callable)
 (defun my-add (Int Int) -> Int)
 (defun my-identity [a] a -> a)
-(defun my-process [a] (Seqable a) -> (List a))  ; Uses Seqable from seq
+(defun my-process [a] (Seq a) -> (List a))  ; Uses Seq from seq
 
 ;; Variable with function type (requires funcall)
 (defvar my-handler (String -> Nil))

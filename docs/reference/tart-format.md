@@ -265,10 +265,10 @@ type expressions. The imported names are not re-exported.
 
 ```elisp
 ;; my-collection.tart
-(open 'seq)  ; Seqable now available for use in signatures
+(open 'seq)  ; Seq now available for use in signatures
 
-(defun my-flatten [a] (Seqable (Seqable a)) -> (List a))
-(defun my-frequencies [a] (Seqable a) -> (HashTable a Int))
+(defun my-flatten [a] (Seq (Seq a)) -> (List a))
+(defun my-frequencies [a] (Seq a) -> (HashTable a Int))
 ```
 
 Use `open` when you need to reference types from other modules in your signatures.
@@ -283,8 +283,8 @@ them part of this module's interface.
 (include 'seq)  ; Re-export everything from seq
 
 ;; Plus additional functions
-(defun seq-partition [a] (Int (Seqable a)) -> (List (List a)))
-(defun seq-interleave [a] ((Seqable a) (Seqable a)) -> (List a))
+(defun seq-partition [a] (Int (Seq a)) -> (List (List a)))
+(defun seq-interleave [a] ((Seq a) (Seq a)) -> (List a))
 ```
 
 Use `include` to extend or re-export another module's type interface.
@@ -293,7 +293,7 @@ Use `include` to extend or re-export another module's type interface.
 
 ```elisp
 ;; my-utils.tart
-(open 'seq)  ; Import Seqable for use in signatures
+(open 'seq)  ; Import Seq for use in signatures
 
 ;; Type aliases
 (type IntList (List Int))
@@ -344,10 +344,10 @@ that don't ship their own type definitions.
 
 ```elisp
 ;; ~/.config/emacs/tart/seq.tart
-(defun seq-map [a b] ((a -> b) (Seqable a)) -> (List b))
-(defun seq-filter [a] ((a -> Bool) (Seqable a)) -> (List a))
-(defun seq-reduce [a b] ((b a -> b) b (Seqable a)) -> b)
-(defun seq-find [a] ((a -> Bool) (Seqable a)) -> (Option a))
+(defun seq-map [a b] ((a -> b) (Seq a)) -> (List b))
+(defun seq-filter [a] ((a -> Bool) (Seq a)) -> (List a))
+(defun seq-reduce [a b] ((b a -> b) b (Seq a)) -> b)
+(defun seq-find [a] ((a -> Bool) (Seq a)) -> (Option a))
 ```
 
 The filename determines the module: `seq.tart` provides types for `(require 'seq)`.

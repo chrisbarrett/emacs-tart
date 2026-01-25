@@ -18,13 +18,13 @@ Type signatures live in `.tart` files. For example, types for `seq.el`:
 
 ```elisp
 ;; seq.tart
-(type Seqable (Or (List a) (Vector a) String))
+(type Seq (Or (List a) (Vector a) String))
 
-(defun seq-map [a b] ((a -> b) (Seqable a)) -> (List b))
-(defun seq-filter [a] ((a -> Bool) (Seqable a)) -> (List a))
-(defun seq-reduce [a b] ((b a -> b) b (Seqable a)) -> b)
-(defun seq-find [a] ((a -> Bool) (Seqable a)) -> (Option a))
-(defun seq-empty-p [a] (Seqable a) -> Bool)
+(defun seq-map [a b] ((a -> b) (Seq a)) -> (List b))
+(defun seq-filter [a] ((a -> Bool) (Seq a)) -> (List a))
+(defun seq-reduce [a b] ((b a -> b) b (Seq a)) -> b)
+(defun seq-find [a] ((a -> Bool) (Seq a)) -> (Option a))
+(defun seq-empty-p [a] (Seq a) -> Bool)
 ```
 
 Tart searches for `.tart` files when you `require` a module, so you can provide

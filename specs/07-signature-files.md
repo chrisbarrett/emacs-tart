@@ -126,12 +126,12 @@ go at the start of arrow types, or after the name in `defun`.
 ```elisp
 (open 'seq)
 
-(defun my-flatten [a] (Seqable (Seqable a)) -> (List a))
+(defun my-flatten [a] (Seq (Seq a)) -> (List a))
 ```
-**And** `seq.tart` defines `(type Seqable ...)`
+**And** `seq.tart` defines `(type Seq ...)`
 **When** loaded
-**Then** `Seqable` is available for use in type expressions
-**And** `Seqable` is NOT re-exported from `my-collection`
+**Then** `Seq` is available for use in type expressions
+**And** `Seq` is NOT re-exported from `my-collection`
 
 **Verify:** Type expressions can reference opened types; opened types not in exports
 
@@ -141,7 +141,7 @@ go at the start of arrow types, or after the name in `defun`.
 ```elisp
 (include 'seq)
 
-(defun seq-partition [a] (Int (Seqable a)) -> (List (List a)))
+(defun seq-partition [a] (Int (Seq a)) -> (List (List a)))
 ```
 **And** `seq.tart` defines functions and types
 **When** loaded
@@ -158,7 +158,7 @@ go at the start of arrow types, or after the name in `defun`.
 ```
 **And** `~/.config/emacs/tart/seq.tart` contains:
 ```elisp
-(defun seq-map [a b] ((a -> b) (Seqable a)) -> (List b))
+(defun seq-map [a b] ((a -> b) (Seq a)) -> (List b))
 ```
 **When** a typed module calls `(require 'seq)` and uses `seq-map`
 **Then** `seq-map` is available with the declared type from the search path
