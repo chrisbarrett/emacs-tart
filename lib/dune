@@ -1,6 +1,6 @@
 (library
  (name tart)
  (public_name tart)
- (libraries yojson)
+ (libraries yojson tart.syntax)
  (preprocess
   (pps ppx_deriving.show ppx_deriving.eq)))

@@ -1,0 +1,12 @@
+(menhir
+ (modules parser)
+ (flags --table --explain))
+
+(ocamllex lexer)
+
+(library
+ (name syntax)
+ (public_name tart.syntax)
+ (libraries menhirLib)
+ (preprocess
+  (pps ppx_deriving.show ppx_deriving.eq)))
