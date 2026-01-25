@@ -17,3 +17,7 @@
 (test
  (name check_test)
  (libraries tart alcotest))
+
+(test
+ (name diagnostic_test)
+ (libraries tart alcotest str))
