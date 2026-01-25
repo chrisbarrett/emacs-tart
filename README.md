@@ -47,7 +47,10 @@ at edit time via LSP integration with Eglot.
 
 ## Signature Files
 
-Type signatures live in `.tart` files. For example, types for `seq.el`:
+A `.tart` file declares the **public interface** of a module. Only what appears
+in the `.tart` file is visible to consumers—implementation details stay hidden.
+
+For example, `seq.tart` provides types for `seq.el`:
 
 ```elisp
 ;; seq.tart
