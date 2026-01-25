@@ -3,7 +3,8 @@
 A static type checker for Emacs Lisp.
 
 Tart catches type errors at edit time via LSP. There's no runtime component—your
-Elisp runs exactly as before, but with compile-time safety.
+Elisp runs exactly as before, but with compile-time safety. (Tart provides some
+Elisp macros for embedding type annotations; these expand to nothing at runtime.)
 
 Type your implementation details for internal safety, then declare a public API
 in a `.tart` signature file. Only what you export is visible to consumers.
