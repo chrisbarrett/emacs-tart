@@ -1000,6 +1000,90 @@ let test_load_overlays () =
            true
          with Not_found -> false)
 
+(** Test that dash.tart parses successfully *)
+let test_parse_dash () =
+  let path = Filename.concat stdlib_dir "dash.tart" in
+  if not (Sys.file_exists path) then
+    Alcotest.fail ("dash.tart not found at: " ^ path);
+  match Search_path.parse_signature_file path with
+  | None -> Alcotest.fail "dash.tart failed to parse"
+  | Some sig_file ->
+      Alcotest.(check string) "module name" "dash" sig_file.sig_module;
+      Alcotest.(check bool)
+        "has declarations" true
+        (List.length sig_file.sig_decls > 100);
+      (* Check key dash functions *)
+      let has_defun name =
+        List.exists
+          (function Sig_ast.DDefun d -> d.defun_name = name | _ -> false)
+          sig_file.sig_decls
+      in
+      Alcotest.(check bool) "has -map" true (has_defun "-map");
+      Alcotest.(check bool) "has -filter" true (has_defun "-filter");
+      Alcotest.(check bool) "has -reduce" true (has_defun "-reduce");
+      Alcotest.(check bool) "has -take" true (has_defun "-take");
+      Alcotest.(check bool) "has -drop" true (has_defun "-drop");
+      Alcotest.(check bool) "has -flatten" true (has_defun "-flatten");
+      Alcotest.(check bool) "has -distinct" true (has_defun "-distinct");
+      Alcotest.(check bool) "has -group-by" true (has_defun "-group-by");
+      Alcotest.(check bool) "has -partition" true (has_defun "-partition");
+      Alcotest.(check bool) "has -sort" true (has_defun "-sort")
+
+(** Test that dash can be loaded into type environment *)
+let test_load_dash () =
+  let sp = Search_path.empty |> Search_path.with_stdlib stdlib_dir in
+  (* First load builtins for base types *)
+  let base_env =
+    match
+      Search_path.load_module ~search_path:sp ~env:Type_env.empty "builtins"
+    with
+    | None -> Alcotest.fail "failed to load builtins module"
+    | Some env -> env
+  in
+  match Search_path.load_module ~search_path:sp ~env:base_env "dash" with
+  | None -> Alcotest.fail "failed to load dash module"
+  | Some env -> (
+      (* Check that -map is loaded *)
+      (match Type_env.lookup "-map" env with
+      | None -> Alcotest.fail "-map not found in env"
+      | Some _ -> ());
+      (* Check that -filter is loaded *)
+      (match Type_env.lookup "-filter" env with
+      | None -> Alcotest.fail "-filter not found in env"
+      | Some _ -> ());
+      (* Check that -reduce-from is loaded *)
+      (match Type_env.lookup "-reduce-from" env with
+      | None -> Alcotest.fail "-reduce-from not found in env"
+      | Some _ -> ());
+      (* Check that -group-by is loaded *)
+      (match Type_env.lookup "-group-by" env with
+      | None -> Alcotest.fail "-group-by not found in env"
+      | Some _ -> ());
+      (* Verify -map type is correct: (((a) -> b) (list a)) -> (list b) *)
+      (match Type_env.lookup "-map" env with
+      | None -> Alcotest.fail "-map not found"
+      | Some scheme ->
+          let scheme_str = Type_env.scheme_to_string scheme in
+          Alcotest.(check bool)
+            "-map has arrow type" true
+            (String.length scheme_str > 0));
+      (* Verify -filter type is correct *)
+      (match Type_env.lookup "-filter" env with
+      | None -> Alcotest.fail "-filter not found"
+      | Some scheme ->
+          let scheme_str = Type_env.scheme_to_string scheme in
+          Alcotest.(check bool)
+            "-filter has arrow type" true
+            (String.length scheme_str > 0));
+      (* Verify -reduce-from type is correct *)
+      match Type_env.lookup "-reduce-from" env with
+      | None -> Alcotest.fail "-reduce-from not found"
+      | Some scheme ->
+          let scheme_str = Type_env.scheme_to_string scheme in
+          Alcotest.(check bool)
+            "-reduce-from has arrow type" true
+            (String.length scheme_str > 0))
+
 let () =
   Alcotest.run "search_path"
     [
@@ -1063,5 +1147,7 @@ let () =
             test_load_text_properties;
           Alcotest.test_case "parse overlays.tart" `Quick test_parse_overlays;
           Alcotest.test_case "load overlays into env" `Quick test_load_overlays;
+          Alcotest.test_case "parse dash.tart" `Quick test_parse_dash;
+          Alcotest.test_case "load dash into env" `Quick test_load_dash;
         ] );
     ]
