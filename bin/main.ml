@@ -156,10 +156,206 @@ let cmd_expand ~load_files file =
           exit 1)
     parse_result.sexps
 
+(** Parse and extract the argument from a REPL command like ",type (+ 1 2)" *)
+let parse_repl_cmd_arg cmd input =
+  let prefix = "," ^ cmd in
+  let prefix_len = String.length prefix in
+  if String.length input > prefix_len then
+    let rest = String.sub input prefix_len (String.length input - prefix_len) in
+    String.trim rest
+  else ""
+
+(** REPL state *)
+type repl_state = {
+  interp : Tart.Env.global;
+  mutable type_env : Tart.Type_env.t;
+}
+
+(** Show type of expression without evaluating *)
+let repl_type state input =
+  let expr = parse_repl_cmd_arg "type" input in
+  if expr = "" then prerr_endline "Usage: ,type <expr>"
+  else
+    let parse_result = Tart.Read.parse_string expr in
+    if parse_result.errors <> [] then
+      List.iter
+        (fun err -> prerr_endline (format_parse_error err))
+        parse_result.errors
+    else
+      match parse_result.sexps with
+      | [] -> prerr_endline ",type: empty expression"
+      | [ sexp ] ->
+          let ty, errors = Tart.Check.check_expr ~env:state.type_env sexp in
+          if errors <> [] then (
+            let diagnostics = Tart.Diagnostic.of_unify_errors errors in
+            List.iter
+              (fun d -> prerr_endline (Tart.Diagnostic.to_string_compact d))
+              diagnostics)
+          else print_endline (Tart.Types.to_string ty)
+      | _ -> prerr_endline ",type: expected single expression"
+
+(** Show macro expansion of expression *)
+let repl_expand state input =
+  let expr = parse_repl_cmd_arg "expand" input in
+  if expr = "" then prerr_endline "Usage: ,expand <expr>"
+  else
+    let parse_result = Tart.Read.parse_string expr in
+    if parse_result.errors <> [] then
+      List.iter
+        (fun err -> prerr_endline (format_parse_error err))
+        parse_result.errors
+    else
+      match parse_result.sexps with
+      | [] -> prerr_endline ",expand: empty expression"
+      | [ sexp ] -> (
+          match Tart.Expand.expand_all state.interp sexp with
+          | Tart.Expand.Expanded expanded ->
+              print_endline (Tart.Sexp.to_string expanded)
+          | Tart.Expand.Expansion_error { message; span } ->
+              let pos = span.start_pos in
+              prerr_endline
+                (Printf.sprintf "%s:%d:%d: error: %s" pos.file pos.line
+                   (pos.col + 1) message))
+      | _ -> prerr_endline ",expand: expected single expression"
+
+(** Show current bindings *)
+let repl_env state =
+  (* Show interpreter globals *)
+  print_endline "=== Values ===";
+  Hashtbl.iter
+    (fun name value ->
+      let type_str =
+        match Tart.Type_env.lookup name state.type_env with
+        | Some scheme -> " :: " ^ Tart.Type_env.scheme_to_string scheme
+        | None -> ""
+      in
+      Printf.printf "%s = %s%s\n" name (Tart.Value.to_string value) type_str)
+    state.interp.globals;
+  (* Show macros *)
+  if Hashtbl.length state.interp.macros > 0 then (
+    print_endline "\n=== Macros ===";
+    Hashtbl.iter
+      (fun name _ -> Printf.printf "%s\n" name)
+      state.interp.macros)
+
+(** Show help message *)
+let repl_help () =
+  print_endline "REPL Commands:";
+  print_endline "  ,quit, ,q      Exit REPL";
+  print_endline "  ,type <expr>   Show type without evaluating";
+  print_endline "  ,expand <expr> Show macro expansion";
+  print_endline "  ,env           List current bindings";
+  print_endline "  ,help          Show this help";
+  print_endline "";
+  print_endline "Enter any Elisp expression to evaluate it."
+
+(** Evaluate input and display result *)
+let repl_eval state input =
+  let parse_result = Tart.Read.parse_string input in
+  if parse_result.errors <> [] then
+    List.iter
+      (fun err -> prerr_endline (format_parse_error err))
+      parse_result.errors
+  else if parse_result.sexps = [] then ()
+  else
+    List.iter
+      (fun sexp ->
+        match Tart.Eval.eval_toplevel state.interp sexp with
+        | Error eval_err ->
+            let pos = eval_err.span.start_pos in
+            prerr_endline
+              (Printf.sprintf "%s:%d:%d: error: %s" pos.file pos.line
+                 (pos.col + 1) eval_err.message)
+        | Ok value ->
+            (* Update type environment for defuns *)
+            let env', _form_result, errors =
+              Tart.Check.check_form state.type_env sexp
+            in
+            state.type_env <- env';
+            (* Infer type of the expression *)
+            let ty, type_errors =
+              Tart.Check.check_expr ~env:state.type_env sexp
+            in
+            let all_errors = errors @ type_errors in
+            if all_errors <> [] then (
+              let diagnostics = Tart.Diagnostic.of_unify_errors all_errors in
+              List.iter
+                (fun d -> prerr_endline (Tart.Diagnostic.to_string_compact d))
+                diagnostics)
+            else
+              let value_str = Tart.Value.to_string value in
+              let type_str = Tart.Types.to_string ty in
+              Printf.printf "%s :: %s\n" value_str type_str)
+      parse_result.sexps
+
+(** Check if input appears to be incomplete (unbalanced parens) *)
+let is_incomplete input =
+  let count = ref 0 in
+  let in_string = ref false in
+  let escape = ref false in
+  String.iter
+    (fun c ->
+      if !escape then escape := false
+      else
+        match c with
+        | '\\' -> escape := true
+        | '"' -> in_string := not !in_string
+        | '(' when not !in_string -> incr count
+        | ')' when not !in_string -> decr count
+        | _ -> ())
+    input;
+  !count > 0
+
+(** Read a potentially multi-line input *)
+let read_input () =
+  let rec loop acc prompt =
+    print_string prompt;
+    flush stdout;
+    match In_channel.input_line In_channel.stdin with
+    | None -> None (* EOF *)
+    | Some line ->
+        let combined =
+          if acc = "" then line else acc ^ "\n" ^ line
+        in
+        if is_incomplete combined then loop combined "... > "
+        else Some combined
+  in
+  loop "" "tart> "
+
 (** REPL subcommand: interactive read-eval-print loop *)
 let cmd_repl () =
-  prerr_endline "tart repl: not yet implemented";
-  exit 2
+  print_endline ("tart " ^ Tart.version ^ " REPL");
+  print_endline "Type ,help for commands, ,quit to exit.";
+  print_endline "";
+
+  let state =
+    {
+      interp = Tart.Eval.make_interpreter ();
+      type_env = Tart.Check.default_env ();
+    }
+  in
+
+  let running = ref true in
+  while !running do
+    match read_input () with
+    | None ->
+        (* EOF (Ctrl-D) *)
+        print_newline ();
+        running := false
+    | Some input ->
+        let trimmed = String.trim input in
+        if trimmed = "" then ()
+        else if trimmed = ",quit" || trimmed = ",q" then running := false
+        else if trimmed = ",help" then repl_help ()
+        else if trimmed = ",env" then repl_env state
+        else if String.starts_with ~prefix:",type" trimmed then
+          repl_type state trimmed
+        else if String.starts_with ~prefix:",expand" trimmed then
+          repl_expand state trimmed
+        else if String.starts_with ~prefix:"," trimmed then
+          prerr_endline ("Unknown command: " ^ trimmed ^ ". Type ,help for commands.")
+        else repl_eval state input
+  done
 
 (** LSP subcommand: start language server *)
 let cmd_lsp _port =
