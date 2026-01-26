@@ -65,3 +65,5 @@ module Diagnostic = Typing.Diagnostic
 (** {1 LSP} *)
 
 module Rpc = Lsp.Rpc
+module Protocol = Lsp.Protocol
+module Server = Lsp.Server

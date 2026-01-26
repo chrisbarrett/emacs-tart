@@ -1,3 +1,7 @@
 (test
  (name rpc_test)
  (libraries tart str alcotest))
+
+(test
+ (name server_test)
+ (libraries tart str alcotest))

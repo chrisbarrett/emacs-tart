@@ -358,9 +358,13 @@ let cmd_repl () =
   done
 
 (** LSP subcommand: start language server *)
-let cmd_lsp _port =
-  prerr_endline "tart lsp: not yet implemented";
-  exit 2
+let cmd_lsp ~log_level _port =
+  (* TODO: Support TCP port mode *)
+  let server =
+    Tart.Server.create ~log_level ~ic:In_channel.stdin ~oc:Out_channel.stdout ()
+  in
+  let exit_code = Tart.Server.run server in
+  exit exit_code
 
 (** Print version and exit *)
 let print_version () =
@@ -483,26 +487,43 @@ let () =
   | "lsp" :: rest ->
       let port = ref None in
       let show_help = ref false in
+      let log_level = ref Tart.Server.Normal in
       let rec parse_lsp_args = function
         | [] -> ()
         | "--help" :: _ | "-h" :: _ -> show_help := true
         | "--port" :: p :: rest ->
             port := Some (int_of_string p);
             parse_lsp_args rest
+        | "--log-level" :: "debug" :: rest ->
+            log_level := Tart.Server.Debug;
+            parse_lsp_args rest
+        | "--log-level" :: "quiet" :: rest ->
+            log_level := Tart.Server.Quiet;
+            parse_lsp_args rest
+        | "--log-level" :: "normal" :: rest ->
+            log_level := Tart.Server.Normal;
+            parse_lsp_args rest
+        | "--log-level" :: _ :: _ ->
+            prerr_endline "tart lsp: --log-level must be debug, normal, or quiet";
+            exit 2
+        | "--log-level" :: [] ->
+            prerr_endline "tart lsp: --log-level requires an argument";
+            exit 2
         | arg :: _ ->
             prerr_endline ("tart lsp: unknown option: " ^ arg);
             exit 2
       in
       parse_lsp_args rest;
       if !show_help then (
-        print_endline "Usage: tart lsp [--port PORT]";
+        print_endline "Usage: tart lsp [OPTIONS]";
         print_endline "";
         print_endline "Start the LSP server.";
         print_endline "";
         print_endline "Options:";
-        print_endline "  --port PORT  Listen on TCP port instead of stdio";
+        print_endline "  --port PORT        Listen on TCP port instead of stdio";
+        print_endline "  --log-level LEVEL  Set log level: debug, normal (default), quiet";
         exit 0)
-      else cmd_lsp !port
+      else cmd_lsp ~log_level:!log_level !port
   (* Default: type-check files *)
   | files ->
       (* Filter out --version and --help that might appear with files *)

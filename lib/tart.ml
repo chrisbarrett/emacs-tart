@@ -31,3 +31,5 @@ module Diagnostic = Typing.Diagnostic
 
 (** Re-export LSP modules *)
 module Rpc = Lsp.Rpc
+module Protocol = Lsp.Protocol
+module Server = Lsp.Server
