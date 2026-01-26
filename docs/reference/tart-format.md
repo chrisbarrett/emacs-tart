@@ -4,17 +4,17 @@ Canonical reference for tart's `.tart` signature file format.
 
 ## Overview
 
-`.tart` files declare the **public interface** of Elisp modules. Only what
-appears in a `.tart` file is visible to consumers—implementation details in the
-`.el` file remain hidden.
+`.tart` files declare the **public interface** of Elisp modules--functions,
+values and their types.
+
+Only what appears in a `.tart` file is visible to consumers. This helps you work
+with all your implementation details in a type-safe way while being deliberate
+about what constitutes the stable 'public' API.
 
 Type checking is available for any `.el` file via LSP. When code uses `require`
-or autoloaded functions, tart searches for corresponding `.tart` files. A sibling
-`foo.tart` declares the public interface of `foo.el` and enables signature
-verification.
-
-**Future extension:** Internal types declared in `.el` files will not be exported.
-A `.tart` file can expose an opaque view of internal types for abstraction.
+or autoloaded functions, tart searches for corresponding `.tart` files. A
+sibling `foo.tart` declares the public interface of `foo.el` and enables
+signature verification.
 
 ## File Structure
 
@@ -54,9 +54,9 @@ arrow_type   ::= '(' ('[' tvar+ ']')? params '->' type ')'
 
 Elisp separates functions and values into different namespaces:
 
-| Declaration | Calling convention | Example |
-|-------------|-------------------|---------|
-| `defun`     | Direct: `(f args...)` | `(defun add (Int Int) -> Int)` |
+| Declaration        | Calling convention              | Example                            |
+| ------------------ | ------------------------------- | ---------------------------------- |
+| `defun`            | Direct: `(f args...)`           | `(defun add (Int Int) -> Int)`     |
 | `defvar` with `->` | Indirect: `(funcall f args...)` | `(defvar handler (String -> Nil))` |
 
 The `->` is infix, separating parameters from return type. Single params need no
@@ -76,20 +76,20 @@ grouping; multiple params require parens.
 
 ### Base Types
 
-| Type      | Description              | Truthy? |
-|-----------|--------------------------|---------|
-| `Int`     | Integers                 | Yes     |
-| `Float`   | Floating-point           | Yes     |
-| `Num`     | Numeric                  | Yes     |
-| `String`  | Strings                  | Yes     |
-| `Symbol`  | Symbols                  | Yes     |
-| `Keyword` | Keywords (`:foo`)        | Yes     |
-| `Nil`     | Only `nil`               | No      |
-| `T`       | Only `t`                 | Yes     |
-| `Truthy`  | Anything except `nil`    | Yes     |
-| `Bool`    | `T \| Nil`               | No      |
-| `Any`     | Top type                 | No      |
-| `Never`   | Bottom type (errors)     | Yes     |
+| Type      | Description           | Truthy? |
+| --------- | --------------------- | ------- |
+| `Int`     | Integers              | Yes     |
+| `Float`   | Floating-point        | Yes     |
+| `Num`     | Numeric               | Yes     |
+| `String`  | Strings               | Yes     |
+| `Symbol`  | Symbols               | Yes     |
+| `Keyword` | Keywords (`:foo`)     | Yes     |
+| `Nil`     | Only `nil`            | No      |
+| `T`       | Only `t`              | Yes     |
+| `Truthy`  | Anything except `nil` | Yes     |
+| `Bool`    | `T \| Nil`            | No      |
+| `Any`     | Top type              | No      |
+| `Never`   | Bottom type (errors)  | Yes     |
 
 ### Type Variables
 
@@ -119,7 +119,8 @@ Useful for discriminated unions and exact value types:
 
 Elisp functions are **not curried**; parameters are grouped.
 
-Arrow types use infix `->`. Single params need no parens; multiple params require grouping:
+Arrow types use infix `->`. Single params need no parens; multiple params
+require grouping:
 
 ```elisp
 Int -> Int                             ; Single param
@@ -139,12 +140,12 @@ Nested function types are readable:
 
 ### Parameter Kinds
 
-| Syntax           | Meaning                           |
-|------------------|-----------------------------------|
-| `type`           | Required positional               |
-| `&optional type` | Optional (caller may omit)        |
-| `&rest type`     | Rest args (element type)          |
-| `&key :k type`   | Keyword argument                  |
+| Syntax           | Meaning                    |
+| ---------------- | -------------------------- |
+| `type`           | Required positional        |
+| `&optional type` | Optional (caller may omit) |
+| `&rest type`     | Rest args (element type)   |
+| `&key :k type`   | Keyword argument           |
 
 ### Polymorphic Types
 
@@ -161,7 +162,8 @@ left-to-right first occurrence:
 (defun foo [a] (a -> b) -> a)         ; Error: unbound 'b'
 ```
 
-For function **values** (in `defvar` or as parameters), quantifiers go at the start:
+For function **values** (in `defvar` or as parameters), quantifiers go at the
+start:
 
 ```elisp
 (defvar id-fn ([a] a -> a))           ; Polymorphic function value
@@ -206,7 +208,8 @@ Functions declared with `defun` are directly callable as `(name args...)`:
 ```
 
 Note: The first parameter to `my-map` is an arrow type `(a -> b)`, meaning it's
-a function **value** that must be called with `funcall` inside the implementation.
+a function **value** that must be called with `funcall` inside the
+implementation.
 
 ### Variable Declarations
 
@@ -241,8 +244,8 @@ them except via declared functions.
 (defun buffer-kill Buffer -> Nil)
 ```
 
-Each opaque declaration creates a distinct type—`Buffer` and `Handle` below
-are not interchangeable:
+Each opaque declaration creates a distinct type—`Buffer` and `Handle` below are
+not interchangeable:
 
 ```elisp
 (type Buffer)
@@ -250,6 +253,7 @@ are not interchangeable:
 ```
 
 Use opaque types for:
+
 - Wrapping external resources (buffers, processes, windows)
 - Enforcing API boundaries (consumers must use your functions)
 - Hiding implementation details that may change
@@ -280,7 +284,8 @@ type expressions. The imported names are not re-exported.
 (defun my-frequencies (Seq a) -> (HashTable a Int))
 ```
 
-Use `open` when you need to reference types from other modules in your signatures.
+Use `open` when you need to reference types from other modules in your
+signatures.
 
 ### Include (Re-export)
 
@@ -332,8 +337,8 @@ When a module is required, tart searches for `.tart` files in order:
 2. **Search path**: Directories in `tart-type-path` (user/community types)
 3. **Bundled stdlib**: `stdlib/module.tart` shipped with tart
 
-This allows providing types for any module, including third-party packages
-that don't ship their own type definitions.
+This allows providing types for any module, including third-party packages that
+don't ship their own type definitions.
 
 ### Search Path Configuration
 
@@ -359,8 +364,9 @@ that don't ship their own type definitions.
 (defun seq-find ((a -> Bool) (Seq a)) -> (Option a))
 ```
 
-The filename determines the module: `seq.tart` provides types for `(require 'seq)`.
-The first match in the search order wins, allowing user overrides of bundled types.
+The filename determines the module: `seq.tart` provides types for
+`(require 'seq)`. The first match in the search order wins, allowing user
+overrides of bundled types.
 
 ## See Also
 
