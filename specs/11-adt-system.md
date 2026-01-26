@@ -15,6 +15,19 @@ Define how ADT values are represented at runtime and integrate with Elisp's
 - **pcase integration**: Patterns work with existing `pcase` infrastructure
 - **Exhaustiveness**: Type checker warns on non-exhaustive matches
 
+## Output
+
+```
+tart/
+├── lib/
+│   └── adt/
+│       ├── adt.ml           ; ADT representation and codegen
+│       └── exhaustiveness.ml ; Pattern match exhaustiveness checking
+└── test/
+    └── adt/
+        └── adt_test.ml
+```
+
 ## Runtime Representation
 
 ADT values are represented as tagged cons cells:
@@ -48,7 +61,7 @@ value for `Some` when the value is truthy.
 (defun Err (e) (cons 'err e))
 ```
 
-**Verify:** `(Ok 42)` returns `(ok . 42)`
+**Verify:** `dune test`; `(Ok 42)` returns `(ok . 42)`
 
 ### R2: Predicate generation
 
@@ -60,7 +73,7 @@ value for `Some` when the value is truthy.
 (defun result-err-p (r) (and (consp r) (eq (car r) 'err)))
 ```
 
-**Verify:** `(result-ok-p (Ok 1))` returns `t`
+**Verify:** `dune test`; `(result-ok-p (Ok 1))` returns `t`
 
 ### R3: Accessor generation
 
@@ -72,7 +85,7 @@ value for `Some` when the value is truthy.
 (defun result-err-value (r) (cdr r))
 ```
 
-**Verify:** `(result-ok-value (Ok 42))` returns `42`
+**Verify:** `dune test`; `(result-ok-value (Ok 42))` returns `42`
 
 ### R4: pcase pattern integration
 
@@ -85,7 +98,7 @@ value for `Some` when the value is truthy.
 **When** type-checked
 **Then** `value` has type `a` and `error` has type `e` in their branches
 
-**Verify:** Type narrowing works in pattern branches
+**Verify:** `dune test`; type narrowing works in pattern branches
 
 ### R5: Exhaustiveness checking
 
@@ -97,7 +110,7 @@ value for `Some` when the value is truthy.
 **When** type-checked
 **Then** warning: "Non-exhaustive pattern match. Missing: None"
 
-**Verify:** Warning on incomplete matches; no warning on complete matches
+**Verify:** `dune test`; warning on incomplete matches; no warning on complete matches
 
 ### R6: Multi-field constructors
 
@@ -114,7 +127,7 @@ value for `Some` when the value is truthy.
 (Point3D 1 2 3) → [point3d 1 2 3]
 ```
 
-**Verify:** Accessors work for all fields
+**Verify:** `dune test`; accessors work for all fields
 
 ### R7: Recursive types
 
@@ -131,7 +144,7 @@ value for `Some` when the value is truthy.
 → (node (leaf . 1) (node (leaf . 2) (leaf . 3)))
 ```
 
-**Verify:** Recursive construction and destruction works
+**Verify:** `dune test`; recursive construction and destruction works
 
 ## Tasks
 
@@ -142,3 +155,5 @@ value for `Some` when the value is truthy.
 - [ ] [R5] Implement exhaustiveness checking
 - [ ] [R6] Handle multi-field constructors
 - [ ] [R7] Test recursive type handling
+
+Run review agent after R1-R3 work (basic codegen) before implementing R4-R5 (type checking).
