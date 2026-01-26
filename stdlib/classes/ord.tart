@@ -1,0 +1,46 @@
+;; Ordering type class
+;;
+;; Provides comparison operations for types.
+;; Requires the Eq superclass.
+
+(class (Eq a)
+  (eq (a a) -> bool))
+
+(class (Ord a) (Eq a)
+  (compare (a a) -> int)
+  (lt (a a) -> bool)
+  (le (a a) -> bool)
+  (gt (a a) -> bool)
+  (ge (a a) -> bool))
+
+;; Basic type instances
+
+(instance (Eq int)
+  (eq . =))
+
+(instance (Ord int)
+  (compare . -)
+  (lt . <)
+  (le . <=)
+  (gt . >)
+  (ge . >=))
+
+(instance (Eq float)
+  (eq . =))
+
+(instance (Ord float)
+  (compare . (lambda (a b) (cond ((< a b) -1) ((> a b) 1) (t 0))))
+  (lt . <)
+  (le . <=)
+  (gt . >)
+  (ge . >=))
+
+(instance (Eq string)
+  (eq . string-equal))
+
+(instance (Ord string)
+  (compare . (lambda (a b) (cond ((string< a b) -1) ((string> a b) 1) (t 0))))
+  (lt . string<)
+  (le . string<=)
+  (gt . string>)
+  (ge . string>=))

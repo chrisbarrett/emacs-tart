@@ -1,0 +1,39 @@
+;; Equality type class
+;;
+;; Provides structural equality testing for types.
+
+(class (Eq a)
+  (eq (a a) -> bool)
+  (neq (a a) -> bool))
+
+;; Basic type instances
+
+(instance (Eq int)
+  (eq . =)
+  (neq . /=))
+
+(instance (Eq float)
+  (eq . =)
+  (neq . /=))
+
+(instance (Eq string)
+  (eq . string-equal)
+  (neq . string-not-equal))
+
+(instance (Eq symbol)
+  (eq . eq)
+  (neq . (lambda (a b) (not (eq a b)))))
+
+(instance (Eq bool)
+  (eq . eq)
+  (neq . (lambda (a b) (not (eq a b)))))
+
+;; Parameterized instances
+
+(instance [a] (Eq a) => (Eq (list a))
+  (eq . equal)
+  (neq . (lambda (a b) (not (equal a b)))))
+
+(instance [a] (Eq a) => (Eq (option a))
+  (eq . equal)
+  (neq . (lambda (a b) (not (equal a b)))))

@@ -501,11 +501,11 @@ Enable ad-hoc polymorphism through type classes and instances.
 
 ### 18.7 Standard Classes
 
-- [ ] Create stdlib/classes/eq.tart with Eq class
-- [ ] Create stdlib/classes/ord.tart with Ord class
-- [ ] Create stdlib/classes/show.tart with Show class
-- [ ] Create stdlib/classes/functor.tart with Functor class
-- [ ] Verify: Standard classes parse and load
+- [x] Create stdlib/classes/eq.tart with Eq class
+- [x] Create stdlib/classes/ord.tart with Ord class
+- [x] Create stdlib/classes/show.tart with Show class
+- [x] Create stdlib/classes/functor.tart with Functor class
+- [x] Verify: Standard classes parse and load
 
 ---
 
