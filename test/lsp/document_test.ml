@@ -1,0 +1,307 @@
+(** Tests for document manager *)
+
+open Lsp
+
+(** {1 Document Store Tests} *)
+
+let test_open_and_get () =
+  let store = Document.create () in
+  Document.open_doc store ~uri:"file:///test.el" ~version:1 ~text:"hello world";
+  match Document.get_doc store "file:///test.el" with
+  | Some doc ->
+      Alcotest.(check string) "uri" "file:///test.el" doc.uri;
+      Alcotest.(check int) "version" 1 doc.version;
+      Alcotest.(check string) "text" "hello world" doc.text
+  | None -> Alcotest.fail "Document not found"
+
+let test_close () =
+  let store = Document.create () in
+  Document.open_doc store ~uri:"file:///test.el" ~version:1 ~text:"hello";
+  Alcotest.(check bool)
+    "exists before close" true
+    (Option.is_some (Document.get_doc store "file:///test.el"));
+  Document.close_doc store ~uri:"file:///test.el";
+  Alcotest.(check bool)
+    "not exists after close" true
+    (Option.is_none (Document.get_doc store "file:///test.el"))
+
+let test_list_uris () =
+  let store = Document.create () in
+  Document.open_doc store ~uri:"file:///a.el" ~version:1 ~text:"a";
+  Document.open_doc store ~uri:"file:///b.el" ~version:1 ~text:"b";
+  let uris = Document.list_uris store |> List.sort String.compare in
+  Alcotest.(check (list string)) "uris" [ "file:///a.el"; "file:///b.el" ] uris
+
+(** {1 Incremental Change Tests} *)
+
+let test_full_replacement () =
+  let store = Document.create () in
+  Document.open_doc store ~uri:"file:///test.el" ~version:1 ~text:"old content";
+  let change : Document.content_change = { range = None; text = "new content" } in
+  (match Document.apply_changes store ~uri:"file:///test.el" ~version:2 [ change ] with
+  | Ok () -> ()
+  | Error e -> Alcotest.fail e);
+  match Document.get_doc store "file:///test.el" with
+  | Some doc ->
+      Alcotest.(check string) "text" "new content" doc.text;
+      Alcotest.(check int) "version" 2 doc.version
+  | None -> Alcotest.fail "Document not found"
+
+let test_single_line_insert () =
+  let store = Document.create () in
+  Document.open_doc store ~uri:"file:///test.el" ~version:1 ~text:"hello world";
+  let change : Document.content_change =
+    {
+      range =
+        Some
+          {
+            start = { line = 0; character = 6 };
+            end_ = { line = 0; character = 6 };
+          };
+      text = "beautiful ";
+    }
+  in
+  (match Document.apply_changes store ~uri:"file:///test.el" ~version:2 [ change ] with
+  | Ok () -> ()
+  | Error e -> Alcotest.fail e);
+  match Document.get_doc store "file:///test.el" with
+  | Some doc -> Alcotest.(check string) "text" "hello beautiful world" doc.text
+  | None -> Alcotest.fail "Document not found"
+
+let test_single_line_delete () =
+  let store = Document.create () in
+  Document.open_doc store ~uri:"file:///test.el" ~version:1 ~text:"hello world";
+  let change : Document.content_change =
+    {
+      range =
+        Some
+          {
+            start = { line = 0; character = 5 };
+            end_ = { line = 0; character = 11 };
+          };
+      text = "";
+    }
+  in
+  (match Document.apply_changes store ~uri:"file:///test.el" ~version:2 [ change ] with
+  | Ok () -> ()
+  | Error e -> Alcotest.fail e);
+  match Document.get_doc store "file:///test.el" with
+  | Some doc -> Alcotest.(check string) "text" "hello" doc.text
+  | None -> Alcotest.fail "Document not found"
+
+let test_single_line_replace () =
+  let store = Document.create () in
+  Document.open_doc store ~uri:"file:///test.el" ~version:1 ~text:"hello world";
+  let change : Document.content_change =
+    {
+      range =
+        Some
+          {
+            start = { line = 0; character = 6 };
+            end_ = { line = 0; character = 11 };
+          };
+      text = "Emacs";
+    }
+  in
+  (match Document.apply_changes store ~uri:"file:///test.el" ~version:2 [ change ] with
+  | Ok () -> ()
+  | Error e -> Alcotest.fail e);
+  match Document.get_doc store "file:///test.el" with
+  | Some doc -> Alcotest.(check string) "text" "hello Emacs" doc.text
+  | None -> Alcotest.fail "Document not found"
+
+let test_multiline_text () =
+  let store = Document.create () in
+  let text = "line 1\nline 2\nline 3" in
+  Document.open_doc store ~uri:"file:///test.el" ~version:1 ~text;
+  (* Insert at start of line 2 *)
+  let change : Document.content_change =
+    {
+      range =
+        Some
+          {
+            start = { line = 1; character = 0 };
+            end_ = { line = 1; character = 0 };
+          };
+      text = ">> ";
+    }
+  in
+  (match Document.apply_changes store ~uri:"file:///test.el" ~version:2 [ change ] with
+  | Ok () -> ()
+  | Error e -> Alcotest.fail e);
+  match Document.get_doc store "file:///test.el" with
+  | Some doc ->
+      Alcotest.(check string) "text" "line 1\n>> line 2\nline 3" doc.text
+  | None -> Alcotest.fail "Document not found"
+
+let test_delete_across_lines () =
+  let store = Document.create () in
+  let text = "line 1\nline 2\nline 3" in
+  Document.open_doc store ~uri:"file:///test.el" ~version:1 ~text;
+  (* Delete from end of line 1 to start of line 3 *)
+  let change : Document.content_change =
+    {
+      range =
+        Some
+          {
+            start = { line = 0; character = 6 };
+            end_ = { line = 2; character = 0 };
+          };
+      text = "";
+    }
+  in
+  (match Document.apply_changes store ~uri:"file:///test.el" ~version:2 [ change ] with
+  | Ok () -> ()
+  | Error e -> Alcotest.fail e);
+  match Document.get_doc store "file:///test.el" with
+  | Some doc -> Alcotest.(check string) "text" "line 1line 3" doc.text
+  | None -> Alcotest.fail "Document not found"
+
+let test_multiple_changes () =
+  let store = Document.create () in
+  Document.open_doc store ~uri:"file:///test.el" ~version:1 ~text:"aaa bbb ccc";
+  (* Apply two changes: first replaces bbb, then aaa
+     Note: Changes are applied in order, so positions shift *)
+  let changes : Document.content_change list =
+    [
+      (* First change: replace aaa with XXX (positions 0-3) *)
+      {
+        range =
+          Some
+            {
+              start = { line = 0; character = 0 };
+              end_ = { line = 0; character = 3 };
+            };
+        text = "XXX";
+      };
+      (* Second change: replace bbb with YYY (positions 4-7, but after first change still 4-7) *)
+      {
+        range =
+          Some
+            {
+              start = { line = 0; character = 4 };
+              end_ = { line = 0; character = 7 };
+            };
+        text = "YYY";
+      };
+    ]
+  in
+  (match Document.apply_changes store ~uri:"file:///test.el" ~version:2 changes with
+  | Ok () -> ()
+  | Error e -> Alcotest.fail e);
+  match Document.get_doc store "file:///test.el" with
+  | Some doc -> Alcotest.(check string) "text" "XXX YYY ccc" doc.text
+  | None -> Alcotest.fail "Document not found"
+
+let test_error_document_not_open () =
+  let store = Document.create () in
+  let change : Document.content_change = { range = None; text = "new" } in
+  match Document.apply_changes store ~uri:"file:///missing.el" ~version:1 [ change ] with
+  | Ok () -> Alcotest.fail "Expected error"
+  | Error e ->
+      Alcotest.(check bool) "error mentions not open" true (String.length e > 0)
+
+(** {1 JSON Parsing Tests} *)
+
+let test_position_of_json () =
+  let json = `Assoc [ ("line", `Int 10); ("character", `Int 5) ] in
+  let pos = Document.position_of_json json in
+  Alcotest.(check int) "line" 10 pos.line;
+  Alcotest.(check int) "character" 5 pos.character
+
+let test_range_of_json () =
+  let json =
+    `Assoc
+      [
+        ("start", `Assoc [ ("line", `Int 1); ("character", `Int 2) ]);
+        ("end", `Assoc [ ("line", `Int 3); ("character", `Int 4) ]);
+      ]
+  in
+  let range = Document.range_of_json json in
+  Alcotest.(check int) "start.line" 1 range.start.line;
+  Alcotest.(check int) "start.character" 2 range.start.character;
+  Alcotest.(check int) "end.line" 3 range.end_.line;
+  Alcotest.(check int) "end.character" 4 range.end_.character
+
+let test_content_change_full () =
+  let json = `Assoc [ ("text", `String "new content") ] in
+  let change = Document.content_change_of_json json in
+  Alcotest.(check bool) "no range" true (Option.is_none change.range);
+  Alcotest.(check string) "text" "new content" change.text
+
+let test_content_change_incremental () =
+  let json =
+    `Assoc
+      [
+        ( "range",
+          `Assoc
+            [
+              ("start", `Assoc [ ("line", `Int 0); ("character", `Int 5) ]);
+              ("end", `Assoc [ ("line", `Int 0); ("character", `Int 10) ]);
+            ] );
+        ("text", `String "replaced");
+      ]
+  in
+  let change = Document.content_change_of_json json in
+  Alcotest.(check bool) "has range" true (Option.is_some change.range);
+  Alcotest.(check string) "text" "replaced" change.text
+
+let test_text_document_identifier () =
+  let json = `Assoc [ ("uri", `String "file:///test.el") ] in
+  let uri = Document.text_document_identifier_of_json json in
+  Alcotest.(check string) "uri" "file:///test.el" uri
+
+let test_versioned_text_document_identifier () =
+  let json =
+    `Assoc [ ("uri", `String "file:///test.el"); ("version", `Int 42) ]
+  in
+  let uri, version = Document.versioned_text_document_identifier_of_json json in
+  Alcotest.(check string) "uri" "file:///test.el" uri;
+  Alcotest.(check int) "version" 42 version
+
+let test_text_document_item () =
+  let json =
+    `Assoc
+      [
+        ("uri", `String "file:///test.el");
+        ("version", `Int 1);
+        ("languageId", `String "elisp");
+        ("text", `String "(defun foo () t)");
+      ]
+  in
+  let uri, version, text = Document.text_document_item_of_json json in
+  Alcotest.(check string) "uri" "file:///test.el" uri;
+  Alcotest.(check int) "version" 1 version;
+  Alcotest.(check string) "text" "(defun foo () t)" text
+
+let () =
+  Alcotest.run "document"
+    [
+      ( "store",
+        [
+          Alcotest.test_case "open and get" `Quick test_open_and_get;
+          Alcotest.test_case "close" `Quick test_close;
+          Alcotest.test_case "list_uris" `Quick test_list_uris;
+        ] );
+      ( "incremental",
+        [
+          Alcotest.test_case "full replacement" `Quick test_full_replacement;
+          Alcotest.test_case "single line insert" `Quick test_single_line_insert;
+          Alcotest.test_case "single line delete" `Quick test_single_line_delete;
+          Alcotest.test_case "single line replace" `Quick test_single_line_replace;
+          Alcotest.test_case "multiline text" `Quick test_multiline_text;
+          Alcotest.test_case "delete across lines" `Quick test_delete_across_lines;
+          Alcotest.test_case "multiple changes" `Quick test_multiple_changes;
+          Alcotest.test_case "error document not open" `Quick test_error_document_not_open;
+        ] );
+      ( "json",
+        [
+          Alcotest.test_case "position" `Quick test_position_of_json;
+          Alcotest.test_case "range" `Quick test_range_of_json;
+          Alcotest.test_case "content change full" `Quick test_content_change_full;
+          Alcotest.test_case "content change incremental" `Quick test_content_change_incremental;
+          Alcotest.test_case "text document identifier" `Quick test_text_document_identifier;
+          Alcotest.test_case "versioned text document identifier" `Quick test_versioned_text_document_identifier;
+          Alcotest.test_case "text document item" `Quick test_text_document_item;
+        ] );
+    ]

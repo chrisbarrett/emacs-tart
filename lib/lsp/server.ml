@@ -13,6 +13,7 @@ type t = {
   oc : Out_channel.t;
   mutable state : state;
   mutable log_level : log_level;
+  documents : Document.t;
 }
 
 and log_level =
@@ -22,10 +23,13 @@ and log_level =
 
 (** Create a new server on the given channels *)
 let create ?(log_level = Normal) ~ic ~oc () : t =
-  { ic; oc; state = Uninitialized; log_level }
+  { ic; oc; state = Uninitialized; log_level; documents = Document.create () }
 
 (** Get the server's current state *)
 let state (server : t) : state = server.state
+
+(** Get the server's document store (for testing) *)
+let documents (server : t) : Document.t = server.documents
 
 (** Log a message to stderr *)
 let log (server : t) (level : log_level) (msg : string) : unit =
@@ -116,6 +120,52 @@ let handle_exit (server : t) : [ `Exit of int ] =
       info server "Exiting (no shutdown request)";
       `Exit 1
 
+(** Handle textDocument/didOpen notification *)
+let handle_did_open (server : t) (params : Yojson.Safe.t option) : unit =
+  match params with
+  | None -> debug server "didOpen missing params"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let text_document = json |> member "textDocument" in
+      let uri, version, text =
+        Document.text_document_item_of_json text_document
+      in
+      Document.open_doc server.documents ~uri ~version ~text;
+      debug server (Printf.sprintf "Opened document: %s (version %d)" uri version)
+
+(** Handle textDocument/didChange notification *)
+let handle_did_change (server : t) (params : Yojson.Safe.t option) : unit =
+  match params with
+  | None -> debug server "didChange missing params"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let text_document = json |> member "textDocument" in
+      let uri, version =
+        Document.versioned_text_document_identifier_of_json text_document
+      in
+      let changes =
+        json |> member "contentChanges" |> to_list
+        |> List.map Document.content_change_of_json
+      in
+      (match Document.apply_changes server.documents ~uri ~version changes with
+      | Ok () ->
+          debug server
+            (Printf.sprintf "Changed document: %s (version %d)" uri version)
+      | Error e ->
+          info server
+            (Printf.sprintf "Error applying changes to %s: %s" uri e))
+
+(** Handle textDocument/didClose notification *)
+let handle_did_close (server : t) (params : Yojson.Safe.t option) : unit =
+  match params with
+  | None -> debug server "didClose missing params"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let text_document = json |> member "textDocument" in
+      let uri = Document.text_document_identifier_of_json text_document in
+      Document.close_doc server.documents ~uri;
+      debug server (Printf.sprintf "Closed document: %s" uri)
+
 (** Dispatch a request to its handler *)
 let dispatch_request (server : t) (msg : Rpc.message) :
     (Yojson.Safe.t, Rpc.response_error) result =
@@ -140,6 +190,15 @@ let dispatch_notification (server : t) (msg : Rpc.message) :
       handle_initialized server;
       `Continue
   | "exit" -> (handle_exit server :> [ `Continue | `Exit of int ])
+  | "textDocument/didOpen" ->
+      handle_did_open server msg.params;
+      `Continue
+  | "textDocument/didChange" ->
+      handle_did_change server msg.params;
+      `Continue
+  | "textDocument/didClose" ->
+      handle_did_close server msg.params;
+      `Continue
   | "$/cancelRequest" ->
       (* Ignore cancellation for now *)
       `Continue

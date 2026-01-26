@@ -27,6 +27,9 @@ val create : ?log_level:log_level -> ic:In_channel.t -> oc:Out_channel.t -> unit
 (** Get the server's current state *)
 val state : t -> state
 
+(** Get the server's document store (for testing) *)
+val documents : t -> Document.t
+
 (** Run the server's main loop.
 
     Reads messages, dispatches to handlers, sends responses.

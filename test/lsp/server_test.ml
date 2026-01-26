@@ -194,6 +194,168 @@ let test_unknown_method () =
   in
   Alcotest.(check bool) "has error" true has_method_error
 
+(** {1 Document Sync Tests} *)
+
+let test_did_open () =
+  let init_msg =
+    make_message ~id:(`Int 1) ~method_:"initialize"
+      ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+      ()
+  in
+  let did_open_msg =
+    make_message ~method_:"textDocument/didOpen"
+      ~params:
+        (`Assoc
+          [
+            ( "textDocument",
+              `Assoc
+                [
+                  ("uri", `String "file:///test.el");
+                  ("languageId", `String "elisp");
+                  ("version", `Int 1);
+                  ("text", `String "(defun foo () t)");
+                ] );
+          ])
+      ()
+  in
+  let shutdown_msg = make_message ~id:(`Int 2) ~method_:"shutdown" () in
+  let exit_msg = make_message ~method_:"exit" () in
+  let input = init_msg ^ did_open_msg ^ shutdown_msg ^ exit_msg in
+  let in_file = Filename.temp_file "lsp_in" ".json" in
+  Out_channel.with_open_bin in_file (fun oc -> Out_channel.output_string oc input);
+  let ic = In_channel.open_bin in_file in
+  let out_file = Filename.temp_file "lsp_out" ".json" in
+  let oc = Out_channel.open_bin out_file in
+  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let exit_code = Server.run server in
+  In_channel.close ic;
+  Out_channel.close oc;
+  Alcotest.(check int) "exit code" 0 exit_code;
+  (* Check document was stored *)
+  match Document.get_doc (Server.documents server) "file:///test.el" with
+  | Some doc ->
+      Alcotest.(check string) "doc text" "(defun foo () t)" doc.text;
+      Alcotest.(check int) "doc version" 1 doc.version
+  | None -> Alcotest.fail "Document not found after didOpen"
+
+let test_did_change_incremental () =
+  let init_msg =
+    make_message ~id:(`Int 1) ~method_:"initialize"
+      ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+      ()
+  in
+  let did_open_msg =
+    make_message ~method_:"textDocument/didOpen"
+      ~params:
+        (`Assoc
+          [
+            ( "textDocument",
+              `Assoc
+                [
+                  ("uri", `String "file:///test.el");
+                  ("languageId", `String "elisp");
+                  ("version", `Int 1);
+                  ("text", `String "hello world");
+                ] );
+          ])
+      ()
+  in
+  let did_change_msg =
+    make_message ~method_:"textDocument/didChange"
+      ~params:
+        (`Assoc
+          [
+            ( "textDocument",
+              `Assoc
+                [ ("uri", `String "file:///test.el"); ("version", `Int 2) ] );
+            ( "contentChanges",
+              `List
+                [
+                  `Assoc
+                    [
+                      ( "range",
+                        `Assoc
+                          [
+                            ( "start",
+                              `Assoc
+                                [ ("line", `Int 0); ("character", `Int 6) ] );
+                            ( "end",
+                              `Assoc
+                                [ ("line", `Int 0); ("character", `Int 11) ] );
+                          ] );
+                      ("text", `String "Emacs");
+                    ];
+                ] );
+          ])
+      ()
+  in
+  let shutdown_msg = make_message ~id:(`Int 2) ~method_:"shutdown" () in
+  let exit_msg = make_message ~method_:"exit" () in
+  let input = init_msg ^ did_open_msg ^ did_change_msg ^ shutdown_msg ^ exit_msg in
+  let in_file = Filename.temp_file "lsp_in" ".json" in
+  Out_channel.with_open_bin in_file (fun oc -> Out_channel.output_string oc input);
+  let ic = In_channel.open_bin in_file in
+  let out_file = Filename.temp_file "lsp_out" ".json" in
+  let oc = Out_channel.open_bin out_file in
+  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let exit_code = Server.run server in
+  In_channel.close ic;
+  Out_channel.close oc;
+  Alcotest.(check int) "exit code" 0 exit_code;
+  (* Check document was updated *)
+  match Document.get_doc (Server.documents server) "file:///test.el" with
+  | Some doc ->
+      Alcotest.(check string) "doc text after change" "hello Emacs" doc.text;
+      Alcotest.(check int) "doc version after change" 2 doc.version
+  | None -> Alcotest.fail "Document not found after didChange"
+
+let test_did_close () =
+  let init_msg =
+    make_message ~id:(`Int 1) ~method_:"initialize"
+      ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+      ()
+  in
+  let did_open_msg =
+    make_message ~method_:"textDocument/didOpen"
+      ~params:
+        (`Assoc
+          [
+            ( "textDocument",
+              `Assoc
+                [
+                  ("uri", `String "file:///test.el");
+                  ("languageId", `String "elisp");
+                  ("version", `Int 1);
+                  ("text", `String "some content");
+                ] );
+          ])
+      ()
+  in
+  let did_close_msg =
+    make_message ~method_:"textDocument/didClose"
+      ~params:
+        (`Assoc
+          [ ("textDocument", `Assoc [ ("uri", `String "file:///test.el") ]) ])
+      ()
+  in
+  let shutdown_msg = make_message ~id:(`Int 2) ~method_:"shutdown" () in
+  let exit_msg = make_message ~method_:"exit" () in
+  let input = init_msg ^ did_open_msg ^ did_close_msg ^ shutdown_msg ^ exit_msg in
+  let in_file = Filename.temp_file "lsp_in" ".json" in
+  Out_channel.with_open_bin in_file (fun oc -> Out_channel.output_string oc input);
+  let ic = In_channel.open_bin in_file in
+  let out_file = Filename.temp_file "lsp_out" ".json" in
+  let oc = Out_channel.open_bin out_file in
+  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let exit_code = Server.run server in
+  In_channel.close ic;
+  Out_channel.close oc;
+  Alcotest.(check int) "exit code" 0 exit_code;
+  (* Check document was removed *)
+  Alcotest.(check bool)
+    "doc removed after close" true
+    (Option.is_none (Document.get_doc (Server.documents server) "file:///test.el"))
+
 let () =
   Alcotest.run "server"
     [
@@ -205,5 +367,11 @@ let () =
           Alcotest.test_case "exit without shutdown" `Quick test_exit_without_shutdown;
           Alcotest.test_case "initialized notification" `Quick test_initialized_notification;
           Alcotest.test_case "unknown method" `Quick test_unknown_method;
+        ] );
+      ( "document-sync",
+        [
+          Alcotest.test_case "didOpen" `Quick test_did_open;
+          Alcotest.test_case "didChange incremental" `Quick test_did_change_incremental;
+          Alcotest.test_case "didClose" `Quick test_did_close;
         ] );
     ]

@@ -167,7 +167,7 @@ responses with proper headers
 
 - [x] [R1] Implement JSON-RPC reader/writer
 - [x] [R2] Handle initialize/initialized/shutdown
-- [ ] [R3] Implement document manager with incremental sync
+- [x] [R3] Implement document manager with incremental sync
 - [ ] [R4] Implement publishDiagnostics on document change
 - [ ] [R5] Ensure diagnostic ranges are accurate
 - [ ] [R6] Implement textDocument/hover

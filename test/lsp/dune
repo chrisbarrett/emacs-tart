@@ -5,3 +5,7 @@
 (test
  (name server_test)
  (libraries tart str alcotest))
+
+(test
+ (name document_test)
+ (libraries tart alcotest))
