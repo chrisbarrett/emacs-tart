@@ -3309,6 +3309,321 @@ let test_extract_function_no_cursor () =
       in
       Alcotest.(check int) "no extract action" 0 (List.length extract_actions)
 
+(** {1 Completion Tests} *)
+
+(** Test that completion returns local defun *)
+let test_completion_returns_local_defun () =
+  let init_msg =
+    make_message ~id:(`Int 1) ~method_:"initialize"
+      ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+      ()
+  in
+  (* Document with a defun and a partial call *)
+  let did_open_msg =
+    make_message ~method_:"textDocument/didOpen"
+      ~params:
+        (`Assoc
+           [
+             ( "textDocument",
+               `Assoc
+                 [
+                   ("uri", `String "file:///test.el");
+                   ("languageId", `String "elisp");
+                   ("version", `Int 1);
+                   ("text", `String "(defun my-foo (x) x)\n(my-f");
+                 ] );
+           ])
+      ()
+  in
+  (* Completion request at position (1, 5) - after "my-f" *)
+  let completion_msg =
+    make_message ~id:(`Int 2) ~method_:"textDocument/completion"
+      ~params:
+        (`Assoc
+           [
+             ("textDocument", `Assoc [ ("uri", `String "file:///test.el") ]);
+             ("position", `Assoc [ ("line", `Int 1); ("character", `Int 5) ]);
+           ])
+      ()
+  in
+  let shutdown_msg = make_message ~id:(`Int 3) ~method_:"shutdown" () in
+  let exit_msg = make_message ~method_:"exit" () in
+  let input =
+    init_msg ^ did_open_msg ^ completion_msg ^ shutdown_msg ^ exit_msg
+  in
+  let in_file = Filename.temp_file "lsp_in" ".json" in
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
+  let ic = In_channel.open_bin in_file in
+  let out_file = Filename.temp_file "lsp_out" ".json" in
+  let oc = Out_channel.open_bin out_file in
+  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let exit_code = Server.run server in
+  In_channel.close ic;
+  Out_channel.close oc;
+  Alcotest.(check int) "exit code" 0 exit_code;
+  let output = In_channel.with_open_bin out_file In_channel.input_all in
+  let messages = parse_messages output in
+  match find_response messages 2 with
+  | None -> Alcotest.fail "No completion response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      Alcotest.(check bool) "result is not null" true (result <> `Null);
+      let items = result |> to_list in
+      (* Should find my-foo *)
+      let my_foo_items =
+        List.filter
+          (fun item -> item |> member "label" |> to_string = "my-foo")
+          items
+      in
+      Alcotest.(check int) "found my-foo" 1 (List.length my_foo_items)
+
+(** Test that completion returns defvar *)
+let test_completion_returns_defvar () =
+  let init_msg =
+    make_message ~id:(`Int 1) ~method_:"initialize"
+      ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+      ()
+  in
+  let did_open_msg =
+    make_message ~method_:"textDocument/didOpen"
+      ~params:
+        (`Assoc
+           [
+             ( "textDocument",
+               `Assoc
+                 [
+                   ("uri", `String "file:///test.el");
+                   ("languageId", `String "elisp");
+                   ("version", `Int 1);
+                   ("text", `String "(defvar my-var 42)\n(+ my-v");
+                 ] );
+           ])
+      ()
+  in
+  let completion_msg =
+    make_message ~id:(`Int 2) ~method_:"textDocument/completion"
+      ~params:
+        (`Assoc
+           [
+             ("textDocument", `Assoc [ ("uri", `String "file:///test.el") ]);
+             ("position", `Assoc [ ("line", `Int 1); ("character", `Int 6) ]);
+           ])
+      ()
+  in
+  let shutdown_msg = make_message ~id:(`Int 3) ~method_:"shutdown" () in
+  let exit_msg = make_message ~method_:"exit" () in
+  let input =
+    init_msg ^ did_open_msg ^ completion_msg ^ shutdown_msg ^ exit_msg
+  in
+  let in_file = Filename.temp_file "lsp_in" ".json" in
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
+  let ic = In_channel.open_bin in_file in
+  let out_file = Filename.temp_file "lsp_out" ".json" in
+  let oc = Out_channel.open_bin out_file in
+  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let exit_code = Server.run server in
+  In_channel.close ic;
+  Out_channel.close oc;
+  Alcotest.(check int) "exit code" 0 exit_code;
+  let output = In_channel.with_open_bin out_file In_channel.input_all in
+  let messages = parse_messages output in
+  match find_response messages 2 with
+  | None -> Alcotest.fail "No completion response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      let items = result |> to_list in
+      let my_var_items =
+        List.filter
+          (fun item -> item |> member "label" |> to_string = "my-var")
+          items
+      in
+      Alcotest.(check int) "found my-var" 1 (List.length my_var_items);
+      (* Check it has variable kind *)
+      let item = List.hd my_var_items in
+      let kind = item |> member "kind" |> to_int in
+      Alcotest.(check int) "kind is Variable" 6 kind
+
+(** Test that completion includes type information in detail *)
+let test_completion_has_type_info () =
+  let init_msg =
+    make_message ~id:(`Int 1) ~method_:"initialize"
+      ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+      ()
+  in
+  let did_open_msg =
+    make_message ~method_:"textDocument/didOpen"
+      ~params:
+        (`Assoc
+           [
+             ( "textDocument",
+               `Assoc
+                 [
+                   ("uri", `String "file:///test.el");
+                   ("languageId", `String "elisp");
+                   ("version", `Int 1);
+                   ("text", `String "(defun add (x y) (+ x y))\n(ad");
+                 ] );
+           ])
+      ()
+  in
+  let completion_msg =
+    make_message ~id:(`Int 2) ~method_:"textDocument/completion"
+      ~params:
+        (`Assoc
+           [
+             ("textDocument", `Assoc [ ("uri", `String "file:///test.el") ]);
+             ("position", `Assoc [ ("line", `Int 1); ("character", `Int 3) ]);
+           ])
+      ()
+  in
+  let shutdown_msg = make_message ~id:(`Int 3) ~method_:"shutdown" () in
+  let exit_msg = make_message ~method_:"exit" () in
+  let input =
+    init_msg ^ did_open_msg ^ completion_msg ^ shutdown_msg ^ exit_msg
+  in
+  let in_file = Filename.temp_file "lsp_in" ".json" in
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
+  let ic = In_channel.open_bin in_file in
+  let out_file = Filename.temp_file "lsp_out" ".json" in
+  let oc = Out_channel.open_bin out_file in
+  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let exit_code = Server.run server in
+  In_channel.close ic;
+  Out_channel.close oc;
+  Alcotest.(check int) "exit code" 0 exit_code;
+  let output = In_channel.with_open_bin out_file In_channel.input_all in
+  let messages = parse_messages output in
+  match find_response messages 2 with
+  | None -> Alcotest.fail "No completion response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      let items = result |> to_list in
+      let add_items =
+        List.filter
+          (fun item -> item |> member "label" |> to_string = "add")
+          items
+      in
+      Alcotest.(check int) "found add" 1 (List.length add_items);
+      (* Check it has a detail with params *)
+      let item = List.hd add_items in
+      let detail = item |> member "detail" |> to_string in
+      Alcotest.(check bool) "has detail" true (String.length detail > 0)
+
+(** Test that completion capability is advertised *)
+let test_completion_capability_advertised () =
+  let init_msg =
+    make_message ~id:(`Int 1) ~method_:"initialize"
+      ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+      ()
+  in
+  let shutdown_msg = make_message ~id:(`Int 2) ~method_:"shutdown" () in
+  let exit_msg = make_message ~method_:"exit" () in
+  let input = init_msg ^ shutdown_msg ^ exit_msg in
+  let in_file = Filename.temp_file "lsp_in" ".json" in
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
+  let ic = In_channel.open_bin in_file in
+  let out_file = Filename.temp_file "lsp_out" ".json" in
+  let oc = Out_channel.open_bin out_file in
+  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let exit_code = Server.run server in
+  In_channel.close ic;
+  Out_channel.close oc;
+  Alcotest.(check int) "exit code" 0 exit_code;
+  let output = In_channel.with_open_bin out_file In_channel.input_all in
+  let messages = parse_messages output in
+  match find_response messages 1 with
+  | None -> Alcotest.fail "No initialize response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      let caps = result |> member "capabilities" in
+      let completion_provider = caps |> member "completionProvider" in
+      Alcotest.(check bool)
+        "completionProvider is present" true
+        (completion_provider <> `Null)
+
+(** Test that completion filters by prefix *)
+let test_completion_filters_by_prefix () =
+  let init_msg =
+    make_message ~id:(`Int 1) ~method_:"initialize"
+      ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+      ()
+  in
+  (* Define multiple functions, request completion for "my-b" prefix *)
+  let did_open_msg =
+    make_message ~method_:"textDocument/didOpen"
+      ~params:
+        (`Assoc
+           [
+             ( "textDocument",
+               `Assoc
+                 [
+                   ("uri", `String "file:///test.el");
+                   ("languageId", `String "elisp");
+                   ("version", `Int 1);
+                   ( "text",
+                     `String
+                       "(defun my-alpha () nil)\n\
+                        (defun my-beta () nil)\n\
+                        (defun other () nil)\n\
+                        (my-b" );
+                 ] );
+           ])
+      ()
+  in
+  let completion_msg =
+    make_message ~id:(`Int 2) ~method_:"textDocument/completion"
+      ~params:
+        (`Assoc
+           [
+             ("textDocument", `Assoc [ ("uri", `String "file:///test.el") ]);
+             ("position", `Assoc [ ("line", `Int 3); ("character", `Int 5) ]);
+           ])
+      ()
+  in
+  let shutdown_msg = make_message ~id:(`Int 3) ~method_:"shutdown" () in
+  let exit_msg = make_message ~method_:"exit" () in
+  let input =
+    init_msg ^ did_open_msg ^ completion_msg ^ shutdown_msg ^ exit_msg
+  in
+  let in_file = Filename.temp_file "lsp_in" ".json" in
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
+  let ic = In_channel.open_bin in_file in
+  let out_file = Filename.temp_file "lsp_out" ".json" in
+  let oc = Out_channel.open_bin out_file in
+  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let exit_code = Server.run server in
+  In_channel.close ic;
+  Out_channel.close oc;
+  Alcotest.(check int) "exit code" 0 exit_code;
+  let output = In_channel.with_open_bin out_file In_channel.input_all in
+  let messages = parse_messages output in
+  match find_response messages 2 with
+  | None -> Alcotest.fail "No completion response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      let items = result |> to_list in
+      (* Should only include my-beta, not my-alpha or other *)
+      let labels =
+        List.map (fun item -> item |> member "label" |> to_string) items
+      in
+      Alcotest.(check bool) "my-beta included" true (List.mem "my-beta" labels);
+      Alcotest.(check bool)
+        "my-alpha excluded" true
+        (not (List.mem "my-alpha" labels));
+      Alcotest.(check bool)
+        "other excluded" true
+        (not (List.mem "other" labels))
+
 let () =
   Alcotest.run "server"
     [
@@ -3418,5 +3733,18 @@ let () =
           Alcotest.test_case "capability advertised" `Quick
             test_document_symbol_capability;
           Alcotest.test_case "empty document" `Quick test_document_symbol_empty;
+        ] );
+      ( "completion",
+        [
+          Alcotest.test_case "returns local defun" `Quick
+            test_completion_returns_local_defun;
+          Alcotest.test_case "returns defvar" `Quick
+            test_completion_returns_defvar;
+          Alcotest.test_case "has type info" `Quick
+            test_completion_has_type_info;
+          Alcotest.test_case "capability advertised" `Quick
+            test_completion_capability_advertised;
+          Alcotest.test_case "filters by prefix" `Quick
+            test_completion_filters_by_prefix;
         ] );
     ]

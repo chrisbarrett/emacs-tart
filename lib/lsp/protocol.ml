@@ -47,6 +47,7 @@ type server_capabilities = {
   references_provider : bool;
   code_action_provider : bool;
   document_symbol_provider : bool;
+  completion_provider : bool;
 }
 (** Server capabilities *)
 
@@ -131,6 +132,13 @@ let server_capabilities_to_json (caps : server_capabilities) : Yojson.Safe.t =
   in
   let fields =
     ("documentSymbolProvider", `Bool caps.document_symbol_provider) :: fields
+  in
+  let fields =
+    if caps.completion_provider then
+      ( "completionProvider",
+        `Assoc [ ("triggerCharacters", `List [ `String "(" ]) ] )
+      :: fields
+    else fields
   in
   `Assoc fields
 
@@ -679,4 +687,122 @@ let document_symbol_result_to_json (result : document_symbol_result) :
     Yojson.Safe.t =
   match result with
   | Some symbols -> `List (List.map document_symbol_to_json symbols)
+  | None -> `Null
+
+(** {1 Completion} *)
+
+(** Completion item kind as defined by LSP *)
+type completion_item_kind =
+  | CIKText
+  | CIKMethod
+  | CIKFunction
+  | CIKConstructor
+  | CIKField
+  | CIKVariable
+  | CIKClass
+  | CIKInterface
+  | CIKModule
+  | CIKProperty
+  | CIKUnit
+  | CIKValue
+  | CIKEnum
+  | CIKKeyword
+  | CIKSnippet
+  | CIKColor
+  | CIKFile
+  | CIKReference
+  | CIKFolder
+  | CIKEnumMember
+  | CIKConstant
+  | CIKStruct
+  | CIKEvent
+  | CIKOperator
+  | CIKTypeParameter
+
+let completion_item_kind_to_int = function
+  | CIKText -> 1
+  | CIKMethod -> 2
+  | CIKFunction -> 3
+  | CIKConstructor -> 4
+  | CIKField -> 5
+  | CIKVariable -> 6
+  | CIKClass -> 7
+  | CIKInterface -> 8
+  | CIKModule -> 9
+  | CIKProperty -> 10
+  | CIKUnit -> 11
+  | CIKValue -> 12
+  | CIKEnum -> 13
+  | CIKKeyword -> 14
+  | CIKSnippet -> 15
+  | CIKColor -> 16
+  | CIKFile -> 17
+  | CIKReference -> 18
+  | CIKFolder -> 19
+  | CIKEnumMember -> 20
+  | CIKConstant -> 21
+  | CIKStruct -> 22
+  | CIKEvent -> 23
+  | CIKOperator -> 24
+  | CIKTypeParameter -> 25
+
+type completion_item = {
+  ci_label : string;
+  ci_kind : completion_item_kind option;
+  ci_detail : string option;
+  ci_documentation : string option;
+  ci_insert_text : string option;
+}
+(** A completion item represents a text suggestion *)
+
+type completion_params = { cp_text_document : string; cp_position : position }
+(** Completion request params *)
+
+let parse_completion_params (json : Yojson.Safe.t) : completion_params =
+  let open Yojson.Safe.Util in
+  let text_document =
+    json |> member "textDocument" |> member "uri" |> to_string
+  in
+  let pos_json = json |> member "position" in
+  let position =
+    {
+      line = pos_json |> member "line" |> to_int;
+      character = pos_json |> member "character" |> to_int;
+    }
+  in
+  { cp_text_document = text_document; cp_position = position }
+
+let completion_item_to_json (item : completion_item) : Yojson.Safe.t =
+  let fields = [ ("label", `String item.ci_label) ] in
+  let fields =
+    match item.ci_kind with
+    | Some k -> ("kind", `Int (completion_item_kind_to_int k)) :: fields
+    | None -> fields
+  in
+  let fields =
+    match item.ci_detail with
+    | Some d -> ("detail", `String d) :: fields
+    | None -> fields
+  in
+  let fields =
+    match item.ci_documentation with
+    | Some doc ->
+        ( "documentation",
+          `Assoc [ ("kind", `String "markdown"); ("value", `String doc) ] )
+        :: fields
+    | None -> fields
+  in
+  let fields =
+    match item.ci_insert_text with
+    | Some t -> ("insertText", `String t) :: fields
+    | None -> fields
+  in
+  `Assoc fields
+
+type completion_result = completion_item list option
+(** Completion result is a list of items or null *)
+
+let completion_result_to_json (result : completion_result) : Yojson.Safe.t =
+  match result with
+  | Some items -> `List (List.map completion_item_to_json items)
   | None -> `Null

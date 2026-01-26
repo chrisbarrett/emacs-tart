@@ -279,10 +279,10 @@ Auto-completion and document structure for improved IDE experience.
 
 ### 12.2 Auto-Completion
 
-- [ ] Implement `textDocument/completion` for symbol names
-- [ ] Complete local variables in scope
-- [ ] Complete functions from loaded signatures (stdlib, requires)
-- [ ] Include type information in completion items
+- [x] Implement `textDocument/completion` for symbol names
+- [x] Complete local variables in scope
+- [x] Complete functions from loaded signatures (stdlib, requires)
+- [x] Include type information in completion items
 - [ ] Verify: Typing prefix shows completion candidates with types
 
 ### 12.3 Signature Help

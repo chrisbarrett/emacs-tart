@@ -41,6 +41,7 @@ type server_capabilities = {
   references_provider : bool;
   code_action_provider : bool;
   document_symbol_provider : bool;
+  completion_provider : bool;
 }
 (** Server capabilities *)
 
@@ -276,3 +277,54 @@ type document_symbol_result = document_symbol list option
 
 val document_symbol_result_to_json : document_symbol_result -> Yojson.Safe.t
 (** Encode document symbol result to JSON *)
+
+(** {1 Completion} *)
+
+(** Completion item kind as defined by LSP *)
+type completion_item_kind =
+  | CIKText
+  | CIKMethod
+  | CIKFunction
+  | CIKConstructor
+  | CIKField
+  | CIKVariable
+  | CIKClass
+  | CIKInterface
+  | CIKModule
+  | CIKProperty
+  | CIKUnit
+  | CIKValue
+  | CIKEnum
+  | CIKKeyword
+  | CIKSnippet
+  | CIKColor
+  | CIKFile
+  | CIKReference
+  | CIKFolder
+  | CIKEnumMember
+  | CIKConstant
+  | CIKStruct
+  | CIKEvent
+  | CIKOperator
+  | CIKTypeParameter
+
+type completion_item = {
+  ci_label : string;
+  ci_kind : completion_item_kind option;
+  ci_detail : string option;
+  ci_documentation : string option;
+  ci_insert_text : string option;
+}
+(** A completion item represents a text suggestion *)
+
+type completion_params = { cp_text_document : string; cp_position : position }
+(** Completion request params *)
+
+val parse_completion_params : Yojson.Safe.t -> completion_params
+(** Parse completion params from JSON *)
+
+type completion_result = completion_item list option
+(** Completion result is a list of items or null *)
+
+val completion_result_to_json : completion_result -> Yojson.Safe.t
+(** Encode completion result to JSON *)
