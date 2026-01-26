@@ -41,12 +41,16 @@ The `tart` executable will be at `_build/default/bin/tart.exe`.
 
 ### Emacs Package
 
-Add `lisp/` to your `load-path` and require `tart`:
+Add `lisp/` to your `load-path`:
 
 ```elisp
 (add-to-list 'load-path "/path/to/emacs-tart/lisp")
-(require 'tart)
 ```
+
+Tart provides two Emacs packages:
+
+- `tart` - Runtime macros (`tart`, `tart-type`, `tart-declare`). No dependencies.
+- `tart-mode` - Development tools (LSP, REPL, keybindings). Requires eglot and comint.
 
 ## Editor Integration
 
@@ -55,12 +59,12 @@ eglot package.
 
 ### Eglot Setup
 
-The `tart.el` package automatically registers Tart as an LSP server for
+The `tart-mode` package automatically registers Tart as an LSP server for
 `emacs-lisp-mode`. To enable LSP automatically when editing files with a sibling
 `.tart` signature file:
 
 ```elisp
-(require 'tart)
+(require 'tart-mode)
 (add-hook 'emacs-lisp-mode-hook #'tart-eglot-ensure)
 ```
 

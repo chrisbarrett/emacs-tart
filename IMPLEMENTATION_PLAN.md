@@ -152,9 +152,9 @@ from the runtime macros in `tart.el`.
 
 ### 7.0 File Split
 
-- [ ] Split current `tart.el` into `tart.el` (macros only) and `tart-mode.el`
+- [x] Split current `tart.el` into `tart.el` (macros only) and `tart-mode.el`
       (dev tooling)
-- [ ] Verify: `(require 'tart)` loads only macros, no eglot/comint deps
+- [x] Verify: `(require 'tart)` loads only macros, no eglot/comint deps
 
 ### 7.1 Inferior Mode
 

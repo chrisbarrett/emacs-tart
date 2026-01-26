@@ -66,5 +66,4 @@
   (should (eq (tart-declare my-buffer buffer) nil))
   (should (eq (tart-declare handler ((string) -> nil)) nil)))
 
-(provide 'tart-tests)
 ;;; tart-tests.el ends here
