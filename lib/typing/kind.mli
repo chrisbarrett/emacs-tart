@@ -71,3 +71,44 @@ val to_string : kind -> string
 
 val scheme_to_string : kind_scheme -> string
 (** Pretty-print a kind scheme to string. *)
+
+(** {1 Kind Environment}
+
+    A kind environment maps type variable names to their kind schemes. This is
+    used during kind inference to track the kinds of type variables.
+
+    When a type variable is looked up but not found, it defaults to kind [*].
+    This ensures backward compatibility: existing signatures that don't use
+    higher-kinded types continue to work unchanged. *)
+
+type env
+(** Kind environment mapping type variable names to kind schemes. *)
+
+val empty_env : env
+(** Empty kind environment. *)
+
+val extend_env : string -> kind_scheme -> env -> env
+(** [extend_env name ks env] adds a binding from [name] to [ks]. *)
+
+val extend_star : string -> env -> env
+(** [extend_star name env] extends [env] with [name] at kind [*]. *)
+
+val extend_fresh : string list -> env -> env
+(** [extend_fresh names env] extends [env] with fresh kind variables for each
+    name. *)
+
+val lookup : string -> env -> kind_scheme
+(** [lookup name env] returns the kind scheme for [name], or a fresh kind
+    variable if not found. *)
+
+val lookup_defaulted : string -> env -> kind
+(** [lookup_defaulted name env] returns the kind for [name], defaulting
+    unconstrained variables to [*]. This is the main interface for getting the
+    final kind of a type variable. *)
+
+val default_all : env -> unit
+(** [default_all env] defaults all unresolved kind variables in [env] to [*].
+    Call this after kind inference is complete to finalize all kinds. *)
+
+val names : env -> string list
+(** [names env] returns all type variable names in the environment. *)

@@ -121,10 +121,85 @@ let kvar_tests =
     ("concrete_scheme", `Quick, test_concrete_scheme);
   ]
 
+(* =============================================================================
+   Kind Environment Tests
+   ============================================================================= *)
+
+let test_empty_env () =
+  reset_kvar_counter ();
+  let env = empty_env in
+  Alcotest.(check (list string)) "empty env has no names" [] (names env)
+
+let test_extend_star () =
+  reset_kvar_counter ();
+  let env = extend_star "a" empty_env in
+  let k = lookup_defaulted "a" env in
+  Alcotest.(check string) "lookup returns star" "*" (to_string k)
+
+let test_lookup_unknown_defaults_to_star () =
+  (* R5: type variables used in concrete position default to kind * *)
+  reset_kvar_counter ();
+  let k = lookup_defaulted "unknown" empty_env in
+  Alcotest.(check string) "unknown defaults to star" "*" (to_string k)
+
+let test_extend_fresh () =
+  reset_kvar_counter ();
+  let env = extend_fresh [ "a"; "b" ] empty_env in
+  Alcotest.(check (list string)) "has both names" [ "b"; "a" ] (names env)
+
+let test_extend_env_with_arrow_kind () =
+  reset_kvar_counter ();
+  let env = extend_env "f" (KConcrete (star @-> star)) empty_env in
+  let k = lookup_defaulted "f" env in
+  Alcotest.(check string) "lookup returns arrow" "* -> *" (to_string k)
+
+let test_default_all () =
+  (* After kind inference, all unconstrained variables default to * *)
+  reset_kvar_counter ();
+  let env = extend_fresh [ "a"; "b" ] empty_env in
+  default_all env;
+  (* Now all should resolve to * *)
+  let k_a = lookup_defaulted "a" env in
+  let k_b = lookup_defaulted "b" env in
+  Alcotest.(check string) "a defaults to star" "*" (to_string k_a);
+  Alcotest.(check string) "b defaults to star" "*" (to_string k_b)
+
+let test_lookup_preserves_concrete () =
+  (* Concrete kinds are not affected by defaulting *)
+  reset_kvar_counter ();
+  let env = extend_env "f" (KConcrete (star @-> star @-> star)) empty_env in
+  let k = lookup_defaulted "f" env in
+  Alcotest.(check string) "concrete preserved" "* -> * -> *" (to_string k)
+
+let test_existing_signature_unchanged () =
+  (* R5: (defun identity [a] (a) -> a) ; a : * (unchanged behavior) *)
+  reset_kvar_counter ();
+  (* Simulate processing type variable 'a' from a signature *)
+  let env = extend_fresh [ "a" ] empty_env in
+  (* After "kind inference" (which doesn't constrain 'a'), default to * *)
+  default_all env;
+  let k = lookup_defaulted "a" env in
+  Alcotest.(check string) "identity's 'a' has kind *" "*" (to_string k)
+
+let env_tests =
+  [
+    ("empty_env", `Quick, test_empty_env);
+    ("extend_star", `Quick, test_extend_star);
+    ( "lookup_unknown_defaults_to_star",
+      `Quick,
+      test_lookup_unknown_defaults_to_star );
+    ("extend_fresh", `Quick, test_extend_fresh);
+    ("extend_env_with_arrow_kind", `Quick, test_extend_env_with_arrow_kind);
+    ("default_all", `Quick, test_default_all);
+    ("lookup_preserves_concrete", `Quick, test_lookup_preserves_concrete);
+    ("existing_signature_unchanged", `Quick, test_existing_signature_unchanged);
+  ]
+
 let () =
   Alcotest.run "Kind"
     [
       ("construction", construction_tests);
       ("equality", equality_tests);
       ("kvar", kvar_tests);
+      ("env", env_tests);
     ]

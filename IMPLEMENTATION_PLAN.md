@@ -339,8 +339,8 @@ Enable polymorphism over type constructors via kind inference.
 
 ### 14.2 Kind Defaulting
 
-- [ ] [R5] Default existing type variables to kind `*`
-- [ ] Verify: Existing signatures unchanged
+- [x] [R5] Default existing type variables to kind `*`
+- [x] Verify: Existing signatures unchanged
 
 ### 14.3 Kind Inference
 
