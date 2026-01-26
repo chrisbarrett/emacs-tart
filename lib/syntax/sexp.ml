@@ -114,3 +114,64 @@ let rec find_at_position ~(line : int) ~(col : int) (sexp : t) : t option =
 (** Find the innermost S-expression at a position across multiple forms. *)
 let find_at_position_in_forms ~(line : int) ~(col : int) (forms : t list) : t option =
   List.find_map (find_at_position ~line ~col) forms
+
+(** Result of find_with_context: the target sexp and optionally the enclosing
+    application if the target is in function position. *)
+type position_context = {
+  target : t;  (** The innermost sexp at the position *)
+  enclosing_application : t option;  (** The enclosing (fn args...) if target is fn *)
+}
+
+(** Find the innermost S-expression at a position, tracking if it's in function
+    position of an application. *)
+let rec find_with_context ~(line : int) ~(col : int) (sexp : t) : position_context option =
+  let span = span_of sexp in
+  if not (Location.contains_position span ~line ~col) then
+    None
+  else
+    match sexp with
+    | List ((fn :: _args) as _children, _) -> (
+        (* Check if we're on the function position *)
+        let fn_span = span_of fn in
+        if Location.contains_position fn_span ~line ~col then
+          (* Recurse into the function to find the most specific match *)
+          match find_with_context ~line ~col fn with
+          | Some ctx ->
+              (* If we found something inside fn, check if it has an enclosing app already *)
+              if Option.is_some ctx.enclosing_application then Some ctx
+              else
+                (* The innermost target is inside fn; this list is the enclosing app *)
+                Some { target = ctx.target; enclosing_application = Some sexp }
+          | None ->
+              (* fn itself is the target, and this list is the enclosing app *)
+              Some { target = fn; enclosing_application = Some sexp }
+        else
+          (* Not in function position, search all children normally *)
+          let children_result =
+            List.find_map (find_with_context ~line ~col) _children
+          in
+          match children_result with
+          | Some _ as result -> result
+          | None -> Some { target = sexp; enclosing_application = None })
+    | List ([], _) -> Some { target = sexp; enclosing_application = None }
+    | Vector (children, _) -> (
+        let children_result =
+          List.find_map (find_with_context ~line ~col) children
+        in
+        match children_result with
+        | Some _ as result -> result
+        | None -> Some { target = sexp; enclosing_application = None })
+    | Cons (car, cdr, _) -> (
+        match find_with_context ~line ~col car with
+        | Some _ as result -> result
+        | None -> (
+            match find_with_context ~line ~col cdr with
+            | Some _ as result -> result
+            | None -> Some { target = sexp; enclosing_application = None }))
+    | Int _ | Float _ | String _ | Symbol _ | Keyword _ | Char _ | Error _ ->
+        Some { target = sexp; enclosing_application = None }
+
+(** Find sexp with context across multiple forms. *)
+let find_with_context_in_forms ~(line : int) ~(col : int) (forms : t list) :
+    position_context option =
+  List.find_map (find_with_context ~line ~col) forms

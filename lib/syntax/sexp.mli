@@ -55,3 +55,20 @@ val find_at_position : line:int -> col:int -> t -> t option
 val find_at_position_in_forms : line:int -> col:int -> t list -> t option
 (** [find_at_position_in_forms ~line ~col forms] finds the innermost
     S-expression at a position across multiple top-level forms. *)
+
+(** {1 Position Context} *)
+
+(** Result of find_with_context: the target sexp and optionally the enclosing
+    application if the target is in function position. *)
+type position_context = {
+  target : t;  (** The innermost sexp at the position *)
+  enclosing_application : t option;  (** The enclosing [(fn args...)] if target is fn *)
+}
+
+val find_with_context : line:int -> col:int -> t -> position_context option
+(** [find_with_context ~line ~col sexp] finds the innermost S-expression
+    at a position, tracking whether it's in function position of an application. *)
+
+val find_with_context_in_forms : line:int -> col:int -> t list -> position_context option
+(** [find_with_context_in_forms ~line ~col forms] finds the innermost
+    S-expression at a position across multiple forms, with context. *)

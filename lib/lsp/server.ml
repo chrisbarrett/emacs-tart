@@ -259,14 +259,44 @@ let handle_did_close (server : t) (params : Yojson.Safe.t option) : unit =
 
 (** Get the type at a specific S-expression within a document.
 
-    This re-type-checks the document and infers the type for the target sexp. *)
-let type_at_sexp (env : Typing.Check.check_result) (target : Syntax.Sexp.t) : Core.Types.typ option =
-  (* For now, use the simple approach: infer the type of the target expression directly *)
+    This infers the type for the target sexp. If the target is in function
+    position of an application, the enclosing application is inferred first
+    to resolve instantiated type variables. *)
+let type_at_sexp (env : Typing.Check.check_result) (ctx : Syntax.Sexp.position_context) : Core.Types.typ option =
   let open Core.Types in
   reset_tvar_counter ();
-  let result = Typing.Infer.infer env.Typing.Check.env target in
-  let _ = Typing.Unify.solve result.Typing.Infer.constraints in
-  Some (repr result.Typing.Infer.ty)
+
+  (* Determine what to infer based on context *)
+  match ctx.enclosing_application with
+  | Some (Syntax.Sexp.List ((fn :: args), _span)) when Syntax.Sexp.equal fn ctx.target || true ->
+      (* Target is in function position of an application.
+         We need to infer the whole application so type variables are resolved.
+         Then extract the function type. *)
+      let fn_result = Typing.Infer.infer env.Typing.Check.env fn in
+      let arg_results = List.map (Typing.Infer.infer env.Typing.Check.env) args in
+
+      (* Build the application constraint *)
+      let result_ty = fresh_tvar 0 in
+      let arg_types = List.map (fun r -> PPositional r.Typing.Infer.ty) arg_results in
+      let expected_fn_type = TArrow (arg_types, result_ty) in
+      let fn_constraint = Typing.Constraint.equal fn_result.Typing.Infer.ty expected_fn_type _span in
+
+      (* Combine all constraints *)
+      let all_constraints =
+        List.fold_left
+          (fun acc r -> Typing.Constraint.combine acc r.Typing.Infer.constraints)
+          (Typing.Constraint.add fn_constraint fn_result.Typing.Infer.constraints)
+          arg_results
+      in
+
+      (* Solve and return the function's instantiated type *)
+      let _ = Typing.Unify.solve all_constraints in
+      Some (repr fn_result.Typing.Infer.ty)
+  | _ ->
+      (* Not in an application context, just infer the target directly *)
+      let result = Typing.Infer.infer env.Typing.Check.env ctx.target in
+      let _ = Typing.Unify.solve result.Typing.Infer.constraints in
+      Some (repr result.Typing.Infer.ty)
 
 (** Handle textDocument/hover request *)
 let handle_hover (server : t) (params : Yojson.Safe.t option) :
@@ -298,21 +328,22 @@ let handle_hover (server : t) (params : Yojson.Safe.t option) :
             Ok `Null)
           else
             match
-              Syntax.Sexp.find_at_position_in_forms ~line ~col
+              Syntax.Sexp.find_with_context_in_forms ~line ~col
                 parse_result.sexps
             with
             | None ->
                 debug server "No S-expression at position";
                 Ok `Null
-            | Some target_sexp -> (
+            | Some ctx -> (
                 debug server
-                  (Printf.sprintf "Found sexp: %s"
-                     (Syntax.Sexp.to_string target_sexp));
+                  (Printf.sprintf "Found sexp: %s (in application: %b)"
+                     (Syntax.Sexp.to_string ctx.target)
+                     (Option.is_some ctx.enclosing_application));
                 (* Type-check the document to get the environment *)
                 let check_result =
                   Typing.Check.check_program parse_result.sexps
                 in
-                match type_at_sexp check_result target_sexp with
+                match type_at_sexp check_result ctx with
                 | None ->
                     debug server "Could not infer type";
                     Ok `Null
@@ -327,7 +358,7 @@ let handle_hover (server : t) (params : Yojson.Safe.t option) :
                             value =
                               Printf.sprintf "```elisp\n%s\n```" type_str;
                           };
-                        range = Some (range_of_span (Syntax.Sexp.span_of target_sexp));
+                        range = Some (range_of_span (Syntax.Sexp.span_of ctx.target));
                       }
                     in
                     Ok (Protocol.hover_to_json hover))))
