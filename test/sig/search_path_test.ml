@@ -1178,6 +1178,99 @@ let test_load_s () =
            true
          with Not_found -> false)
 
+(** Test that f.tart parses successfully *)
+let test_parse_f () =
+  let path = Filename.concat stdlib_dir "f.tart" in
+  if not (Sys.file_exists path) then
+    Alcotest.fail ("f.tart not found at: " ^ path);
+  match Search_path.parse_signature_file path with
+  | None -> Alcotest.fail "f.tart failed to parse"
+  | Some sig_file ->
+      Alcotest.(check string) "module name" "f" sig_file.sig_module;
+      Alcotest.(check bool)
+        "has declarations" true
+        (List.length sig_file.sig_decls > 50);
+      (* Check key f.el functions *)
+      let has_defun name =
+        List.exists
+          (function Sig_ast.DDefun d -> d.defun_name = name | _ -> false)
+          sig_file.sig_decls
+      in
+      Alcotest.(check bool) "has f-join" true (has_defun "f-join");
+      Alcotest.(check bool) "has f-split" true (has_defun "f-split");
+      Alcotest.(check bool) "has f-expand" true (has_defun "f-expand");
+      Alcotest.(check bool) "has f-dirname" true (has_defun "f-dirname");
+      Alcotest.(check bool) "has f-exists-p" true (has_defun "f-exists-p");
+      Alcotest.(check bool) "has f-directory-p" true (has_defun "f-directory-p");
+      Alcotest.(check bool) "has f-read-text" true (has_defun "f-read-text");
+      Alcotest.(check bool) "has f-write-text" true (has_defun "f-write-text");
+      Alcotest.(check bool) "has f-mkdir" true (has_defun "f-mkdir");
+      Alcotest.(check bool) "has f-delete" true (has_defun "f-delete");
+      Alcotest.(check bool) "has f-glob" true (has_defun "f-glob");
+      Alcotest.(check bool) "has f-entries" true (has_defun "f-entries")
+
+(** Test that f can be loaded into type environment *)
+let test_load_f () =
+  let sp = Search_path.empty |> Search_path.with_stdlib stdlib_dir in
+  (* First load builtins for base types *)
+  let base_env =
+    match
+      Search_path.load_module ~search_path:sp ~env:Type_env.empty "builtins"
+    with
+    | None -> Alcotest.fail "failed to load builtins module"
+    | Some env -> env
+  in
+  match Search_path.load_module ~search_path:sp ~env:base_env "f" with
+  | None -> Alcotest.fail "failed to load f module"
+  | Some env ->
+      (* Check that f-join is loaded *)
+      (match Type_env.lookup "f-join" env with
+      | None -> Alcotest.fail "f-join not found in env"
+      | Some _ -> ());
+      (* Check that f-exists-p is loaded *)
+      (match Type_env.lookup "f-exists-p" env with
+      | None -> Alcotest.fail "f-exists-p not found in env"
+      | Some _ -> ());
+      (* Check that f-read-text is loaded *)
+      (match Type_env.lookup "f-read-text" env with
+      | None -> Alcotest.fail "f-read-text not found in env"
+      | Some _ -> ());
+      (* Check that f-glob is loaded *)
+      (match Type_env.lookup "f-glob" env with
+      | None -> Alcotest.fail "f-glob not found in env"
+      | Some _ -> ());
+      (* Verify type checking works with f.el functions *)
+      let ty, errors = check_expr_str ~env "(f-join \"/\" \"home\" \"user\")" in
+      Alcotest.(check int) "f-join: no errors" 0 (List.length errors);
+      (* Result should be String *)
+      let ty_str = Types.to_string ty in
+      Alcotest.(check bool)
+        "f-join returns string type" true
+        (try
+           let _ = Str.search_forward (Str.regexp_string "String") ty_str 0 in
+           true
+         with Not_found -> false);
+      (* Check f-exists-p returns bool *)
+      let ty2, errors2 = check_expr_str ~env "(f-exists-p \"/tmp\")" in
+      Alcotest.(check int) "f-exists-p: no errors" 0 (List.length errors2);
+      let ty2_str = Types.to_string ty2 in
+      Alcotest.(check bool)
+        "f-exists-p returns bool" true
+        (try
+           let _ = Str.search_forward (Str.regexp_string "Bool") ty2_str 0 in
+           true
+         with Not_found -> false);
+      (* Check f-glob returns list of strings *)
+      let ty3, errors3 = check_expr_str ~env "(f-glob \"*.el\")" in
+      Alcotest.(check int) "f-glob: no errors" 0 (List.length errors3);
+      let ty3_str = Types.to_string ty3 in
+      Alcotest.(check bool)
+        "f-glob returns list of strings" true
+        (try
+           let _ = Str.search_forward (Str.regexp_string "List") ty3_str 0 in
+           true
+         with Not_found -> false)
+
 let () =
   Alcotest.run "search_path"
     [
@@ -1245,5 +1338,7 @@ let () =
           Alcotest.test_case "load dash into env" `Quick test_load_dash;
           Alcotest.test_case "parse s.tart" `Quick test_parse_s;
           Alcotest.test_case "load s into env" `Quick test_load_s;
+          Alcotest.test_case "parse f.tart" `Quick test_parse_f;
+          Alcotest.test_case "load f into env" `Quick test_load_f;
         ] );
     ]
