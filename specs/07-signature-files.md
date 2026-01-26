@@ -247,7 +247,7 @@ Minimum coverage:
 ## Tasks
 
 - [x] [R1] Define signature file AST
-- [ ] [R2] Implement type syntax parser
+- [x] [R2] Implement type syntax parser
 - [ ] [R3] Enforce explicit quantification
 - [ ] [R4] Implement bounded quantifiers
 - [ ] [R5] Handle function signatures

@@ -1,0 +1,233 @@
+(** Tests for signature file parser *)
+
+open Sig
+
+(** Helper to parse a string as a type expression *)
+let parse_type_str s =
+  let parse_result = Syntax.Read.parse_string s in
+  match parse_result.sexps with
+  | [sexp] -> Sig_parser.parse_sig_type sexp
+  | _ -> Error { Sig_parser.message = "Expected single expression"; span = Syntax.Location.dummy_span }
+
+(** Helper to parse a string as a declaration *)
+let parse_decl_str s =
+  let parse_result = Syntax.Read.parse_string s in
+  match parse_result.sexps with
+  | [sexp] -> Sig_parser.parse_decl sexp
+  | _ -> Error { Sig_parser.message = "Expected single expression"; span = Syntax.Location.dummy_span }
+
+(** {1 Type Expression Tests} *)
+
+let test_primitive_types () =
+  (* int *)
+  (match parse_type_str "int" with
+   | Ok (Sig_ast.STCon ("int", _)) -> ()
+   | _ -> Alcotest.fail "Expected int type constant");
+
+  (* string *)
+  (match parse_type_str "string" with
+   | Ok (Sig_ast.STCon ("string", _)) -> ()
+   | _ -> Alcotest.fail "Expected string type constant");
+
+  (* nil *)
+  (match parse_type_str "nil" with
+   | Ok (Sig_ast.STCon ("nil", _)) -> ()
+   | _ -> Alcotest.fail "Expected nil type constant");
+
+  (* truthy *)
+  (match parse_type_str "truthy" with
+   | Ok (Sig_ast.STCon ("truthy", _)) -> ()
+   | _ -> Alcotest.fail "Expected truthy type constant")
+
+let test_type_variables () =
+  (* a - not a primitive, so treated as type variable *)
+  (match parse_type_str "a" with
+   | Ok (Sig_ast.STVar ("a", _)) -> ()
+   | _ -> Alcotest.fail "Expected type variable a");
+
+  (* foo - user type *)
+  (match parse_type_str "foo" with
+   | Ok (Sig_ast.STVar ("foo", _)) -> ()
+   | _ -> Alcotest.fail "Expected type variable foo")
+
+let test_type_applications () =
+  (* (list int) *)
+  (match parse_type_str "(list int)" with
+   | Ok (Sig_ast.STApp ("list", [Sig_ast.STCon ("int", _)], _)) -> ()
+   | _ -> Alcotest.fail "Expected (list int) application");
+
+  (* (option string) *)
+  (match parse_type_str "(option string)" with
+   | Ok (Sig_ast.STApp ("option", [Sig_ast.STCon ("string", _)], _)) -> ()
+   | _ -> Alcotest.fail "Expected (option string) application");
+
+  (* (hash-table string int) *)
+  (match parse_type_str "(hash-table string int)" with
+   | Ok (Sig_ast.STApp ("hash-table", [Sig_ast.STCon ("string", _); Sig_ast.STCon ("int", _)], _)) -> ()
+   | _ -> Alcotest.fail "Expected (hash-table string int) application")
+
+let test_arrow_types () =
+  (* (int) -> string *)
+  (match parse_type_str "((int) -> string)" with
+   | Ok (Sig_ast.STArrow ([Sig_ast.SPPositional (Sig_ast.STCon ("int", _))],
+                          Sig_ast.STCon ("string", _), _)) -> ()
+   | _ -> Alcotest.fail "Expected (int) -> string arrow type");
+
+  (* int -> string (single param without parens) *)
+  (match parse_type_str "(int -> string)" with
+   | Ok (Sig_ast.STArrow ([Sig_ast.SPPositional (Sig_ast.STCon ("int", _))],
+                          Sig_ast.STCon ("string", _), _)) -> ()
+   | _ -> Alcotest.fail "Expected int -> string arrow type");
+
+  (* () -> nil (no params) *)
+  (match parse_type_str "(() -> nil)" with
+   | Ok (Sig_ast.STArrow ([], Sig_ast.STCon ("nil", _), _)) -> ()
+   | _ -> Alcotest.fail "Expected () -> nil arrow type")
+
+let test_polymorphic_types () =
+  (* [a] (a) -> a *)
+  (match parse_type_str "([a] (a) -> a)" with
+   | Ok (Sig_ast.STForall ([{ name = "a"; bound = None; _ }],
+                           Sig_ast.STArrow (_, _, _), _)) -> ()
+   | Ok other ->
+       Alcotest.fail (Printf.sprintf "Got unexpected type: %s"
+         (match other with
+          | Sig_ast.STForall _ -> "STForall"
+          | Sig_ast.STArrow _ -> "STArrow"
+          | _ -> "other"))
+   | Error e ->
+       Alcotest.fail (Printf.sprintf "Parse error: %s" e.message))
+
+let test_union_types () =
+  (* (int | string) *)
+  (match parse_type_str "((int | string))" with
+   | Ok (Sig_ast.STUnion ([Sig_ast.STCon ("int", _); Sig_ast.STCon ("string", _)], _)) -> ()
+   | Ok _ -> Alcotest.fail "Expected union type with int and string"
+   | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message));
+
+  (* (int | string | nil) *)
+  (match parse_type_str "((int | string | nil))" with
+   | Ok (Sig_ast.STUnion ([Sig_ast.STCon ("int", _);
+                           Sig_ast.STCon ("string", _);
+                           Sig_ast.STCon ("nil", _)], _)) -> ()
+   | _ -> Alcotest.fail "Expected union type with three alternatives")
+
+let test_tuple_types () =
+  (* (tuple int string) *)
+  (match parse_type_str "(tuple int string)" with
+   | Ok (Sig_ast.STTuple ([Sig_ast.STCon ("int", _); Sig_ast.STCon ("string", _)], _)) -> ()
+   | _ -> Alcotest.fail "Expected tuple type")
+
+(** {1 Declaration Tests} *)
+
+let test_defun_simple () =
+  (* (defun add (int int) -> int) *)
+  (match parse_decl_str "(defun add (int int) -> int)" with
+   | Ok (Sig_ast.DDefun { defun_name = "add";
+                          defun_tvar_binders = [];
+                          defun_params = [Sig_ast.SPPositional (Sig_ast.STCon ("int", _));
+                                          Sig_ast.SPPositional (Sig_ast.STCon ("int", _))];
+                          defun_return = Sig_ast.STCon ("int", _); _ }) -> ()
+   | Ok _ -> Alcotest.fail "Expected defun with correct structure"
+   | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message))
+
+let test_defun_polymorphic () =
+  (* (defun identity [a] (a) -> a) *)
+  (match parse_decl_str "(defun identity [a] (a) -> a)" with
+   | Ok (Sig_ast.DDefun { defun_name = "identity";
+                          defun_tvar_binders = [{ name = "a"; bound = None; _ }];
+                          defun_params = [Sig_ast.SPPositional (Sig_ast.STVar ("a", _))];
+                          defun_return = Sig_ast.STVar ("a", _); _ }) -> ()
+   | Ok _ -> Alcotest.fail "Expected polymorphic defun with correct structure"
+   | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message))
+
+let test_defvar () =
+  (* (defvar my-default string) *)
+  (match parse_decl_str "(defvar my-default string)" with
+   | Ok (Sig_ast.DDefvar { defvar_name = "my-default";
+                            defvar_type = Sig_ast.STCon ("string", _); _ }) -> ()
+   | _ -> Alcotest.fail "Expected defvar declaration")
+
+let test_type_alias () =
+  (* (type int-list (list int)) *)
+  (match parse_decl_str "(type int-list (list int))" with
+   | Ok (Sig_ast.DType { type_name = "int-list";
+                          type_params = [];
+                          type_body = Some (Sig_ast.STApp ("list", [Sig_ast.STCon ("int", _)], _)); _ }) -> ()
+   | _ -> Alcotest.fail "Expected type alias")
+
+let test_type_opaque () =
+  (* (type buffer) *)
+  (match parse_decl_str "(type buffer)" with
+   | Ok (Sig_ast.DType { type_name = "buffer";
+                          type_params = [];
+                          type_body = None; _ }) -> ()
+   | _ -> Alcotest.fail "Expected opaque type")
+
+let test_type_parameterized () =
+  (* (type result [a e] ((ok a) | (err e))) *)
+  (match parse_decl_str "(type result [a e] ((ok a) | (err e)))" with
+   | Ok (Sig_ast.DType { type_name = "result";
+                          type_params = [{ name = "a"; _ }; { name = "e"; _ }];
+                          type_body = Some (Sig_ast.STUnion _); _ }) -> ()
+   | Ok _ -> Alcotest.fail "Expected parameterized type with union body"
+   | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message))
+
+let test_open_directive () =
+  (* (open 'seq) *)
+  (match parse_decl_str "(open 'seq)" with
+   | Ok (Sig_ast.DOpen ("seq", _)) -> ()
+   | _ -> Alcotest.fail "Expected open directive")
+
+let test_include_directive () =
+  (* (include 'base) *)
+  (match parse_decl_str "(include 'base)" with
+   | Ok (Sig_ast.DInclude ("base", _)) -> ()
+   | _ -> Alcotest.fail "Expected include directive")
+
+(** {1 Signature File Tests} *)
+
+let test_parse_signature () =
+  let src = {|
+    (type buffer)
+    (defun buffer-name (buffer) -> string)
+    (defvar default-directory string)
+  |} in
+  let parse_result = Syntax.Read.parse_string src in
+  match Sig_parser.parse_signature ~module_name:"test" parse_result.sexps with
+  | Ok sig_file ->
+      Alcotest.(check string) "module name" "test" sig_file.sig_module;
+      Alcotest.(check int) "decl count" 3 (List.length sig_file.sig_decls)
+  | Error errors ->
+      let msgs = List.map (fun e -> e.Sig_parser.message) errors in
+      Alcotest.fail (Printf.sprintf "Parse errors: %s" (String.concat ", " msgs))
+
+let () =
+  Alcotest.run "sig_parser"
+    [
+      ( "type-expressions",
+        [
+          Alcotest.test_case "primitive types" `Quick test_primitive_types;
+          Alcotest.test_case "type variables" `Quick test_type_variables;
+          Alcotest.test_case "type applications" `Quick test_type_applications;
+          Alcotest.test_case "arrow types" `Quick test_arrow_types;
+          Alcotest.test_case "polymorphic types" `Quick test_polymorphic_types;
+          Alcotest.test_case "union types" `Quick test_union_types;
+          Alcotest.test_case "tuple types" `Quick test_tuple_types;
+        ] );
+      ( "declarations",
+        [
+          Alcotest.test_case "defun simple" `Quick test_defun_simple;
+          Alcotest.test_case "defun polymorphic" `Quick test_defun_polymorphic;
+          Alcotest.test_case "defvar" `Quick test_defvar;
+          Alcotest.test_case "type alias" `Quick test_type_alias;
+          Alcotest.test_case "type opaque" `Quick test_type_opaque;
+          Alcotest.test_case "type parameterized" `Quick test_type_parameterized;
+          Alcotest.test_case "open directive" `Quick test_open_directive;
+          Alcotest.test_case "include directive" `Quick test_include_directive;
+        ] );
+      ( "signature-files",
+        [
+          Alcotest.test_case "parse signature" `Quick test_parse_signature;
+        ] );
+    ]
