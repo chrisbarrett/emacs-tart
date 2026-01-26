@@ -297,25 +297,46 @@ let verify_defun_type ~(name : string) ~(declared : Types.typ)
 
 (** {1 Kind Checking} *)
 
-(** Check kinds for a single declaration. Returns any kind errors found. *)
-let rec check_decl_kinds (decl : Sig.Sig_ast.decl) : kind_check_error list =
+(** Build a kind environment from type variable binders, respecting explicit
+    kind annotations. *)
+let build_scope_kind_env (binders : Sig.Sig_ast.tvar_binder list) : Kind.env =
+  List.fold_left
+    (fun env (b : Sig.Sig_ast.tvar_binder) ->
+      match b.kind with
+      | Some sk ->
+          Kind.extend_env b.name (Kind.KConcrete (Kind.of_sig_kind sk)) env
+      | None -> Kind.extend_env b.name (Kind.fresh_kvar ()) env)
+    Kind.empty_env binders
+
+(** Check kinds for a single declaration. Returns any kind errors found.
+    @param scope_env Kind environment from enclosing type-scope (if any) *)
+let rec check_decl_kinds_with_scope (scope_env : Kind.env)
+    (decl : Sig.Sig_ast.decl) : kind_check_error list =
   match decl with
   | Sig.Sig_ast.DDefun d ->
-      let result = Kind_infer.infer_defun_kinds d in
+      let result = Kind_infer.infer_defun_kinds_with_scope scope_env d in
       List.map (fun e -> { kind_error = e; span = d.defun_loc }) result.errors
   | Sig.Sig_ast.DType d ->
-      let result = Kind_infer.infer_type_decl_kinds d in
+      let result = Kind_infer.infer_type_decl_kinds_with_scope scope_env d in
       List.map (fun e -> { kind_error = e; span = d.type_loc }) result.errors
   | Sig.Sig_ast.DData d ->
-      let result = Kind_infer.infer_data_kinds d in
+      let result = Kind_infer.infer_data_kinds_with_scope scope_env d in
       List.map (fun e -> { kind_error = e; span = d.data_loc }) result.errors
   | Sig.Sig_ast.DTypeScope d ->
-      (* Recursively check kinds for declarations inside the scope *)
-      List.concat_map check_decl_kinds d.scope_decls
+      (* Build kind environment from scope's binders (respecting explicit kind annotations) *)
+      let inner_scope_env = build_scope_kind_env d.scope_tvar_binders in
+      (* Merge with outer scope environment (inner shadows outer) *)
+      let combined_env = Kind.merge scope_env inner_scope_env in
+      (* Recursively check kinds for declarations inside the scope with combined env *)
+      List.concat_map (check_decl_kinds_with_scope combined_env) d.scope_decls
   | Sig.Sig_ast.DDefvar _ | Sig.Sig_ast.DOpen _ | Sig.Sig_ast.DInclude _
   | Sig.Sig_ast.DImportStruct _ ->
       (* These declarations don't have type parameters to kind-check *)
       []
+
+(** Check kinds for a single declaration. Returns any kind errors found. *)
+let check_decl_kinds (decl : Sig.Sig_ast.decl) : kind_check_error list =
+  check_decl_kinds_with_scope Kind.empty_env decl
 
 (** Check kinds for all declarations in a signature file.
 

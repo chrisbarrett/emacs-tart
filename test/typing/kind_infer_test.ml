@@ -418,6 +418,90 @@ let test_mixed_explicit_and_inferred () =
   Alcotest.(check string) "b inferred as *" "*" (to_string k_b)
 
 (* =============================================================================
+   Scope-Aware Kind Inference Tests (R4 from spec 19)
+   ============================================================================= *)
+
+(** Helper to build a scope kind environment from binder specifications. Takes a
+    list of (name, kind_option) pairs. *)
+let build_test_scope_env (binders : (string * string option) list) :
+    Tart.Kind.env =
+  List.fold_left
+    (fun env (name, kind_opt) ->
+      match kind_opt with
+      | Some "* -> *" ->
+          Tart.Kind.extend_env name
+            (Tart.Kind.KConcrete (KArrow (KStar, KStar)))
+            env
+      | Some "* -> * -> *" ->
+          Tart.Kind.extend_env name
+            (Tart.Kind.KConcrete (KArrow (KStar, KArrow (KStar, KStar))))
+            env
+      | Some "*" | None ->
+          Tart.Kind.extend_env name (Tart.Kind.KConcrete KStar) env
+      | Some k -> failwith ("Unknown test kind: " ^ k))
+    Tart.Kind.empty_env binders
+
+let test_scope_kind_hk_variable () =
+  (* Defun inside scope with HK scope variable:
+     scope [(f : (* -> *))]
+       (defun use-f [a] ((f a)) -> int)
+     The scope's f should be available in the defun's kind environment *)
+  let d = parse_defun "(defun use-f [a] ((f a)) -> int)" in
+  let scope_env = build_test_scope_env [ ("f", Some "* -> *") ] in
+  let result = infer_defun_kinds_with_scope scope_env d in
+  Alcotest.(check (list string))
+    "no errors" []
+    (List.map kind_error_to_string result.errors);
+  let k_f = lookup_kind result "f" in
+  let k_a = lookup_kind result "a" in
+  Alcotest.(check string)
+    "f has kind * -> * from scope" "* -> *" (to_string k_f);
+  Alcotest.(check string) "a inferred as *" "*" (to_string k_a)
+
+let test_scope_kind_hk_used_correctly () =
+  (* Scope variable f : (* -> *) used consistently *)
+  let d = parse_defun "(defun fmap-scope [a b] (((a -> b)) (f a)) -> (f b))" in
+  let scope_env = build_test_scope_env [ ("f", Some "* -> *") ] in
+  let result = infer_defun_kinds_with_scope scope_env d in
+  Alcotest.(check (list string))
+    "no errors" []
+    (List.map kind_error_to_string result.errors)
+
+let test_scope_kind_hk_mismatch () =
+  (* Scope declares f : [*], but defun uses it as (f a) expecting [* -> *] *)
+  let d = parse_defun "(defun bad-f [a] ((f a)) -> int)" in
+  let scope_env = build_test_scope_env [ ("f", Some "*") ] in
+  let result = infer_defun_kinds_with_scope scope_env d in
+  Alcotest.(check bool)
+    "should have kind error" true
+    (List.length result.errors > 0)
+
+let test_scope_kind_combined_with_local () =
+  (* Scope variable f : (* -> *), plus defun's own type var a *)
+  let d = parse_defun "(defun pure-scope [a] (a) -> (f a))" in
+  let scope_env = build_test_scope_env [ ("f", Some "* -> *") ] in
+  let result = infer_defun_kinds_with_scope scope_env d in
+  Alcotest.(check (list string))
+    "no errors" []
+    (List.map kind_error_to_string result.errors);
+  let k_f = lookup_kind result "f" in
+  let k_a = lookup_kind result "a" in
+  Alcotest.(check string) "f from scope" "* -> *" (to_string k_f);
+  Alcotest.(check string) "a from defun" "*" (to_string k_a)
+
+let test_scope_kind_binary_constructor () =
+  (* Scope variable f : (* -> * -> *) for binary type constructor *)
+  let d =
+    parse_defun
+      "(defun bimap-scope [a b c d] (((a -> b)) ((c -> d)) (f a c)) -> (f b d))"
+  in
+  let scope_env = build_test_scope_env [ ("f", Some "* -> * -> *") ] in
+  let result = infer_defun_kinds_with_scope scope_env d in
+  Alcotest.(check (list string))
+    "no errors" []
+    (List.map kind_error_to_string result.errors)
+
+(* =============================================================================
    Test Suite
    ============================================================================= *)
 
@@ -482,6 +566,17 @@ let explicit_kind_tests =
     ("mixed_explicit_and_inferred", `Quick, test_mixed_explicit_and_inferred);
   ]
 
+let scope_kind_tests =
+  [
+    ("scope_kind_hk_variable", `Quick, test_scope_kind_hk_variable);
+    ("scope_kind_hk_used_correctly", `Quick, test_scope_kind_hk_used_correctly);
+    ("scope_kind_hk_mismatch", `Quick, test_scope_kind_hk_mismatch);
+    ( "scope_kind_combined_with_local",
+      `Quick,
+      test_scope_kind_combined_with_local );
+    ("scope_kind_binary_constructor", `Quick, test_scope_kind_binary_constructor);
+  ]
+
 let () =
   Alcotest.run "Kind Inference"
     [
@@ -492,4 +587,5 @@ let () =
       ("backward_compat", backward_compat_tests);
       ("kind_errors", kind_error_tests);
       ("explicit_kinds", explicit_kind_tests);
+      ("scope_kinds", scope_kind_tests);
     ]

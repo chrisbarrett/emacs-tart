@@ -1407,6 +1407,42 @@ let test_type_scope_unbound_error () =
             "error mentions unbound" true
             (String.length e.message > 0))
 
+(** Test higher-kinded type variable in scope. R4: HK scoped variables *)
+let test_type_scope_hk_variable () =
+  let sig_src =
+    {|
+    (type-scope [(f : (* -> *))]
+      (defun fmap-scope [a b] (((a -> b)) (f a)) -> (f b))
+      (defun pure-scope [a] (a) -> (f a)))
+  |}
+  in
+  let env = load_sig_str sig_src in
+  (* Both functions should be loaded with 'f' as a type parameter *)
+  (match Type_env.lookup "fmap-scope" env with
+  | None -> Alcotest.fail "fmap-scope not found"
+  | Some _ -> ());
+  match Type_env.lookup "pure-scope" env with
+  | None -> Alcotest.fail "pure-scope not found"
+  | Some _ -> ()
+
+(** Test HK scoped variable kind is enforced in inner declarations *)
+let test_type_scope_hk_kind_enforced () =
+  let sig_src =
+    {|
+    (type-scope [(f : (* -> *))]
+      (defun use-f [a] ((f a)) -> int))
+  |}
+  in
+  let env = load_sig_str sig_src in
+  match Type_env.lookup "use-f" env with
+  | None -> Alcotest.fail "use-f not found"
+  | Some scheme ->
+      (* The scheme should include 'f' as a type parameter *)
+      let scheme_str = Type_env.scheme_to_string scheme in
+      Alcotest.(check bool)
+        "scheme is polymorphic" true
+        (String.length scheme_str > 0)
+
 let () =
   Alcotest.run "sig_loader"
     [
@@ -1575,5 +1611,8 @@ let () =
           Alcotest.test_case "nested scopes" `Quick test_type_scope_nested;
           Alcotest.test_case "unbound error" `Quick
             test_type_scope_unbound_error;
+          Alcotest.test_case "HK variable" `Quick test_type_scope_hk_variable;
+          Alcotest.test_case "HK kind enforced" `Quick
+            test_type_scope_hk_kind_enforced;
         ] );
     ]

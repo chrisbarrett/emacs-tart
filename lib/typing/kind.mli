@@ -113,6 +113,11 @@ val default_all : env -> unit
 val names : env -> string list
 (** [names env] returns all type variable names in the environment. *)
 
+val merge : env -> env -> env
+(** [merge outer inner] merges two environments. The second environment's
+    bindings take precedence (inner shadows outer). This is useful for combining
+    outer scope bindings with inner scope bindings. *)
+
 (** {1 Conversion from Signature Kinds} *)
 
 val of_sig_kind : Sig.Sig_ast.sig_kind -> kind

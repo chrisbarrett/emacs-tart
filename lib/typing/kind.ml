@@ -133,6 +133,14 @@ let default_all (env : env) : unit =
 (** Get all names in the environment. *)
 let names (env : env) : string list = List.map fst env
 
+(** Merge two environments. The second environment's bindings take precedence.
+    This is useful for combining outer scope bindings with inner scope bindings
+    where inner scopes shadow outer ones. *)
+let merge (outer : env) (inner : env) : env =
+  (* Simply prepend inner to outer - since lookup uses List.assoc_opt,
+     inner bindings will shadow outer bindings for the same name. *)
+  inner @ outer
+
 (** {1 Conversion from Signature Kinds} *)
 
 (** Convert a signature kind to an internal kind.

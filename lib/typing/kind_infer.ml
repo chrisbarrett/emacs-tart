@@ -311,6 +311,134 @@ let infer_data_kinds (d : data_decl) : infer_result =
   Kind.default_all env;
   { kind_env = env; errors = List.rev errors }
 
+(** {1 Inference with Scope Context}
+
+    Functions to infer kinds for declarations within a type-scope, where the
+    scope provides additional type variables with potentially explicit kind
+    annotations. *)
+
+(** Infer kinds for a defun declaration within a scope context.
+
+    The scope_env contains kind bindings for type variables from enclosing
+    type-scope blocks. These are combined with the defun's own type parameters.
+
+    @param scope_env Kind environment from enclosing type-scope
+    @param d The defun declaration to analyze
+    @return The inferred kind environment and any errors *)
+let infer_defun_kinds_with_scope (scope_env : Kind.env) (d : defun_decl) :
+    infer_result =
+  Kind.reset_kvar_counter ();
+  (* Start with scope environment, then add defun's own binders *)
+  let env =
+    List.fold_left
+      (fun env (b : tvar_binder) ->
+        match b.kind with
+        | Some sk ->
+            Kind.extend_env b.name (Kind.KConcrete (Kind.of_sig_kind sk)) env
+        | None -> Kind.extend_env b.name (Kind.fresh_kvar ()) env)
+      scope_env d.defun_tvar_binders
+  in
+
+  (* Infer kinds from parameter types *)
+  let errors =
+    List.fold_left
+      (fun errs param ->
+        match infer_param_kind env param with
+        | Ok () -> errs
+        | Error e -> e :: errs)
+      [] d.defun_params
+  in
+
+  (* Infer kind from return type *)
+  let errors =
+    match infer_sig_type_kind env d.defun_return with
+    | Ok kind_scheme -> (
+        match unify_scheme_with_kind kind_scheme Kind.KStar "return type" with
+        | Ok () -> errors
+        | Error e -> e :: errors)
+    | Error e -> e :: errors
+  in
+
+  (* Default all unconstrained kind variables to * *)
+  Kind.default_all env;
+  { kind_env = env; errors = List.rev errors }
+
+(** Infer kinds for a type declaration within a scope context.
+
+    @param scope_env Kind environment from enclosing type-scope
+    @param d The type declaration to analyze
+    @return The inferred kind environment and any errors *)
+let infer_type_decl_kinds_with_scope (scope_env : Kind.env) (d : type_decl) :
+    infer_result =
+  Kind.reset_kvar_counter ();
+  (* Start with scope environment, then add type's own binders *)
+  let env =
+    List.fold_left
+      (fun env (b : tvar_binder) ->
+        match b.kind with
+        | Some sk ->
+            Kind.extend_env b.name (Kind.KConcrete (Kind.of_sig_kind sk)) env
+        | None -> Kind.extend_env b.name (Kind.fresh_kvar ()) env)
+      scope_env d.type_params
+  in
+
+  (* Infer kinds from body if present *)
+  let errors =
+    match d.type_body with
+    | None -> []
+    | Some body -> (
+        match infer_sig_type_kind env body with
+        | Ok kind_scheme -> (
+            match unify_scheme_with_kind kind_scheme Kind.KStar "type body" with
+            | Ok () -> []
+            | Error e -> [ e ])
+        | Error e -> [ e ])
+  in
+
+  Kind.default_all env;
+  { kind_env = env; errors }
+
+(** Infer kinds for a data declaration within a scope context.
+
+    @param scope_env Kind environment from enclosing type-scope
+    @param d The data declaration to analyze
+    @return The inferred kind environment and any errors *)
+let infer_data_kinds_with_scope (scope_env : Kind.env) (d : data_decl) :
+    infer_result =
+  Kind.reset_kvar_counter ();
+  (* Start with scope environment, then add data's own binders *)
+  let env =
+    List.fold_left
+      (fun env (b : tvar_binder) ->
+        match b.kind with
+        | Some sk ->
+            Kind.extend_env b.name (Kind.KConcrete (Kind.of_sig_kind sk)) env
+        | None -> Kind.extend_env b.name (Kind.fresh_kvar ()) env)
+      scope_env d.data_params
+  in
+
+  (* Infer kinds from constructor fields *)
+  let errors =
+    List.fold_left
+      (fun errs (ctor : ctor_decl) ->
+        List.fold_left
+          (fun errs field_ty ->
+            match infer_sig_type_kind env field_ty with
+            | Ok kind_scheme -> (
+                match
+                  unify_scheme_with_kind kind_scheme Kind.KStar
+                    "constructor field"
+                with
+                | Ok () -> errs
+                | Error e -> e :: errs)
+            | Error e -> e :: errs)
+          errs ctor.ctor_fields)
+      [] d.data_ctors
+  in
+
+  Kind.default_all env;
+  { kind_env = env; errors = List.rev errors }
+
 (** {1 Kind Lookup}
 
     Functions to look up the inferred kind of a type parameter. *)
