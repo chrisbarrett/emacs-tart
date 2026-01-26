@@ -510,6 +510,87 @@ let test_load_buffers () =
            true
          with Not_found -> false)
 
+(** Test that windows.tart parses successfully *)
+let test_parse_windows () =
+  let path = Filename.concat stdlib_dir "windows.tart" in
+  if not (Sys.file_exists path) then
+    Alcotest.fail ("windows.tart not found at: " ^ path);
+  match Search_path.parse_signature_file path with
+  | None -> Alcotest.fail "windows.tart failed to parse"
+  | Some sig_file ->
+      Alcotest.(check string) "module name" "windows" sig_file.sig_module;
+      Alcotest.(check bool)
+        "has declarations" true
+        (List.length sig_file.sig_decls > 30);
+      (* windows.tart should have the window opaque type *)
+      let has_type name =
+        List.exists
+          (function Sig_ast.DType t -> t.type_name = name | _ -> false)
+          sig_file.sig_decls
+      in
+      Alcotest.(check bool) "has window type" true (has_type "window");
+      Alcotest.(check bool) "has frame type" true (has_type "frame");
+      (* Check key window functions *)
+      let has_defun name =
+        List.exists
+          (function Sig_ast.DDefun d -> d.defun_name = name | _ -> false)
+          sig_file.sig_decls
+      in
+      Alcotest.(check bool)
+        "has selected-window" true
+        (has_defun "selected-window");
+      Alcotest.(check bool)
+        "has get-buffer-window" true
+        (has_defun "get-buffer-window");
+      Alcotest.(check bool) "has window-list" true (has_defun "window-list");
+      Alcotest.(check bool) "has split-window" true (has_defun "split-window")
+
+(** Test that windows can be loaded into type environment *)
+let test_load_windows () =
+  let sp = Search_path.empty |> Search_path.with_stdlib stdlib_dir in
+  (* First load builtins and buffers for dependency types *)
+  let base_env =
+    match
+      Search_path.load_module ~search_path:sp ~env:Type_env.empty "builtins"
+    with
+    | None -> Alcotest.fail "failed to load builtins module"
+    | Some env -> env
+  in
+  let base_env =
+    match Search_path.load_module ~search_path:sp ~env:base_env "buffers" with
+    | None -> Alcotest.fail "failed to load buffers module"
+    | Some env -> env
+  in
+  match Search_path.load_module ~search_path:sp ~env:base_env "windows" with
+  | None -> Alcotest.fail "failed to load windows module"
+  | Some env ->
+      (* Check that selected-window is loaded *)
+      (match Type_env.lookup "selected-window" env with
+      | None -> Alcotest.fail "selected-window not found in env"
+      | Some _ -> ());
+      (* Check that window-buffer is loaded *)
+      (match Type_env.lookup "window-buffer" env with
+      | None -> Alcotest.fail "window-buffer not found in env"
+      | Some _ -> ());
+      (* Check that split-window is loaded *)
+      (match Type_env.lookup "split-window" env with
+      | None -> Alcotest.fail "split-window not found in env"
+      | Some _ -> ());
+      (* Verify type checking works with window functions *)
+      let _, errors = check_expr_str ~env "(selected-window)" in
+      Alcotest.(check int) "selected-window: no errors" 0 (List.length errors);
+      (* Check window-buffer returns buffer type (also tests optional param with 0 args) *)
+      let ty, errors2 = check_expr_str ~env "(window-buffer)" in
+      Alcotest.(check int) "window-buffer: no errors" 0 (List.length errors2);
+      (* Result should be Buffer (the opened type from buffers.tart) *)
+      let ty_str = Types.to_string ty in
+      Alcotest.(check bool)
+        "returns buffer type" true
+        (try
+           let _ = Str.search_forward (Str.regexp_string "uffer") ty_str 0 in
+           true
+         with Not_found -> false)
+
 (** Test that builtins can be loaded into type environment (R17) Verify:
     Built-in calls type-check; coverage test for all listed functions *)
 let test_load_builtins () =
@@ -625,8 +706,10 @@ let () =
           Alcotest.test_case "parse cl-lib.tart" `Quick test_parse_cl_lib;
           Alcotest.test_case "parse seq.tart" `Quick test_parse_seq;
           Alcotest.test_case "parse buffers.tart" `Quick test_parse_buffers;
+          Alcotest.test_case "parse windows.tart" `Quick test_parse_windows;
           Alcotest.test_case "load builtins into env" `Quick test_load_builtins;
           Alcotest.test_case "load cl-lib into env" `Quick test_load_cl_lib;
           Alcotest.test_case "load buffers into env" `Quick test_load_buffers;
+          Alcotest.test_case "load windows into env" `Quick test_load_windows;
         ] );
     ]

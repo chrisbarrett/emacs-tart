@@ -254,9 +254,40 @@ and unify_param_lists ?(invariant = false) ps1 ps2 loc =
         let* () = unify_param ~invariant p1 p2 loc in
         unify_param_lists ~invariant rest1 rest2 loc
   (* Left exhausted but right has more (and no rest on left) *)
-  | [], _ :: _ -> Error (IArityMismatch (0, List.length ps2, loc))
+  | [], remaining ->
+      (* Check if all remaining params are optional or rest - if so, OK *)
+      let all_optional =
+        List.for_all
+          (function POptional _ | PRest _ -> true | _ -> false)
+          remaining
+      in
+      if all_optional then Ok ()
+      else
+        let required_count =
+          List.length
+            (List.filter
+               (function PPositional _ | PKey _ -> true | _ -> false)
+               remaining)
+        in
+        Error (IArityMismatch (0, required_count, loc))
   (* Right exhausted but left has more (and no rest on right) *)
-  | _ :: _, [] -> Error (IArityMismatch (List.length ps1, 0, loc))
+  | remaining, [] ->
+      (* Check if all remaining params on left are optional or rest - if so, OK
+         (caller provided optional args that callee doesn't need) *)
+      let all_optional =
+        List.for_all
+          (function POptional _ | PRest _ -> true | _ -> false)
+          remaining
+      in
+      if all_optional then Ok ()
+      else
+        let required_count =
+          List.length
+            (List.filter
+               (function PPositional _ | PKey _ -> true | _ -> false)
+               remaining)
+        in
+        Error (IArityMismatch (required_count, 0, loc))
 
 and unify_param ?(invariant = false) p1 p2 loc =
   match (p1, p2) with
