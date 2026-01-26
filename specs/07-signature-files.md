@@ -259,7 +259,7 @@ Minimum coverage:
 - [ ] [R11] Handle struct imports
 - [ ] [R12] Handle open directive (import types)
 - [ ] [R13] Handle include directive (re-export declarations)
-- [ ] [R14] Parse union types with `|` syntax
+- [x] [R14] Parse union types with `|` syntax
 - [ ] [R15] Implement signature search path
 - [ ] [R16] Implement module discovery with search order
 - [ ] [R17] Write bundled stdlib signatures
