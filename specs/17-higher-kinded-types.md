@@ -202,7 +202,7 @@ Error: kind mismatch
 - [x] [R2] Implement kind inference algorithm
 - [x] [R3] Add kind checking to type application
 - [x] [R4] Parse explicit kind annotations
-- [ ] [R6] Implement kind error formatting
+- [x] [R6] Implement kind error formatting
 - [ ] [R7] Update unification for HK instantiation
 - [ ] [R8] Test nested/partial type constructors
 

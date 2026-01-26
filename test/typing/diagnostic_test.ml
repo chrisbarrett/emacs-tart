@@ -907,6 +907,129 @@ let test_signature_mismatch_spans () =
   Alcotest.(check int) "two spans" 2 (List.length spans)
 
 (* =============================================================================
+   Kind Mismatch Tests (R6 from spec 17)
+   ============================================================================= *)
+
+module Kind = Tart.Kind
+module Kind_infer = Tart.Kind_infer
+
+let test_kind_mismatch_diagnostic_creation () =
+  let span = Loc.dummy_span in
+  let expected = Kind.(KStar @-> KStar) in
+  let found = Kind.KStar in
+  let d =
+    Diag.kind_mismatch ~span ~expected ~found ~location:"type constructor f" ()
+  in
+  Alcotest.(check bool) "is error" true (Diag.is_error d);
+  Alcotest.(check string) "message is kind mismatch" "kind mismatch" d.message
+
+let test_kind_mismatch_shows_expected_found () =
+  let span = Loc.dummy_span in
+  let expected = Kind.(KStar @-> KStar) in
+  let found = Kind.KStar in
+  let d =
+    Diag.kind_mismatch ~span ~expected ~found ~location:"type application (f a)"
+      ()
+  in
+  let str = Diag.to_string d in
+  (* Verify expected and found kinds are shown *)
+  Alcotest.(check bool)
+    "shows expected kind" true
+    (contains_pattern (Str.regexp "expected: \\* -> \\*") str);
+  Alcotest.(check bool)
+    "shows found kind" true
+    (contains_pattern (Str.regexp "found: \\*") str)
+
+let test_kind_mismatch_shows_location () =
+  let span = Loc.dummy_span in
+  let expected = Kind.(KStar @-> KStar) in
+  let found = Kind.KStar in
+  let d =
+    Diag.kind_mismatch ~span ~expected ~found ~location:"type application (f a)"
+      ()
+  in
+  let str = Diag.to_string d in
+  Alcotest.(check bool)
+    "shows location" true
+    (contains_pattern (Str.regexp "in type application (f a)") str)
+
+let test_kind_mismatch_has_error_code () =
+  let span = Loc.dummy_span in
+  let expected = Kind.(KStar @-> KStar) in
+  let found = Kind.KStar in
+  let d =
+    Diag.kind_mismatch ~span ~expected ~found ~location:"type constructor f" ()
+  in
+  Alcotest.(check bool) "has error code" true (Option.is_some (Diag.code d));
+  let code = Option.get (Diag.code d) in
+  Alcotest.(check string)
+    "code is E0509" "E0509"
+    (Diag.error_code_to_string code)
+
+let test_kind_mismatch_help_suggestions () =
+  let span = Loc.dummy_span in
+  (* When expected is arrow and found is star *)
+  let d1 =
+    Diag.kind_mismatch ~span
+      ~expected:Kind.(KStar @-> KStar)
+      ~found:Kind.KStar ~location:"f" ()
+  in
+  Alcotest.(check bool)
+    "has help for arrow vs star" true
+    (List.length (Diag.help d1) > 0);
+  (* When expected is star and found is arrow *)
+  let d2 =
+    Diag.kind_mismatch ~span ~expected:Kind.KStar
+      ~found:Kind.(KStar @-> KStar)
+      ~location:"f" ()
+  in
+  Alcotest.(check bool)
+    "has help for star vs arrow" true
+    (List.length (Diag.help d2) > 0)
+
+let test_of_kind_error () =
+  let span = Loc.dummy_span in
+  let err =
+    Kind_infer.KindMismatch
+      {
+        expected = Kind.(KStar @-> KStar);
+        found = Kind.KStar;
+        location = "type constructor f";
+      }
+  in
+  let d = Diag.of_kind_error span err in
+  Alcotest.(check bool) "is error" true (Diag.is_error d);
+  Alcotest.(check string) "message is kind mismatch" "kind mismatch" d.message;
+  let str = Diag.to_string d in
+  Alcotest.(check bool)
+    "shows expected" true
+    (contains_pattern (Str.regexp "expected") str);
+  Alcotest.(check bool)
+    "shows found" true
+    (contains_pattern (Str.regexp "found") str)
+
+let test_kind_arity_mismatch_formatting () =
+  let span = Loc.dummy_span in
+  let err =
+    Kind_infer.ArityMismatch { type_con = "list"; expected = 1; found = 2 }
+  in
+  let d = Diag.of_kind_error span err in
+  Alcotest.(check bool) "is error" true (Diag.is_error d);
+  Alcotest.(check bool)
+    "mentions type constructor" true
+    (contains_pattern (Str.regexp "list") d.message);
+  Alcotest.(check bool)
+    "mentions wrong number" true
+    (contains_pattern (Str.regexp "wrong number") d.message);
+  let str = Diag.to_string d in
+  Alcotest.(check bool)
+    "shows expected count" true
+    (contains_pattern (Str.regexp "expected 1 argument") str);
+  Alcotest.(check bool)
+    "shows found count" true
+    (contains_pattern (Str.regexp "found 2") str)
+
+(* =============================================================================
    Test Suite
    ============================================================================= *)
 
@@ -1030,5 +1153,21 @@ let () =
           Alcotest.test_case "all spans" `Quick test_all_spans;
           Alcotest.test_case "function arg error context" `Quick
             test_end_to_end_function_arg_error;
+        ] );
+      ( "kind_mismatch",
+        [
+          Alcotest.test_case "diagnostic creation" `Quick
+            test_kind_mismatch_diagnostic_creation;
+          Alcotest.test_case "shows expected and found" `Quick
+            test_kind_mismatch_shows_expected_found;
+          Alcotest.test_case "shows location" `Quick
+            test_kind_mismatch_shows_location;
+          Alcotest.test_case "has error code" `Quick
+            test_kind_mismatch_has_error_code;
+          Alcotest.test_case "help for star vs arrow" `Quick
+            test_kind_mismatch_help_suggestions;
+          Alcotest.test_case "of_kind_error" `Quick test_of_kind_error;
+          Alcotest.test_case "arity mismatch formatting" `Quick
+            test_kind_arity_mismatch_formatting;
         ] );
     ]

@@ -663,21 +663,47 @@ let non_exhaustive_match ~span ~message () =
 
 (** Create a kind mismatch diagnostic (E0509).
 
-    Used when a type application has mismatched kinds. *)
+    Used when a type application has mismatched kinds.
+
+    Output format follows R6 from spec 17:
+    {v
+      Error: kind mismatch
+        expected: * -> *
+        found: *
+        in type application: (f a)
+    v} *)
 let kind_mismatch ~span ~expected ~found ~location () =
-  let message =
-    Printf.sprintf "kind mismatch in %s: expected %s, found %s" location
-      (Kind.to_string expected) (Kind.to_string found)
+  let related =
+    [ { span = Loc.dummy_span; message = Printf.sprintf "in %s" location } ]
+  in
+  let help =
+    match (expected, found) with
+    | Kind.KArrow _, Kind.KStar ->
+        [ "this type variable is used as a type constructor but has kind *" ]
+    | Kind.KStar, Kind.KArrow _ ->
+        [ "this type constructor is applied to too few arguments" ]
+    | _ -> []
   in
   {
     severity = Error;
     code = Some E0509;
     span;
-    message;
+    message = "kind mismatch";
     expected = None;
     actual = None;
-    related = [];
-    help = [];
+    related =
+      [
+        {
+          span = Loc.dummy_span;
+          message = Printf.sprintf "expected: %s" (Kind.to_string expected);
+        };
+        {
+          span = Loc.dummy_span;
+          message = Printf.sprintf "found: %s" (Kind.to_string found);
+        };
+      ]
+      @ related;
+    help;
   }
 
 (** Convert a kind inference error to a diagnostic. *)
@@ -686,32 +712,44 @@ let of_kind_error span (err : Kind_infer.kind_error) : t =
   | Kind_infer.KindMismatch { expected; found; location } ->
       kind_mismatch ~span ~expected ~found ~location ()
   | Kind_infer.OccursCheckFailed { kvar_id; kind } ->
-      let message =
-        Printf.sprintf "infinite kind: kind variable ?k%d occurs in %s" kvar_id
-          (Kind.to_string kind)
-      in
       {
         severity = Error;
         code = Some E0509;
         span;
-        message;
+        message = "infinite kind";
         expected = None;
         actual = None;
-        related = [];
-        help = [];
+        related =
+          [
+            {
+              span = Loc.dummy_span;
+              message =
+                Printf.sprintf "kind variable ?k%d occurs in %s" kvar_id
+                  (Kind.to_string kind);
+            };
+          ];
+        help = [ "recursive kind constraints are not supported" ];
       }
   | Kind_infer.ArityMismatch { type_con; expected; found } ->
-      let message =
-        Printf.sprintf "type constructor `%s` expects %d argument(s), found %d"
-          type_con expected found
-      in
+      let arg_word n = if n = 1 then "argument" else "arguments" in
       {
         severity = Error;
         code = Some E0509;
         span;
-        message;
+        message =
+          Printf.sprintf
+            "type constructor `%s` applied to wrong number of arguments"
+            type_con;
         expected = None;
         actual = None;
-        related = [];
+        related =
+          [
+            {
+              span = Loc.dummy_span;
+              message =
+                Printf.sprintf "expected %d %s, found %d" expected
+                  (arg_word expected) found;
+            };
+          ];
         help = [];
       }

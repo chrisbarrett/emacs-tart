@@ -351,8 +351,8 @@ Enable polymorphism over type constructors via kind inference.
 ### 14.4 Explicit Annotations and Errors
 
 - [x] [R4] Parse explicit kind annotations `(f : (* -> *))`
-- [ ] [R6] Implement kind error formatting
-- [ ] Verify: Kind mismatch shows expected/found
+- [x] [R6] Implement kind error formatting
+- [x] Verify: Kind mismatch shows expected/found
 
 ### 14.5 HK Instantiation
 
