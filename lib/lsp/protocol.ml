@@ -48,6 +48,7 @@ type server_capabilities = {
   code_action_provider : bool;
   document_symbol_provider : bool;
   completion_provider : bool;
+  signature_help_provider : bool;
 }
 (** Server capabilities *)
 
@@ -137,6 +138,13 @@ let server_capabilities_to_json (caps : server_capabilities) : Yojson.Safe.t =
     if caps.completion_provider then
       ( "completionProvider",
         `Assoc [ ("triggerCharacters", `List [ `String "(" ]) ] )
+      :: fields
+    else fields
+  in
+  let fields =
+    if caps.signature_help_provider then
+      ( "signatureHelpProvider",
+        `Assoc [ ("triggerCharacters", `List [ `String "("; `String " " ]) ] )
       :: fields
     else fields
   in
@@ -806,3 +814,108 @@ let completion_result_to_json (result : completion_result) : Yojson.Safe.t =
   match result with
   | Some items -> `List (List.map completion_item_to_json items)
   | None -> `Null
+
+(** {1 Signature Help} *)
+
+type parameter_information = {
+  pi_label : string;
+  pi_documentation : string option;
+}
+(** Information about a single parameter of a signature *)
+
+type signature_information = {
+  si_label : string;
+  si_documentation : string option;
+  si_parameters : parameter_information list;
+  si_active_parameter : int option;
+}
+(** Represents the signature of something callable *)
+
+type signature_help = {
+  sh_signatures : signature_information list;
+  sh_active_signature : int option;
+  sh_active_parameter : int option;
+}
+(** Signature help represents a list of signatures and the active one *)
+
+type signature_help_params = {
+  shp_text_document : string;
+  shp_position : position;
+}
+(** Signature help request params *)
+
+let parse_signature_help_params (json : Yojson.Safe.t) : signature_help_params =
+  let open Yojson.Safe.Util in
+  let text_document =
+    json |> member "textDocument" |> member "uri" |> to_string
+  in
+  let pos_json = json |> member "position" in
+  let position =
+    {
+      line = pos_json |> member "line" |> to_int;
+      character = pos_json |> member "character" |> to_int;
+    }
+  in
+  { shp_text_document = text_document; shp_position = position }
+
+let parameter_information_to_json (pi : parameter_information) : Yojson.Safe.t =
+  let fields = [ ("label", `String pi.pi_label) ] in
+  let fields =
+    match pi.pi_documentation with
+    | Some doc ->
+        ( "documentation",
+          `Assoc [ ("kind", `String "markdown"); ("value", `String doc) ] )
+        :: fields
+    | None -> fields
+  in
+  `Assoc fields
+
+let signature_information_to_json (si : signature_information) : Yojson.Safe.t =
+  let fields = [ ("label", `String si.si_label) ] in
+  let fields =
+    match si.si_documentation with
+    | Some doc ->
+        ( "documentation",
+          `Assoc [ ("kind", `String "markdown"); ("value", `String doc) ] )
+        :: fields
+    | None -> fields
+  in
+  let fields =
+    match si.si_parameters with
+    | [] -> fields
+    | params ->
+        ("parameters", `List (List.map parameter_information_to_json params))
+        :: fields
+  in
+  let fields =
+    match si.si_active_parameter with
+    | Some idx -> ("activeParameter", `Int idx) :: fields
+    | None -> fields
+  in
+  `Assoc fields
+
+let signature_help_to_json (sh : signature_help) : Yojson.Safe.t =
+  let fields =
+    [
+      ( "signatures",
+        `List (List.map signature_information_to_json sh.sh_signatures) );
+    ]
+  in
+  let fields =
+    match sh.sh_active_signature with
+    | Some idx -> ("activeSignature", `Int idx) :: fields
+    | None -> fields
+  in
+  let fields =
+    match sh.sh_active_parameter with
+    | Some idx -> ("activeParameter", `Int idx) :: fields
+    | None -> fields
+  in
+  `Assoc fields
+
+type signature_help_result = signature_help option
+(** Signature help result *)
+
+let signature_help_result_to_json (result : signature_help_result) :
+    Yojson.Safe.t =
+  match result with Some sh -> signature_help_to_json sh | None -> `Null

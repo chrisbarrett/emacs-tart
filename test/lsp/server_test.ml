@@ -3624,6 +3624,295 @@ let test_completion_filters_by_prefix () =
         "other excluded" true
         (not (List.mem "other" labels))
 
+(** {1 Signature Help Tests} *)
+
+let test_signature_help_shows_function_signature () =
+  let init_msg =
+    make_message ~id:(`Int 1) ~method_:"initialize"
+      ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+      ()
+  in
+  (* Document with a function call - cursor inside the call *)
+  let did_open_msg =
+    make_message ~method_:"textDocument/didOpen"
+      ~params:
+        (`Assoc
+           [
+             ( "textDocument",
+               `Assoc
+                 [
+                   ("uri", `String "file:///test.el");
+                   ("languageId", `String "elisp");
+                   ("version", `Int 1);
+                   ("text", `String "(defun add (x y) (+ x y))\n(add 1 2)");
+                 ] );
+           ])
+      ()
+  in
+  (* Signature help request at position inside the call (after "1 " at first arg) *)
+  let sig_help_msg =
+    make_message ~id:(`Int 2) ~method_:"textDocument/signatureHelp"
+      ~params:
+        (`Assoc
+           [
+             ("textDocument", `Assoc [ ("uri", `String "file:///test.el") ]);
+             ("position", `Assoc [ ("line", `Int 1); ("character", `Int 5) ]);
+           ])
+      ()
+  in
+  let shutdown_msg = make_message ~id:(`Int 3) ~method_:"shutdown" () in
+  let exit_msg = make_message ~method_:"exit" () in
+  let input =
+    init_msg ^ did_open_msg ^ sig_help_msg ^ shutdown_msg ^ exit_msg
+  in
+  let in_file = Filename.temp_file "lsp_in" ".json" in
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
+  let ic = In_channel.open_bin in_file in
+  let out_file = Filename.temp_file "lsp_out" ".json" in
+  let oc = Out_channel.open_bin out_file in
+  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let exit_code = Server.run server in
+  In_channel.close ic;
+  Out_channel.close oc;
+  Alcotest.(check int) "exit code" 0 exit_code;
+  let output = In_channel.with_open_bin out_file In_channel.input_all in
+  let messages = parse_messages output in
+  match find_response messages 2 with
+  | None -> Alcotest.fail "No signature help response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      Alcotest.(check bool) "result is not null" true (result <> `Null);
+      let signatures = result |> member "signatures" |> to_list in
+      Alcotest.(check bool)
+        "has at least one signature" true
+        (List.length signatures > 0);
+      let first_sig = List.hd signatures in
+      let label = first_sig |> member "label" |> to_string in
+      Alcotest.(check bool)
+        "signature contains function name" true
+        (String.length label > 0 && String.sub label 0 4 = "(add")
+
+let test_signature_help_highlights_active_parameter () =
+  let init_msg =
+    make_message ~id:(`Int 1) ~method_:"initialize"
+      ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+      ()
+  in
+  let did_open_msg =
+    make_message ~method_:"textDocument/didOpen"
+      ~params:
+        (`Assoc
+           [
+             ( "textDocument",
+               `Assoc
+                 [
+                   ("uri", `String "file:///test.el");
+                   ("languageId", `String "elisp");
+                   ("version", `Int 1);
+                   ("text", `String "(defun add (x y) (+ x y))\n(add 1 2)");
+                 ] );
+           ])
+      ()
+  in
+  (* Request at second argument position (after "1 ") *)
+  let sig_help_msg =
+    make_message ~id:(`Int 2) ~method_:"textDocument/signatureHelp"
+      ~params:
+        (`Assoc
+           [
+             ("textDocument", `Assoc [ ("uri", `String "file:///test.el") ]);
+             ("position", `Assoc [ ("line", `Int 1); ("character", `Int 7) ]);
+           ])
+      ()
+  in
+  let shutdown_msg = make_message ~id:(`Int 3) ~method_:"shutdown" () in
+  let exit_msg = make_message ~method_:"exit" () in
+  let input =
+    init_msg ^ did_open_msg ^ sig_help_msg ^ shutdown_msg ^ exit_msg
+  in
+  let in_file = Filename.temp_file "lsp_in" ".json" in
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
+  let ic = In_channel.open_bin in_file in
+  let out_file = Filename.temp_file "lsp_out" ".json" in
+  let oc = Out_channel.open_bin out_file in
+  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let exit_code = Server.run server in
+  In_channel.close ic;
+  Out_channel.close oc;
+  Alcotest.(check int) "exit code" 0 exit_code;
+  let output = In_channel.with_open_bin out_file In_channel.input_all in
+  let messages = parse_messages output in
+  match find_response messages 2 with
+  | None -> Alcotest.fail "No signature help response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      Alcotest.(check bool) "result is not null" true (result <> `Null);
+      (* Check active parameter is set (should be 1 for second arg) *)
+      let active_param =
+        match result |> member "activeParameter" with
+        | `Int i -> Some i
+        | _ -> None
+      in
+      Alcotest.(check (option int))
+        "active parameter is 1 (second arg)" (Some 1) active_param
+
+let test_signature_help_capability_advertised () =
+  let init_msg =
+    make_message ~id:(`Int 1) ~method_:"initialize"
+      ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+      ()
+  in
+  let shutdown_msg = make_message ~id:(`Int 2) ~method_:"shutdown" () in
+  let exit_msg = make_message ~method_:"exit" () in
+  let input = init_msg ^ shutdown_msg ^ exit_msg in
+  let in_file = Filename.temp_file "lsp_in" ".json" in
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
+  let ic = In_channel.open_bin in_file in
+  let out_file = Filename.temp_file "lsp_out" ".json" in
+  let oc = Out_channel.open_bin out_file in
+  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let exit_code = Server.run server in
+  In_channel.close ic;
+  Out_channel.close oc;
+  Alcotest.(check int) "exit code" 0 exit_code;
+  let output = In_channel.with_open_bin out_file In_channel.input_all in
+  let messages = parse_messages output in
+  match find_response messages 1 with
+  | None -> Alcotest.fail "No initialize response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      let caps = result |> member "capabilities" in
+      let sig_help_provider = caps |> member "signatureHelpProvider" in
+      Alcotest.(check bool)
+        "signatureHelpProvider is present" true
+        (sig_help_provider <> `Null)
+
+let test_signature_help_not_in_call () =
+  let init_msg =
+    make_message ~id:(`Int 1) ~method_:"initialize"
+      ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+      ()
+  in
+  let did_open_msg =
+    make_message ~method_:"textDocument/didOpen"
+      ~params:
+        (`Assoc
+           [
+             ( "textDocument",
+               `Assoc
+                 [
+                   ("uri", `String "file:///test.el");
+                   ("languageId", `String "elisp");
+                   ("version", `Int 1);
+                   ("text", `String "(defun foo () 42)\n\n123");
+                 ] );
+           ])
+      ()
+  in
+  (* Request at position outside any function call (on standalone 123) *)
+  let sig_help_msg =
+    make_message ~id:(`Int 2) ~method_:"textDocument/signatureHelp"
+      ~params:
+        (`Assoc
+           [
+             ("textDocument", `Assoc [ ("uri", `String "file:///test.el") ]);
+             ("position", `Assoc [ ("line", `Int 2); ("character", `Int 1) ]);
+           ])
+      ()
+  in
+  let shutdown_msg = make_message ~id:(`Int 3) ~method_:"shutdown" () in
+  let exit_msg = make_message ~method_:"exit" () in
+  let input =
+    init_msg ^ did_open_msg ^ sig_help_msg ^ shutdown_msg ^ exit_msg
+  in
+  let in_file = Filename.temp_file "lsp_in" ".json" in
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
+  let ic = In_channel.open_bin in_file in
+  let out_file = Filename.temp_file "lsp_out" ".json" in
+  let oc = Out_channel.open_bin out_file in
+  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let exit_code = Server.run server in
+  In_channel.close ic;
+  Out_channel.close oc;
+  Alcotest.(check int) "exit code" 0 exit_code;
+  let output = In_channel.with_open_bin out_file In_channel.input_all in
+  let messages = parse_messages output in
+  match find_response messages 2 with
+  | None -> Alcotest.fail "No signature help response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      (* Should return null when not in a function call *)
+      Alcotest.(check bool) "result is null" true (result = `Null)
+
+let test_signature_help_has_parameters () =
+  let init_msg =
+    make_message ~id:(`Int 1) ~method_:"initialize"
+      ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+      ()
+  in
+  let did_open_msg =
+    make_message ~method_:"textDocument/didOpen"
+      ~params:
+        (`Assoc
+           [
+             ( "textDocument",
+               `Assoc
+                 [
+                   ("uri", `String "file:///test.el");
+                   ("languageId", `String "elisp");
+                   ("version", `Int 1);
+                   ("text", `String "(defun add (x y) (+ x y))\n(add 1 2)");
+                 ] );
+           ])
+      ()
+  in
+  let sig_help_msg =
+    make_message ~id:(`Int 2) ~method_:"textDocument/signatureHelp"
+      ~params:
+        (`Assoc
+           [
+             ("textDocument", `Assoc [ ("uri", `String "file:///test.el") ]);
+             ("position", `Assoc [ ("line", `Int 1); ("character", `Int 5) ]);
+           ])
+      ()
+  in
+  let shutdown_msg = make_message ~id:(`Int 3) ~method_:"shutdown" () in
+  let exit_msg = make_message ~method_:"exit" () in
+  let input =
+    init_msg ^ did_open_msg ^ sig_help_msg ^ shutdown_msg ^ exit_msg
+  in
+  let in_file = Filename.temp_file "lsp_in" ".json" in
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
+  let ic = In_channel.open_bin in_file in
+  let out_file = Filename.temp_file "lsp_out" ".json" in
+  let oc = Out_channel.open_bin out_file in
+  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let exit_code = Server.run server in
+  In_channel.close ic;
+  Out_channel.close oc;
+  Alcotest.(check int) "exit code" 0 exit_code;
+  let output = In_channel.with_open_bin out_file In_channel.input_all in
+  let messages = parse_messages output in
+  match find_response messages 2 with
+  | None -> Alcotest.fail "No signature help response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      let signatures = result |> member "signatures" |> to_list in
+      let first_sig = List.hd signatures in
+      let parameters = first_sig |> member "parameters" |> to_list in
+      (* Should have 2 parameters for add(x, y) *)
+      Alcotest.(check int) "has 2 parameters" 2 (List.length parameters)
+
 let () =
   Alcotest.run "server"
     [
@@ -3746,5 +4035,18 @@ let () =
             test_completion_capability_advertised;
           Alcotest.test_case "filters by prefix" `Quick
             test_completion_filters_by_prefix;
+        ] );
+      ( "signature-help",
+        [
+          Alcotest.test_case "shows function signature" `Quick
+            test_signature_help_shows_function_signature;
+          Alcotest.test_case "highlights active parameter" `Quick
+            test_signature_help_highlights_active_parameter;
+          Alcotest.test_case "capability advertised" `Quick
+            test_signature_help_capability_advertised;
+          Alcotest.test_case "not in call returns null" `Quick
+            test_signature_help_not_in_call;
+          Alcotest.test_case "has parameters" `Quick
+            test_signature_help_has_parameters;
         ] );
     ]

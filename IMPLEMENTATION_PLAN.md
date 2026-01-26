@@ -287,9 +287,9 @@ Auto-completion and document structure for improved IDE experience.
 
 ### 12.3 Signature Help
 
-- [ ] Implement `textDocument/signatureHelp` for function calls
-- [ ] Show function signature when cursor is in argument list
-- [ ] Highlight current parameter position
+- [x] Implement `textDocument/signatureHelp` for function calls
+- [x] Show function signature when cursor is in argument list
+- [x] Highlight current parameter position
 - [ ] Verify: Typing `(mapcar |` shows signature with first param highlighted
 
 ### 12.4 Symbol Rename

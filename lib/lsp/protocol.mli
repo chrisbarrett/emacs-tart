@@ -42,6 +42,7 @@ type server_capabilities = {
   code_action_provider : bool;
   document_symbol_provider : bool;
   completion_provider : bool;
+  signature_help_provider : bool;
 }
 (** Server capabilities *)
 
@@ -328,3 +329,41 @@ type completion_result = completion_item list option
 
 val completion_result_to_json : completion_result -> Yojson.Safe.t
 (** Encode completion result to JSON *)
+
+(** {1 Signature Help} *)
+
+type parameter_information = {
+  pi_label : string;
+  pi_documentation : string option;
+}
+(** Information about a single parameter of a signature *)
+
+type signature_information = {
+  si_label : string;
+  si_documentation : string option;
+  si_parameters : parameter_information list;
+  si_active_parameter : int option;
+}
+(** Represents the signature of something callable *)
+
+type signature_help = {
+  sh_signatures : signature_information list;
+  sh_active_signature : int option;
+  sh_active_parameter : int option;
+}
+(** Signature help represents a list of signatures and the active one *)
+
+type signature_help_params = {
+  shp_text_document : string;
+  shp_position : position;
+}
+(** Signature help request params *)
+
+val parse_signature_help_params : Yojson.Safe.t -> signature_help_params
+(** Parse signature help params from JSON *)
+
+type signature_help_result = signature_help option
+(** Signature help result *)
+
+val signature_help_result_to_json : signature_help_result -> Yojson.Safe.t
+(** Encode signature help result to JSON *)
