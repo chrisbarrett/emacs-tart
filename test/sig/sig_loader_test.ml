@@ -6,6 +6,11 @@ module Type_env = Core.Type_env
 module Check = Typing.Check
 module Unify = Typing.Unify
 
+(** Helper: check if a string starts with a prefix *)
+let string_starts_with prefix s =
+  String.length s >= String.length prefix
+  && String.sub s 0 (String.length prefix) = prefix
+
 (** Helper to parse and validate a signature *)
 let validate_str s =
   let parse_result = Syntax.Read.parse_string s in
@@ -1003,6 +1008,114 @@ let test_import_struct_types_distinct () =
     "type error for wrong struct type" true
     (List.length errors > 0)
 
+(** {1 Data Declaration Tests} *)
+
+(** Test that data declaration generates type. *)
+let test_data_generates_type () =
+  let sig_src = {|
+    (data result [a e] (Ok a) (Err e))
+  |} in
+  let env = load_sig_str sig_src in
+  (* The type should exist as an opaque type *)
+  let ty, errors = check_expr_str ~env "(Ok 42)" in
+  Alcotest.(check int) "no type errors" 0 (List.length errors);
+  (* Return type should be the ADT type with applied type args *)
+  Alcotest.(check bool)
+    "result is ADT type" true
+    (string_starts_with "(test/result" (Types.to_string ty))
+
+(** Test that data generates constructor functions. R1: Constructor functions *)
+let test_data_generates_constructors () =
+  let sig_src = {|
+    (data result [a e] (Ok a) (Err e))
+  |} in
+  let env = load_sig_str sig_src in
+  (* Check Ok constructor *)
+  (match Type_env.lookup "Ok" env with
+  | None -> Alcotest.fail "Ok constructor not found"
+  | Some _ -> ());
+  (* Check Err constructor *)
+  match Type_env.lookup "Err" env with
+  | None -> Alcotest.fail "Err constructor not found"
+  | Some _ -> ()
+
+(** Test that constructor functions type-check correctly. *)
+let test_data_constructor_type_check () =
+  let sig_src = {|
+    (data result [a e] (Ok a) (Err e))
+  |} in
+  let env = load_sig_str sig_src in
+  (* Ok constructor should work with any value *)
+  let ty1, errors1 = check_expr_str ~env "(Ok 42)" in
+  Alcotest.(check int) "no type errors for Ok" 0 (List.length errors1);
+  Alcotest.(check bool)
+    "Ok 42 returns result" true
+    (string_starts_with "(test/result" (Types.to_string ty1));
+  (* Err constructor should work with any value *)
+  let ty2, errors2 = check_expr_str ~env {|(Err "oops")|} in
+  Alcotest.(check int) "no type errors for Err" 0 (List.length errors2);
+  Alcotest.(check bool)
+    "Err returns result" true
+    (string_starts_with "(test/result" (Types.to_string ty2))
+
+(** Test that data with nullary constructors works. *)
+let test_data_nullary_constructors () =
+  let sig_src = {|
+    (data bool (True) (False))
+  |} in
+  let env = load_sig_str sig_src in
+  (* True is a function taking no args *)
+  let ty1, errors1 = check_expr_str ~env "(True)" in
+  Alcotest.(check int) "no type errors for True" 0 (List.length errors1);
+  Alcotest.(check string) "True returns bool" "test/bool" (Types.to_string ty1);
+  (* False is a function taking no args *)
+  let ty2, errors2 = check_expr_str ~env "(False)" in
+  Alcotest.(check int) "no type errors for False" 0 (List.length errors2);
+  Alcotest.(check string) "False returns bool" "test/bool" (Types.to_string ty2)
+
+(** Test that data with multi-field constructors works. R6: Multi-field *)
+let test_data_multi_field_constructor () =
+  let sig_src =
+    {|
+    (data point (Point2D int int) (Point3D int int int))
+  |}
+  in
+  let env = load_sig_str sig_src in
+  (* Point2D takes two ints *)
+  let ty1, errors1 = check_expr_str ~env "(Point2D 1 2)" in
+  Alcotest.(check int) "no type errors for Point2D" 0 (List.length errors1);
+  Alcotest.(check string)
+    "Point2D returns point" "test/point" (Types.to_string ty1);
+  (* Point3D takes three ints *)
+  let ty2, errors2 = check_expr_str ~env "(Point3D 1 2 3)" in
+  Alcotest.(check int) "no type errors for Point3D" 0 (List.length errors2);
+  Alcotest.(check string)
+    "Point3D returns point" "test/point" (Types.to_string ty2);
+  (* Type error: wrong number of args *)
+  let _, errors3 = check_expr_str ~env "(Point2D 1)" in
+  Alcotest.(check bool)
+    "type error for wrong arity" true
+    (List.length errors3 > 0)
+
+(** Test polymorphic data type with function using it. R7: Recursive types *)
+let test_data_recursive_type () =
+  let sig_src = {|
+    (data tree [a] (Leaf a) (Node (tree a) (tree a)))
+  |} in
+  let env = load_sig_str sig_src in
+  (* Leaf constructor *)
+  let ty1, errors1 = check_expr_str ~env "(Leaf 42)" in
+  Alcotest.(check int) "no type errors for Leaf" 0 (List.length errors1);
+  Alcotest.(check bool)
+    "Leaf returns tree" true
+    (string_starts_with "(test/tree" (Types.to_string ty1));
+  (* Nested construction *)
+  let ty2, errors2 = check_expr_str ~env "(Node (Leaf 1) (Leaf 2))" in
+  Alcotest.(check int) "no type errors for nested" 0 (List.length errors2);
+  Alcotest.(check bool)
+    "Node returns tree" true
+    (string_starts_with "(test/tree" (Types.to_string ty2))
+
 let () =
   Alcotest.run "sig_loader"
     [
@@ -1123,5 +1236,18 @@ let () =
           Alcotest.test_case "no slots" `Quick test_import_struct_no_slots;
           Alcotest.test_case "types distinct" `Quick
             test_import_struct_types_distinct;
+        ] );
+      ( "data-declarations",
+        [
+          Alcotest.test_case "generates type" `Quick test_data_generates_type;
+          Alcotest.test_case "generates constructors" `Quick
+            test_data_generates_constructors;
+          Alcotest.test_case "constructor type check" `Quick
+            test_data_constructor_type_check;
+          Alcotest.test_case "nullary constructors" `Quick
+            test_data_nullary_constructors;
+          Alcotest.test_case "multi-field constructor" `Quick
+            test_data_multi_field_constructor;
+          Alcotest.test_case "recursive type" `Quick test_data_recursive_type;
         ] );
     ]

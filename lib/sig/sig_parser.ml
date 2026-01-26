@@ -459,6 +459,71 @@ let parse_import_struct (contents : Sexp.t list) (span : Loc.span) : decl result
       error "Expected (import-struct name :slots ((slot type) ...))" span
   | _ -> error "Invalid import-struct syntax" span
 
+(** Parse a constructor declaration.
+
+    Syntax:
+    - (Name) - nullary constructor
+    - (Name type) - single-field constructor
+    - (Name type type ...) - multi-field constructor *)
+let parse_ctor (sexp : Sexp.t) : ctor_decl result =
+  match sexp with
+  | Sexp.List (Sexp.Symbol (name, _) :: field_sexps, span) -> (
+      let rec parse_fields acc = function
+        | [] -> Ok (List.rev acc)
+        | x :: xs -> (
+            match parse_sig_type x with
+            | Ok ty -> parse_fields (ty :: acc) xs
+            | Error e -> Error e)
+      in
+      match parse_fields [] field_sexps with
+      | Ok fields ->
+          Ok { ctor_name = name; ctor_fields = fields; ctor_loc = span }
+      | Error e -> Error e)
+  | Sexp.Symbol (name, span) ->
+      (* Bare symbol: nullary constructor without parens *)
+      Ok { ctor_name = name; ctor_fields = []; ctor_loc = span }
+  | _ -> error "Expected constructor (Name field-types...)" (Sexp.span_of sexp)
+
+(** Parse a data declaration.
+
+    Syntax:
+    - (data Name (Ctor1) (Ctor2 type)) - without type params
+    - (data Name [a] (Ctor1 a) (Ctor2)) - with type params *)
+let parse_data (contents : Sexp.t list) (span : Loc.span) : decl result =
+  match contents with
+  | Sexp.Symbol ("data", _) :: Sexp.Symbol (name, _) :: rest -> (
+      (* Check for optional type parameters [a b ...] *)
+      let params, ctor_sexps =
+        match rest with
+        | (Sexp.Vector (_, _) as quant) :: rest' -> (
+            match parse_tvar_binders quant with
+            | Ok p -> (p, rest')
+            | Error _ -> ([], rest) (* Fall through; will fail on ctors *))
+        | _ -> ([], rest)
+      in
+      (* Parse constructor declarations *)
+      let rec parse_ctors acc = function
+        | [] -> Ok (List.rev acc)
+        | x :: xs -> (
+            match parse_ctor x with
+            | Ok ctor -> parse_ctors (ctor :: acc) xs
+            | Error e -> Error e)
+      in
+      match parse_ctors [] ctor_sexps with
+      | Ok ctors when List.length ctors > 0 ->
+          Ok
+            (DData
+               {
+                 data_name = name;
+                 data_params = params;
+                 data_ctors = ctors;
+                 data_loc = span;
+               })
+      | Ok _ -> error "Data declaration requires at least one constructor" span
+      | Error e -> Error e)
+  | Sexp.Symbol ("data", _) :: _ -> error "Expected type name after data" span
+  | _ -> error "Invalid data declaration syntax" span
+
 (** {1 Top-Level Parsing} *)
 
 (** Parse a single declaration *)
@@ -476,9 +541,11 @@ let parse_decl (sexp : Sexp.t) : decl result =
       parse_include contents span
   | Sexp.List ((Sexp.Symbol ("import-struct", _) :: _ as contents), span) ->
       parse_import_struct contents span
+  | Sexp.List ((Sexp.Symbol ("data", _) :: _ as contents), span) ->
+      parse_data contents span
   | _ ->
       error
-        "Expected declaration (defun, defvar, type, open, include, or \
+        "Expected declaration (defun, defvar, type, data, open, include, or \
          import-struct)"
         (Sexp.span_of sexp)
 

@@ -148,12 +148,12 @@ value for `Some` when the value is truthy.
 
 ## Tasks
 
-- [ ] [R1] Generate constructor functions from ADT definitions
+- [x] [R1] Generate constructor functions from ADT definitions
 - [ ] [R2] Generate predicate functions
 - [ ] [R3] Generate accessor functions
 - [ ] [R4] Implement pcase type narrowing
 - [ ] [R5] Implement exhaustiveness checking
-- [ ] [R6] Handle multi-field constructors
-- [ ] [R7] Test recursive type handling
+- [x] [R6] Handle multi-field constructors
+- [x] [R7] Test recursive type handling
 
 Run review agent after R1-R3 work (basic codegen) before implementing R4-R5 (type checking).

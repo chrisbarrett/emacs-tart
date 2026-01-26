@@ -71,6 +71,7 @@ type decl =
   | DType of type_decl  (** [(type name ...)] - type alias or opaque type *)
   | DImportStruct of import_struct_decl
       (** [(import-struct name ...)] - struct import *)
+  | DData of data_decl  (** [(data name ...)] - algebraic data type *)
 
 and defun_decl = {
   defun_name : string;
@@ -124,6 +125,31 @@ and import_struct_decl = {
 
     Generates: type person, make-person, person-p, and accessors. *)
 
+and ctor_decl = {
+  ctor_name : string;  (** Constructor name (e.g., "Ok", "Err") *)
+  ctor_fields : sig_type list;  (** Field types *)
+  ctor_loc : span;
+}
+(** ADT constructor declaration.
+
+    Examples:
+    - [(Ok a)] - single-field constructor
+    - [(Point2D int int)] - multi-field constructor
+    - [(None)] - nullary constructor *)
+
+and data_decl = {
+  data_name : string;  (** Type name (e.g., "result") *)
+  data_params : tvar_binder list;  (** Type parameters (e.g., [a e]) *)
+  data_ctors : ctor_decl list;  (** Constructor declarations *)
+  data_loc : span;
+}
+(** Algebraic data type declaration.
+
+    Example:
+    - [(data result [a e] (Ok a) (Err e))]
+
+    Generates: constructor functions, predicates, and accessors. *)
+
 (** {1 Signature File} *)
 
 type signature = {
@@ -156,6 +182,7 @@ let decl_loc = function
   | DDefvar d -> d.defvar_loc
   | DType d -> d.type_loc
   | DImportStruct d -> d.struct_loc
+  | DData d -> d.data_loc
 
 (** {1 Constructors} *)
 

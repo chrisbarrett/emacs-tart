@@ -208,11 +208,11 @@ Runtime representation and pattern matching.
 
 ### 9.1 Code Generation
 
-- [ ] [R1] Generate constructor functions from ADT definitions
+- [x] [R1] Generate constructor functions from ADT definitions
 - [ ] [R2] Generate predicate functions
 - [ ] [R3] Generate accessor functions
-- [ ] [R6] Handle multi-field constructors (vectors)
-- [ ] [R7] Test recursive type handling
+- [x] [R6] Handle multi-field constructors (vectors)
+- [x] [R7] Test recursive type handling
 - [ ] Verify: ADT construction/access works at runtime
 
 ### 9.2 Type Checking

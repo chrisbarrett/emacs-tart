@@ -257,6 +257,93 @@ let test_include_directive () =
   | Ok (Sig_ast.DInclude ("base", _)) -> ()
   | _ -> Alcotest.fail "Expected include directive"
 
+(** {1 Data Declaration Tests} *)
+
+let test_data_simple () =
+  (* (data result [a e] (Ok a) (Err e)) *)
+  match parse_decl_str "(data result [a e] (Ok a) (Err e))" with
+  | Ok
+      (Sig_ast.DData
+         {
+           data_name = "result";
+           data_params = [ { name = "a"; _ }; { name = "e"; _ } ];
+           data_ctors =
+             [
+               { ctor_name = "Ok"; ctor_fields = [ Sig_ast.STVar ("a", _) ]; _ };
+               {
+                 ctor_name = "Err";
+                 ctor_fields = [ Sig_ast.STVar ("e", _) ];
+                 _;
+               };
+             ];
+           _;
+         }) ->
+      ()
+  | Ok _ -> Alcotest.fail "Expected data declaration with correct structure"
+  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
+
+let test_data_nullary () =
+  (* (data bool (True) (False)) *)
+  match parse_decl_str "(data bool (True) (False))" with
+  | Ok
+      (Sig_ast.DData
+         {
+           data_name = "bool";
+           data_params = [];
+           data_ctors =
+             [
+               { ctor_name = "True"; ctor_fields = []; _ };
+               { ctor_name = "False"; ctor_fields = []; _ };
+             ];
+           _;
+         }) ->
+      ()
+  | Ok _ -> Alcotest.fail "Expected data declaration with nullary constructors"
+  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
+
+let test_data_multi_field () =
+  (* (data point (Point2D int int)) *)
+  match parse_decl_str "(data point (Point2D int int))" with
+  | Ok
+      (Sig_ast.DData
+         {
+           data_name = "point";
+           data_params = [];
+           data_ctors =
+             [
+               {
+                 ctor_name = "Point2D";
+                 ctor_fields =
+                   [ Sig_ast.STCon ("int", _); Sig_ast.STCon ("int", _) ];
+                 _;
+               };
+             ];
+           _;
+         }) ->
+      ()
+  | Ok _ ->
+      Alcotest.fail "Expected data declaration with multi-field constructor"
+  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
+
+let test_data_recursive () =
+  (* (data tree [a] (Leaf a) (Node (tree a) (tree a))) *)
+  match parse_decl_str "(data tree [a] (Leaf a) (Node (tree a) (tree a)))" with
+  | Ok
+      (Sig_ast.DData
+         {
+           data_name = "tree";
+           data_params = [ { name = "a"; _ } ];
+           data_ctors =
+             [
+               { ctor_name = "Leaf"; ctor_fields = [ _ ]; _ };
+               { ctor_name = "Node"; ctor_fields = [ _; _ ]; _ };
+             ];
+           _;
+         }) ->
+      ()
+  | Ok _ -> Alcotest.fail "Expected recursive data declaration"
+  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
+
 (** {1 Signature File Tests} *)
 
 let test_parse_signature () =
@@ -300,6 +387,10 @@ let () =
           Alcotest.test_case "type parameterized" `Quick test_type_parameterized;
           Alcotest.test_case "open directive" `Quick test_open_directive;
           Alcotest.test_case "include directive" `Quick test_include_directive;
+          Alcotest.test_case "data simple" `Quick test_data_simple;
+          Alcotest.test_case "data nullary" `Quick test_data_nullary;
+          Alcotest.test_case "data multi-field" `Quick test_data_multi_field;
+          Alcotest.test_case "data recursive" `Quick test_data_recursive;
         ] );
       ( "signature-files",
         [ Alcotest.test_case "parse signature" `Quick test_parse_signature ] );

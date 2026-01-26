@@ -159,6 +159,26 @@ let validate_import_struct ctx (d : import_struct_decl) : unit result =
       validate_type ctx ty)
     (Ok ()) d.struct_slots
 
+(** Validate a constructor declaration *)
+let validate_ctor ctx (ctor : ctor_decl) : unit result =
+  List.fold_left
+    (fun acc field_ty ->
+      let* () = acc in
+      validate_type ctx field_ty)
+    (Ok ()) ctor.ctor_fields
+
+(** Validate a data declaration *)
+let validate_data ctx (d : data_decl) : unit result =
+  (* Add type parameters to context *)
+  let param_names = List.map (fun p -> p.name) d.data_params in
+  let ctx = with_tvars ctx param_names in
+  (* Validate each constructor *)
+  List.fold_left
+    (fun acc ctor ->
+      let* () = acc in
+      validate_ctor ctx ctor)
+    (Ok ()) d.data_ctors
+
 (** Validate a single declaration *)
 let validate_decl ctx (decl : decl) : unit result =
   match decl with
@@ -168,6 +188,7 @@ let validate_decl ctx (decl : decl) : unit result =
   | DDefvar d -> validate_defvar ctx d
   | DType d -> validate_type_decl ctx d
   | DImportStruct d -> validate_import_struct ctx d
+  | DData d -> validate_data ctx d
 
 (** {1 Signature Validation} *)
 
@@ -179,6 +200,7 @@ let build_context (sig_file : signature) : tvar_context =
       match decl with
       | DType d -> with_type ctx d.type_name
       | DImportStruct d -> with_type ctx d.struct_name
+      | DData d -> with_type ctx d.data_name
       | _ -> ctx)
     empty_context sig_file.sig_decls
 
@@ -692,6 +714,65 @@ let load_import_struct (module_name : string) (d : import_struct_decl)
   in
   state
 
+(** {1 Data (ADT) Processing}
+
+    data declarations generate types and functions for ADT definitions:
+    - Type: The ADT type (opaque with type parameters)
+    - Constructors: One function per constructor variant
+
+    Runtime representation (per spec 11):
+    - Nullary: 'tag symbol
+    - Single-field: (cons 'tag value)
+    - Multi-field: [tag field1 field2 ...] *)
+
+(** Load a data declaration. Generates the ADT type and constructor functions.
+*)
+let load_data (module_name : string) (d : data_decl) (state : load_state) :
+    load_state =
+  let data_name = d.data_name in
+  let type_params = List.map (fun b -> b.name) d.data_params in
+
+  (* 1. Add the data type as an opaque type (with type parameters) *)
+  let opaque =
+    {
+      opaque_params = type_params;
+      opaque_con = opaque_con_name module_name data_name;
+    }
+  in
+  let state = add_opaque_to_state data_name opaque state in
+
+  (* 2. Add constructor functions *)
+  List.fold_left
+    (fun state (ctor : ctor_decl) ->
+      let ctor_name = ctor.ctor_name in
+      (* Build parameter list for constructor function:
+         each field becomes a positional parameter.
+         Type params are in scope as TCon names. *)
+      let field_params =
+        List.map
+          (fun field_ty ->
+            let typ =
+              sig_type_to_typ_with_ctx state.ls_type_ctx type_params field_ty
+            in
+            Types.PPositional typ)
+          ctor.ctor_fields
+      in
+      (* Return type is the ADT type (may be parameterized) *)
+      let return_typ =
+        if type_params = [] then Types.TCon opaque.opaque_con
+        else
+          Types.TApp
+            (opaque.opaque_con, List.map (fun p -> Types.TCon p) type_params)
+      in
+      let ctor_typ = Types.TArrow (field_params, return_typ) in
+      (* If polymorphic, wrap in forall *)
+      let ctor_scheme =
+        if type_params = [] then Type_env.Mono ctor_typ
+        else Type_env.Poly (type_params, ctor_typ)
+      in
+      add_value_to_state ctor_name ctor_scheme state)
+    state d.data_ctors
+
 (** {1 Open and Include Processing}
 
     - open: Import types for use in signatures (not re-exported to value env)
@@ -807,7 +888,8 @@ and load_decls_into_state (sig_file : signature) (state : load_state) :
       | DDefvar d ->
           let scheme = load_defvar_with_ctx state.ls_type_ctx d in
           add_value_to_state d.defvar_name scheme state
-      | DImportStruct d -> load_import_struct sig_file.sig_module d state)
+      | DImportStruct d -> load_import_struct sig_file.sig_module d state
+      | DData d -> load_data sig_file.sig_module d state)
     state sig_file.sig_decls
 
 (** {1 Signature Loading}
