@@ -555,7 +555,7 @@ Create comprehensive documentation using AsciiDoc, plus refresh the README.
 
 - [x] Create `docs/getting-started.adoc` - Quick start guide
 - [x] Create `docs/library-authors.adoc` - Guide for library authors writing `.tart` files
-- [ ] Create `docs/tooling-setup.adoc` - LSP setup guide for Emacs users
+- [x] Create `docs/tooling-setup.adoc` - LSP setup guide for Emacs users
 - [ ] Create `docs/cli-reference.adoc` - CLI reference (manpage source)
 
 ### 19.2 README Refresh

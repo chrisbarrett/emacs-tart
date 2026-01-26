@@ -1,0 +1,424 @@
+= Tooling Setup
+:toc: left
+:toclevels: 3
+:source-highlighter: rouge
+
+This guide covers configuring Emacs for the best Tart development experience.
+
+== Prerequisites
+
+You'll need:
+
+* *Emacs 29.1* or later (for built-in eglot and tree-sitter support)
+* *tart* binary built and on your PATH (see link:getting-started.adoc[Getting Started])
+
+== Installing the Emacs Packages
+
+Add the `lisp/` directory from the tart repository to your `load-path`:
+
+[source,elisp]
+----
+(add-to-list 'load-path "/path/to/emacs-tart/lisp")
+----
+
+Tart provides two separate packages:
+
+|===
+|Package |Purpose |Dependencies
+
+|`tart`
+|Runtime macros for inline type annotations
+|None (emacs 24.1+)
+
+|`tart-mode`
+|Development tools (LSP, REPL, keybindings)
+|eglot, comint (Emacs 29.1+)
+|===
+
+Load them separately based on your needs:
+
+[source,elisp]
+----
+;; Always safe to require - no dependencies
+(require 'tart)
+
+;; Only for development tooling
+(require 'tart-mode)
+----
+
+== Configuring Eglot
+
+Tart includes an LSP server that provides type checking, hover information,
+completion, and diagnostics.
+
+=== Basic Setup
+
+The `tart-mode` package automatically registers Tart as an LSP server for
+`emacs-lisp-mode`. For automatic LSP activation when editing files with a
+sibling `.tart` file:
+
+[source,elisp]
+----
+(require 'tart-mode)
+(add-hook 'emacs-lisp-mode-hook #'tart-eglot-ensure)
+----
+
+The `tart-eglot-ensure` function checks if the current file has a sibling
+`.tart` file (e.g., `my-lib.el` checks for `my-lib.tart`). If found, it
+automatically starts eglot.
+
+=== Manual Activation
+
+You can always start eglot manually in any Elisp buffer:
+
+----
+M-x eglot
+----
+
+This is useful when:
+
+* Your `.tart` file is elsewhere on the search path (not a sibling)
+* You want type checking for init.el or other config files
+* You're exploring a third-party library with published type signatures
+
+=== Customization Options
+
+|===
+|Variable |Default |Description
+
+|`tart-executable`
+|`"tart"`
+|Path to the tart binary. Can be absolute or found on `exec-path`.
+
+|`tart-lsp-args`
+|`nil`
+|Additional arguments to pass to `tart lsp`. A list of strings.
+
+|`tart-repl-args`
+|`nil`
+|Additional arguments to pass to `tart repl`. A list of strings.
+
+|`tart-repl-history-file`
+|`~/.emacs.d/tart-repl-history`
+|File for REPL history persistence. Set to nil to disable.
+|===
+
+Example customization:
+
+[source,elisp]
+----
+(setq tart-executable "~/.local/bin/tart")
+(setq tart-lsp-args '("--verbose"))
+----
+
+== LSP Features
+
+Once eglot is connected, you get these features automatically:
+
+=== Diagnostics
+
+Type errors appear as underlines in your buffer. Hover over them to see the
+error message, or use `M-x flymake-show-buffer-diagnostics` to see all errors.
+
+Errors include:
+
+* Type mismatches with expected/found types
+* Arity mismatches showing the function signature
+* Undefined variable errors with typo suggestions
+* Missing signature warnings for public functions
+
+=== Hover
+
+Point at any symbol to see its type:
+
+* Function names show the full signature
+* Variables show their declared or inferred type
+* Literals show their type
+
+Use `M-x eldoc` or enable `eldoc-mode` to see types in the echo area.
+
+=== Go to Definition
+
+`M-.` (`xref-find-definitions`) jumps to where a symbol is defined:
+
+* Local definitions in the same file
+* Declarations in sibling `.tart` files
+* Declarations in required modules
+
+=== Find References
+
+`M-?` (`xref-find-references`) lists all uses of the symbol at point.
+
+=== Completion
+
+As you type, eglot provides completions:
+
+* Local variables and functions
+* Functions from loaded signatures (stdlib, requires)
+* Type information in completion candidates
+
+Completion triggers automatically on `(` or can be invoked with `M-<tab>`.
+
+=== Signature Help
+
+When typing arguments to a function call, signature help shows:
+
+* The full function signature
+* The current parameter highlighted
+* Parameter types and return type
+
+Signature help triggers on `(` and ` ` (space).
+
+=== Rename
+
+`M-x eglot-rename` renames a symbol and all its references within the file.
+
+=== Code Actions
+
+`M-x eglot-code-actions` offers context-sensitive actions:
+
+* *Add type annotation* - For public functions missing `.tart` declarations
+* *Extract function* - Lift selected code into a new defun
+
+== The REPL (inferior-tart-mode)
+
+Tart includes an interactive REPL for exploring types and testing expressions.
+
+=== Starting the REPL
+
+[source]
+----
+M-x run-tart
+----
+
+Or equivalently: `M-x inferior-tart`
+
+This opens a `*tart*` buffer with the REPL:
+
+[source]
+----
+tart 0.1.0 REPL
+Type ,help for commands, ,quit to exit.
+
+tart>
+----
+
+=== REPL Commands
+
+The REPL supports special commands prefixed with `,`:
+
+|===
+|Command |Description
+
+|`,type <expr>`
+|Show the type of an expression without evaluating
+
+|`,expand <expr>`
+|Show macro expansion
+
+|`,env`
+|List current bindings
+
+|`,load <file>`
+|Load a file
+
+|`,help`
+|Show available commands
+
+|`,quit`
+|Exit the REPL
+|===
+
+Examples:
+
+[source]
+----
+tart> ,type (mapcar #'1+ '(1 2 3))
+(List Int)
+
+tart> ,expand (when x y)
+(if x (progn y))
+
+tart> ,env
++ : (Int Int) -> Int
+...
+----
+
+=== Sending Code from Buffers
+
+With `tart-mode` enabled, you can send code to the REPL:
+
+|===
+|Keybinding |Command |Description
+
+|`C-c C-z`
+|`tart-switch-to-repl`
+|Switch to REPL buffer (start if needed)
+
+|`C-c C-c`
+|`tart-send-defun`
+|Send the current defun
+
+|`C-c C-r`
+|`tart-send-region`
+|Send the selected region
+
+|`C-c C-e`
+|`tart-send-last-sexp`
+|Send the sexp before point
+
+|`C-c C-b`
+|`tart-send-buffer`
+|Send the entire buffer
+|===
+
+=== Type Inspection Commands
+
+Get types without switching to the REPL:
+
+|===
+|Keybinding |Command |Description
+
+|`C-c C-t`
+|`tart-type-at-point`
+|Show type of sexp at point in echo area
+
+|`C-c C-x`
+|`tart-expand-at-point`
+|Show macro expansion in echo area
+|===
+
+=== History
+
+REPL input history is saved between sessions. Use `M-p` and `M-n` to navigate
+history. Configure the history file:
+
+[source,elisp]
+----
+;; Change location
+(setq tart-repl-history-file "~/.local/share/emacs/tart-history")
+
+;; Disable persistence
+(setq tart-repl-history-file nil)
+----
+
+=== Error Navigation
+
+The REPL supports `compilation-shell-minor-mode` for navigating errors. File
+references in error messages are clickable and support:
+
+* `M-g n` (`next-error`) - Jump to next error location
+* `M-g p` (`previous-error`) - Jump to previous error location
+
+== The tart-mode Minor Mode
+
+Enable `tart-mode` for convenient keybindings in elisp buffers:
+
+[source,elisp]
+----
+(add-hook 'emacs-lisp-mode-hook #'tart-mode)
+----
+
+This adds the " Tart" lighter to the mode line and provides the keybindings
+documented above.
+
+== Troubleshooting
+
+=== LSP Server Won't Start
+
+1. Verify the tart binary is accessible:
++
+[source,bash]
+----
+which tart
+tart --version
+----
+
+2. Check `tart-executable` is correct:
++
+[source,elisp]
+----
+(message "%s" tart-executable)
+----
+
+3. Try starting the LSP server manually:
++
+[source,bash]
+----
+tart lsp
+----
++
+This should wait for input on stdin. Press `Ctrl-C` to exit.
+
+4. Check the `*eglot-events*` buffer for error messages.
+
+=== No Diagnostics Appearing
+
+1. Ensure you have a `.tart` file for the module you're editing.
+
+2. Verify the `.tart` file is syntactically valid:
++
+[source,bash]
+----
+tart check myfile.el
+----
+
+3. For files without sibling `.tart` files, eglot won't auto-start. Use
+   `M-x eglot` manually.
+
+=== Wrong Types Being Shown
+
+1. Save the buffer - the LSP server type-checks the on-disk version.
+
+2. Check for open/include directives in your `.tart` file that might bring
+   in unexpected types.
+
+3. Check if a function is being shadowed by a local variable.
+
+=== REPL Not Responding
+
+1. Check if the process is still running:
++
+[source,elisp]
+----
+(process-status (get-buffer-process "*tart*"))
+----
+
+2. Kill and restart:
++
+[source]
+----
+M-x kill-buffer RET *tart* RET
+M-x run-tart
+----
+
+== Type Checking Your Emacs Config
+
+You can type-check your init.el or other config files:
+
+1. Create a `.tart` file for any custom functions you define:
++
+[source,elisp]
+----
+;; init.tart
+(defun my/toggle-dark-mode () -> nil)
+(defun my/setup-fonts () -> nil)
+----
+
+2. Place it next to your init.el (or in your tart search path).
+
+3. Open init.el and run `M-x eglot`.
+
+For config files that live in unusual locations, you can configure a custom
+search path:
+
+[source,elisp]
+----
+(setq tart-type-path '("~/.config/emacs/types/"))
+----
+
+== See Also
+
+* link:getting-started.adoc[Getting Started] - Quick start tutorial
+* link:library-authors.adoc[Library Authors Guide] - Writing `.tart` files
+* link:cli-reference.adoc[CLI Reference] - Command-line documentation
