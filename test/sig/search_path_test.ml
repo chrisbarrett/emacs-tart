@@ -913,6 +913,93 @@ let test_load_text_properties () =
            true
          with Not_found -> false)
 
+(** Test that overlays.tart parses successfully *)
+let test_parse_overlays () =
+  let path = Filename.concat stdlib_dir "overlays.tart" in
+  if not (Sys.file_exists path) then
+    Alcotest.fail ("overlays.tart not found at: " ^ path);
+  match Search_path.parse_signature_file path with
+  | None -> Alcotest.fail "overlays.tart failed to parse"
+  | Some sig_file ->
+      Alcotest.(check string) "module name" "overlays" sig_file.sig_module;
+      Alcotest.(check bool)
+        "has declarations" true
+        (List.length sig_file.sig_decls > 10);
+      (* overlays.tart should have the overlay opaque type *)
+      let has_type name =
+        List.exists
+          (function Sig_ast.DType t -> t.type_name = name | _ -> false)
+          sig_file.sig_decls
+      in
+      Alcotest.(check bool) "has overlay type" true (has_type "overlay");
+      (* Check key overlay functions *)
+      let has_defun name =
+        List.exists
+          (function Sig_ast.DDefun d -> d.defun_name = name | _ -> false)
+          sig_file.sig_decls
+      in
+      Alcotest.(check bool) "has make-overlay" true (has_defun "make-overlay");
+      Alcotest.(check bool)
+        "has delete-overlay" true
+        (has_defun "delete-overlay");
+      Alcotest.(check bool) "has overlay-get" true (has_defun "overlay-get");
+      Alcotest.(check bool) "has overlay-put" true (has_defun "overlay-put");
+      Alcotest.(check bool) "has overlays-at" true (has_defun "overlays-at");
+      Alcotest.(check bool) "has overlays-in" true (has_defun "overlays-in")
+
+(** Test that overlays can be loaded into type environment *)
+let test_load_overlays () =
+  let sp = Search_path.empty |> Search_path.with_stdlib stdlib_dir in
+  (* First load builtins and buffers for dependency types *)
+  let base_env =
+    match
+      Search_path.load_module ~search_path:sp ~env:Type_env.empty "builtins"
+    with
+    | None -> Alcotest.fail "failed to load builtins module"
+    | Some env -> env
+  in
+  let base_env =
+    match Search_path.load_module ~search_path:sp ~env:base_env "buffers" with
+    | None -> Alcotest.fail "failed to load buffers module"
+    | Some env -> env
+  in
+  match Search_path.load_module ~search_path:sp ~env:base_env "overlays" with
+  | None -> Alcotest.fail "failed to load overlays module"
+  | Some env ->
+      (* Check that make-overlay is loaded *)
+      (match Type_env.lookup "make-overlay" env with
+      | None -> Alcotest.fail "make-overlay not found in env"
+      | Some _ -> ());
+      (* Check that overlay-get is loaded *)
+      (match Type_env.lookup "overlay-get" env with
+      | None -> Alcotest.fail "overlay-get not found in env"
+      | Some _ -> ());
+      (* Check that overlays-at is loaded *)
+      (match Type_env.lookup "overlays-at" env with
+      | None -> Alcotest.fail "overlays-at not found in env"
+      | Some _ -> ());
+      (* Verify type checking works with overlay functions *)
+      let ty, errors = check_expr_str ~env "(make-overlay 1 10)" in
+      Alcotest.(check int) "make-overlay: no errors" 0 (List.length errors);
+      (* Result should be Overlay *)
+      let ty_str = Types.to_string ty in
+      Alcotest.(check bool)
+        "returns overlay type" true
+        (try
+           let _ = Str.search_forward (Str.regexp_string "verlay") ty_str 0 in
+           true
+         with Not_found -> false);
+      (* Check overlays-at returns list of overlays *)
+      let ty2, errors2 = check_expr_str ~env "(overlays-at 5)" in
+      Alcotest.(check int) "overlays-at: no errors" 0 (List.length errors2);
+      let ty2_str = Types.to_string ty2 in
+      Alcotest.(check bool)
+        "returns list type" true
+        (try
+           let _ = Str.search_forward (Str.regexp_string "List") ty2_str 0 in
+           true
+         with Not_found -> false)
+
 let () =
   Alcotest.run "search_path"
     [
@@ -974,5 +1061,7 @@ let () =
             test_parse_text_properties;
           Alcotest.test_case "load text-properties into env" `Quick
             test_load_text_properties;
+          Alcotest.test_case "parse overlays.tart" `Quick test_parse_overlays;
+          Alcotest.test_case "load overlays into env" `Quick test_load_overlays;
         ] );
     ]

@@ -311,14 +311,13 @@ Broader coverage of common Emacs packages.
 
 ### 13.2 File Operations
 
-- [x] Add `stdlib/files.tart` for file I/O
-- [ ] Add `stdlib/directories.tart` for directory operations
+- [x] Add `stdlib/files.tart` for file I/O (includes directory operations)
 - [ ] Verify: File manipulation code type-checks
 
 ### 13.3 Text Properties and Overlays
 
 - [x] Add `stdlib/text-properties.tart`
-- [ ] Add `stdlib/overlays.tart`
+- [x] Add `stdlib/overlays.tart`
 - [ ] Verify: Text property code type-checks
 
 ### 13.4 Common Packages

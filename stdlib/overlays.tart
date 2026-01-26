@@ -1,0 +1,61 @@
+;;; overlays.tart --- Type signatures for Emacs overlay functions
+
+(open 'buffers)
+
+;; Overlay type (opaque)
+(type overlay)
+
+;; Creating and deleting overlays
+(defun make-overlay (int int &optional buffer bool bool) -> overlay)
+(defun delete-overlay (overlay) -> nil)
+(defun move-overlay (overlay int int &optional buffer) -> overlay)
+(defun copy-overlay (overlay) -> overlay)
+
+;; Overlay predicates
+(defun overlayp (any) -> bool)
+
+;; Overlay information
+(defun overlay-start (overlay) -> (int | nil))
+(defun overlay-end (overlay) -> (int | nil))
+(defun overlay-buffer (overlay) -> (buffer | nil))
+
+;; Overlay properties
+(defun overlay-get (overlay symbol) -> any)
+(defun overlay-put (overlay symbol any) -> any)
+(defun overlay-properties (overlay) -> (list any))
+
+;; Finding overlays
+(defun overlays-at (int &optional bool) -> (list overlay))
+(defun overlays-in (int int) -> (list overlay))
+(defun next-overlay-change (int) -> int)
+(defun previous-overlay-change (int) -> int)
+(defun overlay-recenter (int) -> nil)
+
+;; Overlay lists for buffer
+(defun overlay-lists () -> (pair (list overlay) (list overlay)))
+
+;; Removing overlays
+(defun remove-overlays (&optional int int symbol any) -> nil)
+
+;; Overlay priorities
+;; Note: Priority is set via (overlay-put ov 'priority N)
+;; Higher priority overlays take precedence for display properties
+
+;; Common overlay properties (set via overlay-put):
+;; - 'face - Face for display
+;; - 'mouse-face - Face when mouse is over
+;; - 'display - Alternative display specification
+;; - 'help-echo - Help text on hover
+;; - 'keymap - Keymap for the overlay region
+;; - 'local-map - Local keymap for overlay region
+;; - 'priority - Display priority (higher wins)
+;; - 'invisible - Make overlay invisible
+;; - 'intangible - Skip over overlay with point motion
+;; - 'before-string - String to display before overlay
+;; - 'after-string - String to display after overlay
+;; - 'line-prefix - Prefix for each line
+;; - 'wrap-prefix - Prefix for continuation lines
+;; - 'evaporate - Delete overlay when text is deleted
+;; - 'modification-hooks - Hooks called on modification
+;; - 'insert-in-front-hooks - Hooks for insertion at start
+;; - 'insert-behind-hooks - Hooks for insertion at end
