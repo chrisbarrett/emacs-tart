@@ -224,6 +224,18 @@ let rec validate_decl ctx (decl : decl) : unit result =
           (* Validate return type *)
           validate_type method_ctx method_decl.method_return)
         (Ok ()) d.class_methods
+  | DInstance d ->
+      (* Validate instance type and constraints have valid type references *)
+      let inst_tvars = List.map (fun b -> b.name) d.inst_tvar_binders in
+      let inst_ctx = with_tvars ctx inst_tvars in
+      (* Validate instance type *)
+      let* () = validate_type inst_ctx d.inst_type in
+      (* Validate constraints *)
+      List.fold_left
+        (fun acc (_, ty) ->
+          let* () = acc in
+          validate_type inst_ctx ty)
+        (Ok ()) d.inst_constraints
 
 (** {1 Signature Validation} *)
 
@@ -1142,6 +1154,10 @@ and load_decls_into_state (sig_file : signature) (state : load_state) :
           (* Type classes are loaded but don't add values to the environment yet.
              Instance resolution and constraint checking will be implemented
              separately. For now, classes are recorded for later use. *)
+          state
+      | DInstance _d ->
+          (* Instances are recorded for later use in instance resolution.
+             They don't add values to the environment directly. *)
           state)
     state sig_file.sig_decls
 
@@ -1211,6 +1227,9 @@ and load_scoped_decl (sig_file : signature)
       load_type_scope sig_file nested state
   | DClass _d ->
       (* Type classes in scopes are handled the same way - just recorded *)
+      state
+  | DInstance _d ->
+      (* Instances in scopes are handled the same way - just recorded *)
       state
 
 (** {1 Signature Loading}

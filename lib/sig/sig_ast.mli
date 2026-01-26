@@ -87,6 +87,8 @@ type decl =
   | DTypeScope of type_scope_decl
       (** [(type-scope [vars] ...)] - scoped type variable declarations *)
   | DClass of class_decl  (** [(class (Name a) ...)] - type class definition *)
+  | DInstance of instance_decl
+      (** [(instance (Class type) ...)] - type class instance *)
 
 and defun_decl = {
   defun_name : string;
@@ -208,6 +210,33 @@ and class_decl = {
     - [(class (Eq a) (eq (a a) -> bool))] - simple class
     - [(class (Ord a) (Eq a) (compare (a a) -> ordering))] - with superclass
     - [(class (Functor (f : (* -> *))) (fmap [a b] ...))] - HKT class *)
+
+and method_impl = {
+  impl_method : string;  (** Class method name (e.g., "eq") *)
+  impl_fn : string;  (** Implementation function name (e.g., "int-eq") *)
+  impl_loc : span;
+}
+(** Method implementation mapping in an instance declaration.
+
+    Example: [(eq . int-eq)] maps the [eq] method to the [int-eq] function. *)
+
+and instance_decl = {
+  inst_class : string;  (** Class name (e.g., "Eq", "Functor") *)
+  inst_type : sig_type;  (** Type being instantiated (e.g., int, (list a)) *)
+  inst_tvar_binders : tvar_binder list;
+      (** Type variables for parameterized instances *)
+  inst_constraints : (string * sig_type) list;
+      (** Required constraints for parameterized instances: (ClassName,
+          type-arg) *)
+  inst_methods : method_impl list;  (** Method implementations *)
+  inst_loc : span;
+}
+(** Type class instance declaration.
+
+    Examples:
+    - [(instance (Eq int) (eq . =))] - simple instance
+    - [(instance [a] (Eq a) => (Eq (list a)) (eq . list-eq))] - parameterized
+    - [(instance (Functor list) (fmap . mapcar))] - HKT instance *)
 
 (** {1 Signature File} *)
 

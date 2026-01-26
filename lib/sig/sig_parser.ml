@@ -757,6 +757,127 @@ let parse_class (contents : Sexp.t list) (span : Loc.span) : decl result =
       error "Expected class head (ClassName type-param) after class" span
   | _ -> error "Invalid class declaration syntax" span
 
+(** {1 Instance Parsing} *)
+
+(** Parse a method implementation mapping: (method . impl-fn).
+
+    Syntax: (eq . int-eq) *)
+let parse_method_impl (sexp : Sexp.t) : method_impl result =
+  match sexp with
+  | Sexp.Cons (Sexp.Symbol (method_name, _), Sexp.Symbol (impl_fn, _), span) ->
+      Ok { impl_method = method_name; impl_fn; impl_loc = span }
+  | Sexp.List
+      ( [
+          Sexp.Symbol (method_name, _);
+          Sexp.Symbol (".", _);
+          Sexp.Symbol (impl_fn, _);
+        ],
+        span ) ->
+      (* Also allow (method . impl-fn) as a list *)
+      Ok { impl_method = method_name; impl_fn; impl_loc = span }
+  | _ -> error "Expected method mapping (method . impl-fn)" (Sexp.span_of sexp)
+
+(** Parse an instance head: (ClassName type).
+
+    Examples:
+    - (Eq int)
+    - (Eq (list a))
+    - (Functor list) *)
+let parse_instance_head (sexp : Sexp.t) :
+    (string * sig_type, parse_error) Result.t =
+  match sexp with
+  | Sexp.List ([ Sexp.Symbol (class_name, _); type_sexp ], _span) -> (
+      match parse_sig_type type_sexp with
+      | Ok ty -> Ok (class_name, ty)
+      | Error e -> Error e)
+  | Sexp.List ([ Sexp.Symbol (_, _) ], span) ->
+      error "Instance requires a type argument (e.g., (Eq int))" span
+  | Sexp.List (_, span) -> error "Expected instance head (ClassName type)" span
+  | _ -> error "Expected instance head (ClassName type)" (Sexp.span_of sexp)
+
+(** Parse an instance declaration.
+
+    Grammar:
+    - (instance (Class type) method-impl...)
+    - (instance [vars] constraint... => (Class type) method-impl...)
+
+    Examples:
+    - (instance (Eq int) (eq . =) (neq . /=))
+    - (instance [a] (Eq a) => (Eq (list a)) (eq . list-eq))
+    - (instance (Functor list) (fmap . mapcar)) *)
+let parse_instance (contents : Sexp.t list) (span : Loc.span) : decl result =
+  match contents with
+  | Sexp.Symbol ("instance", _) :: rest -> (
+      (* Check for optional type variables [a b ...] *)
+      let binders, after_binders =
+        match rest with
+        | (Sexp.Vector (_, _) as quant) :: rest' -> (
+            match parse_tvar_binders quant with
+            | Ok b -> (b, rest')
+            | Error _ -> ([], rest))
+        | _ -> ([], rest)
+      in
+      (* Check for constraints and => *)
+      let rec find_arrow_fat constraints_rev = function
+        | [] -> (List.rev constraints_rev, [])
+        | Sexp.Symbol ("=>", _) :: after -> (List.rev constraints_rev, after)
+        | x :: rest' -> find_arrow_fat (x :: constraints_rev) rest'
+      in
+      let before_arrow, after_arrow = find_arrow_fat [] after_binders in
+      (* If we found =>, parse constraints; otherwise, first elem is the head *)
+      let constraints, head_and_methods =
+        if after_arrow = [] then
+          (* No =>: no constraints, everything is head + methods *)
+          ([], before_arrow)
+        else
+          (* Has =>: before is constraints, after is head + methods *)
+          (before_arrow, after_arrow)
+      in
+      (* Parse constraints *)
+      let rec parse_constraints acc = function
+        | [] -> Ok (List.rev acc)
+        | sexp :: rest' -> (
+            match parse_superclass sexp with
+            | Ok c -> parse_constraints (c :: acc) rest'
+            | Error e -> Error e)
+      in
+      match parse_constraints [] constraints with
+      | Error e -> Error e
+      | Ok inst_constraints -> (
+          (* First element of head_and_methods is the instance head *)
+          match head_and_methods with
+          | [] -> error "Expected instance head (ClassName type)" span
+          | head_sexp :: method_sexps -> (
+              match parse_instance_head head_sexp with
+              | Error e -> Error e
+              | Ok (inst_class, inst_type) -> (
+                  (* Parse method implementations *)
+                  let rec parse_methods acc = function
+                    | [] -> Ok (List.rev acc)
+                    | sexp :: rest' -> (
+                        match parse_method_impl sexp with
+                        | Ok m -> parse_methods (m :: acc) rest'
+                        | Error e -> Error e)
+                  in
+                  match parse_methods [] method_sexps with
+                  | Error e -> Error e
+                  | Ok inst_methods ->
+                      if List.length inst_methods = 0 then
+                        error "Instance requires at least one method mapping"
+                          span
+                      else
+                        Ok
+                          (DInstance
+                             {
+                               inst_class;
+                               inst_type;
+                               inst_tvar_binders = binders;
+                               inst_constraints;
+                               inst_methods;
+                               inst_loc = span;
+                             })))))
+  | _ -> error "Invalid instance declaration syntax" span
+
 (** {1 Top-Level Parsing} *)
 
 (** Parse a single declaration *)
@@ -780,10 +901,12 @@ let rec parse_decl (sexp : Sexp.t) : decl result =
       parse_type_scope contents span
   | Sexp.List ((Sexp.Symbol ("class", _) :: _ as contents), span) ->
       parse_class contents span
+  | Sexp.List ((Sexp.Symbol ("instance", _) :: _ as contents), span) ->
+      parse_instance contents span
   | _ ->
       error
-        "Expected declaration (defun, defvar, type, data, class, open, \
-         include, import-struct, or type-scope)"
+        "Expected declaration (defun, defvar, type, data, class, instance, \
+         open, include, import-struct, or type-scope)"
         (Sexp.span_of sexp)
 
 (** Parse a type-scope declaration.

@@ -336,6 +336,9 @@ let rec check_decl_kinds_with_scope (scope_env : Kind.env)
   | Sig.Sig_ast.DClass _d ->
       (* TODO: Kind checking for type classes will be implemented with instance resolution *)
       []
+  | Sig.Sig_ast.DInstance _d ->
+      (* TODO: Kind checking for instances will be implemented with instance resolution *)
+      []
 
 (** Check kinds for a single declaration. Returns any kind errors found. *)
 let check_decl_kinds (decl : Sig.Sig_ast.decl) : kind_check_error list =

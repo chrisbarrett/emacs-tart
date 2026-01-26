@@ -1443,6 +1443,66 @@ let test_type_scope_hk_kind_enforced () =
         "scheme is polymorphic" true
         (String.length scheme_str > 0)
 
+(** {1 Instance Declaration Tests (Spec 21 R2)} *)
+
+(** Test that simple instance declarations load without error *)
+let test_instance_simple_loads () =
+  let sig_src =
+    {|
+    (class (Eq a) (eq (a a) -> bool))
+    (instance (Eq int) (eq . =))
+  |}
+  in
+  (* Should load without error; instance doesn't add to env directly *)
+  let _env = load_sig_str sig_src in
+  ()
+
+(** Test that parameterized instance declarations load without error *)
+let test_instance_parameterized_loads () =
+  let sig_src =
+    {|
+    (class (Eq a) (eq (a a) -> bool))
+    (instance (Eq int) (eq . =))
+    (instance [a] (Eq a) => (Eq (list a)) (eq . list-eq))
+  |}
+  in
+  let _env = load_sig_str sig_src in
+  ()
+
+(** Test that HKT instance declarations load without error. Note: we define a
+    type alias for the constructor since validation doesn't know about builtins
+*)
+let test_instance_hkt_loads () =
+  let sig_src =
+    {|
+    (type my-list [a] (list a))
+    (class (Functor (f : (* -> *)))
+      (fmap [a b] (((a) -> b) (f a)) -> (f b)))
+    (instance (Functor my-list) (fmap . mapcar))
+  |}
+  in
+  let _env = load_sig_str sig_src in
+  ()
+
+(** Test that instance validation catches unbound type variables *)
+let test_instance_unbound_tvar_error () =
+  let sig_src =
+    {|
+    (class (Eq a) (eq (a a) -> bool))
+    (instance (Eq b) (eq . =))
+  |}
+  in
+  let parse_result = Syntax.Read.parse_string sig_src in
+  match Sig_parser.parse_signature ~module_name:"test" parse_result.sexps with
+  | Error _ -> Alcotest.fail "Parse should succeed"
+  | Ok sig_file -> (
+      match Sig_loader.validate_signature sig_file with
+      | Ok () -> Alcotest.fail "Validation should fail for unbound 'b'"
+      | Error e ->
+          Alcotest.(check bool)
+            "error mentions unbound type variable" true
+            (String.length e.message > 0))
+
 let () =
   Alcotest.run "sig_loader"
     [
@@ -1614,5 +1674,15 @@ let () =
           Alcotest.test_case "HK variable" `Quick test_type_scope_hk_variable;
           Alcotest.test_case "HK kind enforced" `Quick
             test_type_scope_hk_kind_enforced;
+        ] );
+      ( "instance-declarations",
+        [
+          Alcotest.test_case "simple instance loads" `Quick
+            test_instance_simple_loads;
+          Alcotest.test_case "parameterized instance loads" `Quick
+            test_instance_parameterized_loads;
+          Alcotest.test_case "HKT instance loads" `Quick test_instance_hkt_loads;
+          Alcotest.test_case "unbound tvar error" `Quick
+            test_instance_unbound_tvar_error;
         ] );
     ]

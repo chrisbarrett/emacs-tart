@@ -465,6 +465,108 @@ let test_class_no_methods_error () =
         "error mentions methods" true
         (String.length e.message > 0)
 
+(** {1 Instance Declaration Tests} *)
+
+let test_instance_simple () =
+  (* (instance (Eq int) (eq . =)) *)
+  match parse_decl_str "(instance (Eq int) (eq . =))" with
+  | Ok
+      (Sig_ast.DInstance
+         {
+           inst_class = "Eq";
+           inst_type = Sig_ast.STCon ("int", _);
+           inst_tvar_binders = [];
+           inst_constraints = [];
+           inst_methods = [ { impl_method = "eq"; impl_fn = "="; _ } ];
+           _;
+         }) ->
+      ()
+  | Ok _ -> Alcotest.fail "Expected simple instance declaration"
+  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
+
+let test_instance_multiple_methods () =
+  (* (instance (Eq int) (eq . =) (neq . /=)) *)
+  match parse_decl_str "(instance (Eq int) (eq . =) (neq . /=))" with
+  | Ok
+      (Sig_ast.DInstance
+         {
+           inst_class = "Eq";
+           inst_methods =
+             [
+               { impl_method = "eq"; impl_fn = "="; _ };
+               { impl_method = "neq"; impl_fn = "/="; _ };
+             ];
+           _;
+         }) ->
+      ()
+  | Ok _ -> Alcotest.fail "Expected instance with two methods"
+  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
+
+let test_instance_parameterized () =
+  (* (instance [a] (Eq a) => (Eq (list a)) (eq . list-eq)) *)
+  match
+    parse_decl_str "(instance [a] (Eq a) => (Eq (list a)) (eq . list-eq))"
+  with
+  | Ok
+      (Sig_ast.DInstance
+         {
+           inst_class = "Eq";
+           inst_type = Sig_ast.STApp ("list", [ Sig_ast.STVar ("a", _) ], _);
+           inst_tvar_binders = [ { name = "a"; _ } ];
+           inst_constraints = [ ("Eq", Sig_ast.STVar ("a", _)) ];
+           inst_methods = [ { impl_method = "eq"; impl_fn = "list-eq"; _ } ];
+           _;
+         }) ->
+      ()
+  | Ok _ -> Alcotest.fail "Expected parameterized instance declaration"
+  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
+
+let test_instance_hkt () =
+  (* (instance (Functor list) (fmap . mapcar)) *)
+  match parse_decl_str "(instance (Functor list) (fmap . mapcar))" with
+  | Ok
+      (Sig_ast.DInstance
+         {
+           inst_class = "Functor";
+           inst_type = Sig_ast.STVar ("list", _);
+           inst_tvar_binders = [];
+           inst_constraints = [];
+           inst_methods = [ { impl_method = "fmap"; impl_fn = "mapcar"; _ } ];
+           _;
+         }) ->
+      ()
+  | Ok _ -> Alcotest.fail "Expected HKT instance declaration"
+  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
+
+let test_instance_multiple_constraints () =
+  (* (instance [a] (Eq a) (Ord a) => (Sortable (list a)) (sort . list-sort)) *)
+  match
+    parse_decl_str
+      "(instance [a] (Eq a) (Ord a) => (Sortable (list a)) (sort . list-sort))"
+  with
+  | Ok
+      (Sig_ast.DInstance
+         {
+           inst_class = "Sortable";
+           inst_tvar_binders = [ { name = "a"; _ } ];
+           inst_constraints =
+             [ ("Eq", Sig_ast.STVar ("a", _)); ("Ord", Sig_ast.STVar ("a", _)) ];
+           inst_methods = [ { impl_method = "sort"; impl_fn = "list-sort"; _ } ];
+           _;
+         }) ->
+      ()
+  | Ok _ -> Alcotest.fail "Expected instance with multiple constraints"
+  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
+
+let test_instance_no_methods_error () =
+  (* (instance (Eq int)) - should fail, no methods *)
+  match parse_decl_str "(instance (Eq int))" with
+  | Ok _ -> Alcotest.fail "Expected error for instance with no methods"
+  | Error e ->
+      Alcotest.(check bool)
+        "error mentions method" true
+        (String.length e.message > 0)
+
 (** {1 Signature File Tests} *)
 
 let test_parse_signature () =
@@ -525,6 +627,19 @@ let () =
             test_class_multiple_superclasses;
           Alcotest.test_case "class no methods error" `Quick
             test_class_no_methods_error;
+        ] );
+      ( "instance-declarations",
+        [
+          Alcotest.test_case "instance simple" `Quick test_instance_simple;
+          Alcotest.test_case "instance multiple methods" `Quick
+            test_instance_multiple_methods;
+          Alcotest.test_case "instance parameterized" `Quick
+            test_instance_parameterized;
+          Alcotest.test_case "instance HKT" `Quick test_instance_hkt;
+          Alcotest.test_case "instance multiple constraints" `Quick
+            test_instance_multiple_constraints;
+          Alcotest.test_case "instance no methods error" `Quick
+            test_instance_no_methods_error;
         ] );
       ( "signature-files",
         [ Alcotest.test_case "parse signature" `Quick test_parse_signature ] );

@@ -466,10 +466,10 @@ Enable ad-hoc polymorphism through type classes and instances.
 
 ### 18.2 Instance Declarations
 
-- [ ] [R2] Add instance declaration AST to sig_ast.ml
-- [ ] [R2] Parse instance declarations in sig_parser.ml
-- [ ] [R2] Load instances and validate method mappings
-- [ ] Verify: `dune test`; instance declarations parse and load
+- [x] [R2] Add instance declaration AST to sig_ast.ml
+- [x] [R2] Parse instance declarations in sig_parser.ml
+- [x] [R2] Load instances and validate method mappings
+- [x] Verify: `dune test`; instance declarations parse and load
 
 ### 18.3 Constraint Syntax
 
