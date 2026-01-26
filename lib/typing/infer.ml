@@ -812,7 +812,8 @@ and infer_defun_with_declaration (env : Env.t) (name : string)
   let declared_return = convert_and_subst return_sig_type in
 
   (* Add constraint: body type = declared return type *)
-  let return_constraint = C.equal body_result.ty declared_return span in
+  let context = C.DeclaredReturn { fn_name = name; declared_type = declared_return } in
+  let return_constraint = C.equal ~context body_result.ty declared_return span in
   let all_constraints = C.add return_constraint body_result.constraints in
 
   (* Solve constraints *)

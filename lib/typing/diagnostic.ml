@@ -324,7 +324,7 @@ let arity_mismatch_with_context ~span ~expected ~actual ~context () =
         help = [];
       }
   | Constraint.NoContext | Constraint.IfBranch _ | Constraint.TartAnnotation _
-    ->
+  | Constraint.DeclaredReturn _ ->
       arity_mismatch ~span ~expected ~actual ()
 
 (** Generate a note about the other branch in an if expression *)
@@ -441,6 +441,31 @@ let type_mismatch_with_context ~span ~expected ~actual ~context () =
             span = Loc.dummy_span;
             message =
               Printf.sprintf "annotation declares type %s"
+                (Types.to_string declared_type);
+          };
+        ]
+      in
+      {
+        severity = Error;
+        code = Some E0308;
+        span;
+        message;
+        expected = Some expected;
+        actual = Some actual;
+        related;
+        help = base_help;
+      }
+  | Constraint.DeclaredReturn { fn_name; declared_type } ->
+      let base_help = suggest_type_fix ~expected ~actual in
+      let message =
+        Printf.sprintf "function body doesn't match declared return type"
+      in
+      let related =
+        [
+          {
+            span = Loc.dummy_span;
+            message =
+              Printf.sprintf "`%s` declared to return %s" fn_name
                 (Types.to_string declared_type);
           };
         ]

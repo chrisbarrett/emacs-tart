@@ -196,6 +196,43 @@ let test_declare_tart_polymorphic () =
   let result = Check.check_program sexps in
   Alcotest.(check int) "no errors" 0 (List.length result.errors)
 
+(** Helper to check if a string contains a substring *)
+let contains ~substring s =
+  try
+    let _ = Str.search_forward (Str.regexp_string substring) s 0 in
+    true
+  with Not_found -> false
+
+(** Test error message for return type mismatch (R9) *)
+let test_declare_tart_return_error_message () =
+  let sexps =
+    parse_many
+      {|(defun bad (x)
+          (declare (tart (int) -> string))
+          x)|}
+  in
+  let result = Check.check_program sexps in
+  Alcotest.(check bool) "has error" true (List.length result.errors > 0);
+  match result.errors with
+  | err :: _ ->
+      let diag = Tart.Diagnostic.of_unify_error err in
+      (* Message should say "function body doesn't match declared return type" *)
+      Alcotest.(check bool)
+        "message mentions return type" true
+        (contains ~substring:"declared return type" diag.message);
+      (* Related info should mention the function name and declared type *)
+      Alcotest.(check bool)
+        "has related info" true
+        (List.length diag.related > 0);
+      let related = List.hd diag.related in
+      Alcotest.(check bool)
+        "related mentions function name" true
+        (contains ~substring:"bad" related.message);
+      Alcotest.(check bool)
+        "related mentions declared type" true
+        (contains ~substring:"String" related.message)
+  | [] -> Alcotest.fail "expected error"
+
 (* =============================================================================
    tart annotation Tests: (tart TYPE FORM)
    ============================================================================= *)
@@ -653,6 +690,8 @@ let () =
           Alcotest.test_case "return mismatch error" `Quick
             test_declare_tart_return_mismatch;
           Alcotest.test_case "polymorphic" `Quick test_declare_tart_polymorphic;
+          Alcotest.test_case "return error message" `Quick
+            test_declare_tart_return_error_message;
         ] );
       ( "tart_annotation",
         [

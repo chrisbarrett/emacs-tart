@@ -24,6 +24,10 @@ type context =
     }
   | TartAnnotation of { declared_type : Core.Types.typ }
       (** Type annotation via (tart TYPE FORM) *)
+  | DeclaredReturn of {
+      fn_name : string;  (** Name of the function *)
+      declared_type : Core.Types.typ;  (** Declared return type *)
+    }  (** Function body vs declared return type *)
 
 type t = {
   lhs : Core.Types.typ;  (** Left-hand side type *)

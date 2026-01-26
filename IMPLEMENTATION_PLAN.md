@@ -199,7 +199,7 @@ Phase 7).
 ### 8.4 Integration
 
 - [x] [R10] Verify inline annotations match `.tart` declarations
-- [ ] [R9] Format error messages for annotation mismatches
+- [x] [R9] Format error messages for annotation mismatches
 - [x] Verify: Mismatched inline/`.tart` produces error
 
 ## Phase 9: ADT System (Spec 11)
