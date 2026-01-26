@@ -489,8 +489,8 @@ Enable ad-hoc polymorphism through type classes and instances.
 
 - [x] [R5] Implement recursive constraint resolution
 - [x] [R6] Implement superclass constraint checking
-- [ ] [R7] Add HKT class support (Functor-like)
-- [ ] Verify: `dune test`; nested and HKT constraints resolve
+- [x] [R7] Add HKT class support (Functor-like)
+- [x] Verify: `dune test`; nested and HKT constraints resolve
 
 ### 18.6 Error Handling
 

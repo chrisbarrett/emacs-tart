@@ -273,6 +273,56 @@ let test_transitive_superclass_missing () =
       Alcotest.(check string) "missing is Eq" "Eq" cls
   | Ok () -> Alcotest.fail "Expected Error for missing transitive superclass"
 
+(** {1 HKT Class Tests (R7)} *)
+
+(** Create a simple HKT instance (type constructor as instance head) *)
+let hkt_instance class_name type_con =
+  {
+    inst_class = class_name;
+    inst_type = TCon type_con;
+    inst_tvars = [];
+    inst_constraints = [];
+  }
+
+(** R7: HKT instance resolution for type constructors *)
+let test_hkt_instance_resolution () =
+  (* (instance (Functor list) ...) - the instance head is a type constructor *)
+  let functor_list = hkt_instance "Functor" "List" in
+  let reg = empty_registry |> add_instance functor_list in
+  match resolve_all reg [ ("Functor", TCon "List") ] with
+  | Ok () -> ()
+  | Error (cls, ty) ->
+      Alcotest.fail
+        (Printf.sprintf "Expected Ok, got Error (%s %s)" cls (to_string ty))
+
+(** R7: HKT instance not found for different constructor *)
+let test_hkt_instance_not_found () =
+  (* (instance (Functor list)) but resolving (Functor option) should fail *)
+  let functor_list = hkt_instance "Functor" "List" in
+  let reg = empty_registry |> add_instance functor_list in
+  match resolve_all reg [ ("Functor", TCon "Option") ] with
+  | Error (cls, ty) ->
+      Alcotest.(check string) "class" "Functor" cls;
+      Alcotest.(check string) "type" "Option" (to_string ty)
+  | Ok () -> Alcotest.fail "Expected Error for missing (Functor Option)"
+
+(** R7: Multiple HKT instances for same class *)
+let test_multiple_hkt_instances () =
+  (* (instance (Functor list)) and (instance (Functor option)) *)
+  let functor_list = hkt_instance "Functor" "List" in
+  let functor_option = hkt_instance "Functor" "Option" in
+  let reg =
+    empty_registry |> add_instance functor_list |> add_instance functor_option
+  in
+  (* Both should resolve *)
+  match
+    resolve_all reg [ ("Functor", TCon "List"); ("Functor", TCon "Option") ]
+  with
+  | Ok () -> ()
+  | Error (cls, ty) ->
+      Alcotest.fail
+        (Printf.sprintf "Expected Ok, got Error (%s %s)" cls (to_string ty))
+
 (** {1 Test Runner} *)
 
 let () =
@@ -315,6 +365,15 @@ let () =
           Alcotest.test_case "transitive" `Quick test_transitive_superclasses;
           Alcotest.test_case "transitive missing" `Quick
             test_transitive_superclass_missing;
+        ] );
+      ( "hkt-instances",
+        [
+          Alcotest.test_case "type constructor instance" `Quick
+            test_hkt_instance_resolution;
+          Alcotest.test_case "not found different constructor" `Quick
+            test_hkt_instance_not_found;
+          Alcotest.test_case "multiple HKT instances" `Quick
+            test_multiple_hkt_instances;
         ] );
       ( "load-instance",
         [
