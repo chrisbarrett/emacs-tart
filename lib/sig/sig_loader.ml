@@ -577,33 +577,182 @@ let load_defun (d : defun_decl) : Type_env.scheme =
 let load_defvar (d : defvar_decl) : Type_env.scheme =
   load_defvar_with_ctx empty_type_context d
 
+(** {1 Module Resolution}
+
+    Module resolution is delegated to a callback function, allowing
+    different resolution strategies (search paths, bundled stdlib, etc.). *)
+
+(** Module resolution callback type.
+    Takes a module name and returns the parsed signature if found.
+    The result contains both the signature AST and whether it should be
+    treated as an error if not found (for required modules). *)
+type module_resolver = string -> signature option
+
+(** A dummy resolver that finds nothing. Used as default. *)
+let no_resolver : module_resolver = fun _ -> None
+
+(** {1 Loaded Module State}
+
+    State accumulated during signature loading, tracking:
+    - Type context (aliases and opaques) from this and opened modules
+    - Value environment (functions and variables)
+    - Exports (which names are exported by this module) *)
+
+(** State accumulated during loading *)
+type load_state = {
+  ls_type_ctx : type_context;     (** Types available for use in signatures *)
+  ls_env : Type_env.t;            (** Values exported by this module *)
+  ls_resolver : module_resolver;  (** How to find other modules *)
+  ls_loaded : string list;        (** Modules already loaded (cycle detection) *)
+}
+
+(** Create initial load state *)
+let init_load_state ~resolver ~base_env ~module_name =
+  {
+    ls_type_ctx = empty_type_context;
+    ls_env = base_env;
+    ls_resolver = resolver;
+    ls_loaded = [module_name];  (* Mark self as loaded to prevent self-import *)
+  }
+
+(** Add a type alias to the load state *)
+let add_alias_to_state name alias state =
+  let aliases = add_alias name alias state.ls_type_ctx.tc_aliases in
+  { state with ls_type_ctx = { state.ls_type_ctx with tc_aliases = aliases } }
+
+(** Add an opaque type to the load state *)
+let add_opaque_to_state name opaque state =
+  let opaques = add_opaque name opaque state.ls_type_ctx.tc_opaques in
+  { state with ls_type_ctx = { state.ls_type_ctx with tc_opaques = opaques } }
+
+(** Add a value binding to the load state *)
+let add_value_to_state name scheme state =
+  { state with ls_env = Type_env.extend name scheme state.ls_env }
+
+(** {1 Open and Include Processing}
+
+    - open: Import types for use in signatures (not re-exported to value env)
+    - include: Inline all declarations (types available AND values re-exported) *)
+
+(** Process an 'open' directive.
+    Imports types from another module for use in type expressions.
+    Types are NOT re-exported; they are only available for signature writing.
+
+    R12: "seq is available for use in type expressions"
+         "seq is NOT re-exported from my-collection" *)
+let process_open (module_name : string) (state : load_state) : load_state =
+  if List.mem module_name state.ls_loaded then
+    (* Already loaded - skip to prevent cycles *)
+    state
+  else
+    match state.ls_resolver module_name with
+    | None ->
+        (* Module not found - for now, silently skip.
+           Later we can add proper error reporting. *)
+        state
+    | Some opened_sig ->
+        (* Mark as loaded *)
+        let state = { state with ls_loaded = module_name :: state.ls_loaded } in
+        (* Import type aliases from opened module *)
+        let aliases = build_alias_context opened_sig in
+        let state = List.fold_left
+            (fun s (name, alias) -> add_alias_to_state name alias s)
+            state aliases
+        in
+        (* Import opaque types from opened module *)
+        let opaques = build_opaque_context opened_sig.sig_module opened_sig in
+        let state = List.fold_left
+            (fun s (name, opaque) -> add_opaque_to_state name opaque s)
+            state opaques
+        in
+        (* Note: we do NOT add values to ls_env - open only imports types *)
+        state
+
+(** Process an 'include' directive.
+    Imports all declarations from another module and re-exports them.
+    Both types AND values become part of this module's interface.
+
+    R13: "all declarations from seq.tart are part of my-extended-seq's interface"
+         "types from seq are available for use in signatures" *)
+let rec process_include (module_name : string) (state : load_state) : load_state =
+  if List.mem module_name state.ls_loaded then
+    (* Already loaded - skip to prevent cycles *)
+    state
+  else
+    match state.ls_resolver module_name with
+    | None ->
+        (* Module not found - for now, silently skip *)
+        state
+    | Some included_sig ->
+        (* Mark as loaded *)
+        let state = { state with ls_loaded = module_name :: state.ls_loaded } in
+        (* Process the included signature's declarations recursively *)
+        load_decls_into_state included_sig state
+
+(** Load declarations from a signature into the load state.
+    Handles all declaration types including open/include recursively. *)
+and load_decls_into_state (sig_file : signature) (state : load_state) : load_state =
+  List.fold_left
+    (fun state decl ->
+       match decl with
+       | DOpen (name, _) ->
+           process_open name state
+       | DInclude (name, _) ->
+           process_include name state
+       | DType d ->
+           (* Add to type context *)
+           (match d.type_body with
+            | Some body ->
+                (* Type alias *)
+                let alias = {
+                  alias_params = List.map (fun b -> b.name) d.type_params;
+                  alias_body = body;
+                } in
+                add_alias_to_state d.type_name alias state
+            | None ->
+                (* Opaque type - use the original module name for the constructor *)
+                let opaque = {
+                  opaque_params = List.map (fun b -> b.name) d.type_params;
+                  opaque_con = opaque_con_name sig_file.sig_module d.type_name;
+                } in
+                add_opaque_to_state d.type_name opaque state)
+       | DDefun d ->
+           let scheme = load_defun_with_ctx state.ls_type_ctx d in
+           add_value_to_state d.defun_name scheme state
+       | DDefvar d ->
+           let scheme = load_defvar_with_ctx state.ls_type_ctx d in
+           add_value_to_state d.defvar_name scheme state
+       | DImportStruct _ ->
+           (* Not implemented yet *)
+           state)
+    state sig_file.sig_decls
+
 (** {1 Signature Loading}
 
     Load an entire signature file into a type environment. *)
 
+(** Load a validated signature into a type environment with module resolution.
+    Adds all function and variable declarations to the environment.
+    Type aliases are expanded and opaque types are resolved during loading.
+    Open directives import types only; include directives re-export values.
+    Returns the extended environment.
+
+    @param resolver Function to resolve module names to signatures
+    @param env Base type environment to extend
+    @param sig_file The signature to load *)
+let load_signature_with_resolver
+    ~(resolver : module_resolver)
+    (env : Type_env.t)
+    (sig_file : signature) : Type_env.t =
+  let state = init_load_state ~resolver ~base_env:env ~module_name:sig_file.sig_module in
+  let final_state = load_decls_into_state sig_file state in
+  final_state.ls_env
+
 (** Load a validated signature into a type environment.
+    This is the simple interface without module resolution.
+    Open and include directives will be ignored (no resolver provided).
     Adds all function and variable declarations to the environment.
     Type aliases are expanded and opaque types are resolved during loading.
     Returns the extended environment. *)
 let load_signature (env : Type_env.t) (sig_file : signature) : Type_env.t =
-  (* First pass: collect type aliases and opaque types *)
-  let aliases = build_alias_context sig_file in
-  let opaques = build_opaque_context sig_file.sig_module sig_file in
-  let ctx = { tc_aliases = aliases; tc_opaques = opaques } in
-  (* Second pass: load declarations with full type context *)
-  List.fold_left
-    (fun acc decl ->
-       match decl with
-       | DOpen _ | DInclude _ ->
-           (* Module directives - not handled yet *)
-           acc
-       | DDefun d ->
-           let scheme = load_defun_with_ctx ctx d in
-           Type_env.extend d.defun_name scheme acc
-       | DDefvar d ->
-           let scheme = load_defvar_with_ctx ctx d in
-           Type_env.extend d.defvar_name scheme acc
-       | DType _ | DImportStruct _ ->
-           (* Type declarations - not adding to value environment *)
-           acc)
-    env sig_file.sig_decls
+  load_signature_with_resolver ~resolver:no_resolver env sig_file

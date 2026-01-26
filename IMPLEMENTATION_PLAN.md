@@ -22,9 +22,9 @@ Foundation for module boundaries and type-checked code.
 - [x] Verify: Opaque types not unifiable with other types
 
 ### 1.4 Module Directives
-- [ ] [R12] Implement `open` directive (import types, not re-export)
-- [ ] [R13] Implement `include` directive (inline and re-export)
-- [ ] Verify: Opened types available but not exported
+- [x] [R12] Implement `open` directive (import types, not re-export)
+- [x] [R13] Implement `include` directive (inline and re-export)
+- [x] Verify: Opened types available but not exported
 
 ### 1.5 Struct Imports
 - [ ] [R11] Implement `import-struct` to generate type, constructor, predicate, accessors

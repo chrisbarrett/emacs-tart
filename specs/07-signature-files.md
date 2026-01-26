@@ -257,8 +257,8 @@ Minimum coverage:
 - [x] [R9] Handle opaque types (no definition)
 - [x] [R10] Handle opaque types with phantom parameters
 - [ ] [R11] Handle struct imports
-- [ ] [R12] Handle open directive (import types)
-- [ ] [R13] Handle include directive (re-export declarations)
+- [x] [R12] Handle open directive (import types)
+- [x] [R13] Handle include directive (re-export declarations)
 - [x] [R14] Parse union types with `|` syntax
 - [ ] [R15] Implement signature search path
 - [ ] [R16] Implement module discovery with search order

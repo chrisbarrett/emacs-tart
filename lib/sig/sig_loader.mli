@@ -130,9 +130,35 @@ val load_defun : Sig_ast.defun_decl -> Core.Type_env.scheme
     The type may be polymorphic if it contains a forall. *)
 val load_defvar : Sig_ast.defvar_decl -> Core.Type_env.scheme
 
+(** {1 Module Resolution} *)
+
+(** Module resolution callback type.
+    Takes a module name and returns the parsed signature if found. *)
+type module_resolver = string -> Sig_ast.signature option
+
+(** A dummy resolver that finds nothing. Used as default. *)
+val no_resolver : module_resolver
+
 (** {1 Signature Loading} *)
 
+(** Load a validated signature into a type environment with module resolution.
+    Adds all function and variable declarations to the environment.
+    Type aliases are expanded and opaque types are resolved during loading.
+    Open directives import types only; include directives re-export values.
+    Returns the extended environment.
+
+    @param resolver Function to resolve module names to signatures
+    @param env Base type environment to extend
+    @param sig_file The signature to load *)
+val load_signature_with_resolver :
+  resolver:module_resolver ->
+  Core.Type_env.t ->
+  Sig_ast.signature ->
+  Core.Type_env.t
+
 (** Load a validated signature into a type environment.
+    This is the simple interface without module resolution.
+    Open and include directives will be ignored (no resolver provided).
     Adds all function and variable declarations to the environment.
     Type aliases are expanded during loading.
     Returns the extended environment. *)

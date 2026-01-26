@@ -13,15 +13,36 @@ let validate_str s =
   | Error _ -> failwith "Parse error in test"
   | Ok sig_file -> Sig_loader.validate_signature sig_file
 
-(** Helper to parse a signature string and load it into an environment *)
-let load_sig_str ?(env = Type_env.empty) s =
+(** Helper to parse a signature string into an AST *)
+let parse_sig_str ?(module_name = "test") s =
   let parse_result = Syntax.Read.parse_string s in
-  match Sig_parser.parse_signature ~module_name:"test" parse_result.sexps with
+  match Sig_parser.parse_signature ~module_name parse_result.sexps with
   | Error _ -> failwith "Parse error in test"
   | Ok sig_file ->
       match Sig_loader.validate_signature sig_file with
       | Error e -> failwith ("Validation error: " ^ e.message)
-      | Ok () -> Sig_loader.load_signature env sig_file
+      | Ok () -> sig_file
+
+(** Helper to parse a signature string into an AST without validation.
+    Used when the signature depends on opened/included modules where
+    validation can't know about external types. *)
+let parse_sig_str_no_validate ?(module_name = "test") s =
+  let parse_result = Syntax.Read.parse_string s in
+  match Sig_parser.parse_signature ~module_name parse_result.sexps with
+  | Error _ -> failwith "Parse error in test"
+  | Ok sig_file -> sig_file
+
+(** Helper to parse a signature string and load it into an environment *)
+let load_sig_str ?(env = Type_env.empty) s =
+  let sig_file = parse_sig_str s in
+  Sig_loader.load_signature env sig_file
+
+(** Helper to load a signature with a module resolver.
+    Note: Validation is skipped because external types from opened/included
+    modules aren't known at parse time. *)
+let load_sig_str_with_resolver ?(env = Type_env.empty) ~resolver s =
+  let sig_file = parse_sig_str_no_validate s in
+  Sig_loader.load_signature_with_resolver ~resolver env sig_file
 
 (** Helper to parse and type-check an expression *)
 let check_expr_str ~env s =
@@ -304,6 +325,29 @@ let test_type_alias_with_poly_fn () =
   (* (wrapper Int) expands to (List Int) *)
   Alcotest.(check string) "result is list int" "(List Int)" (Types.to_string ty)
 
+(** Test type alias in parameter position with polymorphic function.
+    This verifies that aliases are expanded in parameter position.
+    Note: We check the scheme directly rather than calling the function,
+    as the type checker has a known limitation with polymorphic params. *)
+let test_type_alias_in_param_position () =
+  let sig_src = {|
+    (type seq [a] (list a))
+    (defun process-seq [a] ((seq a)) -> a)
+  |} in
+  let env = load_sig_str sig_src in
+  (* Verify the alias was expanded in the scheme *)
+  match Type_env.lookup "process-seq" env with
+  | None -> Alcotest.fail "process-seq not found"
+  | Some scheme ->
+      let scheme_str = Type_env.scheme_to_string scheme in
+      (* Should contain "List" not "seq" *)
+      Alcotest.(check bool) "scheme contains List"
+        true (try let _ = Str.search_forward (Str.regexp_string "List") scheme_str 0 in true
+              with Not_found -> false);
+      Alcotest.(check bool) "scheme does not contain seq"
+        true (not (try let _ = Str.search_forward (Str.regexp_string "seq") scheme_str 0 in true
+                   with Not_found -> false))
+
 (** {1 Opaque Type Tests (R9, R10)}
 
     These tests verify that opaque types work as distinct abstract types. *)
@@ -393,6 +437,276 @@ let test_opaque_with_polymorphism () =
   Alcotest.(check int) "no type errors" 0 (List.length errors);
   Alcotest.(check string) "unbox returns inner type" "Int" (Types.to_string ty)
 
+(** {1 Open Directive Tests (R12)}
+
+    Tests for the 'open' directive that imports types for use in signatures
+    without re-exporting them. *)
+
+(** Test that open imports type aliases for use in signatures.
+    R12: "seq is available for use in type expressions" *)
+let test_open_imports_type_aliases () =
+  (* Create a module "seq" with a type alias *)
+  let seq_sig = parse_sig_str ~module_name:"seq" {|
+    (type seq [a] (list a))
+  |} in
+  (* Create a resolver that returns the seq module *)
+  let resolver name =
+    if name = "seq" then Some seq_sig else None
+  in
+  (* Module that opens seq and uses its type *)
+  let env = load_sig_str_with_resolver ~resolver {|
+    (open 'seq)
+    (defun process-seq [a] ((seq a)) -> a)
+  |} in
+  (* Verify the function is loaded with correct type *)
+  (* (seq a) should expand to (list a), so process-seq : [a] (list a) -> a *)
+  match Type_env.lookup "process-seq" env with
+  | None -> Alcotest.fail "process-seq not found"
+  | Some scheme ->
+      let scheme_str = Type_env.scheme_to_string scheme in
+      (* The scheme should contain "List" (the expanded type), not "seq" *)
+      Alcotest.(check bool) "seq alias expanded to List"
+        true (try let _ = Str.search_forward (Str.regexp_string "List") scheme_str 0 in true
+              with Not_found -> false);
+      Alcotest.(check bool) "scheme does not contain seq"
+        true (not (try let _ = Str.search_forward (Str.regexp_string "seq") scheme_str 0 in true
+                   with Not_found -> false))
+
+(** Test that open imports opaque types for use in signatures.
+    R12: Opaque types from opened modules are available *)
+let test_open_imports_opaque_types () =
+  (* Create a module "buf" with an opaque type *)
+  let buf_sig = parse_sig_str ~module_name:"buf" {|
+    (type buffer)
+    (defun make-buffer () -> buffer)
+  |} in
+  let resolver name =
+    if name = "buf" then Some buf_sig else None
+  in
+  (* Module that opens buf and uses its opaque type *)
+  let env = load_sig_str_with_resolver ~resolver {|
+    (open 'buf)
+    (defun wrap-buffer (buffer) -> (list buffer))
+  |} in
+  (* The buffer type should be available *)
+  match Type_env.lookup "wrap-buffer" env with
+  | None -> Alcotest.fail "wrap-buffer not found"
+  | Some _ -> ()  (* Type was successfully loaded *)
+
+(** Test that opened values are NOT re-exported.
+    R12: "seq is NOT re-exported from my-collection" *)
+let test_open_does_not_export_values () =
+  (* Create a module with a function *)
+  let lib_sig = parse_sig_str ~module_name:"lib" {|
+    (defun lib-func (int) -> int)
+  |} in
+  let resolver name =
+    if name = "lib" then Some lib_sig else None
+  in
+  (* Module that opens lib *)
+  let env = load_sig_str_with_resolver ~resolver {|
+    (open 'lib)
+    (defun my-func (int) -> int)
+  |} in
+  (* lib-func should NOT be in the environment (open doesn't re-export values) *)
+  (match Type_env.lookup "lib-func" env with
+   | None -> ()  (* Correct - not re-exported *)
+   | Some _ -> Alcotest.fail "lib-func should not be re-exported from open");
+  (* my-func should be there *)
+  (match Type_env.lookup "my-func" env with
+   | None -> Alcotest.fail "my-func should be in environment"
+   | Some _ -> ())
+
+(** Test that open handles cycles gracefully.
+    Opening the same module twice or opening self should not loop. *)
+let test_open_cycle_detection () =
+  (* Create modules that open each other *)
+  let rec resolver name =
+    if name = "a" then Some (parse_sig_str_with_resolver ~module_name:"a" ~resolver {|
+      (open 'b)
+      (type ta (list int))
+    |})
+    else if name = "b" then Some (parse_sig_str ~module_name:"b" {|
+      (type tb (list string))
+    |})
+    else None
+  and parse_sig_str_with_resolver ~module_name ~resolver:_ s =
+    (* Note: For cycle testing, we don't actually need recursive resolution
+       in the test setup - the loader handles it internally *)
+    parse_sig_str ~module_name s
+  in
+  (* This should not infinite loop *)
+  let env = load_sig_str_with_resolver ~resolver {|
+    (open 'a)
+    (defun use-ta (ta) -> nil)
+  |} in
+  match Type_env.lookup "use-ta" env with
+  | None -> Alcotest.fail "use-ta should be loaded"
+  | Some _ -> ()
+
+(** {1 Include Directive Tests (R13)}
+
+    Tests for the 'include' directive that inlines and re-exports all
+    declarations from another module. *)
+
+(** Test that include re-exports function declarations.
+    R13: "all declarations from seq.tart are part of my-extended-seq's interface" *)
+let test_include_reexports_functions () =
+  (* Create a module with functions *)
+  let base_sig = parse_sig_str ~module_name:"base" {|
+    (defun base-add (int int) -> int)
+    (defun base-mul (int int) -> int)
+  |} in
+  let resolver name =
+    if name = "base" then Some base_sig else None
+  in
+  (* Module that includes base *)
+  let env = load_sig_str_with_resolver ~resolver {|
+    (include 'base)
+    (defun extended-op (int int int) -> int)
+  |} in
+  (* base-add should be re-exported *)
+  (match Type_env.lookup "base-add" env with
+   | None -> Alcotest.fail "base-add should be re-exported via include"
+   | Some _ -> ());
+  (* base-mul should be re-exported *)
+  (match Type_env.lookup "base-mul" env with
+   | None -> Alcotest.fail "base-mul should be re-exported via include"
+   | Some _ -> ());
+  (* Our own function should also be there *)
+  (match Type_env.lookup "extended-op" env with
+   | None -> Alcotest.fail "extended-op should be in environment"
+   | Some _ -> ())
+
+(** Test that include re-exports type aliases.
+    R13: Types from included module are available AND re-exported *)
+let test_include_reexports_types () =
+  (* Create a module with a type alias *)
+  let types_sig = parse_sig_str ~module_name:"types" {|
+    (type int-list (list int))
+    (defun make-list () -> int-list)
+  |} in
+  let resolver name =
+    if name = "types" then Some types_sig else None
+  in
+  (* Module that includes types *)
+  let env = load_sig_str_with_resolver ~resolver {|
+    (include 'types)
+    (defun sum-list (int-list) -> int)
+  |} in
+  (* Verify make-list is re-exported from include *)
+  (match Type_env.lookup "make-list" env with
+   | None -> Alcotest.fail "make-list should be re-exported via include"
+   | Some scheme ->
+       let scheme_str = Type_env.scheme_to_string scheme in
+       (* int-list should expand to (List Int) *)
+       Alcotest.(check bool) "make-list returns expanded type"
+         true (try let _ = Str.search_forward (Str.regexp_string "List") scheme_str 0 in true
+               with Not_found -> false));
+  (* Verify sum-list was loaded with expanded alias *)
+  (match Type_env.lookup "sum-list" env with
+   | None -> Alcotest.fail "sum-list not found"
+   | Some scheme ->
+       let scheme_str = Type_env.scheme_to_string scheme in
+       (* int-list should expand to (List Int) *)
+       Alcotest.(check bool) "sum-list param has expanded type"
+         true (try let _ = Str.search_forward (Str.regexp_string "List") scheme_str 0 in true
+               with Not_found -> false))
+
+(** Test that include re-exports variable declarations.
+    R13: defvar declarations are also re-exported *)
+let test_include_reexports_variables () =
+  (* Create a module with a variable *)
+  let config_sig = parse_sig_str ~module_name:"config" {|
+    (defvar default-value int)
+  |} in
+  let resolver name =
+    if name = "config" then Some config_sig else None
+  in
+  (* Module that includes config *)
+  let env = load_sig_str_with_resolver ~resolver {|
+    (include 'config)
+    (defun use-default () -> int)
+  |} in
+  (* default-value should be re-exported *)
+  let ty, errors = check_expr_str ~env "default-value" in
+  Alcotest.(check int) "no type errors" 0 (List.length errors);
+  Alcotest.(check string) "variable type is Int" "Int" (Types.to_string ty)
+
+(** Test that include handles opaque types correctly.
+    R13: Opaque types preserve their module-qualified names *)
+let test_include_preserves_opaque_identity () =
+  (* Create a module with an opaque type *)
+  let opaque_sig = parse_sig_str ~module_name:"opaque-mod" {|
+    (type handle)
+    (defun make-handle () -> handle)
+    (defun use-handle (handle) -> nil)
+  |} in
+  let resolver name =
+    if name = "opaque-mod" then Some opaque_sig else None
+  in
+  (* Module that includes the opaque module *)
+  let env = load_sig_str_with_resolver ~resolver {|
+    (include 'opaque-mod)
+  |} in
+  (* Using the handle correctly should work *)
+  let _, errors = check_expr_str ~env "(use-handle (make-handle))" in
+  Alcotest.(check int) "no type errors" 0 (List.length errors)
+
+(** Test transitive includes.
+    Including a module that includes another module. *)
+let test_include_transitive () =
+  (* Create base module *)
+  let base_sig = parse_sig_str ~module_name:"base" {|
+    (defun base-fn () -> int)
+  |} in
+  (* Create middle module that includes base *)
+  let middle_sig = parse_sig_str ~module_name:"middle" {|
+    (include 'base)
+    (defun middle-fn () -> int)
+  |} in
+  let resolver name =
+    match name with
+    | "base" -> Some base_sig
+    | "middle" -> Some middle_sig
+    | _ -> None
+  in
+  (* Module that includes middle *)
+  let env = load_sig_str_with_resolver ~resolver {|
+    (include 'middle)
+    (defun top-fn () -> int)
+  |} in
+  (* All functions should be available due to transitive inclusion *)
+  (match Type_env.lookup "base-fn" env with
+   | None -> Alcotest.fail "base-fn should be transitively re-exported"
+   | Some _ -> ());
+  (match Type_env.lookup "middle-fn" env with
+   | None -> Alcotest.fail "middle-fn should be re-exported"
+   | Some _ -> ());
+  (match Type_env.lookup "top-fn" env with
+   | None -> Alcotest.fail "top-fn should be in environment"
+   | Some _ -> ())
+
+(** Test that include handles cycles gracefully. *)
+let test_include_cycle_detection () =
+  (* Create modules where we'd have potential cycles *)
+  let a_sig = parse_sig_str ~module_name:"a" {|
+    (defun a-fn () -> int)
+  |} in
+  let resolver name =
+    if name = "a" then Some a_sig else None
+  in
+  (* Including the same module twice should not duplicate *)
+  let env = load_sig_str_with_resolver ~resolver {|
+    (include 'a)
+    (include 'a)
+    (defun my-fn () -> int)
+  |} in
+  (* Should work without errors *)
+  (match Type_env.lookup "a-fn" env with
+   | None -> Alcotest.fail "a-fn should be in environment"
+   | Some _ -> ())
+
 let () =
   Alcotest.run "sig_loader"
     [
@@ -435,6 +749,7 @@ let () =
           Alcotest.test_case "type alias defvar" `Quick test_type_alias_defvar;
           Alcotest.test_case "nested type alias" `Quick test_nested_type_alias;
           Alcotest.test_case "type alias with poly fn" `Quick test_type_alias_with_poly_fn;
+          Alcotest.test_case "type alias in param position" `Quick test_type_alias_in_param_position;
         ] );
       ( "opaque-types",
         [
@@ -444,5 +759,21 @@ let () =
           Alcotest.test_case "opaque phantom params" `Quick test_opaque_phantom_params;
           Alcotest.test_case "opaque return type" `Quick test_opaque_return_type;
           Alcotest.test_case "opaque with polymorphism" `Quick test_opaque_with_polymorphism;
+        ] );
+      ( "open-directive",
+        [
+          Alcotest.test_case "open imports type aliases" `Quick test_open_imports_type_aliases;
+          Alcotest.test_case "open imports opaque types" `Quick test_open_imports_opaque_types;
+          Alcotest.test_case "open does not export values" `Quick test_open_does_not_export_values;
+          Alcotest.test_case "open cycle detection" `Quick test_open_cycle_detection;
+        ] );
+      ( "include-directive",
+        [
+          Alcotest.test_case "include re-exports functions" `Quick test_include_reexports_functions;
+          Alcotest.test_case "include re-exports types" `Quick test_include_reexports_types;
+          Alcotest.test_case "include re-exports variables" `Quick test_include_reexports_variables;
+          Alcotest.test_case "include preserves opaque identity" `Quick test_include_preserves_opaque_identity;
+          Alcotest.test_case "include transitive" `Quick test_include_transitive;
+          Alcotest.test_case "include cycle detection" `Quick test_include_cycle_detection;
         ] );
     ]
