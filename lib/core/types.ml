@@ -1,27 +1,23 @@
 (** Type representation for the Tart type system.
 
-    This module defines the core type representation used for type inference
-    and checking. It uses mutable type variables with union-find for efficient
+    This module defines the core type representation used for type inference and
+    checking. It uses mutable type variables with union-find for efficient
     unification.
 
     Based on levels-based Hindley-Milner inference with union-find for
-    near-linear generalization performance.
-*)
+    near-linear generalization performance. *)
 
-(** Unique identifier for type variables *)
 type tvar_id = int [@@deriving show, eq]
+(** Unique identifier for type variables *)
 
 (** Type variable state - uses union-find representation.
 
-    [Unbound (id, level)] is an unresolved type variable. The level tracks
-    the scope depth for let-generalization: variables with level > current
-    scope level can be generalized.
+    [Unbound (id, level)] is an unresolved type variable. The level tracks the
+    scope depth for let-generalization: variables with level > current scope
+    level can be generalized.
 
-    [Link ty] indicates this variable has been unified with [ty].
-*)
-type tvar =
-  | Unbound of tvar_id * int  (** id, level *)
-  | Link of typ
+    [Link ty] indicates this variable has been unified with [ty]. *)
+type tvar = Unbound of tvar_id * int  (** id, level *) | Link of typ
 
 (** Type representation.
 
@@ -31,8 +27,7 @@ type tvar =
     - [TArrow] - Function type with grouped parameters
     - [TForall] - Universally quantified type
     - [TUnion] - Union types (Or a b)
-    - [TTuple] - Fixed-length heterogeneous tuples
-*)
+    - [TTuple] - Fixed-length heterogeneous tuples *)
 and typ =
   | TVar of tvar ref
   | TCon of string
@@ -49,7 +44,7 @@ and typ =
 and param =
   | PPositional of typ
   | POptional of typ  (** Type should be (Option a) *)
-  | PRest of typ      (** Type should be the element type; desugars to (List a) *)
+  | PRest of typ  (** Type should be the element type; desugars to (List a) *)
   | PKey of string * typ  (** :keyword name and type *)
 
 (** Global counter for fresh type variable IDs *)
@@ -65,22 +60,16 @@ let fresh_tvar level =
   TVar (ref (Unbound (id, level)))
 
 (** Get the ID of an unbound type variable, or None if linked *)
-let tvar_id tv =
-  match !tv with
-  | Unbound (id, _) -> Some id
-  | Link _ -> None
+let tvar_id tv = match !tv with Unbound (id, _) -> Some id | Link _ -> None
 
 (** Get the level of an unbound type variable, or None if linked *)
 let tvar_level tv =
-  match !tv with
-  | Unbound (_, level) -> Some level
-  | Link _ -> None
+  match !tv with Unbound (_, level) -> Some level | Link _ -> None
 
 (** Follow links to find the representative type.
 
     Path compression: updates intermediate links to point directly to the
-    representative for amortized near-constant lookup.
-*)
+    representative for amortized near-constant lookup. *)
 let rec repr ty =
   match ty with
   | TVar tv -> (
@@ -94,10 +83,7 @@ let rec repr ty =
   | _ -> ty
 
 (** Check if a type is a type variable (after following links) *)
-let is_tvar ty =
-  match repr ty with
-  | TVar _ -> true
-  | _ -> false
+let is_tvar ty = match repr ty with TVar _ -> true | _ -> false
 
 (** Primitive type constants *)
 module Prim = struct
@@ -117,6 +103,7 @@ end
 
 (** Construct common types *)
 let list_of elem = TApp ("List", [ elem ])
+
 let vector_of elem = TApp ("Vector", [ elem ])
 let option_of elem = TApp ("Option", [ elem ])
 let pair_of a b = TApp ("Pair", [ a; b ])
@@ -156,16 +143,16 @@ and param_to_string = function
   | PRest ty -> Printf.sprintf "&rest %s" (to_string ty)
   | PKey (name, ty) -> Printf.sprintf "&key %s %s" name (to_string ty)
 
-(** Check if two types are syntactically equal (after following links).
-    This does NOT unify - it only checks structural equality.
-    Type variables are equal only if they have the same identity.
-*)
+(** Check if two types are syntactically equal (after following links). This
+    does NOT unify - it only checks structural equality. Type variables are
+    equal only if they have the same identity. *)
 let rec equal t1 t2 =
   match (repr t1, repr t2) with
-  | TVar tv1, TVar tv2 -> tv1 == tv2  (* Physical equality *)
+  | TVar tv1, TVar tv2 -> tv1 == tv2 (* Physical equality *)
   | TCon n1, TCon n2 -> n1 = n2
   | TApp (c1, args1), TApp (c2, args2) ->
-      c1 = c2 && List.length args1 = List.length args2
+      c1 = c2
+      && List.length args1 = List.length args2
       && List.for_all2 equal args1 args2
   | TArrow (ps1, r1), TArrow (ps2, r2) ->
       List.length ps1 = List.length ps2
@@ -190,23 +177,22 @@ and param_equal p1 p2 =
 
 (** Truthiness checking for the Option type constraint.
 
-    In Elisp, truthiness is fundamental: nil is the only falsy value.
-    The type hierarchy is:
+    In Elisp, truthiness is fundamental: nil is the only falsy value. The type
+    hierarchy is:
     - Nil: the only falsy type
     - Truthy: anything that is not Nil (primitive supertype)
     - Any = Truthy | Nil (top type)
     - Bool = T | Nil
 
-    For Option types, we require the inner type to be Truthy.
-    This ensures "some" and "none" cases are always distinguishable.
-    Without this constraint, (Option Nil) would be indistinguishable
-    from Nil itself, breaking pattern matching semantics.
-*)
+    For Option types, we require the inner type to be Truthy. This ensures
+    "some" and "none" cases are always distinguishable. Without this constraint,
+    (Option Nil) would be indistinguishable from Nil itself, breaking pattern
+    matching semantics. *)
 
 (** Errors that can occur during type construction/validation *)
 type validation_error =
   | NonTruthyOptionArg of typ
-  (** Option argument must be truthy - contains the offending type *)
+      (** Option argument must be truthy - contains the offending type *)
 
 (** Check if a type is definitely truthy (cannot be nil).
 
@@ -224,8 +210,7 @@ type validation_error =
     - It's Any (which includes Nil)
     - It's a union containing Nil
     - It's an unresolved type variable (conservatively false)
-    - It's an Option type (which includes Nil by definition)
-*)
+    - It's an Option type (which includes Nil by definition) *)
 let rec is_truthy ty =
   match repr ty with
   | TVar _ ->
@@ -234,12 +219,13 @@ let rec is_truthy ty =
       false
   | TCon name -> (
       match name with
-      | "Nil" -> false     (* Nil is the falsy value *)
-      | "Bool" -> false    (* Bool = T | Nil, includes Nil *)
-      | "Any" -> false     (* Any = Truthy | Nil, includes Nil *)
+      | "Nil" -> false (* Nil is the falsy value *)
+      | "Bool" -> false (* Bool = T | Nil, includes Nil *)
+      | "Any" -> false (* Any = Truthy | Nil, includes Nil *)
       (* All other primitives are truthy *)
-      | "Int" | "Float" | "Num" | "String" | "Symbol" | "Keyword"
-      | "T" | "Truthy" | "Never" -> true
+      | "Int" | "Float" | "Num" | "String" | "Symbol" | "Keyword" | "T"
+      | "Truthy" | "Never" ->
+          true
       (* Unknown type constants: conservatively assume truthy
          (user-defined types without Nil) *)
       | _ -> true)
@@ -270,16 +256,13 @@ let rec is_truthy ty =
 
 (** Validate that a type is suitable as an Option argument.
 
-    Returns Ok () if the type is truthy, or Error with the problematic type.
-*)
+    Returns Ok () if the type is truthy, or Error with the problematic type. *)
 let validate_option_arg ty =
-  if is_truthy ty then Ok ()
-  else Error (NonTruthyOptionArg ty)
+  if is_truthy ty then Ok () else Error (NonTruthyOptionArg ty)
 
 (** Create an Option type with validation.
 
-    Returns Error if the argument type is not truthy.
-*)
+    Returns Error if the argument type is not truthy. *)
 let option_of_checked elem =
   match validate_option_arg elem with
   | Ok () -> Ok (option_of elem)
@@ -288,4 +271,5 @@ let option_of_checked elem =
 (** Format a validation error as a string *)
 let validation_error_to_string = function
   | NonTruthyOptionArg ty ->
-      Printf.sprintf "Option argument must be truthy, but got: %s" (to_string ty)
+      Printf.sprintf "Option argument must be truthy, but got: %s"
+        (to_string ty)

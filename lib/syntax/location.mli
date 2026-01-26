@@ -1,22 +1,19 @@
 (** Source location tracking for error reporting and IDE features.
 
-    This module provides types and utilities for tracking source positions
-    and spans in parsed files. Every AST node carries location information
-    for precise error messages and editor integration. *)
+    This module provides types and utilities for tracking source positions and
+    spans in parsed files. Every AST node carries location information for
+    precise error messages and editor integration. *)
 
-(** A position in a source file. *)
 type pos = {
   file : string;  (** File path *)
-  line : int;     (** 1-based line number *)
-  col : int;      (** 0-based column *)
-  offset : int;   (** 0-based byte offset from start of file *)
+  line : int;  (** 1-based line number *)
+  col : int;  (** 0-based column *)
+  offset : int;  (** 0-based byte offset from start of file *)
 }
+(** A position in a source file. *)
 
+type span = { start_pos : pos; end_pos : pos }
 (** A span between two positions. *)
-type span = {
-  start_pos : pos;
-  end_pos : pos;
-}
 
 (** {1 Comparison} *)
 
@@ -55,9 +52,10 @@ val pos_of_lexing : string -> Lexing.position -> pos
 (** [pos_of_lexing file lp] converts a [Lexing.position] to our [pos] type. *)
 
 val span_of_lexing : string -> Lexing.position -> Lexing.position -> span
-(** [span_of_lexing file start_lp end_lp] creates a span from lexer positions. *)
+(** [span_of_lexing file start_lp end_lp] creates a span from lexer positions.
+*)
 
 val contains_position : span -> line:int -> col:int -> bool
-(** [contains_position span ~line ~col] checks if a 0-based LSP position
-    is contained within the span. Note: Internal positions use 1-based lines,
+(** [contains_position span ~line ~col] checks if a 0-based LSP position is
+    contained within the span. Note: Internal positions use 1-based lines,
     0-based columns, so this function performs the necessary conversion. *)

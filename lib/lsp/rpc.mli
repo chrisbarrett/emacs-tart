@@ -8,31 +8,30 @@
     Content-Length: <length>\r\n
     \r\n
     <json content>
-    v}
-*)
+    v} *)
 
 (** {1 Message Types} *)
 
-(** JSON-RPC request/notification message *)
 type message = {
   id : Yojson.Safe.t option;  (** Request ID; None for notifications *)
-  method_ : string;           (** Method name *)
+  method_ : string;  (** Method name *)
   params : Yojson.Safe.t option;  (** Method parameters *)
 }
+(** JSON-RPC request/notification message *)
 
-(** JSON-RPC response *)
 type response = {
   id : Yojson.Safe.t;  (** Request ID *)
   result : Yojson.Safe.t option;  (** Success result *)
   error : response_error option;  (** Error response *)
 }
+(** JSON-RPC response *)
 
-(** JSON-RPC error object *)
 and response_error = {
   code : int;
   message : string;
   data : Yojson.Safe.t option;
 }
+(** JSON-RPC error object *)
 
 (** {1 Standard Error Codes} *)
 
@@ -57,42 +56,48 @@ type read_error =
   | InvalidJson of string
   | InvalidMessage of string
 
+val read_message : In_channel.t -> (message, read_error) result
 (** Read a single JSON-RPC message from an input channel.
 
     Reads Content-Length header, then reads that many bytes of JSON content,
     parses and validates as a JSON-RPC message.
 
     @return Ok message on success, Error read_error on failure *)
-val read_message : In_channel.t -> (message, read_error) result
 
 (** {1 Writing Messages} *)
 
+val write_response : Out_channel.t -> response -> unit
 (** Write a JSON-RPC response to an output channel.
 
     Formats with Content-Length header and flushes output. *)
-val write_response : Out_channel.t -> response -> unit
 
+val write_notification :
+  Out_channel.t -> method_:string -> params:Yojson.Safe.t -> unit
 (** Write a JSON-RPC notification to an output channel.
 
     Notifications have no id and expect no response. *)
-val write_notification : Out_channel.t -> method_:string -> params:Yojson.Safe.t -> unit
 
 (** {1 Response Helpers} *)
 
-(** Create a success response *)
 val success_response : id:Yojson.Safe.t -> result:Yojson.Safe.t -> response
+(** Create a success response *)
 
-(** Create an error response *)
 val error_response :
-  id:Yojson.Safe.t -> code:int -> message:string -> ?data:Yojson.Safe.t -> unit -> response
+  id:Yojson.Safe.t ->
+  code:int ->
+  message:string ->
+  ?data:Yojson.Safe.t ->
+  unit ->
+  response
+(** Create an error response *)
 
 (** {1 Debugging} *)
 
-(** Format a message for debugging *)
 val message_to_string : message -> string
+(** Format a message for debugging *)
 
-(** Format a response for debugging *)
 val response_to_string : response -> string
+(** Format a response for debugging *)
 
-(** Format a read_error for display *)
 val read_error_to_string : read_error -> string
+(** Format a read_error for display *)

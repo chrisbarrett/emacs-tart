@@ -1,7 +1,7 @@
 (** Macro expansion entry point.
 
-    This module provides the public API for macro expansion, hiding the
-    internal evaluation machinery. *)
+    This module provides the public API for macro expansion, hiding the internal
+    evaluation machinery. *)
 
 open Value
 open Syntax
@@ -14,15 +14,17 @@ type expansion_result =
 (** Expand all macros in a form *)
 let expand_all global sexp =
   try Expanded (Eval.macroexpand_all global sexp)
-  with Eval.Eval_error e -> Expansion_error { message = e.message; span = e.span }
+  with Eval.Eval_error e ->
+    Expansion_error { message = e.message; span = e.span }
 
 (** Expand a single macro call (one step) *)
 let expand_1 global sexp =
   match sexp with
-  | Sexp.List (Sexp.Symbol (name, _) :: _, span) when Env.is_macro name global ->
-      (try Expanded (Eval.expand_macro_1 global span name sexp)
-       with Eval.Eval_error e ->
-         Expansion_error { message = e.message; span = e.span })
+  | Sexp.List (Sexp.Symbol (name, _) :: _, span) when Env.is_macro name global
+    -> (
+      try Expanded (Eval.expand_macro_1 global span name sexp)
+      with Eval.Eval_error e ->
+        Expansion_error { message = e.message; span = e.span })
   | _ -> Expanded sexp
 
 (** Load macro definitions from a parsed file *)
@@ -45,5 +47,12 @@ let is_macro_call global = function
 
 (** Register a macro from value representation *)
 let register_macro global name params body env =
-  let macro = { macro_name = name; macro_params = params; macro_body = body; macro_env = env } in
+  let macro =
+    {
+      macro_name = name;
+      macro_params = params;
+      macro_body = body;
+      macro_env = env;
+    }
+  in
   Env.define_macro name macro global

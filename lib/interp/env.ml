@@ -10,12 +10,13 @@
 
 open Value
 
-(** The global interpreter state *)
 type global = {
   mutable globals : (string, value) Hashtbl.t;  (** Global variable bindings *)
   mutable macros : (string, macro) Hashtbl.t;  (** Macro definitions *)
-  mutable specials : (string, bool) Hashtbl.t;  (** Special (dynamic) variables *)
+  mutable specials : (string, bool) Hashtbl.t;
+      (** Special (dynamic) variables *)
 }
+(** The global interpreter state *)
 
 (** Create a fresh global state *)
 let make_global () =
@@ -30,12 +31,13 @@ let default_global = make_global ()
 
 (** Look up a variable, checking lexical env first, then globals *)
 let lookup_var name (env : env) global =
-  match lookup name env with Some v -> Some v | None -> Hashtbl.find_opt global.globals name
+  match lookup name env with
+  | Some v -> Some v
+  | None -> Hashtbl.find_opt global.globals name
 
 (** Set a variable - lexical if bound, otherwise global *)
 let set_var name value (env : env) global =
-  if set name value env then ()
-  else Hashtbl.replace global.globals name value
+  if set name value env then () else Hashtbl.replace global.globals name value
 
 (** Define a global variable *)
 let define_global name value global = Hashtbl.replace global.globals name value

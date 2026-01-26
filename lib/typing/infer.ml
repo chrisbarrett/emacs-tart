@@ -1,30 +1,22 @@
 (** Constraint-based type inference.
 
-    This module generates type constraints for Elisp expressions.
-    The main entry point is [infer], which takes an expression and
-    environment and returns (type, constraints).
+    This module generates type constraints for Elisp expressions. The main entry
+    point is [infer], which takes an expression and environment and returns
+    (type, constraints).
 
-    Constraints are equality constraints τ₁ = τ₂ that are later
-    solved by unification.
-*)
+    Constraints are equality constraints τ₁ = τ₂ that are later solved by
+    unification. *)
 
 open Core.Types
 module Env = Core.Type_env
 module C = Constraint
 module G = Generalize
 
+type result = { ty : typ; constraints : C.set }
 (** Result of inference: the inferred type and generated constraints *)
-type result = {
-  ty : typ;
-  constraints : C.set;
-}
 
+type defun_result = { name : string; fn_type : typ; defun_constraints : C.set }
 (** Result of inferring a top-level definition *)
-type defun_result = {
-  name : string;
-  fn_type : typ;
-  defun_constraints : C.set;
-}
 
 (** Create a result with no constraints *)
 let pure ty = { ty; constraints = C.empty }
@@ -34,14 +26,12 @@ let with_constraint ty c = { ty; constraints = C.add c C.empty }
 
 (** Combine results, merging constraints *)
 let combine_results results =
-  List.fold_left
-    (fun acc r -> C.combine acc r.constraints)
-    C.empty results
+  List.fold_left (fun acc r -> C.combine acc r.constraints) C.empty results
 
 (** Infer the type of an S-expression.
 
-    This generates constraints but does not solve them.
-    Call [Unify.solve] on the constraints to unify type variables.
+    This generates constraints but does not solve them. Call [Unify.solve] on
+    the constraints to unify type variables.
 
     Expressions handled:
     - Literals: produce base types (no constraints)
@@ -51,8 +41,7 @@ let combine_results results =
     - Quote: quoted expressions have type based on their structure
     - If: branches must unify; result is their common type
     - Let: generate constraints for bindings (generalization in R5)
-    - Progn: result is type of last expression
-*)
+    - Progn: result is type of last expression *)
 let rec infer (env : Env.t) (sexp : Syntax.Sexp.t) : result =
   let open Syntax.Sexp in
   match sexp with
@@ -60,9 +49,8 @@ let rec infer (env : Env.t) (sexp : Syntax.Sexp.t) : result =
   | Int (_, _) -> pure Prim.int
   | Float (_, _) -> pure Prim.float
   | String (_, _) -> pure Prim.string
-  | Char (_, _) -> pure Prim.int  (* Characters are integers in Elisp *)
+  | Char (_, _) -> pure Prim.int (* Characters are integers in Elisp *)
   | Keyword (_, _) -> pure Prim.keyword
-
   (* === Variables === *)
   | Symbol (name, _span) -> (
       match Env.lookup name env with
@@ -74,90 +62,63 @@ let rec infer (env : Env.t) (sexp : Syntax.Sexp.t) : result =
           (* Unbound variable - for now, give it a fresh type variable.
              Later, this should report an error. *)
           pure (fresh_tvar (Env.current_level env)))
-
   (* === Quoted expressions === *)
-  | List ([Symbol ("quote", _); quoted], _) ->
-      infer_quoted quoted
-
+  | List ([ Symbol ("quote", _); quoted ], _) -> infer_quoted quoted
   (* === Lambda expressions === *)
   | List (Symbol ("lambda", _) :: List (params, _) :: body, span) ->
       infer_lambda env params body span
-
   (* === If expressions === *)
-  | List ([Symbol ("if", _); cond; then_branch; else_branch], span) ->
+  | List ([ Symbol ("if", _); cond; then_branch; else_branch ], span) ->
       infer_if env cond then_branch else_branch span
-
-  | List ([Symbol ("if", _); cond; then_branch], span) ->
+  | List ([ Symbol ("if", _); cond; then_branch ], span) ->
       (* If without else returns nil when condition is false *)
       infer_if_no_else env cond then_branch span
-
   (* === Let expressions === *)
   | List (Symbol ("let", _) :: List (bindings, _) :: body, span) ->
       infer_let env bindings body span
-
   | List (Symbol ("let*", _) :: List (bindings, _) :: body, span) ->
       infer_let_star env bindings body span
-
   (* === Defun - returns symbol, but binds function type === *)
-  | List (Symbol ("defun", _) :: Symbol (name, _) :: List (params, _) :: body, span) ->
+  | List
+      (Symbol ("defun", _) :: Symbol (name, _) :: List (params, _) :: body, span)
+    ->
       infer_defun_as_expr env name params body span
-
   (* === Progn (implicit in many forms) === *)
-  | List (Symbol ("progn", _) :: exprs, span) ->
-      infer_progn env exprs span
-
+  | List (Symbol ("progn", _) :: exprs, span) -> infer_progn env exprs span
   (* === Setq - assignment === *)
-  | List (Symbol ("setq", _) :: rest, span) ->
-      infer_setq env rest span
-
+  | List (Symbol ("setq", _) :: rest, span) -> infer_setq env rest span
   (* === Cond === *)
-  | List (Symbol ("cond", _) :: clauses, span) ->
-      infer_cond env clauses span
-
+  | List (Symbol ("cond", _) :: clauses, span) -> infer_cond env clauses span
   (* === And/Or === *)
-  | List ([Symbol ("and", _)], _) ->
-      pure Prim.t  (* (and) with no args returns t *)
-  | List (Symbol ("and", _) :: args, span) ->
-      infer_and env args span
-
-  | List ([Symbol ("or", _)], _) ->
-      pure Prim.nil  (* (or) with no args returns nil *)
-  | List (Symbol ("or", _) :: args, span) ->
-      infer_or env args span
-
+  | List ([ Symbol ("and", _) ], _) ->
+      pure Prim.t (* (and) with no args returns t *)
+  | List (Symbol ("and", _) :: args, span) -> infer_and env args span
+  | List ([ Symbol ("or", _) ], _) ->
+      pure Prim.nil (* (or) with no args returns nil *)
+  | List (Symbol ("or", _) :: args, span) -> infer_or env args span
   (* === Not === *)
-  | List ([Symbol ("not", _); arg], span) ->
-      infer_not env arg span
-
+  | List ([ Symbol ("not", _); arg ], span) -> infer_not env arg span
   (* === Function application (catch-all for lists) === *)
-  | List (fn :: args, span) ->
-      infer_application env fn args span
-
+  | List (fn :: args, span) -> infer_application env fn args span
   | List ([], _span) ->
       (* Empty list is nil *)
       pure Prim.nil
-
   (* === Vectors === *)
-  | Vector (elems, span) ->
-      infer_vector env elems span
-
+  | Vector (elems, span) -> infer_vector env elems span
   (* === Cons pairs - not valid expressions === *)
   | Cons (_, _, _span) ->
       (* Dotted pairs as expressions are typically errors,
          but we'll give them a fresh type variable *)
       pure (fresh_tvar (Env.current_level env))
-
   (* === Error nodes === *)
-  | Error (_, _) ->
-      pure (fresh_tvar (Env.current_level env))
+  | Error (_, _) -> pure (fresh_tvar (Env.current_level env))
 
 (** Infer the type of a quoted expression.
 
     Quoted data has types based on structure:
     - Quoted symbol: Symbol
     - Quoted list: (List Any) for now (proper list inference later)
-    - Other literals: their literal types
-*)
+    - Other literals: their literal types *)
 and infer_quoted (sexp : Syntax.Sexp.t) : result =
   let open Syntax.Sexp in
   match sexp with
@@ -167,29 +128,31 @@ and infer_quoted (sexp : Syntax.Sexp.t) : result =
   | Char (_, _) -> pure Prim.int
   | Keyword (_, _) -> pure Prim.keyword
   | Symbol (_, _) -> pure Prim.symbol
-  | List (_, _) -> pure (list_of Prim.any)  (* Quoted lists: (List Any) *)
+  | List (_, _) -> pure (list_of Prim.any) (* Quoted lists: (List Any) *)
   | Vector (_, _) -> pure (vector_of Prim.any)
-  | Cons (_, _, _) -> pure Prim.any  (* Dotted pairs: Any *)
+  | Cons (_, _, _) -> pure Prim.any (* Dotted pairs: Any *)
   | Error (_, _) -> pure Prim.any
 
 (** Infer the type of a lambda expression.
 
-    Creates fresh type variables for each parameter and infers
-    the body type in the extended environment.
-*)
+    Creates fresh type variables for each parameter and infers the body type in
+    the extended environment. *)
 and infer_lambda env params body span =
   let open Syntax.Sexp in
   (* Create fresh type variables for each parameter *)
-  let param_info = List.map (fun p ->
-    match p with
-    | Symbol (name, _) ->
-        let tv = fresh_tvar (Env.current_level env) in
-        (name, tv)
-    | _ ->
-        (* Non-symbol in parameter list - give it a fresh var *)
-        let tv = fresh_tvar (Env.current_level env) in
-        ("_", tv)
-  ) params in
+  let param_info =
+    List.map
+      (fun p ->
+        match p with
+        | Symbol (name, _) ->
+            let tv = fresh_tvar (Env.current_level env) in
+            (name, tv)
+        | _ ->
+            (* Non-symbol in parameter list - give it a fresh var *)
+            let tv = fresh_tvar (Env.current_level env) in
+            ("_", tv))
+      params
+  in
 
   (* Extend environment with parameter types *)
   let body_env = Env.extend_monos param_info env in
@@ -205,9 +168,8 @@ and infer_lambda env params body span =
 
 (** Infer the type of an if expression with else branch.
 
-    Generates constraint: then_type = else_type
-    Result type is a fresh variable unified with both branches.
-*)
+    Generates constraint: then_type = else_type Result type is a fresh variable
+    unified with both branches. *)
 and infer_if env cond then_branch else_branch span =
   let cond_result = infer env cond in
   let then_result = infer env then_branch in
@@ -231,9 +193,8 @@ and infer_if env cond then_branch else_branch span =
 
 (** Infer the type of an if expression without else branch.
 
-    When else is missing, the false case returns nil.
-    Result is (Option then_type) if then_type is truthy, otherwise Any.
-*)
+    When else is missing, the false case returns nil. Result is (Option
+    then_type) if then_type is truthy, otherwise Any. *)
 and infer_if_no_else env cond then_branch span =
   let cond_result = infer env cond in
   let then_result = infer env then_branch in
@@ -252,8 +213,7 @@ and infer_if_no_else env cond then_branch span =
      union types: result = Or(then_type, Nil). *)
   let all_constraints =
     C.combine cond_result.constraints
-      (C.combine then_result.constraints
-         (C.add then_constraint C.empty))
+      (C.combine then_result.constraints (C.add then_constraint C.empty))
   in
 
   (* The result type should really be (Or then_type Nil),
@@ -262,35 +222,36 @@ and infer_if_no_else env cond then_branch span =
 
 (** Infer the type of a let expression with generalization.
 
-    Let bindings use levels-based generalization:
-    1. Enter a new level for the binding scope
-    2. Infer each binding's type at the higher level
-    3. Solve constraints for each binding
-    4. Generalize type variables at level > outer level (if syntactic value)
-    5. Add generalized bindings to environment and infer body
-*)
+    Let bindings use levels-based generalization: 1. Enter a new level for the
+    binding scope 2. Infer each binding's type at the higher level 3. Solve
+    constraints for each binding 4. Generalize type variables at level > outer
+    level (if syntactic value) 5. Add generalized bindings to environment and
+    infer body *)
 and infer_let env bindings body span =
   let open Syntax.Sexp in
   let outer_level = Env.current_level env in
   let inner_env = Env.enter_level env in
 
   (* Process all bindings, inferring and solving each one *)
-  let binding_schemes = List.map (fun binding ->
-    match binding with
-    | List ([Symbol (name, _); expr], _) ->
-        let result = infer inner_env expr in
-        (* Solve constraints immediately for this binding *)
-        let _ = Unify.solve result.constraints in
-        (* Generalize if it's a syntactic value *)
-        let scheme = G.generalize_if_value outer_level result.ty expr in
-        (name, scheme, result.constraints)
-    | List ([Symbol (name, _)], _) ->
-        (* Binding without value: nil (not generalizable) *)
-        (name, Env.Mono Prim.nil, C.empty)
-    | _ ->
-        (* Malformed binding *)
-        ("_", Env.Mono (fresh_tvar (Env.current_level inner_env)), C.empty)
-  ) bindings in
+  let binding_schemes =
+    List.map
+      (fun binding ->
+        match binding with
+        | List ([ Symbol (name, _); expr ], _) ->
+            let result = infer inner_env expr in
+            (* Solve constraints immediately for this binding *)
+            let _ = Unify.solve result.constraints in
+            (* Generalize if it's a syntactic value *)
+            let scheme = G.generalize_if_value outer_level result.ty expr in
+            (name, scheme, result.constraints)
+        | List ([ Symbol (name, _) ], _) ->
+            (* Binding without value: nil (not generalizable) *)
+            (name, Env.Mono Prim.nil, C.empty)
+        | _ ->
+            (* Malformed binding *)
+            ("_", Env.Mono (fresh_tvar (Env.current_level inner_env)), C.empty))
+      bindings
+  in
 
   (* Collect constraints from all bindings *)
   let binding_constraints =
@@ -300,22 +261,24 @@ and infer_let env bindings body span =
   in
 
   (* Extend environment with all bindings (now potentially polymorphic) *)
-  let body_env = List.fold_left
-    (fun env (name, scheme, _) -> Env.extend name scheme env)
-    env binding_schemes
+  let body_env =
+    List.fold_left
+      (fun env (name, scheme, _) -> Env.extend name scheme env)
+      env binding_schemes
   in
 
   (* Infer body *)
   let body_result = infer_progn body_env body span in
 
-  { ty = body_result.ty;
-    constraints = C.combine binding_constraints body_result.constraints }
+  {
+    ty = body_result.ty;
+    constraints = C.combine binding_constraints body_result.constraints;
+  }
 
 (** Infer the type of a let* expression with generalization.
 
-    Each binding sees previous bindings (sequential), and each is
-    generalized independently.
-*)
+    Each binding sees previous bindings (sequential), and each is generalized
+    independently. *)
 and infer_let_star env bindings body span =
   let open Syntax.Sexp in
   let outer_level = Env.current_level env in
@@ -327,58 +290,60 @@ and infer_let_star env bindings body span =
     | binding :: rest -> (
         let inner_env = Env.enter_level env in
         match binding with
-        | List ([Symbol (name, _); expr], _) ->
+        | List ([ Symbol (name, _); expr ], _) ->
             let result = infer inner_env expr in
             (* Solve constraints immediately *)
             let _ = Unify.solve result.constraints in
             (* Generalize if syntactic value *)
             let scheme = G.generalize_if_value outer_level result.ty expr in
             let env' = Env.extend name scheme env in
-            process_bindings env' rest (C.combine constraints result.constraints)
-        | List ([Symbol (name, _)], _) ->
+            process_bindings env' rest
+              (C.combine constraints result.constraints)
+        | List ([ Symbol (name, _) ], _) ->
             let env' = Env.extend_mono name Prim.nil env in
             process_bindings env' rest constraints
-        | _ ->
-            process_bindings env rest constraints)
+        | _ -> process_bindings env rest constraints)
   in
 
-  let (body_env, binding_constraints) = process_bindings env bindings C.empty in
+  let body_env, binding_constraints = process_bindings env bindings C.empty in
   let body_result = infer_progn body_env body span in
 
-  { ty = body_result.ty;
-    constraints = C.combine binding_constraints body_result.constraints }
+  {
+    ty = body_result.ty;
+    constraints = C.combine binding_constraints body_result.constraints;
+  }
 
 (** Infer the type of a progn expression.
 
-    Returns the type of the last expression, or nil if empty.
-*)
+    Returns the type of the last expression, or nil if empty. *)
 and infer_progn env exprs span =
   match exprs with
   | [] -> pure Prim.nil
-  | [e] -> infer env e
+  | [ e ] -> infer env e
   | e :: rest ->
       let e_result = infer env e in
       let rest_result = infer_progn env rest span in
-      { ty = rest_result.ty;
-        constraints = C.combine e_result.constraints rest_result.constraints }
+      {
+        ty = rest_result.ty;
+        constraints = C.combine e_result.constraints rest_result.constraints;
+      }
 
 (** Infer the type of a setq expression.
 
-    (setq var1 val1 var2 val2 ...)
-    Returns the value of the last assignment.
-*)
+    (setq var1 val1 var2 val2 ...) Returns the value of the last assignment. *)
 and infer_setq env pairs span =
   let open Syntax.Sexp in
   let rec process_pairs pairs constraints last_ty =
     match pairs with
     | [] -> { ty = last_ty; constraints }
-    | [_] ->
+    | [ _ ] ->
         (* Odd number of args - malformed, return nil *)
         { ty = Prim.nil; constraints }
     | Symbol (name, _) :: value :: rest ->
         let result = infer env value in
         (* Check if variable exists in env *)
-        let constraint_set = match Env.lookup name env with
+        let constraint_set =
+          match Env.lookup name env with
           | Some scheme ->
               (* Generate constraint: value type = variable type *)
               let var_ty = Env.instantiate scheme env in
@@ -396,8 +361,7 @@ and infer_setq env pairs span =
 
 (** Infer the type of a cond expression.
 
-    Each clause is (test body...). Result unifies all clause bodies.
-*)
+    Each clause is (test body...). Result unifies all clause bodies. *)
 and infer_cond env clauses span =
   let open Syntax.Sexp in
   let result_ty = fresh_tvar (Env.current_level env) in
@@ -409,12 +373,13 @@ and infer_cond env clauses span =
         let test_result = infer env test in
         let body_result = infer_progn env body span in
         let body_constraint = C.equal result_ty body_result.ty span in
-        let all = C.combine test_result.constraints
-                    (C.combine body_result.constraints
-                       (C.add body_constraint constraints)) in
+        let all =
+          C.combine test_result.constraints
+            (C.combine body_result.constraints
+               (C.add body_constraint constraints))
+        in
         process_clauses rest all
-    | _ :: rest ->
-        process_clauses rest constraints
+    | _ :: rest -> process_clauses rest constraints
   in
 
   let all_constraints = process_clauses clauses C.empty in
@@ -422,9 +387,8 @@ and infer_cond env clauses span =
 
 (** Infer the type of an and expression.
 
-    Returns the last value if all are truthy, or the first falsy value.
-    Type is the type of the last argument (simplified).
-*)
+    Returns the last value if all are truthy, or the first falsy value. Type is
+    the type of the last argument (simplified). *)
 and infer_and env args _span =
   let results = List.map (infer env) args in
   let constraints = combine_results results in
@@ -434,9 +398,8 @@ and infer_and env args _span =
 
 (** Infer the type of an or expression.
 
-    Returns the first truthy value, or the last value.
-    Type is a union of all argument types (simplified to last).
-*)
+    Returns the first truthy value, or the last value. Type is a union of all
+    argument types (simplified to last). *)
 and infer_or env args _span =
   let results = List.map (infer env) args in
   let constraints = combine_results results in
@@ -446,16 +409,14 @@ and infer_or env args _span =
 
 (** Infer the type of a not expression.
 
-    (not x) always returns a boolean.
-*)
+    (not x) always returns a boolean. *)
 and infer_not env arg _span =
   let arg_result = infer env arg in
   { ty = Prim.bool; constraints = arg_result.constraints }
 
 (** Infer the type of a function application.
 
-    Generates constraint: fn_type = (arg_types...) -> result_type
-*)
+    Generates constraint: fn_type = (arg_types...) -> result_type *)
 and infer_application env fn args span =
   let fn_result = infer env fn in
   let arg_results = List.map (infer env) args in
@@ -481,11 +442,10 @@ and infer_application env fn args span =
 
 (** Infer a defun as an expression.
 
-    As an expression, defun returns a symbol (the function name).
-    The function type is inferred like a lambda.
+    As an expression, defun returns a symbol (the function name). The function
+    type is inferred like a lambda.
 
-    For the side effect of binding the name to the type, use [infer_defun].
-*)
+    For the side effect of binding the name to the type, use [infer_defun]. *)
 and infer_defun_as_expr env _name params body span =
   (* Infer as a lambda, but return Symbol as the expression type *)
   let _fn_result = infer_lambda env params body span in
@@ -494,26 +454,30 @@ and infer_defun_as_expr env _name params body span =
 
 (** Infer the type of a defun and return the binding information.
 
-    Unlike [infer_defun_as_expr], this returns the function name and type
-    so callers can bind it in the environment.
-*)
+    Unlike [infer_defun_as_expr], this returns the function name and type so
+    callers can bind it in the environment. *)
 and infer_defun (env : Env.t) (sexp : Syntax.Sexp.t) : defun_result option =
   let open Syntax.Sexp in
   match sexp with
-  | List (Symbol ("defun", _) :: Symbol (name, _) :: List (params, _) :: body, span) ->
+  | List
+      (Symbol ("defun", _) :: Symbol (name, _) :: List (params, _) :: body, span)
+    ->
       let outer_level = Env.current_level env in
       let inner_env = Env.enter_level env in
 
       (* Create fresh type variables for each parameter *)
-      let param_info = List.map (fun p ->
-        match p with
-        | Symbol (pname, _) ->
-            let tv = fresh_tvar (Env.current_level inner_env) in
-            (pname, tv)
-        | _ ->
-            let tv = fresh_tvar (Env.current_level inner_env) in
-            ("_", tv)
-      ) params in
+      let param_info =
+        List.map
+          (fun p ->
+            match p with
+            | Symbol (pname, _) ->
+                let tv = fresh_tvar (Env.current_level inner_env) in
+                (pname, tv)
+            | _ ->
+                let tv = fresh_tvar (Env.current_level inner_env) in
+                ("_", tv))
+          params
+      in
 
       (* Extend environment with parameter types *)
       let body_env = Env.extend_monos param_info inner_env in
@@ -530,18 +494,23 @@ and infer_defun (env : Env.t) (sexp : Syntax.Sexp.t) : defun_result option =
 
       (* Generalize the function type (defun is always a syntactic value) *)
       let scheme = G.generalize outer_level fn_type in
-      let generalized_ty = match scheme with
+      let generalized_ty =
+        match scheme with
         | Env.Mono ty -> ty
         | Env.Poly (vars, ty) -> TForall (vars, ty)
       in
 
-      Some { name; fn_type = generalized_ty; defun_constraints = body_result.constraints }
+      Some
+        {
+          name;
+          fn_type = generalized_ty;
+          defun_constraints = body_result.constraints;
+        }
   | _ -> None
 
 (** Infer the type of a vector literal.
 
-    All elements must have the same type.
-*)
+    All elements must have the same type. *)
 and infer_vector env elems span =
   match elems with
   | [] ->
@@ -553,15 +522,17 @@ and infer_vector env elems span =
       let rest_results = List.map (infer env) rest in
 
       (* All elements must unify with the first *)
-      let elem_constraints = List.map
-        (fun r -> C.equal first_result.ty r.ty span)
-        rest_results
+      let elem_constraints =
+        List.map (fun r -> C.equal first_result.ty r.ty span) rest_results
       in
 
       let all_constraints =
         C.combine first_result.constraints
-          (C.combine (combine_results rest_results)
-             (List.fold_left (fun acc c -> C.add c acc) C.empty elem_constraints))
+          (C.combine
+             (combine_results rest_results)
+             (List.fold_left
+                (fun acc c -> C.add c acc)
+                C.empty elem_constraints))
       in
 
       { ty = vector_of first_result.ty; constraints = all_constraints }

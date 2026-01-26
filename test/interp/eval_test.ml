@@ -10,8 +10,9 @@ let eval_check expected source () =
   | Result.Ok value ->
       Alcotest.(check string) "eval result" expected (to_string value)
   | Result.Error e ->
-      Alcotest.fail (Printf.sprintf "eval error at %d:%d: %s"
-        e.span.start_pos.line e.span.start_pos.col e.message)
+      Alcotest.fail
+        (Printf.sprintf "eval error at %d:%d: %s" e.span.start_pos.line
+           e.span.start_pos.col e.message)
 
 (** Helper to check evaluation produces an error *)
 let _eval_error_check msg_contains source () =
@@ -20,11 +21,19 @@ let _eval_error_check msg_contains source () =
   | Result.Ok value ->
       Alcotest.fail (Printf.sprintf "expected error, got %s" (to_string value))
   | Result.Error e ->
-      if not (String.length msg_contains = 0 ||
-              String.sub e.message 0 (min (String.length msg_contains) (String.length e.message)) = msg_contains
-              || String.sub e.message 0 (min (String.length e.message) (String.length msg_contains)) = msg_contains) then
-        Alcotest.fail (Printf.sprintf "error message mismatch: expected '%s' in '%s'"
-          msg_contains e.message)
+      if
+        not
+          (String.length msg_contains = 0
+          || String.sub e.message 0
+               (min (String.length msg_contains) (String.length e.message))
+             = msg_contains
+          || String.sub e.message 0
+               (min (String.length e.message) (String.length msg_contains))
+             = msg_contains)
+      then
+        Alcotest.fail
+          (Printf.sprintf "error message mismatch: expected '%s' in '%s'"
+             msg_contains e.message)
 
 (* =============================================================================
    Literals
@@ -111,7 +120,9 @@ let test_reverse () = eval_check "(3 2 1)" "(reverse '(1 2 3))" ()
    String operations
    ============================================================================= *)
 
-let test_concat () = eval_check "\"hello world\"" "(concat \"hello\" \" \" \"world\")" ()
+let test_concat () =
+  eval_check "\"hello world\"" "(concat \"hello\" \" \" \"world\")" ()
+
 let test_substring () = eval_check "\"ell\"" "(substring \"hello\" 1 4)" ()
 let test_upcase () = eval_check "\"HELLO\"" "(upcase \"hello\")" ()
 let test_downcase () = eval_check "\"hello\"" "(downcase \"HELLO\")" ()
@@ -124,20 +135,20 @@ let test_if_then () = eval_check "1" "(if t 1 2)" ()
 let test_if_else () = eval_check "2" "(if nil 1 2)" ()
 let test_if_no_else () = eval_check "nil" "(if nil 1)" ()
 let test_if_multiple_else () = eval_check "3" "(if nil 1 2 3)" ()
-
 let test_and_empty () = eval_check "t" "(and)" ()
 let test_and_true () = eval_check "3" "(and 1 2 3)" ()
 let test_and_short () = eval_check "nil" "(and 1 nil 3)" ()
-
 let test_or_empty () = eval_check "nil" "(or)" ()
 let test_or_first () = eval_check "1" "(or 1 2 3)" ()
 let test_or_skip () = eval_check "2" "(or nil 2 3)" ()
-
 let test_progn () = eval_check "3" "(progn 1 2 3)" ()
 let test_progn_empty () = eval_check "nil" "(progn)" ()
 
-let test_cond () = eval_check "one" "(cond ((= 1 2) 'wrong) ((= 1 1) 'one) (t 'default))" ()
-let test_cond_default () = eval_check "default" "(cond ((= 1 2) 'wrong) (t 'default))" ()
+let test_cond () =
+  eval_check "one" "(cond ((= 1 2) 'wrong) ((= 1 1) 'one) (t 'default))" ()
+
+let test_cond_default () =
+  eval_check "default" "(cond ((= 1 2) 'wrong) (t 'default))" ()
 
 (* =============================================================================
    Let bindings
@@ -146,11 +157,13 @@ let test_cond_default () = eval_check "default" "(cond ((= 1 2) 'wrong) (t 'defa
 let test_let () = eval_check "3" "(let ((x 1) (y 2)) (+ x y))" ()
 let test_let_empty_body () = eval_check "nil" "(let ((x 1)))" ()
 let test_let_shadow () = eval_check "2" "(let ((x 1)) (let ((x 2)) x))" ()
+
 let test_let_parallel () =
   (* In let, bindings are parallel - y should see the outer x *)
   eval_check "11" "(let ((x 10)) (let ((x 1) (y x)) (+ x y)))" ()
 
 let test_let_star () = eval_check "3" "(let* ((x 1) (y (+ x 1))) (+ x y))" ()
+
 let test_let_star_seq () =
   (* In let*, y sees the new x *)
   eval_check "2" "(let* ((x 1) (y x)) (+ x y))" ()
@@ -161,11 +174,16 @@ let test_let_star_seq () =
 
 let test_lambda () = eval_check "3" "((lambda (x) (+ x 1)) 2)" ()
 let test_lambda_no_args () = eval_check "42" "((lambda () 42))" ()
-let test_lambda_multiple () = eval_check "6" "((lambda (a b c) (+ a b c)) 1 2 3)" ()
 
-let test_defun () = eval_check "6" "(progn (defun double (x) (* x 2)) (double 3))" ()
+let test_lambda_multiple () =
+  eval_check "6" "((lambda (a b c) (+ a b c)) 1 2 3)" ()
+
+let test_defun () =
+  eval_check "6" "(progn (defun double (x) (* x 2)) (double 3))" ()
+
 let test_defun_recursive () =
-  eval_check "6" "(progn (defun fact (n) (if (= n 0) 1 (* n (fact (- n 1))))) (fact 3))" ()
+  eval_check "6"
+    "(progn (defun fact (n) (if (= n 0) 1 (* n (fact (- n 1))))) (fact 3))" ()
 
 let test_funcall () = eval_check "4" "(funcall (lambda (x) (* x 2)) 2)" ()
 let test_apply () = eval_check "6" "(apply '+ '(1 2 3))" ()
@@ -176,18 +194,28 @@ let test_mapcar () = eval_check "(2 3 4)" "(mapcar '1+ '(1 2 3))" ()
    ============================================================================= *)
 
 let test_setq () = eval_check "5" "(let ((x 1)) (setq x 5) x)" ()
-let test_setq_multiple () = eval_check "3" "(let ((x 0) (y 0)) (setq x 1 y 2) (+ x y))" ()
-let test_setq_global () = eval_check "42" "(progn (setq my-global 42) my-global)" ()
+
+let test_setq_multiple () =
+  eval_check "3" "(let ((x 0) (y 0)) (setq x 1 y 2) (+ x y))" ()
+
+let test_setq_global () =
+  eval_check "42" "(progn (setq my-global 42) my-global)" ()
 
 (* =============================================================================
    Macros
    ============================================================================= *)
 
 let test_defmacro () =
-  eval_check "5" "(progn (defmacro incf (x) (list 'setq x (list '+ x 1))) (let ((y 4)) (incf y) y))" ()
+  eval_check "5"
+    "(progn (defmacro incf (x) (list 'setq x (list '+ x 1))) (let ((y 4)) \
+     (incf y) y))"
+    ()
 
 let test_when_macro () =
-  eval_check "done" "(progn (defmacro when (test &rest body) (list 'if test (cons 'progn body))) (when t 'done))" ()
+  eval_check "done"
+    "(progn (defmacro when (test &rest body) (list 'if test (cons 'progn \
+     body))) (when t 'done))"
+    ()
 
 (* =============================================================================
    Test runner

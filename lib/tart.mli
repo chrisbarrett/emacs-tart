@@ -1,7 +1,7 @@
 (** Tart: A type checker for Emacs Lisp.
 
-    Tart provides static type analysis for Emacs Lisp, based on
-    Hindley-Milner type inference with levels-based generalization.
+    Tart provides static type analysis for Emacs Lisp, based on Hindley-Milner
+    type inference with levels-based generalization.
 
     {1 Quick Start}
 

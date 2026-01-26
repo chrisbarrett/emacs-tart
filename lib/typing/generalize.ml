@@ -1,14 +1,13 @@
 (** Levels-based let-generalization for Hindley-Milner type inference.
 
-    This module implements the generalization step of HM inference using
-    the levels-based approach. Type variables are generalized (become
-    polymorphic) only if their level is greater than the current scope level.
+    This module implements the generalization step of HM inference using the
+    levels-based approach. Type variables are generalized (become polymorphic)
+    only if their level is greater than the current scope level.
 
     The key insight is that type variables with level > current_level were
     created inside the current let binding and are safe to generalize.
 
-    Reference: "How OCaml type checker works" by Oleg Kiselyov
-*)
+    Reference: "How OCaml type checker works" by Oleg Kiselyov *)
 
 open Core.Types
 module Env = Core.Type_env
@@ -22,8 +21,7 @@ module Env = Core.Type_env
     - Variables
     - Quoted expressions
 
-    Non-values (like function applications) remain monomorphic.
-*)
+    Non-values (like function applications) remain monomorphic. *)
 let rec is_syntactic_value (sexp : Syntax.Sexp.t) : bool =
   let open Syntax.Sexp in
   match sexp with
@@ -32,7 +30,7 @@ let rec is_syntactic_value (sexp : Syntax.Sexp.t) : bool =
   (* Literals are values *)
   | Int _ | Float _ | String _ | Char _ | Keyword _ -> true
   (* Quoted expressions are values *)
-  | List ([Symbol ("quote", _); _], _) -> true
+  | List ([ Symbol ("quote", _); _ ], _) -> true
   (* Variables are values (they reference already-computed values) *)
   | Symbol (_, _) -> true
   (* Empty list (nil) is a value *)
@@ -46,37 +44,38 @@ let rec is_syntactic_value (sexp : Syntax.Sexp.t) : bool =
 
 (** Collect all free type variables in a type at levels > given level.
 
-    These are the variables that will be generalized. We collect them
-    by traversing the type and finding unbound type variables whose
-    level is strictly greater than the current scope level.
-*)
+    These are the variables that will be generalized. We collect them by
+    traversing the type and finding unbound type variables whose level is
+    strictly greater than the current scope level. *)
 let rec collect_generalizable_tvars level ty acc =
   match repr ty with
   | TVar tv -> (
       match !tv with
       | Unbound (id, tvar_level) ->
-          if tvar_level > level && not (List.mem id acc) then
-            id :: acc
-          else
-            acc
+          if tvar_level > level && not (List.mem id acc) then id :: acc else acc
       | Link _ -> failwith "repr should have followed link")
   | TCon _ -> acc
   | TApp (_, args) ->
-      List.fold_left (fun acc ty -> collect_generalizable_tvars level ty acc) acc args
+      List.fold_left
+        (fun acc ty -> collect_generalizable_tvars level ty acc)
+        acc args
   | TArrow (params, ret) ->
-      let acc = List.fold_left
-        (fun acc param ->
-           let ty = match param with
-             | PPositional ty | POptional ty | PRest ty | PKey (_, ty) -> ty
-           in
-           collect_generalizable_tvars level ty acc)
-        acc params
+      let acc =
+        List.fold_left
+          (fun acc param ->
+            let ty =
+              match param with
+              | PPositional ty | POptional ty | PRest ty | PKey (_, ty) -> ty
+            in
+            collect_generalizable_tvars level ty acc)
+          acc params
       in
       collect_generalizable_tvars level ret acc
-  | TForall (_, body) ->
-      collect_generalizable_tvars level body acc
+  | TForall (_, body) -> collect_generalizable_tvars level body acc
   | TUnion types | TTuple types ->
-      List.fold_left (fun acc ty -> collect_generalizable_tvars level ty acc) acc types
+      List.fold_left
+        (fun acc ty -> collect_generalizable_tvars level ty acc)
+        acc types
 
 (** Generate fresh variable names for generalization.
 
@@ -89,9 +88,8 @@ let name_of_id id =
 
 (** Replace type variables with their named versions for forall binding.
 
-    When we generalize, we replace TVar refs with TCon names that will
-    be bound by the forall quantifier.
-*)
+    When we generalize, we replace TVar refs with TCon names that will be bound
+    by the forall quantifier. *)
 let rec replace_tvars_with_names var_map ty =
   match repr ty with
   | TVar tv -> (
@@ -105,16 +103,12 @@ let rec replace_tvars_with_names var_map ty =
   | TApp (con, args) ->
       TApp (con, List.map (replace_tvars_with_names var_map) args)
   | TArrow (params, ret) ->
-      TArrow (
-        List.map (replace_tvar_in_param var_map) params,
-        replace_tvars_with_names var_map ret
-      )
-  | TForall (vars, body) ->
-      TForall (vars, replace_tvars_with_names var_map body)
-  | TUnion types ->
-      TUnion (List.map (replace_tvars_with_names var_map) types)
-  | TTuple types ->
-      TTuple (List.map (replace_tvars_with_names var_map) types)
+      TArrow
+        ( List.map (replace_tvar_in_param var_map) params,
+          replace_tvars_with_names var_map ret )
+  | TForall (vars, body) -> TForall (vars, replace_tvars_with_names var_map body)
+  | TUnion types -> TUnion (List.map (replace_tvars_with_names var_map) types)
+  | TTuple types -> TTuple (List.map (replace_tvars_with_names var_map) types)
 
 and replace_tvar_in_param var_map = function
   | PPositional ty -> PPositional (replace_tvars_with_names var_map ty)
@@ -124,12 +118,11 @@ and replace_tvar_in_param var_map = function
 
 (** Generalize a type at the given level.
 
-    Finds all type variables with level > given level, and wraps the type
-    in a forall quantifier binding those variables.
+    Finds all type variables with level > given level, and wraps the type in a
+    forall quantifier binding those variables.
 
-    Returns a Mono scheme if no variables can be generalized, or a Poly
-    scheme with the generalized type.
-*)
+    Returns a Mono scheme if no variables can be generalized, or a Poly scheme
+    with the generalized type. *)
 let generalize level ty : Env.scheme =
   let tvar_ids = collect_generalizable_tvars level ty [] in
   match tvar_ids with
@@ -146,11 +139,7 @@ let generalize level ty : Env.scheme =
 
 (** Generalize a type only if the expression is a syntactic value.
 
-    This implements the value restriction: non-values remain monomorphic
-    to ensure soundness in the presence of mutable state.
-*)
+    This implements the value restriction: non-values remain monomorphic to
+    ensure soundness in the presence of mutable state. *)
 let generalize_if_value level ty (expr : Syntax.Sexp.t) : Env.scheme =
-  if is_syntactic_value expr then
-    generalize level ty
-  else
-    Env.Mono ty
+  if is_syntactic_value expr then generalize level ty else Env.Mono ty

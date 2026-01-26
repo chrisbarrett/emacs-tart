@@ -10,12 +10,14 @@
 
 (** {1 Types} *)
 
-(** The global interpreter state. *)
 type global = {
-  mutable globals : (string, Value.value) Hashtbl.t;   (** Global variable bindings *)
-  mutable macros : (string, Value.macro) Hashtbl.t;    (** Macro definitions *)
-  mutable specials : (string, bool) Hashtbl.t;         (** Special (dynamic) variables *)
+  mutable globals : (string, Value.value) Hashtbl.t;
+      (** Global variable bindings *)
+  mutable macros : (string, Value.macro) Hashtbl.t;  (** Macro definitions *)
+  mutable specials : (string, bool) Hashtbl.t;
+      (** Special (dynamic) variables *)
 }
+(** The global interpreter state. *)
 
 (** {1 Global state management} *)
 
@@ -57,7 +59,8 @@ val is_special : string -> global -> bool
 
 (** {1 Function call support} *)
 
-val make_call_env : Value.params -> Value.value list -> Value.env -> (Value.env, string) result
-(** Create a new lexical environment for a function call.
-    Binds parameters to arguments according to the parameter spec.
-    Returns [Error] with a message if arity doesn't match. *)
+val make_call_env :
+  Value.params -> Value.value list -> Value.env -> (Value.env, string) result
+(** Create a new lexical environment for a function call. Binds parameters to
+    arguments according to the parameter spec. Returns [Error] with a message if
+    arity doesn't match. *)

@@ -9,35 +9,33 @@ type state =
   | ShuttingDown
 
 (** Log level *)
-type log_level =
-  | Quiet
-  | Normal
-  | Debug
+type log_level = Quiet | Normal | Debug
 
-(** Server instance *)
 type t
+(** Server instance *)
 
+val create :
+  ?log_level:log_level -> ic:In_channel.t -> oc:Out_channel.t -> unit -> t
 (** Create a new server on the given channels.
 
     @param log_level Controls logging verbosity (default: Normal)
     @param ic Input channel (typically stdin)
     @param oc Output channel (typically stdout) *)
-val create : ?log_level:log_level -> ic:In_channel.t -> oc:Out_channel.t -> unit -> t
 
-(** Get the server's current state *)
 val state : t -> state
+(** Get the server's current state *)
 
-(** Get the server's document store (for testing) *)
 val documents : t -> Document.t
+(** Get the server's document store (for testing) *)
 
+val run : t -> int
 (** Run the server's main loop.
 
-    Reads messages, dispatches to handlers, sends responses.
-    Returns exit code (0 for clean shutdown, 1 for error). *)
-val run : t -> int
+    Reads messages, dispatches to handlers, sends responses. Returns exit code
+    (0 for clean shutdown, 1 for error). *)
 
-(** Log a message at debug level *)
 val debug : t -> string -> unit
+(** Log a message at debug level *)
 
-(** Log a message at info level *)
 val info : t -> string -> unit
+(** Log a message at info level *)

@@ -16,10 +16,7 @@ type t = {
   documents : Document.t;
 }
 
-and log_level =
-  | Quiet
-  | Normal
-  | Debug
+and log_level = Quiet | Normal | Debug
 
 (** Create a new server on the given channels *)
 let create ?(log_level = Normal) ~ic ~oc () : t =
@@ -56,32 +53,30 @@ let capabilities () : Protocol.server_capabilities =
     hover_provider = true;
   }
 
-(** Extract filename from a file:// URI.
-    Returns the path portion, or the raw URI if not a file:// URI. *)
+(** Extract filename from a file:// URI. Returns the path portion, or the raw
+    URI if not a file:// URI. *)
 let filename_of_uri (uri : string) : string =
   if String.length uri > 7 && String.sub uri 0 7 = "file://" then
     String.sub uri 7 (String.length uri - 7)
-  else
-    uri
+  else uri
 
-(** Convert a source location span to an LSP range.
-    Note: Loc.span has 1-based lines and 0-based columns.
-    LSP uses 0-based lines and 0-based characters (UTF-16 code units, but
-    we approximate with bytes). *)
+(** Convert a source location span to an LSP range. Note: Loc.span has 1-based
+    lines and 0-based columns. LSP uses 0-based lines and 0-based characters
+    (UTF-16 code units, but we approximate with bytes). *)
 let range_of_span (span : Syntax.Location.span) : Protocol.range =
   {
-    Protocol.start = {
-      line = span.start_pos.line - 1;  (* Convert to 0-based *)
-      character = span.start_pos.col;
-    };
-    end_ = {
-      line = span.end_pos.line - 1;
-      character = span.end_pos.col;
-    };
+    Protocol.start =
+      {
+        line = span.start_pos.line - 1;
+        (* Convert to 0-based *)
+        character = span.start_pos.col;
+      };
+    end_ = { line = span.end_pos.line - 1; character = span.end_pos.col };
   }
 
 (** Convert a Typing.Diagnostic.t to an LSP diagnostic *)
-let lsp_diagnostic_of_diagnostic (d : Typing.Diagnostic.t) : Protocol.diagnostic =
+let lsp_diagnostic_of_diagnostic (d : Typing.Diagnostic.t) : Protocol.diagnostic
+    =
   let severity =
     match d.severity with
     | Typing.Diagnostic.Error -> Protocol.Error
@@ -96,7 +91,8 @@ let lsp_diagnostic_of_diagnostic (d : Typing.Diagnostic.t) : Protocol.diagnostic
   }
 
 (** Convert a parse error to an LSP diagnostic *)
-let lsp_diagnostic_of_parse_error (err : Syntax.Read.parse_error) : Protocol.diagnostic =
+let lsp_diagnostic_of_parse_error (err : Syntax.Read.parse_error) :
+    Protocol.diagnostic =
   {
     Protocol.range = range_of_span err.span;
     severity = Some Protocol.Error;
@@ -104,25 +100,30 @@ let lsp_diagnostic_of_parse_error (err : Syntax.Read.parse_error) : Protocol.dia
     source = Some "tart";
   }
 
-(** Type-check a document and return LSP diagnostics.
-    Returns parse errors if parsing fails, otherwise type errors. *)
+(** Type-check a document and return LSP diagnostics. Returns parse errors if
+    parsing fails, otherwise type errors. *)
 let check_document (uri : string) (text : string) : Protocol.diagnostic list =
   let filename = filename_of_uri uri in
   let parse_result = Syntax.Read.parse_string ~filename text in
   (* Collect parse errors *)
-  let parse_diagnostics = List.map lsp_diagnostic_of_parse_error parse_result.errors in
+  let parse_diagnostics =
+    List.map lsp_diagnostic_of_parse_error parse_result.errors
+  in
   (* If we have sexps, type-check them *)
   let type_diagnostics =
     if parse_result.sexps = [] then []
     else
       let check_result = Typing.Check.check_program parse_result.sexps in
-      let typing_diagnostics = Typing.Diagnostic.of_unify_errors check_result.errors in
+      let typing_diagnostics =
+        Typing.Diagnostic.of_unify_errors check_result.errors
+      in
       List.map lsp_diagnostic_of_diagnostic typing_diagnostics
   in
   parse_diagnostics @ type_diagnostics
 
 (** Publish diagnostics for a document *)
-let publish_diagnostics (server : t) (uri : string) (version : int option) : unit =
+let publish_diagnostics (server : t) (uri : string) (version : int option) :
+    unit =
   match Document.get_doc server.documents uri with
   | None -> ()
   | Some doc ->
@@ -130,8 +131,9 @@ let publish_diagnostics (server : t) (uri : string) (version : int option) : uni
       let params : Protocol.publish_diagnostics_params =
         { uri; version; diagnostics }
       in
-      debug server (Printf.sprintf "Publishing %d diagnostics for %s"
-        (List.length diagnostics) uri);
+      debug server
+        (Printf.sprintf "Publishing %d diagnostics for %s"
+           (List.length diagnostics) uri);
       Rpc.write_notification server.oc
         ~method_:"textDocument/publishDiagnostics"
         ~params:(Protocol.publish_diagnostics_params_to_json params)
@@ -211,7 +213,8 @@ let handle_did_open (server : t) (params : Yojson.Safe.t option) : unit =
         Document.text_document_item_of_json text_document
       in
       Document.open_doc server.documents ~uri ~version ~text;
-      debug server (Printf.sprintf "Opened document: %s (version %d)" uri version);
+      debug server
+        (Printf.sprintf "Opened document: %s (version %d)" uri version);
       (* Publish diagnostics for the newly opened document *)
       publish_diagnostics server uri (Some version)
 
@@ -219,7 +222,7 @@ let handle_did_open (server : t) (params : Yojson.Safe.t option) : unit =
 let handle_did_change (server : t) (params : Yojson.Safe.t option) : unit =
   match params with
   | None -> debug server "didChange missing params"
-  | Some json ->
+  | Some json -> (
       let open Yojson.Safe.Util in
       let text_document = json |> member "textDocument" in
       let uri, version =
@@ -229,15 +232,14 @@ let handle_did_change (server : t) (params : Yojson.Safe.t option) : unit =
         json |> member "contentChanges" |> to_list
         |> List.map Document.content_change_of_json
       in
-      (match Document.apply_changes server.documents ~uri ~version changes with
+      match Document.apply_changes server.documents ~uri ~version changes with
       | Ok () ->
           debug server
             (Printf.sprintf "Changed document: %s (version %d)" uri version);
           (* Publish diagnostics for the changed document *)
           publish_diagnostics server uri (Some version)
       | Error e ->
-          info server
-            (Printf.sprintf "Error applying changes to %s: %s" uri e))
+          info server (Printf.sprintf "Error applying changes to %s: %s" uri e))
 
 (** Handle textDocument/didClose notification *)
 let handle_did_close (server : t) (params : Yojson.Safe.t option) : unit =
@@ -260,14 +262,15 @@ let handle_did_close (server : t) (params : Yojson.Safe.t option) : unit =
 (** Get the type at a specific S-expression within a document.
 
     This infers the type for the target sexp. If the target is in function
-    position of an application, the enclosing application is inferred first
-    to resolve instantiated type variables.
+    position of an application, the enclosing application is inferred first to
+    resolve instantiated type variables.
 
     Handles errors gracefully:
     - If unification fails, returns the best-effort type (before solving)
     - If type inference itself fails, returns None
     - Never raises exceptions *)
-let type_at_sexp (env : Typing.Check.check_result) (ctx : Syntax.Sexp.position_context) : Core.Types.typ option =
+let type_at_sexp (env : Typing.Check.check_result)
+    (ctx : Syntax.Sexp.position_context) : Core.Types.typ option =
   let open Core.Types in
   reset_tvar_counter ();
 
@@ -279,8 +282,8 @@ let type_at_sexp (env : Typing.Check.check_result) (ctx : Syntax.Sexp.position_c
       let result = infer_fn () in
       (* Try to solve constraints - if it fails, we still have the inferred type *)
       (match Typing.Unify.solve result.Typing.Infer.constraints with
-       | Ok () -> ()
-       | Error _ -> ());
+      | Ok () -> ()
+      | Error _ -> ());
       Some (repr result.Typing.Infer.ty)
     with _ ->
       (* On any exception during inference, return None *)
@@ -289,34 +292,47 @@ let type_at_sexp (env : Typing.Check.check_result) (ctx : Syntax.Sexp.position_c
 
   (* Determine what to infer based on context *)
   match ctx.enclosing_application with
-  | Some (Syntax.Sexp.List ((fn :: args), _span)) when Syntax.Sexp.equal fn ctx.target || true ->
+  | Some (Syntax.Sexp.List (fn :: args, _span))
+    when Syntax.Sexp.equal fn ctx.target || true ->
       (* Target is in function position of an application.
          We need to infer the whole application so type variables are resolved.
          Then extract the function type. *)
       safe_infer_and_solve (fun () ->
-        let fn_result = Typing.Infer.infer env.Typing.Check.env fn in
-        let arg_results = List.map (Typing.Infer.infer env.Typing.Check.env) args in
+          let fn_result = Typing.Infer.infer env.Typing.Check.env fn in
+          let arg_results =
+            List.map (Typing.Infer.infer env.Typing.Check.env) args
+          in
 
-        (* Build the application constraint *)
-        let result_ty = fresh_tvar 0 in
-        let arg_types = List.map (fun r -> PPositional r.Typing.Infer.ty) arg_results in
-        let expected_fn_type = TArrow (arg_types, result_ty) in
-        let fn_constraint = Typing.Constraint.equal fn_result.Typing.Infer.ty expected_fn_type _span in
+          (* Build the application constraint *)
+          let result_ty = fresh_tvar 0 in
+          let arg_types =
+            List.map (fun r -> PPositional r.Typing.Infer.ty) arg_results
+          in
+          let expected_fn_type = TArrow (arg_types, result_ty) in
+          let fn_constraint =
+            Typing.Constraint.equal fn_result.Typing.Infer.ty expected_fn_type
+              _span
+          in
 
-        (* Combine all constraints *)
-        let all_constraints =
-          List.fold_left
-            (fun acc r -> Typing.Constraint.combine acc r.Typing.Infer.constraints)
-            (Typing.Constraint.add fn_constraint fn_result.Typing.Infer.constraints)
-            arg_results
-        in
+          (* Combine all constraints *)
+          let all_constraints =
+            List.fold_left
+              (fun acc r ->
+                Typing.Constraint.combine acc r.Typing.Infer.constraints)
+              (Typing.Constraint.add fn_constraint
+                 fn_result.Typing.Infer.constraints)
+              arg_results
+          in
 
-        (* Return combined result - solve happens in safe_infer_and_solve *)
-        { Typing.Infer.ty = fn_result.Typing.Infer.ty; constraints = all_constraints })
+          (* Return combined result - solve happens in safe_infer_and_solve *)
+          {
+            Typing.Infer.ty = fn_result.Typing.Infer.ty;
+            constraints = all_constraints;
+          })
   | _ ->
       (* Not in an application context, just infer the target directly *)
       safe_infer_and_solve (fun () ->
-        Typing.Infer.infer env.Typing.Check.env ctx.target)
+          Typing.Infer.infer env.Typing.Check.env ctx.target)
 
 (** Handle textDocument/hover request *)
 let handle_hover (server : t) (params : Yojson.Safe.t option) :
@@ -334,8 +350,7 @@ let handle_hover (server : t) (params : Yojson.Safe.t option) :
       let uri = hover_params.text_document in
       let line = hover_params.position.line in
       let col = hover_params.position.character in
-      debug server
-        (Printf.sprintf "Hover request at %s:%d:%d" uri line col);
+      debug server (Printf.sprintf "Hover request at %s:%d:%d" uri line col);
       match Document.get_doc server.documents uri with
       | None ->
           debug server (Printf.sprintf "Document not found: %s" uri);
@@ -375,10 +390,10 @@ let handle_hover (server : t) (params : Yojson.Safe.t option) :
                         contents =
                           {
                             kind = Protocol.Markdown;
-                            value =
-                              Printf.sprintf "```elisp\n%s\n```" type_str;
+                            value = Printf.sprintf "```elisp\n%s\n```" type_str;
                           };
-                        range = Some (range_of_span (Syntax.Sexp.span_of ctx.target));
+                        range =
+                          Some (range_of_span (Syntax.Sexp.span_of ctx.target));
                       }
                     in
                     Ok (Protocol.hover_to_json hover))))
@@ -422,12 +437,13 @@ let dispatch_notification (server : t) (msg : Rpc.message) :
       `Continue
   | _ ->
       (* Ignore unknown notifications per LSP spec *)
-      debug server (Printf.sprintf "Ignoring unknown notification: %s" msg.method_);
+      debug server
+        (Printf.sprintf "Ignoring unknown notification: %s" msg.method_);
       `Continue
 
 (** Process a single message and optionally send a response *)
-let process_message (server : t) (msg : Rpc.message) : [ `Continue | `Exit of int ]
-    =
+let process_message (server : t) (msg : Rpc.message) :
+    [ `Continue | `Exit of int ] =
   match msg.id with
   | Some id ->
       (* Request - must send response *)
@@ -436,7 +452,8 @@ let process_message (server : t) (msg : Rpc.message) : [ `Continue | `Exit of in
         | Ok result -> Rpc.success_response ~id ~result
         | Error err -> { Rpc.id; result = None; error = Some err }
       in
-      debug server (Printf.sprintf "Response: %s" (Rpc.response_to_string response));
+      debug server
+        (Printf.sprintf "Response: %s" (Rpc.response_to_string response));
       Rpc.write_response server.oc response;
       `Continue
   | None ->
@@ -448,14 +465,15 @@ let run (server : t) : int =
   info server "Starting LSP server";
   let rec loop () =
     match Rpc.read_message server.ic with
-    | Error Rpc.Eof ->
+    | Error Rpc.Eof -> (
         info server "Client disconnected";
         (* Exit with code 1 if we didn't get proper shutdown *)
-        (match server.state with
+        match server.state with
         | ShuttingDown -> 0
         | _ -> 1)
     | Error err ->
-        info server (Printf.sprintf "Read error: %s" (Rpc.read_error_to_string err));
+        info server
+          (Printf.sprintf "Read error: %s" (Rpc.read_error_to_string err));
         1
     | Ok msg -> (
         debug server (Printf.sprintf "Received: %s" (Rpc.message_to_string msg));

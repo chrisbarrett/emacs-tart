@@ -1,12 +1,12 @@
 (** Pure built-in functions for the Elisp interpreter.
 
-    This module provides implementations of core Elisp functions that are
-    pure (no side effects beyond the interpreter's state). Functions that
-    require I/O, buffers, or other Emacs-specific state are not included
-    and hit opaque boundaries.
+    This module provides implementations of core Elisp functions that are pure
+    (no side effects beyond the interpreter's state). Functions that require
+    I/O, buffers, or other Emacs-specific state are not included and hit opaque
+    boundaries.
 
-    Higher-order functions (mapcar, mapc, apply, funcall) require access
-    to the evaluator and are implemented as special forms in {!Eval}. *)
+    Higher-order functions (mapcar, mapc, apply, funcall) require access to the
+    evaluator and are implemented as special forms in {!Eval}. *)
 
 (** {1 Built-in registry} *)
 
@@ -14,13 +14,13 @@ val builtins : Value.value list
 (** All pure built-in functions as [Value.Builtin] values. *)
 
 val init_globals : Env.global -> unit
-(** Initialize a global environment with all built-in functions.
-    Also adds [nil] and [t] as global bindings. *)
+(** Initialize a global environment with all built-in functions. Also adds [nil]
+    and [t] as global bindings. *)
 
 (** {1 Individual built-ins}
 
-    These are exposed for testing. Each function takes a list of arguments
-    and returns [Ok value] or [Error message]. *)
+    These are exposed for testing. Each function takes a list of arguments and
+    returns [Ok value] or [Error message]. *)
 
 (** {2 List operations} *)
 

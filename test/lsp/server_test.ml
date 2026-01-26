@@ -7,12 +7,8 @@ let make_message ?(id : Yojson.Safe.t option) ~method_ ?params () : string =
   let json =
     `Assoc
       ([ ("jsonrpc", `String "2.0"); ("method", `String method_) ]
-      @ (match id with
-        | Some i -> [ ("id", i) ]
-        | None -> [])
-      @ (match params with
-        | Some p -> [ ("params", p) ]
-        | None -> []))
+      @ (match id with Some i -> [ ("id", i) ] | None -> [])
+      @ match params with Some p -> [ ("params", p) ] | None -> [])
   in
   let content = Yojson.Safe.to_string json in
   Printf.sprintf "Content-Length: %d\r\n\r\n%s" (String.length content) content
@@ -33,18 +29,19 @@ let test_initialize () =
     make_message ~id:(`Int 1) ~method_:"initialize"
       ~params:
         (`Assoc
-          [
-            ("processId", `Int 12345);
-            ("rootUri", `String "file:///tmp/test");
-            ("capabilities", `Assoc []);
-          ])
+           [
+             ("processId", `Int 12345);
+             ("rootUri", `String "file:///tmp/test");
+             ("capabilities", `Assoc []);
+           ])
       ()
   in
   let shutdown_msg = make_message ~id:(`Int 2) ~method_:"shutdown" () in
   let exit_msg = make_message ~method_:"exit" () in
   let input = init_msg ^ shutdown_msg ^ exit_msg in
   let in_file = Filename.temp_file "lsp_in" ".json" in
-  Out_channel.with_open_bin in_file (fun oc -> Out_channel.output_string oc input);
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
@@ -70,13 +67,18 @@ let test_initialize () =
       (* Check capabilities present *)
       let result = json |> member "result" in
       let caps = result |> member "capabilities" in
-      Alcotest.(check bool) "has textDocumentSync" true (caps |> member "textDocumentSync" <> `Null);
-      Alcotest.(check bool) "hoverProvider" true (caps |> member "hoverProvider" |> to_bool);
+      Alcotest.(check bool)
+        "has textDocumentSync" true
+        (caps |> member "textDocumentSync" <> `Null);
+      Alcotest.(check bool)
+        "hoverProvider" true
+        (caps |> member "hoverProvider" |> to_bool);
       (* Check serverInfo *)
       let server_info = result |> member "serverInfo" in
-      Alcotest.(check string) "server name" "tart" (server_info |> member "name" |> to_string)
-  | None ->
-      Alcotest.fail "Could not parse response"
+      Alcotest.(check string)
+        "server name" "tart"
+        (server_info |> member "name" |> to_string)
+  | None -> Alcotest.fail "Could not parse response"
 
 let test_initialize_already_initialized () =
   let init_msg =
@@ -93,7 +95,8 @@ let test_initialize_already_initialized () =
   let exit_msg = make_message ~method_:"exit" () in
   let input = init_msg ^ init_msg2 ^ shutdown_msg ^ exit_msg in
   let in_file = Filename.temp_file "lsp_in" ".json" in
-  Out_channel.with_open_bin in_file (fun oc -> Out_channel.output_string oc input);
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
@@ -111,7 +114,8 @@ let test_shutdown_not_initialized () =
   let exit_msg = make_message ~method_:"exit" () in
   let input = shutdown_msg ^ exit_msg in
   let in_file = Filename.temp_file "lsp_in" ".json" in
-  Out_channel.with_open_bin in_file (fun oc -> Out_channel.output_string oc input);
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
@@ -131,7 +135,8 @@ let test_exit_without_shutdown () =
   let exit_msg = make_message ~method_:"exit" () in
   let input = init_msg ^ exit_msg in
   let in_file = Filename.temp_file "lsp_in" ".json" in
-  Out_channel.with_open_bin in_file (fun oc -> Out_channel.output_string oc input);
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
@@ -148,12 +153,15 @@ let test_initialized_notification () =
       ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
       ()
   in
-  let initialized_msg = make_message ~method_:"initialized" ~params:(`Assoc []) () in
+  let initialized_msg =
+    make_message ~method_:"initialized" ~params:(`Assoc []) ()
+  in
   let shutdown_msg = make_message ~id:(`Int 2) ~method_:"shutdown" () in
   let exit_msg = make_message ~method_:"exit" () in
   let input = init_msg ^ initialized_msg ^ shutdown_msg ^ exit_msg in
   let in_file = Filename.temp_file "lsp_in" ".json" in
-  Out_channel.with_open_bin in_file (fun oc -> Out_channel.output_string oc input);
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
@@ -174,7 +182,8 @@ let test_unknown_method () =
   let exit_msg = make_message ~method_:"exit" () in
   let input = init_msg ^ unknown_msg ^ shutdown_msg ^ exit_msg in
   let in_file = Filename.temp_file "lsp_in" ".json" in
-  Out_channel.with_open_bin in_file (fun oc -> Out_channel.output_string oc input);
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
@@ -188,7 +197,12 @@ let test_unknown_method () =
   let output = In_channel.with_open_bin out_file In_channel.input_all in
   let has_method_error =
     try
-      let _ = Str.search_forward (Str.regexp_string "method") (String.lowercase_ascii output) 0 in
+      let _ =
+        Str.search_forward
+          (Str.regexp_string "method")
+          (String.lowercase_ascii output)
+          0
+      in
       true
     with Not_found -> false
   in
@@ -206,23 +220,24 @@ let test_did_open () =
     make_message ~method_:"textDocument/didOpen"
       ~params:
         (`Assoc
-          [
-            ( "textDocument",
-              `Assoc
-                [
-                  ("uri", `String "file:///test.el");
-                  ("languageId", `String "elisp");
-                  ("version", `Int 1);
-                  ("text", `String "(defun foo () t)");
-                ] );
-          ])
+           [
+             ( "textDocument",
+               `Assoc
+                 [
+                   ("uri", `String "file:///test.el");
+                   ("languageId", `String "elisp");
+                   ("version", `Int 1);
+                   ("text", `String "(defun foo () t)");
+                 ] );
+           ])
       ()
   in
   let shutdown_msg = make_message ~id:(`Int 2) ~method_:"shutdown" () in
   let exit_msg = make_message ~method_:"exit" () in
   let input = init_msg ^ did_open_msg ^ shutdown_msg ^ exit_msg in
   let in_file = Filename.temp_file "lsp_in" ".json" in
-  Out_channel.with_open_bin in_file (fun oc -> Out_channel.output_string oc input);
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
@@ -248,52 +263,55 @@ let test_did_change_incremental () =
     make_message ~method_:"textDocument/didOpen"
       ~params:
         (`Assoc
-          [
-            ( "textDocument",
-              `Assoc
-                [
-                  ("uri", `String "file:///test.el");
-                  ("languageId", `String "elisp");
-                  ("version", `Int 1);
-                  ("text", `String "hello world");
-                ] );
-          ])
+           [
+             ( "textDocument",
+               `Assoc
+                 [
+                   ("uri", `String "file:///test.el");
+                   ("languageId", `String "elisp");
+                   ("version", `Int 1);
+                   ("text", `String "hello world");
+                 ] );
+           ])
       ()
   in
   let did_change_msg =
     make_message ~method_:"textDocument/didChange"
       ~params:
         (`Assoc
-          [
-            ( "textDocument",
-              `Assoc
-                [ ("uri", `String "file:///test.el"); ("version", `Int 2) ] );
-            ( "contentChanges",
-              `List
-                [
-                  `Assoc
-                    [
-                      ( "range",
-                        `Assoc
-                          [
-                            ( "start",
-                              `Assoc
-                                [ ("line", `Int 0); ("character", `Int 6) ] );
-                            ( "end",
-                              `Assoc
-                                [ ("line", `Int 0); ("character", `Int 11) ] );
-                          ] );
-                      ("text", `String "Emacs");
-                    ];
-                ] );
-          ])
+           [
+             ( "textDocument",
+               `Assoc
+                 [ ("uri", `String "file:///test.el"); ("version", `Int 2) ] );
+             ( "contentChanges",
+               `List
+                 [
+                   `Assoc
+                     [
+                       ( "range",
+                         `Assoc
+                           [
+                             ( "start",
+                               `Assoc
+                                 [ ("line", `Int 0); ("character", `Int 6) ] );
+                             ( "end",
+                               `Assoc
+                                 [ ("line", `Int 0); ("character", `Int 11) ] );
+                           ] );
+                       ("text", `String "Emacs");
+                     ];
+                 ] );
+           ])
       ()
   in
   let shutdown_msg = make_message ~id:(`Int 2) ~method_:"shutdown" () in
   let exit_msg = make_message ~method_:"exit" () in
-  let input = init_msg ^ did_open_msg ^ did_change_msg ^ shutdown_msg ^ exit_msg in
+  let input =
+    init_msg ^ did_open_msg ^ did_change_msg ^ shutdown_msg ^ exit_msg
+  in
   let in_file = Filename.temp_file "lsp_in" ".json" in
-  Out_channel.with_open_bin in_file (fun oc -> Out_channel.output_string oc input);
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
@@ -319,30 +337,33 @@ let test_did_close () =
     make_message ~method_:"textDocument/didOpen"
       ~params:
         (`Assoc
-          [
-            ( "textDocument",
-              `Assoc
-                [
-                  ("uri", `String "file:///test.el");
-                  ("languageId", `String "elisp");
-                  ("version", `Int 1);
-                  ("text", `String "some content");
-                ] );
-          ])
+           [
+             ( "textDocument",
+               `Assoc
+                 [
+                   ("uri", `String "file:///test.el");
+                   ("languageId", `String "elisp");
+                   ("version", `Int 1);
+                   ("text", `String "some content");
+                 ] );
+           ])
       ()
   in
   let did_close_msg =
     make_message ~method_:"textDocument/didClose"
       ~params:
         (`Assoc
-          [ ("textDocument", `Assoc [ ("uri", `String "file:///test.el") ]) ])
+           [ ("textDocument", `Assoc [ ("uri", `String "file:///test.el") ]) ])
       ()
   in
   let shutdown_msg = make_message ~id:(`Int 2) ~method_:"shutdown" () in
   let exit_msg = make_message ~method_:"exit" () in
-  let input = init_msg ^ did_open_msg ^ did_close_msg ^ shutdown_msg ^ exit_msg in
+  let input =
+    init_msg ^ did_open_msg ^ did_close_msg ^ shutdown_msg ^ exit_msg
+  in
   let in_file = Filename.temp_file "lsp_in" ".json" in
-  Out_channel.with_open_bin in_file (fun oc -> Out_channel.output_string oc input);
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
@@ -354,7 +375,8 @@ let test_did_close () =
   (* Check document was removed *)
   Alcotest.(check bool)
     "doc removed after close" true
-    (Option.is_none (Document.get_doc (Server.documents server) "file:///test.el"))
+    (Option.is_none
+       (Document.get_doc (Server.documents server) "file:///test.el"))
 
 (** {1 Diagnostics Tests} *)
 
@@ -409,23 +431,24 @@ let test_diagnostics_on_open () =
     make_message ~method_:"textDocument/didOpen"
       ~params:
         (`Assoc
-          [
-            ( "textDocument",
-              `Assoc
-                [
-                  ("uri", `String "file:///test.el");
-                  ("languageId", `String "elisp");
-                  ("version", `Int 1);
-                  ("text", `String "(+ 1 \"hello\")");
-                ] );
-          ])
+           [
+             ( "textDocument",
+               `Assoc
+                 [
+                   ("uri", `String "file:///test.el");
+                   ("languageId", `String "elisp");
+                   ("version", `Int 1);
+                   ("text", `String "(+ 1 \"hello\")");
+                 ] );
+           ])
       ()
   in
   let shutdown_msg = make_message ~id:(`Int 2) ~method_:"shutdown" () in
   let exit_msg = make_message ~method_:"exit" () in
   let input = init_msg ^ did_open_msg ^ shutdown_msg ^ exit_msg in
   let in_file = Filename.temp_file "lsp_in" ".json" in
-  Out_channel.with_open_bin in_file (fun oc -> Out_channel.output_string oc input);
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
@@ -447,9 +470,14 @@ let test_diagnostics_on_open () =
       (* Check the first diagnostic has expected fields *)
       let first = List.hd diagnostics in
       Alcotest.(check bool) "has range" true (first |> member "range" <> `Null);
-      Alcotest.(check bool) "has message" true (first |> member "message" <> `Null);
-      Alcotest.(check bool) "has severity" true (first |> member "severity" <> `Null);
-      Alcotest.(check string) "source is tart" "tart"
+      Alcotest.(check bool)
+        "has message" true
+        (first |> member "message" <> `Null);
+      Alcotest.(check bool)
+        "has severity" true
+        (first |> member "severity" <> `Null);
+      Alcotest.(check string)
+        "source is tart" "tart"
         (first |> member "source" |> to_string)
 
 let test_diagnostics_on_change () =
@@ -463,16 +491,16 @@ let test_diagnostics_on_change () =
     make_message ~method_:"textDocument/didOpen"
       ~params:
         (`Assoc
-          [
-            ( "textDocument",
-              `Assoc
-                [
-                  ("uri", `String "file:///test.el");
-                  ("languageId", `String "elisp");
-                  ("version", `Int 1);
-                  ("text", `String "(+ 1 2)");
-                ] );
-          ])
+           [
+             ( "textDocument",
+               `Assoc
+                 [
+                   ("uri", `String "file:///test.el");
+                   ("languageId", `String "elisp");
+                   ("version", `Int 1);
+                   ("text", `String "(+ 1 2)");
+                 ] );
+           ])
       ()
   in
   (* Change it to have an error *)
@@ -480,26 +508,23 @@ let test_diagnostics_on_change () =
     make_message ~method_:"textDocument/didChange"
       ~params:
         (`Assoc
-          [
-            ( "textDocument",
-              `Assoc
-                [ ("uri", `String "file:///test.el"); ("version", `Int 2) ] );
-            ( "contentChanges",
-              `List
-                [
-                  `Assoc
-                    [
-                      ("text", `String "(+ 1 \"bad\")");
-                    ];
-                ] );
-          ])
+           [
+             ( "textDocument",
+               `Assoc
+                 [ ("uri", `String "file:///test.el"); ("version", `Int 2) ] );
+             ( "contentChanges",
+               `List [ `Assoc [ ("text", `String "(+ 1 \"bad\")") ] ] );
+           ])
       ()
   in
   let shutdown_msg = make_message ~id:(`Int 2) ~method_:"shutdown" () in
   let exit_msg = make_message ~method_:"exit" () in
-  let input = init_msg ^ did_open_msg ^ did_change_msg ^ shutdown_msg ^ exit_msg in
+  let input =
+    init_msg ^ did_open_msg ^ did_change_msg ^ shutdown_msg ^ exit_msg
+  in
   let in_file = Filename.temp_file "lsp_in" ".json" in
-  Out_channel.with_open_bin in_file (fun oc -> Out_channel.output_string oc input);
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
@@ -520,8 +545,7 @@ let test_diagnostics_on_change () =
       messages
   in
   Alcotest.(check bool)
-    "has multiple diagnostics notifications"
-    true
+    "has multiple diagnostics notifications" true
     (List.length diag_notifications >= 2)
 
 let test_diagnostics_cleared_on_close () =
@@ -534,30 +558,33 @@ let test_diagnostics_cleared_on_close () =
     make_message ~method_:"textDocument/didOpen"
       ~params:
         (`Assoc
-          [
-            ( "textDocument",
-              `Assoc
-                [
-                  ("uri", `String "file:///test.el");
-                  ("languageId", `String "elisp");
-                  ("version", `Int 1);
-                  ("text", `String "(+ 1 \"error\")");
-                ] );
-          ])
+           [
+             ( "textDocument",
+               `Assoc
+                 [
+                   ("uri", `String "file:///test.el");
+                   ("languageId", `String "elisp");
+                   ("version", `Int 1);
+                   ("text", `String "(+ 1 \"error\")");
+                 ] );
+           ])
       ()
   in
   let did_close_msg =
     make_message ~method_:"textDocument/didClose"
       ~params:
         (`Assoc
-          [ ("textDocument", `Assoc [ ("uri", `String "file:///test.el") ]) ])
+           [ ("textDocument", `Assoc [ ("uri", `String "file:///test.el") ]) ])
       ()
   in
   let shutdown_msg = make_message ~id:(`Int 2) ~method_:"shutdown" () in
   let exit_msg = make_message ~method_:"exit" () in
-  let input = init_msg ^ did_open_msg ^ did_close_msg ^ shutdown_msg ^ exit_msg in
+  let input =
+    init_msg ^ did_open_msg ^ did_close_msg ^ shutdown_msg ^ exit_msg
+  in
   let in_file = Filename.temp_file "lsp_in" ".json" in
-  Out_channel.with_open_bin in_file (fun oc -> Out_channel.output_string oc input);
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
@@ -575,7 +602,8 @@ let test_diagnostics_cleared_on_close () =
         let open Yojson.Safe.Util in
         match json |> member "method" with
         | `String "textDocument/publishDiagnostics" ->
-            json |> member "params" |> member "uri" |> to_string = "file:///test.el"
+            json |> member "params" |> member "uri" |> to_string
+            = "file:///test.el"
         | _ -> false)
       messages
   in
@@ -584,7 +612,9 @@ let test_diagnostics_cleared_on_close () =
   | [] -> Alcotest.fail "No diagnostics notifications found"
   | last :: _ ->
       let open Yojson.Safe.Util in
-      let diagnostics = last |> member "params" |> member "diagnostics" |> to_list in
+      let diagnostics =
+        last |> member "params" |> member "diagnostics" |> to_list
+      in
       Alcotest.(check int) "diagnostics cleared" 0 (List.length diagnostics)
 
 let test_diagnostics_valid_document () =
@@ -598,23 +628,24 @@ let test_diagnostics_valid_document () =
     make_message ~method_:"textDocument/didOpen"
       ~params:
         (`Assoc
-          [
-            ( "textDocument",
-              `Assoc
-                [
-                  ("uri", `String "file:///test.el");
-                  ("languageId", `String "elisp");
-                  ("version", `Int 1);
-                  ("text", `String "(+ 1 2)");
-                ] );
-          ])
+           [
+             ( "textDocument",
+               `Assoc
+                 [
+                   ("uri", `String "file:///test.el");
+                   ("languageId", `String "elisp");
+                   ("version", `Int 1);
+                   ("text", `String "(+ 1 2)");
+                 ] );
+           ])
       ()
   in
   let shutdown_msg = make_message ~id:(`Int 2) ~method_:"shutdown" () in
   let exit_msg = make_message ~method_:"exit" () in
   let input = init_msg ^ did_open_msg ^ shutdown_msg ^ exit_msg in
   let in_file = Filename.temp_file "lsp_in" ".json" in
-  Out_channel.with_open_bin in_file (fun oc -> Out_channel.output_string oc input);
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
@@ -632,7 +663,8 @@ let test_diagnostics_valid_document () =
       let open Yojson.Safe.Util in
       let params = json |> member "params" in
       let diagnostics = params |> member "diagnostics" |> to_list in
-      Alcotest.(check int) "no diagnostics for valid code" 0 (List.length diagnostics)
+      Alcotest.(check int)
+        "no diagnostics for valid code" 0 (List.length diagnostics)
 
 let test_diagnostics_parse_error () =
   let init_msg =
@@ -645,23 +677,24 @@ let test_diagnostics_parse_error () =
     make_message ~method_:"textDocument/didOpen"
       ~params:
         (`Assoc
-          [
-            ( "textDocument",
-              `Assoc
-                [
-                  ("uri", `String "file:///test.el");
-                  ("languageId", `String "elisp");
-                  ("version", `Int 1);
-                  ("text", `String "(defun foo (");
-                ] );
-          ])
+           [
+             ( "textDocument",
+               `Assoc
+                 [
+                   ("uri", `String "file:///test.el");
+                   ("languageId", `String "elisp");
+                   ("version", `Int 1);
+                   ("text", `String "(defun foo (");
+                 ] );
+           ])
       ()
   in
   let shutdown_msg = make_message ~id:(`Int 2) ~method_:"shutdown" () in
   let exit_msg = make_message ~method_:"exit" () in
   let input = init_msg ^ did_open_msg ^ shutdown_msg ^ exit_msg in
   let in_file = Filename.temp_file "lsp_in" ".json" in
-  Out_channel.with_open_bin in_file (fun oc -> Out_channel.output_string oc input);
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
@@ -679,18 +712,18 @@ let test_diagnostics_parse_error () =
       let open Yojson.Safe.Util in
       let params = json |> member "params" in
       let diagnostics = params |> member "diagnostics" |> to_list in
-      Alcotest.(check bool) "has parse error diagnostic" true (List.length diagnostics > 0)
+      Alcotest.(check bool)
+        "has parse error diagnostic" true
+        (List.length diagnostics > 0)
 
 (** {1 Hover Tests} *)
 
 (** Helper to find a response with a given id *)
-let find_response (messages : Yojson.Safe.t list) (id : int) : Yojson.Safe.t option =
+let find_response (messages : Yojson.Safe.t list) (id : int) :
+    Yojson.Safe.t option =
   let open Yojson.Safe.Util in
   List.find_opt
-    (fun json ->
-      match json |> member "id" with
-      | `Int i -> i = id
-      | _ -> false)
+    (fun json -> match json |> member "id" with `Int i -> i = id | _ -> false)
     messages
 
 let test_hover_on_literal () =
@@ -703,16 +736,16 @@ let test_hover_on_literal () =
     make_message ~method_:"textDocument/didOpen"
       ~params:
         (`Assoc
-          [
-            ( "textDocument",
-              `Assoc
-                [
-                  ("uri", `String "file:///test.el");
-                  ("languageId", `String "elisp");
-                  ("version", `Int 1);
-                  ("text", `String "42");
-                ] );
-          ])
+           [
+             ( "textDocument",
+               `Assoc
+                 [
+                   ("uri", `String "file:///test.el");
+                   ("languageId", `String "elisp");
+                   ("version", `Int 1);
+                   ("text", `String "42");
+                 ] );
+           ])
       ()
   in
   (* Hover at position (0, 0) - should get int type *)
@@ -720,17 +753,18 @@ let test_hover_on_literal () =
     make_message ~id:(`Int 2) ~method_:"textDocument/hover"
       ~params:
         (`Assoc
-          [
-            ("textDocument", `Assoc [ ("uri", `String "file:///test.el") ]);
-            ("position", `Assoc [ ("line", `Int 0); ("character", `Int 0) ]);
-          ])
+           [
+             ("textDocument", `Assoc [ ("uri", `String "file:///test.el") ]);
+             ("position", `Assoc [ ("line", `Int 0); ("character", `Int 0) ]);
+           ])
       ()
   in
   let shutdown_msg = make_message ~id:(`Int 3) ~method_:"shutdown" () in
   let exit_msg = make_message ~method_:"exit" () in
   let input = init_msg ^ did_open_msg ^ hover_msg ^ shutdown_msg ^ exit_msg in
   let in_file = Filename.temp_file "lsp_in" ".json" in
-  Out_channel.with_open_bin in_file (fun oc -> Out_channel.output_string oc input);
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
@@ -751,10 +785,14 @@ let test_hover_on_literal () =
       let contents = result |> member "contents" in
       let value = contents |> member "value" |> to_string in
       (* Should contain "Int" type *)
-      Alcotest.(check bool) "contains Int type" true
-        (String.length value > 0 && (try
-          let _ = Str.search_forward (Str.regexp_string "Int") value 0 in true
-        with Not_found -> false))
+      Alcotest.(check bool)
+        "contains Int type" true
+        (String.length value > 0
+        &&
+        try
+          let _ = Str.search_forward (Str.regexp_string "Int") value 0 in
+          true
+        with Not_found -> false)
 
 let test_hover_on_function_call () =
   let init_msg =
@@ -766,16 +804,16 @@ let test_hover_on_function_call () =
     make_message ~method_:"textDocument/didOpen"
       ~params:
         (`Assoc
-          [
-            ( "textDocument",
-              `Assoc
-                [
-                  ("uri", `String "file:///test.el");
-                  ("languageId", `String "elisp");
-                  ("version", `Int 1);
-                  ("text", `String "(+ 1 2)");
-                ] );
-          ])
+           [
+             ( "textDocument",
+               `Assoc
+                 [
+                   ("uri", `String "file:///test.el");
+                   ("languageId", `String "elisp");
+                   ("version", `Int 1);
+                   ("text", `String "(+ 1 2)");
+                 ] );
+           ])
       ()
   in
   (* Hover at position (0, 1) - on the + symbol *)
@@ -783,17 +821,18 @@ let test_hover_on_function_call () =
     make_message ~id:(`Int 2) ~method_:"textDocument/hover"
       ~params:
         (`Assoc
-          [
-            ("textDocument", `Assoc [ ("uri", `String "file:///test.el") ]);
-            ("position", `Assoc [ ("line", `Int 0); ("character", `Int 1) ]);
-          ])
+           [
+             ("textDocument", `Assoc [ ("uri", `String "file:///test.el") ]);
+             ("position", `Assoc [ ("line", `Int 0); ("character", `Int 1) ]);
+           ])
       ()
   in
   let shutdown_msg = make_message ~id:(`Int 3) ~method_:"shutdown" () in
   let exit_msg = make_message ~method_:"exit" () in
   let input = init_msg ^ did_open_msg ^ hover_msg ^ shutdown_msg ^ exit_msg in
   let in_file = Filename.temp_file "lsp_in" ".json" in
-  Out_channel.with_open_bin in_file (fun oc -> Out_channel.output_string oc input);
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
@@ -814,10 +853,12 @@ let test_hover_on_function_call () =
       let contents = result |> member "contents" in
       let value = contents |> member "value" |> to_string in
       (* Should have a function type with arrows *)
-      Alcotest.(check bool) "contains arrow" true
+      Alcotest.(check bool)
+        "contains arrow" true
         (try
-          let _ = Str.search_forward (Str.regexp_string "->") value 0 in true
-        with Not_found -> false)
+           let _ = Str.search_forward (Str.regexp_string "->") value 0 in
+           true
+         with Not_found -> false)
 
 let test_hover_outside_code () =
   let init_msg =
@@ -829,16 +870,16 @@ let test_hover_outside_code () =
     make_message ~method_:"textDocument/didOpen"
       ~params:
         (`Assoc
-          [
-            ( "textDocument",
-              `Assoc
-                [
-                  ("uri", `String "file:///test.el");
-                  ("languageId", `String "elisp");
-                  ("version", `Int 1);
-                  ("text", `String "42\n");
-                ] );
-          ])
+           [
+             ( "textDocument",
+               `Assoc
+                 [
+                   ("uri", `String "file:///test.el");
+                   ("languageId", `String "elisp");
+                   ("version", `Int 1);
+                   ("text", `String "42\n");
+                 ] );
+           ])
       ()
   in
   (* Hover at position (1, 0) - empty line, outside any code *)
@@ -846,17 +887,18 @@ let test_hover_outside_code () =
     make_message ~id:(`Int 2) ~method_:"textDocument/hover"
       ~params:
         (`Assoc
-          [
-            ("textDocument", `Assoc [ ("uri", `String "file:///test.el") ]);
-            ("position", `Assoc [ ("line", `Int 1); ("character", `Int 0) ]);
-          ])
+           [
+             ("textDocument", `Assoc [ ("uri", `String "file:///test.el") ]);
+             ("position", `Assoc [ ("line", `Int 1); ("character", `Int 0) ]);
+           ])
       ()
   in
   let shutdown_msg = make_message ~id:(`Int 3) ~method_:"shutdown" () in
   let exit_msg = make_message ~method_:"exit" () in
   let input = init_msg ^ did_open_msg ^ hover_msg ^ shutdown_msg ^ exit_msg in
   let in_file = Filename.temp_file "lsp_in" ".json" in
-  Out_channel.with_open_bin in_file (fun oc -> Out_channel.output_string oc input);
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
@@ -886,17 +928,17 @@ let test_hover_has_range () =
     make_message ~method_:"textDocument/didOpen"
       ~params:
         (`Assoc
-          [
-            ( "textDocument",
-              `Assoc
-                [
-                  ("uri", `String "file:///test.el");
-                  ("languageId", `String "elisp");
-                  ("version", `Int 1);
-                  (* Use a simpler literal for testing range *)
-                  ("text", `String "42");
-                ] );
-          ])
+           [
+             ( "textDocument",
+               `Assoc
+                 [
+                   ("uri", `String "file:///test.el");
+                   ("languageId", `String "elisp");
+                   ("version", `Int 1);
+                   (* Use a simpler literal for testing range *)
+                   ("text", `String "42");
+                 ] );
+           ])
       ()
   in
   (* Hover on int literal at position 0 *)
@@ -904,17 +946,18 @@ let test_hover_has_range () =
     make_message ~id:(`Int 2) ~method_:"textDocument/hover"
       ~params:
         (`Assoc
-          [
-            ("textDocument", `Assoc [ ("uri", `String "file:///test.el") ]);
-            ("position", `Assoc [ ("line", `Int 0); ("character", `Int 0) ]);
-          ])
+           [
+             ("textDocument", `Assoc [ ("uri", `String "file:///test.el") ]);
+             ("position", `Assoc [ ("line", `Int 0); ("character", `Int 0) ]);
+           ])
       ()
   in
   let shutdown_msg = make_message ~id:(`Int 3) ~method_:"shutdown" () in
   let exit_msg = make_message ~method_:"exit" () in
   let input = init_msg ^ did_open_msg ^ hover_msg ^ shutdown_msg ^ exit_msg in
   let in_file = Filename.temp_file "lsp_in" ".json" in
-  Out_channel.with_open_bin in_file (fun oc -> Out_channel.output_string oc input);
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
@@ -954,16 +997,16 @@ let test_hover_instantiated_type () =
     make_message ~method_:"textDocument/didOpen"
       ~params:
         (`Assoc
-          [
-            ( "textDocument",
-              `Assoc
-                [
-                  ("uri", `String "file:///test.el");
-                  ("languageId", `String "elisp");
-                  ("version", `Int 1);
-                  ("text", `String "(cons 1 nil)");
-                ] );
-          ])
+           [
+             ( "textDocument",
+               `Assoc
+                 [
+                   ("uri", `String "file:///test.el");
+                   ("languageId", `String "elisp");
+                   ("version", `Int 1);
+                   ("text", `String "(cons 1 nil)");
+                 ] );
+           ])
       ()
   in
   (* Hover at position (0, 1) - on the 'cons' symbol *)
@@ -971,17 +1014,18 @@ let test_hover_instantiated_type () =
     make_message ~id:(`Int 2) ~method_:"textDocument/hover"
       ~params:
         (`Assoc
-          [
-            ("textDocument", `Assoc [ ("uri", `String "file:///test.el") ]);
-            ("position", `Assoc [ ("line", `Int 0); ("character", `Int 1) ]);
-          ])
+           [
+             ("textDocument", `Assoc [ ("uri", `String "file:///test.el") ]);
+             ("position", `Assoc [ ("line", `Int 0); ("character", `Int 1) ]);
+           ])
       ()
   in
   let shutdown_msg = make_message ~id:(`Int 3) ~method_:"shutdown" () in
   let exit_msg = make_message ~method_:"exit" () in
   let input = init_msg ^ did_open_msg ^ hover_msg ^ shutdown_msg ^ exit_msg in
   let in_file = Filename.temp_file "lsp_in" ".json" in
-  Out_channel.with_open_bin in_file (fun oc -> Out_channel.output_string oc input);
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
@@ -1002,19 +1046,23 @@ let test_hover_instantiated_type () =
       let contents = result |> member "contents" in
       let value = contents |> member "value" |> to_string in
       (* Should have Int in the type, not a type variable like '_0 *)
-      Alcotest.(check bool) "contains Int (instantiated)" true
+      Alcotest.(check bool)
+        "contains Int (instantiated)" true
         (try
-          let _ = Str.search_forward (Str.regexp_string "Int") value 0 in true
-        with Not_found -> false);
+           let _ = Str.search_forward (Str.regexp_string "Int") value 0 in
+           true
+         with Not_found -> false);
       (* Should NOT have unresolved type variables like '_0 *)
       let has_tvar =
         try
-          let _ = Str.search_forward (Str.regexp "'_[0-9]+") value 0 in true
+          let _ = Str.search_forward (Str.regexp "'_[0-9]+") value 0 in
+          true
         with Not_found -> false
       in
       Alcotest.(check bool) "no unresolved tvars" false has_tvar
 
-(** Test hover still works on valid code when document has type errors elsewhere *)
+(** Test hover still works on valid code when document has type errors elsewhere
+*)
 let test_hover_with_errors_elsewhere () =
   let init_msg =
     make_message ~id:(`Int 1) ~method_:"initialize"
@@ -1026,18 +1074,18 @@ let test_hover_with_errors_elsewhere () =
     make_message ~method_:"textDocument/didOpen"
       ~params:
         (`Assoc
-          [
-            ( "textDocument",
-              `Assoc
-                [
-                  ("uri", `String "file:///test.el");
-                  ("languageId", `String "elisp");
-                  ("version", `Int 1);
-                  (* Line 0: valid code (42)
+           [
+             ( "textDocument",
+               `Assoc
+                 [
+                   ("uri", `String "file:///test.el");
+                   ("languageId", `String "elisp");
+                   ("version", `Int 1);
+                   (* Line 0: valid code (42)
                      Line 1: type error (+ 1 "hello") *)
-                  ("text", `String "42\n(+ 1 \"hello\")");
-                ] );
-          ])
+                   ("text", `String "42\n(+ 1 \"hello\")");
+                 ] );
+           ])
       ()
   in
   (* Hover at position (0, 0) - on the valid literal 42 *)
@@ -1045,17 +1093,18 @@ let test_hover_with_errors_elsewhere () =
     make_message ~id:(`Int 2) ~method_:"textDocument/hover"
       ~params:
         (`Assoc
-          [
-            ("textDocument", `Assoc [ ("uri", `String "file:///test.el") ]);
-            ("position", `Assoc [ ("line", `Int 0); ("character", `Int 0) ]);
-          ])
+           [
+             ("textDocument", `Assoc [ ("uri", `String "file:///test.el") ]);
+             ("position", `Assoc [ ("line", `Int 0); ("character", `Int 0) ]);
+           ])
       ()
   in
   let shutdown_msg = make_message ~id:(`Int 3) ~method_:"shutdown" () in
   let exit_msg = make_message ~method_:"exit" () in
   let input = init_msg ^ did_open_msg ^ hover_msg ^ shutdown_msg ^ exit_msg in
   let in_file = Filename.temp_file "lsp_in" ".json" in
-  Out_channel.with_open_bin in_file (fun oc -> Out_channel.output_string oc input);
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
@@ -1077,10 +1126,12 @@ let test_hover_with_errors_elsewhere () =
       let contents = result |> member "contents" in
       let value = contents |> member "value" |> to_string in
       (* Should contain "Int" type for the literal 42 *)
-      Alcotest.(check bool) "contains Int type" true
+      Alcotest.(check bool)
+        "contains Int type" true
         (try
-          let _ = Str.search_forward (Str.regexp_string "Int") value 0 in true
-        with Not_found -> false)
+           let _ = Str.search_forward (Str.regexp_string "Int") value 0 in
+           true
+         with Not_found -> false)
 
 (** Test hover on code at the error site itself still provides info *)
 let test_hover_at_error_site () =
@@ -1094,16 +1145,16 @@ let test_hover_at_error_site () =
     make_message ~method_:"textDocument/didOpen"
       ~params:
         (`Assoc
-          [
-            ( "textDocument",
-              `Assoc
-                [
-                  ("uri", `String "file:///test.el");
-                  ("languageId", `String "elisp");
-                  ("version", `Int 1);
-                  ("text", `String "(+ 1 \"hello\")");
-                ] );
-          ])
+           [
+             ( "textDocument",
+               `Assoc
+                 [
+                   ("uri", `String "file:///test.el");
+                   ("languageId", `String "elisp");
+                   ("version", `Int 1);
+                   ("text", `String "(+ 1 \"hello\")");
+                 ] );
+           ])
       ()
   in
   (* Hover at position (0, 1) - on the + function *)
@@ -1111,17 +1162,18 @@ let test_hover_at_error_site () =
     make_message ~id:(`Int 2) ~method_:"textDocument/hover"
       ~params:
         (`Assoc
-          [
-            ("textDocument", `Assoc [ ("uri", `String "file:///test.el") ]);
-            ("position", `Assoc [ ("line", `Int 0); ("character", `Int 1) ]);
-          ])
+           [
+             ("textDocument", `Assoc [ ("uri", `String "file:///test.el") ]);
+             ("position", `Assoc [ ("line", `Int 0); ("character", `Int 1) ]);
+           ])
       ()
   in
   let shutdown_msg = make_message ~id:(`Int 3) ~method_:"shutdown" () in
   let exit_msg = make_message ~method_:"exit" () in
   let input = init_msg ^ did_open_msg ^ hover_msg ^ shutdown_msg ^ exit_msg in
   let in_file = Filename.temp_file "lsp_in" ".json" in
-  Out_channel.with_open_bin in_file (fun oc -> Out_channel.output_string oc input);
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
@@ -1139,15 +1191,15 @@ let test_hover_at_error_site () =
       let open Yojson.Safe.Util in
       let result = json |> member "result" in
       (* Should still get some response - either type or null, but not an error *)
-      Alcotest.(check bool) "response succeeded (not error)" true
+      Alcotest.(check bool)
+        "response succeeded (not error)" true
         (json |> member "error" = `Null);
       (* If we get a result, it should have some type info *)
-      if result <> `Null then begin
+      if result <> `Null then
         let contents = result |> member "contents" in
         let value = contents |> member "value" |> to_string in
         (* Should have some content (best-effort type) *)
         Alcotest.(check bool) "has some content" true (String.length value > 0)
-      end
 
 let () =
   Alcotest.run "server"
@@ -1155,34 +1207,45 @@ let () =
       ( "lifecycle",
         [
           Alcotest.test_case "initialize" `Quick test_initialize;
-          Alcotest.test_case "already initialized" `Quick test_initialize_already_initialized;
-          Alcotest.test_case "shutdown not initialized" `Quick test_shutdown_not_initialized;
-          Alcotest.test_case "exit without shutdown" `Quick test_exit_without_shutdown;
-          Alcotest.test_case "initialized notification" `Quick test_initialized_notification;
+          Alcotest.test_case "already initialized" `Quick
+            test_initialize_already_initialized;
+          Alcotest.test_case "shutdown not initialized" `Quick
+            test_shutdown_not_initialized;
+          Alcotest.test_case "exit without shutdown" `Quick
+            test_exit_without_shutdown;
+          Alcotest.test_case "initialized notification" `Quick
+            test_initialized_notification;
           Alcotest.test_case "unknown method" `Quick test_unknown_method;
         ] );
       ( "document-sync",
         [
           Alcotest.test_case "didOpen" `Quick test_did_open;
-          Alcotest.test_case "didChange incremental" `Quick test_did_change_incremental;
+          Alcotest.test_case "didChange incremental" `Quick
+            test_did_change_incremental;
           Alcotest.test_case "didClose" `Quick test_did_close;
         ] );
       ( "diagnostics",
         [
-          Alcotest.test_case "on open with errors" `Quick test_diagnostics_on_open;
+          Alcotest.test_case "on open with errors" `Quick
+            test_diagnostics_on_open;
           Alcotest.test_case "on change" `Quick test_diagnostics_on_change;
-          Alcotest.test_case "cleared on close" `Quick test_diagnostics_cleared_on_close;
-          Alcotest.test_case "valid document" `Quick test_diagnostics_valid_document;
+          Alcotest.test_case "cleared on close" `Quick
+            test_diagnostics_cleared_on_close;
+          Alcotest.test_case "valid document" `Quick
+            test_diagnostics_valid_document;
           Alcotest.test_case "parse error" `Quick test_diagnostics_parse_error;
         ] );
       ( "hover",
         [
           Alcotest.test_case "on literal" `Quick test_hover_on_literal;
-          Alcotest.test_case "on function call" `Quick test_hover_on_function_call;
+          Alcotest.test_case "on function call" `Quick
+            test_hover_on_function_call;
           Alcotest.test_case "outside code" `Quick test_hover_outside_code;
           Alcotest.test_case "has range" `Quick test_hover_has_range;
-          Alcotest.test_case "instantiated type" `Quick test_hover_instantiated_type;
-          Alcotest.test_case "with errors elsewhere" `Quick test_hover_with_errors_elsewhere;
+          Alcotest.test_case "instantiated type" `Quick
+            test_hover_instantiated_type;
+          Alcotest.test_case "with errors elsewhere" `Quick
+            test_hover_with_errors_elsewhere;
           Alcotest.test_case "at error site" `Quick test_hover_at_error_site;
         ] );
     ]

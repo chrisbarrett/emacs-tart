@@ -1,20 +1,19 @@
 (** Constraint representation for type inference.
 
     This module defines equality constraints generated during type inference.
-    Constraints are collected and then solved by unification.
-*)
+    Constraints are collected and then solved by unification. *)
 
 open Core.Types
 
-(** An equality constraint: two types that must unify. *)
 type t = {
   lhs : typ;  (** Left-hand side type *)
   rhs : typ;  (** Right-hand side type *)
   loc : Syntax.Location.span;  (** Source location for error reporting *)
 }
+(** An equality constraint: two types that must unify. *)
 
-(** A set of constraints to be solved *)
 type set = t list
+(** A set of constraints to be solved *)
 
 (** Create an equality constraint *)
 let equal lhs rhs loc = { lhs; rhs; loc }
@@ -29,9 +28,7 @@ let add c cs = c :: cs
 let combine cs1 cs2 = cs1 @ cs2
 
 (** Pretty-print a constraint for debugging *)
-let to_string c =
-  Printf.sprintf "%s = %s" (to_string c.lhs) (to_string c.rhs)
+let to_string c = Printf.sprintf "%s = %s" (to_string c.lhs) (to_string c.rhs)
 
 (** Pretty-print a constraint set *)
-let set_to_string cs =
-  String.concat "\n" (List.map to_string cs)
+let set_to_string cs = String.concat "\n" (List.map to_string cs)

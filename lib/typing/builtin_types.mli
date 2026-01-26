@@ -1,8 +1,8 @@
 (** Type signatures for built-in Elisp functions.
 
-    This module defines the types for pure built-in functions that are
-    available in the interpreter. These types are loaded into the initial
-    type environment used for type checking.
+    This module defines the types for pure built-in functions that are available
+    in the interpreter. These types are loaded into the initial type environment
+    used for type checking.
 
     The signatures follow the type system design:
     - Uses Option for nullable returns (e.g., car on a list)

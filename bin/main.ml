@@ -1,7 +1,7 @@
 (** Tart CLI entry point
 
-    Subcommand dispatch for type-checking, evaluation, macro expansion,
-    and LSP server. *)
+    Subcommand dispatch for type-checking, evaluation, macro expansion, and LSP
+    server. *)
 
 (** Format a parse error for display in compiler-style format *)
 let format_parse_error (err : Tart.Read.parse_error) : string =
@@ -11,8 +11,8 @@ let format_parse_error (err : Tart.Read.parse_error) : string =
 
 (** Type-check a single file with a given environment.
 
-    Returns the updated environment (with definitions from this file)
-    and the error count for this file. *)
+    Returns the updated environment (with definitions from this file) and the
+    error count for this file. *)
 let check_file env filename : Tart.Type_env.t * int =
   (* Parse the file *)
   let parse_result = Tart.Read.parse_file filename in
@@ -34,13 +34,15 @@ let check_file env filename : Tart.Type_env.t * int =
       (fun d -> prerr_endline (Tart.Diagnostic.to_string_compact d))
       diagnostics;
 
-    let error_count = parse_error_count + Tart.Diagnostic.count_errors diagnostics in
+    let error_count =
+      parse_error_count + Tart.Diagnostic.count_errors diagnostics
+    in
     (check_result.env, error_count)
 
 (** Default command: type-check files.
 
-    Files are processed in order; definitions from earlier files
-    are visible to later files. *)
+    Files are processed in order; definitions from earlier files are visible to
+    later files. *)
 let cmd_check files =
   if files = [] then (
     prerr_endline "tart: no input files. Use --help for usage.";
@@ -60,8 +62,8 @@ let cmd_check files =
 
 (** Eval subcommand: evaluate expression and print result with type.
 
-    Parses the expression, evaluates it in the interpreter,
-    infers its type, and prints "<value> :: <type>".
+    Parses the expression, evaluates it in the interpreter, infers its type, and
+    prints "<value> :: <type>".
 
     Exits with code 1 on parse errors, eval errors, or type errors. *)
 let cmd_eval expr =
@@ -165,11 +167,11 @@ let parse_repl_cmd_arg cmd input =
     String.trim rest
   else ""
 
-(** REPL state *)
 type repl_state = {
   interp : Tart.Env.global;
   mutable type_env : Tart.Type_env.t;
 }
+(** REPL state *)
 
 (** Show type of expression without evaluating *)
 let repl_type state input =
@@ -186,11 +188,11 @@ let repl_type state input =
       | [] -> prerr_endline ",type: empty expression"
       | [ sexp ] ->
           let ty, errors = Tart.Check.check_expr ~env:state.type_env sexp in
-          if errors <> [] then (
+          if errors <> [] then
             let diagnostics = Tart.Diagnostic.of_unify_errors errors in
             List.iter
               (fun d -> prerr_endline (Tart.Diagnostic.to_string_compact d))
-              diagnostics)
+              diagnostics
           else print_endline (Tart.Types.to_string ty)
       | _ -> prerr_endline ",type: expected single expression"
 
@@ -234,9 +236,7 @@ let repl_env state =
   (* Show macros *)
   if Hashtbl.length state.interp.macros > 0 then (
     print_endline "\n=== Macros ===";
-    Hashtbl.iter
-      (fun name _ -> Printf.printf "%s\n" name)
-      state.interp.macros)
+    Hashtbl.iter (fun name _ -> Printf.printf "%s\n" name) state.interp.macros)
 
 (** Show help message *)
 let repl_help () =
@@ -277,11 +277,11 @@ let repl_eval state input =
               Tart.Check.check_expr ~env:state.type_env sexp
             in
             let all_errors = errors @ type_errors in
-            if all_errors <> [] then (
+            if all_errors <> [] then
               let diagnostics = Tart.Diagnostic.of_unify_errors all_errors in
               List.iter
                 (fun d -> prerr_endline (Tart.Diagnostic.to_string_compact d))
-                diagnostics)
+                diagnostics
             else
               let value_str = Tart.Value.to_string value in
               let type_str = Tart.Types.to_string ty in
@@ -314,11 +314,8 @@ let read_input () =
     match In_channel.input_line In_channel.stdin with
     | None -> None (* EOF *)
     | Some line ->
-        let combined =
-          if acc = "" then line else acc ^ "\n" ^ line
-        in
-        if is_incomplete combined then loop combined "... > "
-        else Some combined
+        let combined = if acc = "" then line else acc ^ "\n" ^ line in
+        if is_incomplete combined then loop combined "... > " else Some combined
   in
   loop "" "tart> "
 
@@ -353,7 +350,8 @@ let cmd_repl () =
         else if String.starts_with ~prefix:",expand" trimmed then
           repl_expand state trimmed
         else if String.starts_with ~prefix:"," trimmed then
-          prerr_endline ("Unknown command: " ^ trimmed ^ ". Type ,help for commands.")
+          prerr_endline
+            ("Unknown command: " ^ trimmed ^ ". Type ,help for commands.")
         else repl_eval state input
   done
 
@@ -426,7 +424,7 @@ let () =
       | _ ->
           prerr_endline "tart eval: expected single expression";
           exit 2)
-  | "expand" :: rest ->
+  | "expand" :: rest -> (
       let load_files = ref [] in
       let target_file = ref None in
       let show_help = ref false in
@@ -458,9 +456,10 @@ let () =
         print_endline "Macro-expand FILE and print the result.";
         print_endline "";
         print_endline "Options:";
-        print_endline "  --load FILE  Load macros from FILE before expanding (repeatable)";
+        print_endline
+          "  --load FILE  Load macros from FILE before expanding (repeatable)";
         exit 0)
-      else (
+      else
         match !target_file with
         | None ->
             prerr_endline "tart expand: missing file";
@@ -504,7 +503,8 @@ let () =
             log_level := Tart.Server.Normal;
             parse_lsp_args rest
         | "--log-level" :: _ :: _ ->
-            prerr_endline "tart lsp: --log-level must be debug, normal, or quiet";
+            prerr_endline
+              "tart lsp: --log-level must be debug, normal, or quiet";
             exit 2
         | "--log-level" :: [] ->
             prerr_endline "tart lsp: --log-level requires an argument";
@@ -521,7 +521,8 @@ let () =
         print_endline "";
         print_endline "Options:";
         print_endline "  --port PORT        Listen on TCP port instead of stdio";
-        print_endline "  --log-level LEVEL  Set log level: debug, normal (default), quiet";
+        print_endline
+          "  --log-level LEVEL  Set log level: debug, normal (default), quiet";
         exit 0)
       else cmd_lsp ~log_level:!log_level !port
   (* Default: type-check files *)

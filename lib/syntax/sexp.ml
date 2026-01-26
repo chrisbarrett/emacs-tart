@@ -85,12 +85,11 @@ let rec to_string = function
       ^ " . " ^ to_string tail ^ ")"
   | Error (msg, _) -> Printf.sprintf "#<error: %s>" msg
 
-(** Find the innermost S-expression containing the given position.
-    Position is 0-based (LSP convention). *)
+(** Find the innermost S-expression containing the given position. Position is
+    0-based (LSP convention). *)
 let rec find_at_position ~(line : int) ~(col : int) (sexp : t) : t option =
   let span = span_of sexp in
-  if not (Location.contains_position span ~line ~col) then
-    None
+  if not (Location.contains_position span ~line ~col) then None
   else
     (* Position is within this sexp; check children for a more specific match *)
     let children_result =
@@ -112,25 +111,27 @@ let rec find_at_position ~(line : int) ~(col : int) (sexp : t) : t option =
     | None -> Some sexp
 
 (** Find the innermost S-expression at a position across multiple forms. *)
-let find_at_position_in_forms ~(line : int) ~(col : int) (forms : t list) : t option =
+let find_at_position_in_forms ~(line : int) ~(col : int) (forms : t list) :
+    t option =
   List.find_map (find_at_position ~line ~col) forms
 
-(** Result of find_with_context: the target sexp and optionally the enclosing
-    application if the target is in function position. *)
 type position_context = {
   target : t;  (** The innermost sexp at the position *)
-  enclosing_application : t option;  (** The enclosing (fn args...) if target is fn *)
+  enclosing_application : t option;
+      (** The enclosing (fn args...) if target is fn *)
 }
+(** Result of find_with_context: the target sexp and optionally the enclosing
+    application if the target is in function position. *)
 
 (** Find the innermost S-expression at a position, tracking if it's in function
     position of an application. *)
-let rec find_with_context ~(line : int) ~(col : int) (sexp : t) : position_context option =
+let rec find_with_context ~(line : int) ~(col : int) (sexp : t) :
+    position_context option =
   let span = span_of sexp in
-  if not (Location.contains_position span ~line ~col) then
-    None
+  if not (Location.contains_position span ~line ~col) then None
   else
     match sexp with
-    | List ((fn :: _args) as _children, _) -> (
+    | List ((fn :: _args as _children), _) -> (
         (* Check if we're on the function position *)
         let fn_span = span_of fn in
         if Location.contains_position fn_span ~line ~col then

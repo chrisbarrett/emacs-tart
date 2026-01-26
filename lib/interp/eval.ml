@@ -1,14 +1,14 @@
 (** Core evaluator for the Elisp interpreter.
 
-    Implements evaluation of Elisp expressions in a pure environment.
-    Special forms are handled directly; function calls go through apply. *)
+    Implements evaluation of Elisp expressions in a pure environment. Special
+    forms are handled directly; function calls go through apply. *)
 
 open Value
 open Syntax.Sexp
 open Syntax.Location
 
-(** Evaluation error with source location *)
 type eval_error = { message : string; span : span }
+(** Evaluation error with source location *)
 
 exception Eval_error of eval_error
 
@@ -30,7 +30,8 @@ let rec sexp_to_value = function
   | Char (c, _) -> Value.Int c
   | List ([], _) -> Nil
   | List (elts, _) -> of_list (List.map sexp_to_value elts)
-  | Vector (elts, _) -> Value.Vector (Array.of_list (List.map sexp_to_value elts))
+  | Vector (elts, _) ->
+      Value.Vector (Array.of_list (List.map sexp_to_value elts))
   | Cons (car, cdr, _) -> Value.Cons (sexp_to_value car, sexp_to_value cdr)
   | Error (msg, _span) -> Opaque ("parse-error: " ^ msg)
 
@@ -57,13 +58,9 @@ let rec value_to_sexp span = function
 (** Parse a lambda parameter list *)
 let parse_params span params_sexp =
   let rec loop required optional rest = function
-    | [] ->
-        {
-          required = List.rev required;
-          optional = List.rev optional;
-          rest;
-        }
-    | Symbol ("&optional", _) :: elts -> parse_optional required optional rest elts
+    | [] -> { required = List.rev required; optional = List.rev optional; rest }
+    | Symbol ("&optional", _) :: elts ->
+        parse_optional required optional rest elts
     | Symbol ("&rest", _) :: elts -> parse_rest required optional elts
     | Symbol (name, _) :: elts -> loop (name :: required) optional rest elts
     | sexp :: _ -> error (span_of sexp) "invalid parameter"
@@ -216,10 +213,10 @@ and eval_bq_list env global depth elts =
   let rec loop acc = function
     | [] -> of_list (List.rev acc)
     | List ([ Symbol ("unquote-splicing", _); inner ], _span) :: rest
-      when depth = 1 ->
+      when depth = 1 -> (
         (* Evaluate and splice *)
         let spliced = eval env global inner in
-        (match to_list spliced with
+        match to_list spliced with
         | Some items -> loop (List.rev_append items acc) rest
         | None ->
             (* If not a proper list, just append as single element *)
@@ -245,7 +242,8 @@ and eval_function env global span = function
       | Some ((Closure _ | Builtin _) as f) -> f
       | Some _ -> errorf name_span "%s is not a function" name
       | None -> errorf name_span "void function: %s" name)
-  | [ (List (Symbol ("lambda", _) :: _, _) as lambda) ] -> eval env global lambda
+  | [ (List (Symbol ("lambda", _) :: _, _) as lambda) ] ->
+      eval env global lambda
   | _ -> error span "invalid function form"
 
 (** if - conditional *)
@@ -400,9 +398,10 @@ and eval_defmacro env global span = function
 (** defvar - define variable *)
 and eval_defvar global span = function
   | Symbol (name, _) :: _init :: _ ->
-      if not (Hashtbl.mem global.Env.globals name) then (
-        let v = Nil in  (* defvar doesn't eval init if already defined *)
-        Env.define_global name v global);
+      (if not (Hashtbl.mem global.Env.globals name) then
+         let v = Nil in
+         (* defvar doesn't eval init if already defined *)
+         Env.define_global name v global);
       Value.Symbol name
   | Symbol (name, _) :: [] ->
       Env.define_global name Nil global;
@@ -412,7 +411,8 @@ and eval_defvar global span = function
 (** defconst - define constant *)
 and eval_defconst global span = function
   | Symbol (name, _) :: _init :: _ ->
-      let v = Nil in  (* Would need env to eval init *)
+      let v = Nil in
+      (* Would need env to eval init *)
       Env.define_global name v global;
       Value.Symbol name
   | _ -> error span "invalid defconst form"
@@ -430,18 +430,18 @@ and resolve_function env global span v =
 
 (** funcall - call function with evaluated args *)
 and eval_funcall env global span = function
-  | fn :: args ->
+  | fn :: args -> (
       let fn_val = eval env global fn in
       let fn_val = resolve_function env global span fn_val in
       let arg_vals = List.map (eval env global) args in
-      (match apply global fn_val arg_vals with
+      match apply global fn_val arg_vals with
       | Ok v -> v
       | Error msg -> error span msg)
   | [] -> error span "funcall requires a function"
 
 (** apply - call function with last arg as list *)
 and eval_apply env global span = function
-  | fn :: args when List.length args >= 1 ->
+  | fn :: args when List.length args >= 1 -> (
       let fn_val = eval env global fn in
       let fn_val = resolve_function env global span fn_val in
       let rev_args = List.rev args in
@@ -454,18 +454,18 @@ and eval_apply env global span = function
         | Some l -> other_vals @ l
         | None -> error span "apply: last argument must be a list"
       in
-      (match apply global fn_val final_args with
+      match apply global fn_val final_args with
       | Ok v -> v
       | Error msg -> error span msg)
   | _ -> error span "apply requires function and arguments"
 
 (** mapcar - map function over list *)
 and eval_mapcar env global span = function
-  | [ fn; lst ] ->
+  | [ fn; lst ] -> (
       let fn_val = eval env global fn in
       let fn_val = resolve_function env global span fn_val in
       let lst_val = eval env global lst in
-      (match to_list lst_val with
+      match to_list lst_val with
       | Some items ->
           let results =
             List.map
@@ -481,11 +481,11 @@ and eval_mapcar env global span = function
 
 (** mapc - map function over list, return list *)
 and eval_mapc env global span = function
-  | [ fn; lst ] ->
+  | [ fn; lst ] -> (
       let fn_val = eval env global fn in
       let fn_val = resolve_function env global span fn_val in
       let lst_val = eval env global lst in
-      (match to_list lst_val with
+      match to_list lst_val with
       | Some items ->
           List.iter
             (fun item ->
@@ -520,14 +520,14 @@ and eval_macroexpand_1 global span = function
 (** Expand a single macro call *)
 and expand_macro_1 global _span name form =
   match Env.lookup_macro name global with
-  | None -> form  (* Not a macro *)
+  | None -> form (* Not a macro *)
   | Some macro -> (
       match form with
-      | List (_ :: args, call_span) ->
+      | List (_ :: args, call_span) -> (
           (* Bind macro parameters to unevaluated arguments *)
           let arg_values = List.map sexp_to_value args in
           let macro_env = push_scope macro.macro_env in
-          (match Env.make_call_env macro.macro_params arg_values macro_env with
+          match Env.make_call_env macro.macro_params arg_values macro_env with
           | Ok env ->
               (* Evaluate macro body *)
               let result = eval_progn env global macro.macro_body in
@@ -550,16 +550,15 @@ and macroexpand_all global sexp =
   | List (elts, span) ->
       (* Recursively expand in subforms *)
       List (List.map (macroexpand_all global) elts, span)
-  | Vector (elts, span) ->
-      Vector (List.map (macroexpand_all global) elts, span)
+  | Vector (elts, span) -> Vector (List.map (macroexpand_all global) elts, span)
   | _ -> sexp
 
 (** Evaluate a function call *)
 and eval_call env global span name args =
   match Env.lookup_var name env global with
-  | Some fn ->
+  | Some fn -> (
       let arg_values = List.map (eval env global) args in
-      (match apply global fn arg_values with
+      match apply global fn arg_values with
       | Ok v -> v
       | Error msg -> error span msg)
   | None -> errorf span "void function: %s" name
@@ -569,8 +568,7 @@ and apply global fn args =
   match fn with
   | Closure c -> (
       match Env.make_call_env c.params args c.env with
-      | Ok env ->
-          Ok (eval_progn env global c.body)
+      | Ok env -> Ok (eval_progn env global c.body)
       | Error msg -> Error msg)
   | Builtin b -> b.builtin_fn args
   | v -> Error (Printf.sprintf "invalid function: %s" (type_name v))

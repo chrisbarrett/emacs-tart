@@ -1,7 +1,6 @@
 (** Tests for JSON-RPC protocol implementation *)
 
 open Alcotest
-
 module Rpc = Tart.Rpc
 
 (** Helper to check if a string contains a substring *)
@@ -33,38 +32,44 @@ let capture_output f =
 (** Test read_message with a valid request *)
 let test_read_request () =
   let json = {|{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}|} in
-  let content = Printf.sprintf "Content-Length: %d\r\n\r\n%s" (String.length json) json in
+  let content =
+    Printf.sprintf "Content-Length: %d\r\n\r\n%s" (String.length json) json
+  in
   let ic = ic_of_string content in
   match Rpc.read_message ic with
   | Ok msg ->
       check (option (of_pp Yojson.Safe.pp)) "id" (Some (`Int 1)) msg.id;
       check string "method" "initialize" msg.method_;
-      check (option (of_pp Yojson.Safe.pp)) "params" (Some (`Assoc [])) msg.params
-  | Error e ->
-      fail (Rpc.read_error_to_string e)
+      check
+        (option (of_pp Yojson.Safe.pp))
+        "params"
+        (Some (`Assoc []))
+        msg.params
+  | Error e -> fail (Rpc.read_error_to_string e)
 
 (** Test read_message with a notification (no id) *)
 let test_read_notification () =
   let json = {|{"jsonrpc":"2.0","method":"initialized","params":{}}|} in
-  let content = Printf.sprintf "Content-Length: %d\r\n\r\n%s" (String.length json) json in
+  let content =
+    Printf.sprintf "Content-Length: %d\r\n\r\n%s" (String.length json) json
+  in
   let ic = ic_of_string content in
   match Rpc.read_message ic with
   | Ok msg ->
       check (option (of_pp Yojson.Safe.pp)) "id" None msg.id;
       check string "method" "initialized" msg.method_
-  | Error e ->
-      fail (Rpc.read_error_to_string e)
+  | Error e -> fail (Rpc.read_error_to_string e)
 
 (** Test read_message with no params *)
 let test_read_no_params () =
   let json = {|{"jsonrpc":"2.0","id":1,"method":"shutdown"}|} in
-  let content = Printf.sprintf "Content-Length: %d\r\n\r\n%s" (String.length json) json in
+  let content =
+    Printf.sprintf "Content-Length: %d\r\n\r\n%s" (String.length json) json
+  in
   let ic = ic_of_string content in
   match Rpc.read_message ic with
-  | Ok msg ->
-      check (option (of_pp Yojson.Safe.pp)) "params" None msg.params
-  | Error e ->
-      fail (Rpc.read_error_to_string e)
+  | Ok msg -> check (option (of_pp Yojson.Safe.pp)) "params" None msg.params
+  | Error e -> fail (Rpc.read_error_to_string e)
 
 (** Test read_message with missing Content-Length *)
 let test_read_missing_header () =
@@ -73,7 +78,8 @@ let test_read_missing_header () =
   match Rpc.read_message ic with
   | Ok _ -> fail "Should have failed"
   | Error (Rpc.InvalidHeader _) -> ()
-  | Error e -> fail (Printf.sprintf "Wrong error: %s" (Rpc.read_error_to_string e))
+  | Error e ->
+      fail (Printf.sprintf "Wrong error: %s" (Rpc.read_error_to_string e))
 
 (** Test read_message with invalid JSON *)
 let test_read_invalid_json () =
@@ -82,39 +88,49 @@ let test_read_invalid_json () =
   match Rpc.read_message ic with
   | Ok _ -> fail "Should have failed"
   | Error (Rpc.InvalidJson _) -> ()
-  | Error e -> fail (Printf.sprintf "Wrong error: %s" (Rpc.read_error_to_string e))
+  | Error e ->
+      fail (Printf.sprintf "Wrong error: %s" (Rpc.read_error_to_string e))
 
 (** Test read_message with missing method *)
 let test_read_missing_method () =
   let json = {|{"jsonrpc":"2.0","id":1}|} in
-  let content = Printf.sprintf "Content-Length: %d\r\n\r\n%s" (String.length json) json in
+  let content =
+    Printf.sprintf "Content-Length: %d\r\n\r\n%s" (String.length json) json
+  in
   let ic = ic_of_string content in
   match Rpc.read_message ic with
   | Ok _ -> fail "Should have failed"
   | Error (Rpc.InvalidMessage _) -> ()
-  | Error e -> fail (Printf.sprintf "Wrong error: %s" (Rpc.read_error_to_string e))
+  | Error e ->
+      fail (Printf.sprintf "Wrong error: %s" (Rpc.read_error_to_string e))
 
 (** Test write_response with success *)
 let test_write_success () =
   let resp = Rpc.success_response ~id:(`Int 1) ~result:(`String "ok") in
   let output = capture_output (fun oc -> Rpc.write_response oc resp) in
   check bool "has header" true (String.length output > 0);
-  check bool "has content-length" true (String.starts_with ~prefix:"Content-Length:" output);
-  check bool "has result" true (String.ends_with ~suffix:{|"result":"ok"}|} output)
+  check bool "has content-length" true
+    (String.starts_with ~prefix:"Content-Length:" output);
+  check bool "has result" true
+    (String.ends_with ~suffix:{|"result":"ok"}|} output)
 
 (** Test write_response with error *)
 let test_write_error () =
-  let resp = Rpc.error_response ~id:(`Int 1) ~code:Rpc.method_not_found
-    ~message:"Method not found" () in
+  let resp =
+    Rpc.error_response ~id:(`Int 1) ~code:Rpc.method_not_found
+      ~message:"Method not found" ()
+  in
   let output = capture_output (fun oc -> Rpc.write_response oc resp) in
   check bool "has error" true (contains ~substring:{|"error"|} output);
   check bool "has code" true (contains ~substring:"-32601" output)
 
 (** Test write_notification *)
 let test_write_notification () =
-  let output = capture_output (fun oc ->
-    Rpc.write_notification oc ~method_:"textDocument/publishDiagnostics"
-      ~params:(`Assoc [("uri", `String "file:///test.el")])) in
+  let output =
+    capture_output (fun oc ->
+        Rpc.write_notification oc ~method_:"textDocument/publishDiagnostics"
+          ~params:(`Assoc [ ("uri", `String "file:///test.el") ]))
+  in
   check bool "has method" true
     (contains ~substring:{|"method":"textDocument/publishDiagnostics"|} output);
   check bool "has params" true (contains ~substring:"uri" output);
@@ -149,19 +165,16 @@ let test_read_multiple () =
   let msg2 = {|{"jsonrpc":"2.0","id":2,"method":"m2"}|} in
   let content =
     Printf.sprintf "Content-Length: %d\r\n\r\n%sContent-Length: %d\r\n\r\n%s"
-      (String.length msg1) msg1
-      (String.length msg2) msg2
+      (String.length msg1) msg1 (String.length msg2) msg2
   in
   let ic = ic_of_string content in
   match Rpc.read_message ic with
-  | Ok msg1_parsed ->
+  | Ok msg1_parsed -> (
       check string "first method" "m1" msg1_parsed.method_;
-      (match Rpc.read_message ic with
-      | Ok msg2_parsed ->
-          check string "second method" "m2" msg2_parsed.method_
+      match Rpc.read_message ic with
+      | Ok msg2_parsed -> check string "second method" "m2" msg2_parsed.method_
       | Error e -> fail (Rpc.read_error_to_string e))
-  | Error e ->
-      fail (Rpc.read_error_to_string e)
+  | Error e -> fail (Rpc.read_error_to_string e)
 
 (** Test EOF handling *)
 let test_read_eof () =
@@ -169,7 +182,8 @@ let test_read_eof () =
   match Rpc.read_message ic with
   | Ok _ -> fail "Should have failed with Eof"
   | Error Rpc.Eof -> ()
-  | Error e -> fail (Printf.sprintf "Wrong error: %s" (Rpc.read_error_to_string e))
+  | Error e ->
+      fail (Printf.sprintf "Wrong error: %s" (Rpc.read_error_to_string e))
 
 let () =
   run "rpc"

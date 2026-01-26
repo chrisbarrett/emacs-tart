@@ -1,7 +1,7 @@
 (** S-expression AST for Emacs Lisp.
 
-    This module defines the core S-expression type used to represent
-    parsed Elisp code. Reader macros are desugared during parsing:
+    This module defines the core S-expression type used to represent parsed
+    Elisp code. Reader macros are desugared during parsing:
     - ['x] becomes [(quote x)]
     - [`x] becomes [(backquote x)]
     - [,x] becomes [(unquote x)]
@@ -17,11 +17,11 @@ type t =
   | String of string * Location.span
   | Symbol of string * Location.span
   | Keyword of string * Location.span  (** Keywords like [:foo] *)
-  | Char of int * Location.span        (** Character literals [?a], [?\n], etc. *)
+  | Char of int * Location.span  (** Character literals [?a], [?\n], etc. *)
   | List of t list * Location.span
-  | Vector of t list * Location.span   (** [#(...)] vectors *)
-  | Cons of t * t * Location.span      (** Dotted pairs [(a . b)] *)
-  | Error of string * Location.span    (** Error node for recovery *)
+  | Vector of t list * Location.span  (** [#(...)] vectors *)
+  | Cons of t * t * Location.span  (** Dotted pairs [(a . b)] *)
+  | Error of string * Location.span  (** Error node for recovery *)
 
 (** {1 Comparison} *)
 
@@ -43,8 +43,8 @@ val with_span : t -> Location.span -> t
 (** {1 Serialization} *)
 
 val to_string : t -> string
-(** Pretty-print an S-expression in Elisp syntax (without locations).
-    Reader macros are printed in their sugared form. *)
+(** Pretty-print an S-expression in Elisp syntax (without locations). Reader
+    macros are printed in their sugared form. *)
 
 (** {1 Position Lookup} *)
 
@@ -58,17 +58,19 @@ val find_at_position_in_forms : line:int -> col:int -> t list -> t option
 
 (** {1 Position Context} *)
 
-(** Result of find_with_context: the target sexp and optionally the enclosing
-    application if the target is in function position. *)
 type position_context = {
   target : t;  (** The innermost sexp at the position *)
-  enclosing_application : t option;  (** The enclosing [(fn args...)] if target is fn *)
+  enclosing_application : t option;
+      (** The enclosing [(fn args...)] if target is fn *)
 }
+(** Result of find_with_context: the target sexp and optionally the enclosing
+    application if the target is in function position. *)
 
 val find_with_context : line:int -> col:int -> t -> position_context option
-(** [find_with_context ~line ~col sexp] finds the innermost S-expression
-    at a position, tracking whether it's in function position of an application. *)
+(** [find_with_context ~line ~col sexp] finds the innermost S-expression at a
+    position, tracking whether it's in function position of an application. *)
 
-val find_with_context_in_forms : line:int -> col:int -> t list -> position_context option
+val find_with_context_in_forms :
+  line:int -> col:int -> t list -> position_context option
 (** [find_with_context_in_forms ~line ~col forms] finds the innermost
     S-expression at a position across multiple forms, with context. *)

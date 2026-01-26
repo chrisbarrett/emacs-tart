@@ -37,8 +37,12 @@ let test_list_uris () =
 let test_full_replacement () =
   let store = Document.create () in
   Document.open_doc store ~uri:"file:///test.el" ~version:1 ~text:"old content";
-  let change : Document.content_change = { range = None; text = "new content" } in
-  (match Document.apply_changes store ~uri:"file:///test.el" ~version:2 [ change ] with
+  let change : Document.content_change =
+    { range = None; text = "new content" }
+  in
+  (match
+     Document.apply_changes store ~uri:"file:///test.el" ~version:2 [ change ]
+   with
   | Ok () -> ()
   | Error e -> Alcotest.fail e);
   match Document.get_doc store "file:///test.el" with
@@ -61,7 +65,9 @@ let test_single_line_insert () =
       text = "beautiful ";
     }
   in
-  (match Document.apply_changes store ~uri:"file:///test.el" ~version:2 [ change ] with
+  (match
+     Document.apply_changes store ~uri:"file:///test.el" ~version:2 [ change ]
+   with
   | Ok () -> ()
   | Error e -> Alcotest.fail e);
   match Document.get_doc store "file:///test.el" with
@@ -82,7 +88,9 @@ let test_single_line_delete () =
       text = "";
     }
   in
-  (match Document.apply_changes store ~uri:"file:///test.el" ~version:2 [ change ] with
+  (match
+     Document.apply_changes store ~uri:"file:///test.el" ~version:2 [ change ]
+   with
   | Ok () -> ()
   | Error e -> Alcotest.fail e);
   match Document.get_doc store "file:///test.el" with
@@ -103,7 +111,9 @@ let test_single_line_replace () =
       text = "Emacs";
     }
   in
-  (match Document.apply_changes store ~uri:"file:///test.el" ~version:2 [ change ] with
+  (match
+     Document.apply_changes store ~uri:"file:///test.el" ~version:2 [ change ]
+   with
   | Ok () -> ()
   | Error e -> Alcotest.fail e);
   match Document.get_doc store "file:///test.el" with
@@ -126,7 +136,9 @@ let test_multiline_text () =
       text = ">> ";
     }
   in
-  (match Document.apply_changes store ~uri:"file:///test.el" ~version:2 [ change ] with
+  (match
+     Document.apply_changes store ~uri:"file:///test.el" ~version:2 [ change ]
+   with
   | Ok () -> ()
   | Error e -> Alcotest.fail e);
   match Document.get_doc store "file:///test.el" with
@@ -150,7 +162,9 @@ let test_delete_across_lines () =
       text = "";
     }
   in
-  (match Document.apply_changes store ~uri:"file:///test.el" ~version:2 [ change ] with
+  (match
+     Document.apply_changes store ~uri:"file:///test.el" ~version:2 [ change ]
+   with
   | Ok () -> ()
   | Error e -> Alcotest.fail e);
   match Document.get_doc store "file:///test.el" with
@@ -186,7 +200,9 @@ let test_multiple_changes () =
       };
     ]
   in
-  (match Document.apply_changes store ~uri:"file:///test.el" ~version:2 changes with
+  (match
+     Document.apply_changes store ~uri:"file:///test.el" ~version:2 changes
+   with
   | Ok () -> ()
   | Error e -> Alcotest.fail e);
   match Document.get_doc store "file:///test.el" with
@@ -196,7 +212,9 @@ let test_multiple_changes () =
 let test_error_document_not_open () =
   let store = Document.create () in
   let change : Document.content_change = { range = None; text = "new" } in
-  match Document.apply_changes store ~uri:"file:///missing.el" ~version:1 [ change ] with
+  match
+    Document.apply_changes store ~uri:"file:///missing.el" ~version:1 [ change ]
+  with
   | Ok () -> Alcotest.fail "Expected error"
   | Error e ->
       Alcotest.(check bool) "error mentions not open" true (String.length e > 0)
@@ -288,20 +306,27 @@ let () =
           Alcotest.test_case "full replacement" `Quick test_full_replacement;
           Alcotest.test_case "single line insert" `Quick test_single_line_insert;
           Alcotest.test_case "single line delete" `Quick test_single_line_delete;
-          Alcotest.test_case "single line replace" `Quick test_single_line_replace;
+          Alcotest.test_case "single line replace" `Quick
+            test_single_line_replace;
           Alcotest.test_case "multiline text" `Quick test_multiline_text;
-          Alcotest.test_case "delete across lines" `Quick test_delete_across_lines;
+          Alcotest.test_case "delete across lines" `Quick
+            test_delete_across_lines;
           Alcotest.test_case "multiple changes" `Quick test_multiple_changes;
-          Alcotest.test_case "error document not open" `Quick test_error_document_not_open;
+          Alcotest.test_case "error document not open" `Quick
+            test_error_document_not_open;
         ] );
       ( "json",
         [
           Alcotest.test_case "position" `Quick test_position_of_json;
           Alcotest.test_case "range" `Quick test_range_of_json;
-          Alcotest.test_case "content change full" `Quick test_content_change_full;
-          Alcotest.test_case "content change incremental" `Quick test_content_change_incremental;
-          Alcotest.test_case "text document identifier" `Quick test_text_document_identifier;
-          Alcotest.test_case "versioned text document identifier" `Quick test_versioned_text_document_identifier;
+          Alcotest.test_case "content change full" `Quick
+            test_content_change_full;
+          Alcotest.test_case "content change incremental" `Quick
+            test_content_change_incremental;
+          Alcotest.test_case "text document identifier" `Quick
+            test_text_document_identifier;
+          Alcotest.test_case "versioned text document identifier" `Quick
+            test_versioned_text_document_identifier;
           Alcotest.test_case "text document item" `Quick test_text_document_item;
         ] );
     ]

@@ -10,26 +10,30 @@ module Lexer = Syntax.Lexer
 module Parser = Syntax.Parser
 module Read = Syntax.Read
 
-(** Re-export interpreter modules *)
 module Value = Interp.Value
+(** Re-export interpreter modules *)
+
 module Env = Interp.Env
 module Builtin = Interp.Builtin
 module Eval = Interp.Eval
 module Expand = Interp.Expand
 
-(** Re-export core type system modules *)
 module Types = Core.Types
+(** Re-export core type system modules *)
+
 module Type_env = Core.Type_env
 
-(** Re-export typing modules *)
 module Constraint = Typing.Constraint
+(** Re-export typing modules *)
+
 module Infer = Typing.Infer
 module Unify = Typing.Unify
 module Generalize = Typing.Generalize
 module Check = Typing.Check
 module Diagnostic = Typing.Diagnostic
 
-(** Re-export LSP modules *)
 module Rpc = Lsp.Rpc
+(** Re-export LSP modules *)
+
 module Protocol = Lsp.Protocol
 module Server = Lsp.Server

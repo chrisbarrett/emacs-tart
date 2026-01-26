@@ -1,45 +1,40 @@
 (** Type error diagnostics for user-facing error messages.
 
     This module provides structured diagnostic information for type errors,
-    including source locations, expected vs actual types, and related
-    locations (provenance) for understanding where types originated.
+    including source locations, expected vs actual types, and related locations
+    (provenance) for understanding where types originated.
 
     R10: Type error diagnostics - errors include:
     - Source location of the error
     - Expected type
     - Actual type
-    - Related locations (e.g., where expected type originated)
-*)
+    - Related locations (e.g., where expected type originated) *)
 
 module Types = Core.Types
 module Loc = Syntax.Location
 
 (** Severity level for diagnostics *)
-type severity =
-  | Error
-  | Warning
-  | Hint
+type severity = Error | Warning | Hint
 
+type related_location = { span : Loc.span; message : string }
 (** A related location with context *)
-type related_location = {
-  span : Loc.span;
-  message : string;
-}
 
-(** A structured diagnostic message *)
 type t = {
   severity : severity;
-  span : Loc.span;               (** Primary location of the error *)
-  message : string;              (** Main error message *)
-  expected : Types.typ option;   (** Expected type (if applicable) *)
-  actual : Types.typ option;     (** Actual type found (if applicable) *)
+  span : Loc.span;  (** Primary location of the error *)
+  message : string;  (** Main error message *)
+  expected : Types.typ option;  (** Expected type (if applicable) *)
+  actual : Types.typ option;  (** Actual type found (if applicable) *)
   related : related_location list;  (** Related locations with context *)
 }
+(** A structured diagnostic message *)
 
 (** Create a type mismatch diagnostic *)
 let type_mismatch ~span ~expected ~actual ?(related = []) () =
-  let message = Printf.sprintf "Type mismatch: expected %s but found %s"
-    (Types.to_string expected) (Types.to_string actual) in
+  let message =
+    Printf.sprintf "Type mismatch: expected %s but found %s"
+      (Types.to_string expected) (Types.to_string actual)
+  in
   {
     severity = Error;
     span;
@@ -51,21 +46,18 @@ let type_mismatch ~span ~expected ~actual ?(related = []) () =
 
 (** Create an arity mismatch diagnostic *)
 let arity_mismatch ~span ~expected ~actual ?(related = []) () =
-  let message = Printf.sprintf "Arity mismatch: expected %d arguments but got %d"
-    expected actual in
-  {
-    severity = Error;
-    span;
-    message;
-    expected = None;
-    actual = None;
-    related;
-  }
+  let message =
+    Printf.sprintf "Arity mismatch: expected %d arguments but got %d" expected
+      actual
+  in
+  { severity = Error; span; message; expected = None; actual = None; related }
 
 (** Create an occurs check diagnostic *)
 let occurs_check ~span ~tvar_id ~typ ?(related = []) () =
-  let message = Printf.sprintf "Infinite type: type variable '_%d occurs in %s"
-    tvar_id (Types.to_string typ) in
+  let message =
+    Printf.sprintf "Infinite type: type variable '_%d occurs in %s" tvar_id
+      (Types.to_string typ)
+  in
   {
     severity = Error;
     span;
@@ -91,23 +83,20 @@ let of_unify_errors (errors : Unify.error list) : t list =
 
 (** Format a source position for display *)
 let format_pos (pos : Loc.pos) : string =
-  if pos.file = "<generated>" then
-    "<generated>"
-  else
-    Printf.sprintf "%s:%d:%d" pos.file pos.line (pos.col + 1)
+  if pos.file = "<generated>" then "<generated>"
+  else Printf.sprintf "%s:%d:%d" pos.file pos.line (pos.col + 1)
 
 (** Format a source span for display *)
 let format_span (span : Loc.span) : string =
   let start = span.start_pos in
   let end_pos = span.end_pos in
   if start.file = end_pos.file && start.line = end_pos.line then
-    Printf.sprintf "%s:%d:%d-%d"
-      start.file start.line (start.col + 1) (end_pos.col + 1)
+    Printf.sprintf "%s:%d:%d-%d" start.file start.line (start.col + 1)
+      (end_pos.col + 1)
   else if start.file = end_pos.file then
-    Printf.sprintf "%s:%d:%d-%d:%d"
-      start.file start.line (start.col + 1) end_pos.line (end_pos.col + 1)
-  else
-    Printf.sprintf "%s-%s" (format_pos start) (format_pos end_pos)
+    Printf.sprintf "%s:%d:%d-%d:%d" start.file start.line (start.col + 1)
+      end_pos.line (end_pos.col + 1)
+  else Printf.sprintf "%s-%s" (format_pos start) (format_pos end_pos)
 
 (** Format severity for display *)
 let format_severity = function
@@ -119,16 +108,15 @@ let format_severity = function
 
     Output format (similar to rustc/clang):
     {[
-      file.el:10:5: error: Type mismatch: expected Int but found String
-        |
-     10 |   (+ x "hello")
-        |        ^^^^^^^
-        |
-        = expected: Int
-        = found: String
-        = note: expected type from function signature at file.el:5:1
-    ]}
-*)
+       file.el:10:5: error: Type mismatch: expected Int but found String
+         |
+      10 |   (+ x "hello")
+         |        ^^^^^^^
+         |
+         = expected: Int
+         = found: String
+         = note: expected type from function signature at file.el:5:1
+    ]} *)
 let to_string (d : t) : string =
   let buf = Buffer.create 256 in
 
@@ -140,46 +128,43 @@ let to_string (d : t) : string =
   Buffer.add_string buf d.message;
 
   (* Type information *)
-  begin match d.expected with
+  (match d.expected with
   | Some ty ->
       Buffer.add_string buf "\n  = expected: ";
       Buffer.add_string buf (Types.to_string ty)
-  | None -> ()
-  end;
-  begin match d.actual with
+  | None -> ());
+  (match d.actual with
   | Some ty ->
       Buffer.add_string buf "\n  = found: ";
       Buffer.add_string buf (Types.to_string ty)
-  | None -> ()
-  end;
+  | None -> ());
 
   (* Related locations *)
-  List.iter (fun (rel : related_location) ->
-    Buffer.add_string buf "\n  = note: ";
-    Buffer.add_string buf rel.message;
-    Buffer.add_string buf " at ";
-    Buffer.add_string buf (format_span rel.span)
-  ) d.related;
+  List.iter
+    (fun (rel : related_location) ->
+      Buffer.add_string buf "\n  = note: ";
+      Buffer.add_string buf rel.message;
+      Buffer.add_string buf " at ";
+      Buffer.add_string buf (format_span rel.span))
+    d.related;
 
   Buffer.contents buf
 
 (** Format a diagnostic in a compact single-line format.
 
-    Useful for IDE integration and machine parsing.
-    Format: file:line:col: severity: message [expected: T1, found: T2]
-*)
+    Useful for IDE integration and machine parsing. Format: file:line:col:
+    severity: message [expected: T1, found: T2] *)
 let to_string_compact (d : t) : string =
-  let type_info = match (d.expected, d.actual) with
+  let type_info =
+    match (d.expected, d.actual) with
     | Some exp, Some act ->
-        Printf.sprintf " [expected: %s, found: %s]"
-          (Types.to_string exp) (Types.to_string act)
+        Printf.sprintf " [expected: %s, found: %s]" (Types.to_string exp)
+          (Types.to_string act)
     | _ -> ""
   in
-  Printf.sprintf "%s: %s: %s%s"
-    (format_span d.span)
+  Printf.sprintf "%s: %s: %s%s" (format_span d.span)
     (format_severity d.severity)
-    d.message
-    type_info
+    d.message type_info
 
 (** Format multiple diagnostics *)
 let to_string_list (ds : t list) : string =
@@ -194,10 +179,7 @@ let all_spans (d : t) : Loc.span list =
 
 (** Check if a diagnostic is an error (vs warning/hint) *)
 let is_error (d : t) : bool =
-  match d.severity with
-  | Error -> true
-  | Warning | Hint -> false
+  match d.severity with Error -> true | Warning | Hint -> false
 
 (** Count errors in a list of diagnostics *)
-let count_errors (ds : t list) : int =
-  List.length (List.filter is_error ds)
+let count_errors (ds : t list) : int = List.length (List.filter is_error ds)

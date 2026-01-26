@@ -1,9 +1,9 @@
 (** Pure built-in functions for the Elisp interpreter.
 
-    This module provides implementations of core Elisp functions that are
-    pure (no side effects beyond the interpreter's state). Functions that
-    require I/O, buffers, or other Emacs-specific state are not included
-    and hit opaque boundaries. *)
+    This module provides implementations of core Elisp functions that are pure
+    (no side effects beyond the interpreter's state). Functions that require
+    I/O, buffers, or other Emacs-specific state are not included and hit opaque
+    boundaries. *)
 
 open Value
 
@@ -43,7 +43,7 @@ let list args = Ok (of_list args)
 
 let length = function
   | [ Nil ] -> Ok (Int 0)
-  | [ Cons _ as lst ] -> (
+  | [ (Cons _ as lst) ] -> (
       match to_list lst with
       | Some items -> Ok (Int (List.length items))
       | None -> Error "length: improper list")
@@ -76,7 +76,8 @@ let append args =
     match a with
     | Nil -> b
     | Cons (car, cdr) -> Cons (car, append_two cdr b)
-    | _ -> Cons (a, b)  (* improper list case *)
+    | _ -> Cons (a, b)
+    (* improper list case *)
   in
   Ok (List.fold_right append_two args Nil)
 
@@ -120,7 +121,7 @@ let assoc = function
   | [ key; alist ] ->
       let rec find = function
         | Nil -> Nil
-        | Cons (Cons (k, _v) as pair, rest) ->
+        | Cons ((Cons (k, _v) as pair), rest) ->
             if equal k key then pair else find rest
         | Cons (_, rest) -> find rest
         | _ -> Nil
@@ -132,7 +133,7 @@ let assq = function
   | [ key; alist ] ->
       let rec find = function
         | Nil -> Nil
-        | Cons (Cons (k, _v) as pair, rest) -> (
+        | Cons ((Cons (k, _v) as pair), rest) -> (
             match (k, key) with
             | Symbol a, Symbol b when String.equal a b -> pair
             | Int a, Int b when a = b -> pair
@@ -274,8 +275,7 @@ let num_compare _name op = function
             | Int a, Int b ->
                 if op (float_of_int a) (float_of_int b) then loop curr rest
                 else Ok Nil
-            | Float a, Float b ->
-                if op a b then loop curr rest else Ok Nil
+            | Float a, Float b -> if op a b then loop curr rest else Ok Nil
             | Int a, Float b ->
                 if op (float_of_int a) b then loop curr rest else Ok Nil
             | Float a, Int b ->
@@ -426,7 +426,9 @@ let downcase = function
 
 let string_to_list = function
   | [ String s ] ->
-      let chars = List.init (String.length s) (fun i -> Int (Char.code s.[i])) in
+      let chars =
+        List.init (String.length s) (fun i -> Int (Char.code s.[i]))
+      in
       Ok (of_list chars)
   | [ v ] -> type_error "string" v
   | args -> arity_error "string-to-list" 1 (List.length args)
@@ -451,7 +453,8 @@ let format_ = function
           | '%', _ ->
               Buffer.add_char buf '%';
               loop (i + 2) args
-          | c, [] -> Error (Printf.sprintf "format: not enough arguments for %%%c" c)
+          | c, [] ->
+              Error (Printf.sprintf "format: not enough arguments for %%%c" c)
           | c, _v :: _ -> Error (Printf.sprintf "format: wrong type for %%%c" c)
         else (
           Buffer.add_char buf fmt.[i];
@@ -509,8 +512,7 @@ let number_to_string = function
 let string_to_number = function
   | [ String s ] -> (
       try Ok (Int (int_of_string s))
-      with _ -> (
-        try Ok (Float (float_of_string s)) with _ -> Ok (Int 0)))
+      with _ -> ( try Ok (Float (float_of_string s)) with _ -> Ok (Int 0)))
   | [ v ] -> type_error "string" v
   | args -> arity_error "string-to-number" 1 (List.length args)
 
@@ -518,8 +520,8 @@ let string_to_number = function
    Higher-order functions (stubs - actual implementation in eval.ml)
    ============================================================================= *)
 
-(** Note: mapcar, mapc, apply, funcall require access to the evaluator,
-    so they are implemented as special forms in eval.ml rather than here. *)
+(** Note: mapcar, mapc, apply, funcall require access to the evaluator, so they
+    are implemented as special forms in eval.ml rather than here. *)
 
 (* =============================================================================
    Built-in registry

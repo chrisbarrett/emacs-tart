@@ -1,15 +1,15 @@
 (** LSP Protocol message types.
 
-    Defines request/response types for the Language Server Protocol.
-    Phase 1: initialize, initialized, shutdown. *)
+    Defines request/response types for the Language Server Protocol. Phase 1:
+    initialize, initialized, shutdown. *)
 
 (** {1 Initialize Request} *)
 
-(** Client capabilities (simplified for Phase 1).
-    We parse just what we need and ignore the rest. *)
 type client_capabilities = {
   text_document : text_document_client_capabilities option;
 }
+(** Client capabilities (simplified for Phase 1). We parse just what we need and
+    ignore the rest. *)
 
 and text_document_client_capabilities = {
   synchronization : text_document_sync_client_capabilities option;
@@ -19,40 +19,35 @@ and text_document_sync_client_capabilities = {
   dynamic_registration : bool option;
 }
 
-(** Initialize request params *)
 type initialize_params = {
   process_id : int option;
   root_uri : string option;
   capabilities : client_capabilities;
 }
+(** Initialize request params *)
 
 (** Text document sync kind *)
-type text_document_sync_kind =
-  | None_
-  | Full
-  | Incremental
+type text_document_sync_kind = None_ | Full | Incremental
 
 let text_document_sync_kind_to_int = function
   | None_ -> 0
   | Full -> 1
   | Incremental -> 2
 
-(** Text document sync options *)
 type text_document_sync_options = {
   open_close : bool;
   change : text_document_sync_kind;
 }
+(** Text document sync options *)
 
-(** Server capabilities *)
 type server_capabilities = {
   text_document_sync : text_document_sync_options option;
   hover_provider : bool;
 }
+(** Server capabilities *)
 
+type initialize_result = { capabilities : server_capabilities }
 (** Initialize result *)
-type initialize_result = {
-  capabilities : server_capabilities;
-}
 
 (** {1 JSON Parsing} *)
 
@@ -129,11 +124,8 @@ let initialize_result_to_json (result : initialize_result) : Yojson.Safe.t =
 
 (** {1 Server Info} *)
 
+type server_info = { name : string; version : string option }
 (** Server info included in initialize response *)
-type server_info = {
-  name : string;
-  version : string option;
-}
 
 (** Encode server info to JSON *)
 let server_info_to_json (info : server_info) : Yojson.Safe.t =
@@ -156,21 +148,9 @@ let initialize_response_to_json ~(result : initialize_result)
 
 (** {1 Diagnostics} *)
 
-type diagnostic_severity =
-  | Error
-  | Warning
-  | Information
-  | Hint
-
-type position = {
-  line : int;
-  character : int;
-}
-
-type range = {
-  start : position;
-  end_ : position;
-}
+type diagnostic_severity = Error | Warning | Information | Hint
+type position = { line : int; character : int }
+type range = { start : position; end_ : position }
 
 type diagnostic = {
   range : range;
@@ -195,7 +175,11 @@ let position_to_json (pos : position) : Yojson.Safe.t =
   `Assoc [ ("line", `Int pos.line); ("character", `Int pos.character) ]
 
 let range_to_json (range : range) : Yojson.Safe.t =
-  `Assoc [ ("start", position_to_json range.start); ("end", position_to_json range.end_) ]
+  `Assoc
+    [
+      ("start", position_to_json range.start);
+      ("end", position_to_json range.end_);
+    ]
 
 let diagnostic_to_json (d : diagnostic) : Yojson.Safe.t =
   let fields =
@@ -231,27 +215,16 @@ let publish_diagnostics_params_to_json (params : publish_diagnostics_params) :
 (** {1 Hover} *)
 
 (** Markup content kind *)
-type markup_kind =
-  | PlainText
-  | Markdown
+type markup_kind = PlainText | Markdown
 
+type markup_content = { kind : markup_kind; value : string }
 (** Markup content for hover *)
-type markup_content = {
-  kind : markup_kind;
-  value : string;
-}
 
+type hover = { contents : markup_content; range : range option }
 (** Hover result *)
-type hover = {
-  contents : markup_content;
-  range : range option;
-}
 
+type hover_params = { text_document : string; (* URI *) position : position }
 (** Hover params *)
-type hover_params = {
-  text_document : string;  (* URI *)
-  position : position;
-}
 
 let parse_hover_params (json : Yojson.Safe.t) : hover_params =
   let open Yojson.Safe.Util in
@@ -260,8 +233,10 @@ let parse_hover_params (json : Yojson.Safe.t) : hover_params =
   in
   let pos_json = json |> member "position" in
   let position =
-    { line = pos_json |> member "line" |> to_int;
-      character = pos_json |> member "character" |> to_int }
+    {
+      line = pos_json |> member "line" |> to_int;
+      character = pos_json |> member "character" |> to_int;
+    }
   in
   { text_document; position }
 
@@ -270,13 +245,14 @@ let markup_kind_to_string = function
   | Markdown -> "markdown"
 
 let markup_content_to_json (content : markup_content) : Yojson.Safe.t =
-  `Assoc [
-    ("kind", `String (markup_kind_to_string content.kind));
-    ("value", `String content.value);
-  ]
+  `Assoc
+    [
+      ("kind", `String (markup_kind_to_string content.kind));
+      ("value", `String content.value);
+    ]
 
 let hover_to_json (hover : hover) : Yojson.Safe.t =
-  let fields = [("contents", markup_content_to_json hover.contents)] in
+  let fields = [ ("contents", markup_content_to_json hover.contents) ] in
   let fields =
     match hover.range with
     | Some r -> ("range", range_to_json r) :: fields

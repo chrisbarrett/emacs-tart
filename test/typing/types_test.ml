@@ -11,8 +11,7 @@ let test_fresh_tvar () =
   let tv1 = fresh_tvar 0 in
   let tv2 = fresh_tvar 0 in
   (* Should have different IDs *)
-  Alcotest.(check bool) "different vars" true
-    (to_string tv1 <> to_string tv2)
+  Alcotest.(check bool) "different vars" true (to_string tv1 <> to_string tv2)
 
 let test_tvar_level () =
   reset_tvar_counter ();
@@ -24,8 +23,7 @@ let test_tvar_level () =
 let test_tvar_id () =
   reset_tvar_counter ();
   match fresh_tvar 0 with
-  | TVar tv ->
-      Alcotest.(check (option int)) "id is 0" (Some 0) (tvar_id tv)
+  | TVar tv -> Alcotest.(check (option int)) "id is 0" (Some 0) (tvar_id tv)
   | _ -> Alcotest.fail "expected TVar"
 
 (* =============================================================================
@@ -36,8 +34,7 @@ let test_repr_unbound () =
   reset_tvar_counter ();
   let tv = fresh_tvar 0 in
   (* repr of unbound var is itself *)
-  Alcotest.(check bool) "repr returns same" true
-    (repr tv == tv)
+  Alcotest.(check bool) "repr returns same" true (repr tv == tv)
 
 let test_repr_linked () =
   reset_tvar_counter ();
@@ -57,20 +54,20 @@ let test_repr_chain () =
   let tv2 = fresh_tvar 0 in
   let tv3 = fresh_tvar 0 in
   (match (tv1, tv2, tv3) with
-   | TVar r1, TVar r2, TVar r3 ->
-       r3 := Link Prim.int;
-       r2 := Link tv3;
-       r1 := Link tv2
-   | _ -> Alcotest.fail "expected TVars");
+  | TVar r1, TVar r2, TVar r3 ->
+      r3 := Link Prim.int;
+      r2 := Link tv3;
+      r1 := Link tv2
+  | _ -> Alcotest.fail "expected TVars");
   (* repr should reach Int through the chain *)
   Alcotest.(check string) "repr follows chain" "Int" (to_string (repr tv1));
   (* Path compression should update links *)
-  (match tv1 with
-   | TVar r1 ->
-       (match !r1 with
-        | Link t -> Alcotest.(check string) "path compressed" "Int" (to_string t)
-        | _ -> Alcotest.fail "expected Link after repr")
-   | _ -> Alcotest.fail "expected TVar")
+  match tv1 with
+  | TVar r1 -> (
+      match !r1 with
+      | Link t -> Alcotest.(check string) "path compressed" "Int" (to_string t)
+      | _ -> Alcotest.fail "expected Link after repr")
+  | _ -> Alcotest.fail "expected TVar"
 
 (* =============================================================================
    Type Construction Tests
@@ -100,73 +97,71 @@ let test_pair_type () =
 
 let test_nested_type () =
   let ty = list_of (option_of Prim.int) in
-  Alcotest.(check string) "List (Option Int)" "(List (Option Int))" (to_string ty)
+  Alcotest.(check string)
+    "List (Option Int)" "(List (Option Int))" (to_string ty)
 
 (* =============================================================================
    Function Type Tests
    ============================================================================= *)
 
 let test_arrow_simple () =
-  let ty = arrow [Prim.int; Prim.int] Prim.int in
-  Alcotest.(check string) "Int -> Int -> Int" "(-> (Int Int) Int)" (to_string ty)
+  let ty = arrow [ Prim.int; Prim.int ] Prim.int in
+  Alcotest.(check string)
+    "Int -> Int -> Int" "(-> (Int Int) Int)" (to_string ty)
 
 let test_arrow_no_args () =
   let ty = arrow [] Prim.int in
   Alcotest.(check string) "() -> Int" "(-> () Int)" (to_string ty)
 
 let test_arrow_with_optional () =
-  let ty = TArrow ([PPositional Prim.string; POptional (option_of Prim.int)], Prim.string) in
-  Alcotest.(check string) "with optional"
-    "(-> (String &optional (Option Int)) String)"
-    (to_string ty)
+  let ty =
+    TArrow
+      ([ PPositional Prim.string; POptional (option_of Prim.int) ], Prim.string)
+  in
+  Alcotest.(check string)
+    "with optional" "(-> (String &optional (Option Int)) String)" (to_string ty)
 
 let test_arrow_with_rest () =
-  let ty = TArrow ([PRest Prim.string], Prim.string) in
-  Alcotest.(check string) "with rest"
-    "(-> (&rest String) String)"
-    (to_string ty)
+  let ty = TArrow ([ PRest Prim.string ], Prim.string) in
+  Alcotest.(check string)
+    "with rest" "(-> (&rest String) String)" (to_string ty)
 
 let test_arrow_with_key () =
-  let ty = TArrow ([PKey (":name", Prim.string)], Prim.nil) in
-  Alcotest.(check string) "with keyword"
-    "(-> (&key :name String) Nil)"
-    (to_string ty)
+  let ty = TArrow ([ PKey (":name", Prim.string) ], Prim.nil) in
+  Alcotest.(check string)
+    "with keyword" "(-> (&key :name String) Nil)" (to_string ty)
 
 (* =============================================================================
    Polymorphic Type Tests
    ============================================================================= *)
 
 let test_forall_identity () =
-  let ty = forall ["a"] (arrow [TCon "a"] (TCon "a")) in
-  Alcotest.(check string) "identity type"
-    "(forall (a) (-> (a) a))"
-    (to_string ty)
+  let ty = forall [ "a" ] (arrow [ TCon "a" ] (TCon "a")) in
+  Alcotest.(check string)
+    "identity type" "(forall (a) (-> (a) a))" (to_string ty)
 
 let test_forall_multi_vars () =
-  let ty = forall ["a"; "b"] (arrow [TCon "a"; TCon "b"] (TCon "a")) in
-  Alcotest.(check string) "multi-var forall"
-    "(forall (a b) (-> (a b) a))"
-    (to_string ty)
+  let ty = forall [ "a"; "b" ] (arrow [ TCon "a"; TCon "b" ] (TCon "a")) in
+  Alcotest.(check string)
+    "multi-var forall" "(forall (a b) (-> (a b) a))" (to_string ty)
 
 let test_forall_list_length () =
-  let ty = forall ["a"] (arrow [list_of (TCon "a")] Prim.int) in
-  Alcotest.(check string) "list length type"
-    "(forall (a) (-> ((List a)) Int))"
-    (to_string ty)
+  let ty = forall [ "a" ] (arrow [ list_of (TCon "a") ] Prim.int) in
+  Alcotest.(check string)
+    "list length type" "(forall (a) (-> ((List a)) Int))" (to_string ty)
 
 (* =============================================================================
    Union Type Tests
    ============================================================================= *)
 
 let test_union_simple () =
-  let ty = TUnion [Prim.int; Prim.string] in
+  let ty = TUnion [ Prim.int; Prim.string ] in
   Alcotest.(check string) "Or Int String" "(Or Int String)" (to_string ty)
 
 let test_tuple_type () =
-  let ty = TTuple [Prim.string; Prim.int; Prim.bool] in
-  Alcotest.(check string) "Tuple String Int Bool"
-    "(Tuple String Int Bool)"
-    (to_string ty)
+  let ty = TTuple [ Prim.string; Prim.int; Prim.bool ] in
+  Alcotest.(check string)
+    "Tuple String Int Bool" "(Tuple String Int Bool)" (to_string ty)
 
 (* =============================================================================
    Type Equality Tests
@@ -184,9 +179,9 @@ let test_equal_tapp () =
   Alcotest.(check bool) "List Int <> List String" false (equal t1 t3)
 
 let test_equal_arrow () =
-  let t1 = arrow [Prim.int] Prim.int in
-  let t2 = arrow [Prim.int] Prim.int in
-  let t3 = arrow [Prim.string] Prim.int in
+  let t1 = arrow [ Prim.int ] Prim.int in
+  let t2 = arrow [ Prim.int ] Prim.int in
+  let t3 = arrow [ Prim.string ] Prim.int in
   Alcotest.(check bool) "same arrow" true (equal t1 t2);
   Alcotest.(check bool) "diff arrow" false (equal t1 t3)
 
@@ -200,9 +195,7 @@ let test_equal_tvars () =
 let test_equal_linked_tvar () =
   reset_tvar_counter ();
   let tv = fresh_tvar 0 in
-  (match tv with
-   | TVar r -> r := Link Prim.int
-   | _ -> ());
+  (match tv with TVar r -> r := Link Prim.int | _ -> ());
   Alcotest.(check bool) "linked tvar equals target" true (equal tv Prim.int)
 
 (* =============================================================================
@@ -230,39 +223,48 @@ let test_falsy_types () =
 let test_truthy_containers () =
   (* Container types are truthy *)
   Alcotest.(check bool) "List is truthy" true (is_truthy (list_of Prim.int));
-  Alcotest.(check bool) "Vector is truthy" true (is_truthy (vector_of Prim.string));
-  Alcotest.(check bool) "Pair is truthy" true (is_truthy (pair_of Prim.int Prim.string));
-  Alcotest.(check bool) "HashTable is truthy" true
+  Alcotest.(check bool)
+    "Vector is truthy" true
+    (is_truthy (vector_of Prim.string));
+  Alcotest.(check bool)
+    "Pair is truthy" true
+    (is_truthy (pair_of Prim.int Prim.string));
+  Alcotest.(check bool)
+    "HashTable is truthy" true
     (is_truthy (hash_table_of Prim.symbol Prim.string))
 
 let test_option_not_truthy () =
   (* Option types are NOT truthy (they include Nil) *)
-  Alcotest.(check bool) "Option String is NOT truthy" false
+  Alcotest.(check bool)
+    "Option String is NOT truthy" false
     (is_truthy (option_of Prim.string))
 
 let test_arrow_truthy () =
   (* Function types are truthy *)
-  let fn_type = arrow [Prim.int] Prim.string in
+  let fn_type = arrow [ Prim.int ] Prim.string in
   Alcotest.(check bool) "arrow is truthy" true (is_truthy fn_type)
 
 let test_tuple_truthy () =
   (* Tuple types are truthy *)
-  let tuple_type = TTuple [Prim.int; Prim.string] in
+  let tuple_type = TTuple [ Prim.int; Prim.string ] in
   Alcotest.(check bool) "tuple is truthy" true (is_truthy tuple_type)
 
 let test_forall_truthy () =
   (* Forall types inherit truthiness from body *)
-  let truthy_forall = forall ["a"] (arrow [TCon "a"] (TCon "a")) in
-  let falsy_forall = forall ["a"] Prim.any in
-  Alcotest.(check bool) "forall with truthy body is truthy" true (is_truthy truthy_forall);
-  Alcotest.(check bool) "forall with Any body is NOT truthy" false (is_truthy falsy_forall)
+  let truthy_forall = forall [ "a" ] (arrow [ TCon "a" ] (TCon "a")) in
+  let falsy_forall = forall [ "a" ] Prim.any in
+  Alcotest.(check bool)
+    "forall with truthy body is truthy" true (is_truthy truthy_forall);
+  Alcotest.(check bool)
+    "forall with Any body is NOT truthy" false (is_truthy falsy_forall)
 
 let test_union_truthy () =
   (* Union is truthy only if ALL members are truthy *)
-  let all_truthy = TUnion [Prim.int; Prim.string] in
-  let has_nil = TUnion [Prim.int; Prim.nil] in
-  let has_any = TUnion [Prim.string; Prim.any] in
-  Alcotest.(check bool) "union of truthy types is truthy" true (is_truthy all_truthy);
+  let all_truthy = TUnion [ Prim.int; Prim.string ] in
+  let has_nil = TUnion [ Prim.int; Prim.nil ] in
+  let has_any = TUnion [ Prim.string; Prim.any ] in
+  Alcotest.(check bool)
+    "union of truthy types is truthy" true (is_truthy all_truthy);
   Alcotest.(check bool) "union with Nil is NOT truthy" false (is_truthy has_nil);
   Alcotest.(check bool) "union with Any is NOT truthy" false (is_truthy has_any)
 
@@ -278,10 +280,10 @@ let test_linked_tvar_truthy () =
   let tv1 = fresh_tvar 0 in
   let tv2 = fresh_tvar 0 in
   (match (tv1, tv2) with
-   | TVar r1, TVar r2 ->
-       r1 := Link Prim.int;
-       r2 := Link Prim.nil
-   | _ -> ());
+  | TVar r1, TVar r2 ->
+      r1 := Link Prim.int;
+      r2 := Link Prim.nil
+  | _ -> ());
   Alcotest.(check bool) "tvar linked to Int is truthy" true (is_truthy tv1);
   Alcotest.(check bool) "tvar linked to Nil is NOT truthy" false (is_truthy tv2)
 
@@ -292,19 +294,24 @@ let test_linked_tvar_truthy () =
 let test_option_of_checked_string () =
   (* String is truthy, so Option String should succeed *)
   match option_of_checked Prim.string with
-  | Ok ty -> Alcotest.(check string) "Option String valid" "(Option String)" (to_string ty)
+  | Ok ty ->
+      Alcotest.(check string)
+        "Option String valid" "(Option String)" (to_string ty)
   | Error _ -> Alcotest.fail "Option String should be valid"
 
 let test_option_of_checked_int () =
   (* Int is truthy, so Option Int should succeed *)
   match option_of_checked Prim.int with
-  | Ok ty -> Alcotest.(check string) "Option Int valid" "(Option Int)" (to_string ty)
+  | Ok ty ->
+      Alcotest.(check string) "Option Int valid" "(Option Int)" (to_string ty)
   | Error _ -> Alcotest.fail "Option Int should be valid"
 
 let test_option_of_checked_list () =
   (* List is truthy, so Option (List a) should succeed *)
   match option_of_checked (list_of Prim.int) with
-  | Ok ty -> Alcotest.(check string) "Option (List Int) valid" "(Option (List Int))" (to_string ty)
+  | Ok ty ->
+      Alcotest.(check string)
+        "Option (List Int) valid" "(Option (List Int))" (to_string ty)
   | Error _ -> Alcotest.fail "Option (List Int) should be valid"
 
 let test_option_of_checked_nil_fails () =
@@ -333,13 +340,15 @@ let test_option_of_checked_option_fails () =
   match option_of_checked (option_of Prim.string) with
   | Ok _ -> Alcotest.fail "Option (Option String) should be invalid"
   | Error (NonTruthyOptionArg ty) ->
-      Alcotest.(check string) "error contains Option" "(Option String)" (to_string ty)
+      Alcotest.(check string)
+        "error contains Option" "(Option String)" (to_string ty)
 
 let test_validation_error_message () =
   (* Test error message formatting *)
   let err = NonTruthyOptionArg Prim.nil in
   let msg = validation_error_to_string err in
-  Alcotest.(check bool) "message mentions truthy" true
+  Alcotest.(check bool)
+    "message mentions truthy" true
     (String.length msg > 0 && String.sub msg 0 6 = "Option")
 
 (* =============================================================================
@@ -411,13 +420,21 @@ let () =
         ] );
       ( "option-validation",
         [
-          Alcotest.test_case "Option String succeeds" `Quick test_option_of_checked_string;
-          Alcotest.test_case "Option Int succeeds" `Quick test_option_of_checked_int;
-          Alcotest.test_case "Option (List Int) succeeds" `Quick test_option_of_checked_list;
-          Alcotest.test_case "Option Nil fails" `Quick test_option_of_checked_nil_fails;
-          Alcotest.test_case "Option Any fails" `Quick test_option_of_checked_any_fails;
-          Alcotest.test_case "Option Bool fails" `Quick test_option_of_checked_bool_fails;
-          Alcotest.test_case "Option (Option a) fails" `Quick test_option_of_checked_option_fails;
-          Alcotest.test_case "validation error message" `Quick test_validation_error_message;
+          Alcotest.test_case "Option String succeeds" `Quick
+            test_option_of_checked_string;
+          Alcotest.test_case "Option Int succeeds" `Quick
+            test_option_of_checked_int;
+          Alcotest.test_case "Option (List Int) succeeds" `Quick
+            test_option_of_checked_list;
+          Alcotest.test_case "Option Nil fails" `Quick
+            test_option_of_checked_nil_fails;
+          Alcotest.test_case "Option Any fails" `Quick
+            test_option_of_checked_any_fails;
+          Alcotest.test_case "Option Bool fails" `Quick
+            test_option_of_checked_bool_fails;
+          Alcotest.test_case "Option (Option a) fails" `Quick
+            test_option_of_checked_option_fails;
+          Alcotest.test_case "validation error message" `Quick
+            test_validation_error_message;
         ] );
     ]

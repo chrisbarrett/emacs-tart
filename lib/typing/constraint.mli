@@ -5,15 +5,15 @@
 
 (** {1 Constraints} *)
 
-(** An equality constraint: two types that must unify. *)
 type t = {
   lhs : Core.Types.typ;  (** Left-hand side type *)
   rhs : Core.Types.typ;  (** Right-hand side type *)
   loc : Syntax.Location.span;  (** Source location for error reporting *)
 }
+(** An equality constraint: two types that must unify. *)
 
-(** A set of constraints to be solved. *)
 type set = t list
+(** A set of constraints to be solved. *)
 
 (** {1 Construction} *)
 

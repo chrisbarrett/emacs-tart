@@ -1,43 +1,44 @@
 (** Runtime value representation for Elisp interpreter *)
 
-(** Parameter specification for functions *)
 type params = {
   required : string list;  (** Required positional parameters *)
-  optional : (string * value option) list;  (** &optional params with defaults *)
+  optional : (string * value option) list;
+      (** &optional params with defaults *)
   rest : string option;  (** &rest parameter name *)
 }
+(** Parameter specification for functions *)
 
-(** Lexical environment - a list of scopes, each scope is a list of bindings *)
 and env = (string * value ref) list list
+(** Lexical environment - a list of scopes, each scope is a list of bindings *)
 
-(** A closure captures its parameter list, body, and lexical environment *)
 and closure = {
   params : params;
   body : Syntax.Sexp.t list;  (** Body forms *)
   env : env;  (** Captured lexical environment *)
   name : string option;  (** Optional name for error messages *)
 }
+(** A closure captures its parameter list, body, and lexical environment *)
 
-(** A built-in function implemented in OCaml *)
 and builtin = {
   builtin_name : string;
   builtin_arity : int * int option;  (** (min, max) - None means variadic *)
   builtin_fn : value list -> (value, string) result;
 }
+(** A built-in function implemented in OCaml *)
 
-(** Macro representation *)
 and macro = {
   macro_name : string;
   macro_params : params;
   macro_body : Syntax.Sexp.t list;
   macro_env : env;
 }
+(** Macro representation *)
 
 (** Elisp runtime values.
 
     The interpreter uses a tagged value representation that mirrors Emacs's
-    internal value types. Closures capture their lexical environment for
-    proper scoping semantics.
+    internal value types. Closures capture their lexical environment for proper
+    scoping semantics.
 
     Note: This is a pure interpreter - values that require effects (buffers,
     processes, etc.) are represented as opaque boundaries. *)
@@ -56,8 +57,8 @@ and value =
   | Macro of macro
   | Opaque of string  (** Opaque boundary - requires type annotation *)
 
-(** Alias for value for external use *)
 type t = value
+(** Alias for value for external use *)
 
 (** Builtins compare by name only *)
 let equal_builtin b1 b2 = String.equal b1.builtin_name b2.builtin_name
@@ -89,9 +90,8 @@ let rec equal v1 v2 =
   | Keyword a, Keyword b -> String.equal a b
   | Cons (a1, a2), Cons (b1, b2) -> equal a1 b1 && equal a2 b2
   | Vector a, Vector b ->
-      Array.length a = Array.length b
-      && Array.for_all2 equal a b
-  | Closure _, Closure _ -> false  (* Closures don't compare equal *)
+      Array.length a = Array.length b && Array.for_all2 equal a b
+  | Closure _, Closure _ -> false (* Closures don't compare equal *)
   | Builtin a, Builtin b -> equal_builtin a b
   | Macro a, Macro b -> String.equal a.macro_name b.macro_name
   | Opaque a, Opaque b -> String.equal a b
@@ -128,8 +128,7 @@ let rec pp fmt = function
           Format.fprintf fmt "(%a)"
             (Format.pp_print_list ~pp_sep:Format.pp_print_space pp)
             items
-      | None ->
-          Format.fprintf fmt "(%a . %a)" pp car pp cdr)
+      | None -> Format.fprintf fmt "(%a . %a)" pp car pp cdr)
   | Vector arr ->
       Format.fprintf fmt "#(%a)"
         (Format.pp_print_list ~pp_sep:Format.pp_print_space pp)
@@ -159,11 +158,15 @@ let pp_env fmt env =
   let pp_binding fmt (name, _) = Format.fprintf fmt "%s" name in
   let pp_scope fmt scope =
     Format.fprintf fmt "[%a]"
-      (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_binding)
+      (Format.pp_print_list
+         ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
+         pp_binding)
       scope
   in
   Format.fprintf fmt "(%a)"
-    (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt " ") pp_scope)
+    (Format.pp_print_list
+       ~pp_sep:(fun fmt () -> Format.fprintf fmt " ")
+       pp_scope)
     env
 
 let show v =
@@ -180,8 +183,7 @@ let empty_env : env = []
 let push_scope (env : env) : env = [] :: env
 
 (** Pop the innermost scope *)
-let pop_scope (env : env) : env =
-  match env with [] -> [] | _ :: rest -> rest
+let pop_scope (env : env) : env = match env with [] -> [] | _ :: rest -> rest
 
 (** Bind a variable in the innermost scope *)
 let bind (name : string) (v : value) (env : env) : env =
@@ -220,9 +222,7 @@ let is_truthy = function Nil -> false | _ -> true
 let is_nil = function Nil -> true | _ -> false
 
 (** Convert a list of values to a proper list value *)
-let rec of_list = function
-  | [] -> Nil
-  | x :: xs -> Cons (x, of_list xs)
+let rec of_list = function [] -> Nil | x :: xs -> Cons (x, of_list xs)
 
 (** Convert value to association list (list of cons cells) *)
 let to_alist v =
@@ -264,8 +264,7 @@ let rec to_string = function
   | Cons (car, cdr) -> (
       (* Try to print as a proper list *)
       match to_list (Cons (car, cdr)) with
-      | Some items ->
-          "(" ^ String.concat " " (List.map to_string items) ^ ")"
+      | Some items -> "(" ^ String.concat " " (List.map to_string items) ^ ")"
       | None ->
           (* Print as dotted pair/improper list *)
           let rec collect acc = function
@@ -277,9 +276,7 @@ let rec to_string = function
           ^ String.concat " " (List.map to_string items)
           ^ " . " ^ to_string tail ^ ")")
   | Vector arr ->
-      "#("
-      ^ String.concat " " (Array.to_list (Array.map to_string arr))
-      ^ ")"
+      "#(" ^ String.concat " " (Array.to_list (Array.map to_string arr)) ^ ")"
   | Closure c -> (
       match c.name with
       | Some n -> Printf.sprintf "#<closure:%s>" n

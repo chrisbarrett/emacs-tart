@@ -1,32 +1,26 @@
 (** Type error diagnostics for user-facing error messages.
 
     This module provides structured diagnostic information for type errors,
-    including source locations, expected vs actual types, and related
-    locations (provenance) for understanding where types originated. *)
+    including source locations, expected vs actual types, and related locations
+    (provenance) for understanding where types originated. *)
 
 (** {1 Types} *)
 
 (** Severity level for diagnostics. *)
-type severity =
-  | Error
-  | Warning
-  | Hint
+type severity = Error | Warning | Hint
 
+type related_location = { span : Syntax.Location.span; message : string }
 (** A related location with context. *)
-type related_location = {
-  span : Syntax.Location.span;
-  message : string;
-}
 
-(** A structured diagnostic message. *)
 type t = {
   severity : severity;
-  span : Syntax.Location.span;          (** Primary location of the error *)
-  message : string;                     (** Main error message *)
-  expected : Core.Types.typ option;     (** Expected type (if applicable) *)
-  actual : Core.Types.typ option;       (** Actual type found (if applicable) *)
-  related : related_location list;      (** Related locations with context *)
+  span : Syntax.Location.span;  (** Primary location of the error *)
+  message : string;  (** Main error message *)
+  expected : Core.Types.typ option;  (** Expected type (if applicable) *)
+  actual : Core.Types.typ option;  (** Actual type found (if applicable) *)
+  related : related_location list;  (** Related locations with context *)
 }
+(** A structured diagnostic message. *)
 
 (** {1 Construction} *)
 
@@ -35,7 +29,8 @@ val type_mismatch :
   expected:Core.Types.typ ->
   actual:Core.Types.typ ->
   ?related:related_location list ->
-  unit -> t
+  unit ->
+  t
 (** Create a type mismatch diagnostic. *)
 
 val arity_mismatch :
@@ -43,7 +38,8 @@ val arity_mismatch :
   expected:int ->
   actual:int ->
   ?related:related_location list ->
-  unit -> t
+  unit ->
+  t
 (** Create an arity mismatch diagnostic. *)
 
 val occurs_check :
@@ -51,7 +47,8 @@ val occurs_check :
   tvar_id:Core.Types.tvar_id ->
   typ:Core.Types.typ ->
   ?related:related_location list ->
-  unit -> t
+  unit ->
+  t
 (** Create an occurs check (infinite type) diagnostic. *)
 
 (** {1 Conversion from unification errors} *)
@@ -87,8 +84,8 @@ val to_string : t -> string
 val to_string_compact : t -> string
 (** Format a diagnostic in a compact single-line format.
 
-    Useful for IDE integration and machine parsing.
-    Format: [file:line:col: severity: message \[expected: T1, found: T2\]] *)
+    Useful for IDE integration and machine parsing. Format:
+    [file:line:col: severity: message [expected: T1, found: T2]] *)
 
 val to_string_list : t list -> string
 (** Format multiple diagnostics. *)

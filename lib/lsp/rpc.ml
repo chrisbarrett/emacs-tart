@@ -33,6 +33,7 @@ let internal_error = -32603
 
 (** LSP-specific error codes *)
 let server_not_initialized = -32002
+
 let request_cancelled = -32800
 let content_modified = -32801
 
@@ -44,19 +45,18 @@ type read_error =
   | InvalidJson of string
   | InvalidMessage of string
 
-(** Read headers until we get a blank line.
-    Returns the Content-Length value. *)
+(** Read headers until we get a blank line. Returns the Content-Length value. *)
 let read_headers (ic : In_channel.t) : (int, read_error) result =
   let content_length = ref None in
   let rec read_header_lines () =
     match In_channel.input_line ic with
     | None -> Error Eof
-    | Some "" ->
+    | Some "" -> (
         (* Empty line (after stripping \r) signals end of headers *)
-        (match !content_length with
+        match !content_length with
         | Some len -> Ok len
         | None -> Error (InvalidHeader "Missing Content-Length header"))
-    | Some line ->
+    | Some line -> (
         (* Strip trailing \r if present (LSP uses \r\n) *)
         let line =
           if String.length line > 0 && line.[String.length line - 1] = '\r' then
@@ -70,15 +70,14 @@ let read_headers (ic : In_channel.t) : (int, read_error) result =
           | None -> Error (InvalidHeader "Missing Content-Length header")
         else
           (* Parse header line *)
-          (match String.split_on_char ':' line with
+          match String.split_on_char ':' line with
           | [ name; value ] ->
               let name = String.trim name in
               let value = String.trim value in
-              if String.lowercase_ascii name = "content-length" then
-                (match int_of_string_opt value with
-                | Some len -> content_length := Some len
-                | None ->
-                    ());
+              (if String.lowercase_ascii name = "content-length" then
+                 match int_of_string_opt value with
+                 | Some len -> content_length := Some len
+                 | None -> ());
               read_header_lines ()
           | _ -> read_header_lines ())
   in
@@ -106,15 +105,9 @@ let parse_message (json : Yojson.Safe.t) : (message, read_error) result =
       | `Null -> raise (Type_error ("Missing method field", json))
       | _ -> raise (Type_error ("Method must be a string", json))
     in
-    let id =
-      match json |> member "id" with
-      | `Null -> None
-      | v -> Some v
-    in
+    let id = match json |> member "id" with `Null -> None | v -> Some v in
     let params =
-      match json |> member "params" with
-      | `Null -> None
-      | v -> Some v
+      match json |> member "params" with `Null -> None | v -> Some v
     in
     Ok { id; method_; params }
   with
@@ -139,10 +132,7 @@ let read_message (ic : In_channel.t) : (message, read_error) result =
 let error_to_json (err : response_error) : Yojson.Safe.t =
   let fields =
     [ ("code", `Int err.code); ("message", `String err.message) ]
-    @
-    match err.data with
-    | None -> []
-    | Some d -> [ ("data", d) ]
+    @ match err.data with None -> [] | Some d -> [ ("data", d) ]
   in
   `Assoc fields
 
@@ -164,7 +154,9 @@ let response_to_json (resp : response) : Yojson.Safe.t =
 (** Write JSON with Content-Length header *)
 let write_json (oc : Out_channel.t) (json : Yojson.Safe.t) : unit =
   let content = Yojson.Safe.to_string json in
-  let header = Printf.sprintf "Content-Length: %d\r\n\r\n" (String.length content) in
+  let header =
+    Printf.sprintf "Content-Length: %d\r\n\r\n" (String.length content)
+  in
   Out_channel.output_string oc header;
   Out_channel.output_string oc content;
   Out_channel.flush oc
@@ -176,13 +168,18 @@ let write_notification (oc : Out_channel.t) ~(method_ : string)
     ~(params : Yojson.Safe.t) : unit =
   let json =
     `Assoc
-      [ ("jsonrpc", `String "2.0"); ("method", `String method_); ("params", params) ]
+      [
+        ("jsonrpc", `String "2.0");
+        ("method", `String method_);
+        ("params", params);
+      ]
   in
   write_json oc json
 
 (** {1 Response Helpers} *)
 
-let success_response ~(id : Yojson.Safe.t) ~(result : Yojson.Safe.t) : response =
+let success_response ~(id : Yojson.Safe.t) ~(result : Yojson.Safe.t) : response
+    =
   { id; result = Some result; error = None }
 
 let error_response ~(id : Yojson.Safe.t) ~(code : int) ~(message : string)
@@ -208,7 +205,8 @@ let response_to_string (resp : response) : string =
   let id_str = Yojson.Safe.to_string resp.id in
   match (resp.result, resp.error) with
   | Some r, None ->
-      Printf.sprintf "<response id=%s result=%s>" id_str (Yojson.Safe.to_string r)
+      Printf.sprintf "<response id=%s result=%s>" id_str
+        (Yojson.Safe.to_string r)
   | None, Some e ->
       Printf.sprintf "<response id=%s error=%d:%s>" id_str e.code e.message
   | _ -> Printf.sprintf "<response id=%s invalid>" id_str

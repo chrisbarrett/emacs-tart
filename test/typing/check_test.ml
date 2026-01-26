@@ -10,8 +10,7 @@ let parse str =
   | Ok sexp -> sexp
   | Error msg -> failwith ("parse error: " ^ msg)
 
-let parse_many str =
-  Tart.Read.parse_string_exn ~filename:"<test>" str
+let parse_many str = Tart.Read.parse_string_exn ~filename:"<test>" str
 
 (* =============================================================================
    check_expr Tests
@@ -25,14 +24,16 @@ let test_check_expr_literal () =
 
 let test_check_expr_application () =
   let sexp = parse "(f 1)" in
-  let env = Env.extend_mono "f" (arrow [Prim.int] Prim.string) Env.empty in
+  let env = Env.extend_mono "f" (arrow [ Prim.int ] Prim.string) Env.empty in
   let ty, errors = Check.check_expr ~env sexp in
   Alcotest.(check string) "return type" "String" (to_string ty);
   Alcotest.(check int) "no errors" 0 (List.length errors)
 
 let test_check_expr_type_error () =
   let sexp = parse "(+ 1 \"hello\")" in
-  let env = Env.extend_mono "+" (arrow [Prim.int; Prim.int] Prim.int) Env.empty in
+  let env =
+    Env.extend_mono "+" (arrow [ Prim.int; Prim.int ] Prim.int) Env.empty
+  in
   let _, errors = Check.check_expr ~env sexp in
   Alcotest.(check bool) "has error" true (List.length errors > 0)
 
@@ -44,27 +45,25 @@ let test_check_form_defun () =
   let sexp = parse "(defun foo () 42)" in
   let env', result, _ = Check.check_form Env.empty sexp in
   (* Should bind foo in environment *)
-  Alcotest.(check bool) "foo bound" true
+  Alcotest.(check bool)
+    "foo bound" true
     (Option.is_some (Env.lookup "foo" env'));
   (* Result should be DefunForm *)
   match result with
   | Check.DefunForm { name; _ } ->
       Alcotest.(check string) "defun name" "foo" name
-  | Check.ExprForm _ ->
-      Alcotest.fail "expected DefunForm"
+  | Check.ExprForm _ -> Alcotest.fail "expected DefunForm"
 
 let test_check_form_expr () =
   let sexp = parse "42" in
   let env', result, _ = Check.check_form Env.empty sexp in
   (* Environment unchanged *)
-  Alcotest.(check int) "env unchanged" 0
-    (List.length env'.Env.bindings);
+  Alcotest.(check int) "env unchanged" 0 (List.length env'.Env.bindings);
   (* Result should be ExprForm *)
   match result with
   | Check.ExprForm { ty } ->
       Alcotest.(check string) "expr type" "Int" (to_string ty)
-  | Check.DefunForm _ ->
-      Alcotest.fail "expected ExprForm"
+  | Check.DefunForm _ -> Alcotest.fail "expected ExprForm"
 
 (* =============================================================================
    check_program Tests
@@ -77,11 +76,14 @@ let test_check_program_empty () =
 
 let test_check_program_single_defun () =
   let sexps = parse_many "(defun add1 (x) (+ x 1))" in
-  let env = Env.extend_mono "+" (arrow [Prim.int; Prim.int] Prim.int) Env.empty in
+  let env =
+    Env.extend_mono "+" (arrow [ Prim.int; Prim.int ] Prim.int) Env.empty
+  in
   let result = Check.check_program ~env sexps in
   Alcotest.(check int) "one form" 1 (List.length result.forms);
   (* add1 should be bound in final env *)
-  Alcotest.(check bool) "add1 bound" true
+  Alcotest.(check bool)
+    "add1 bound" true
     (Option.is_some (Env.lookup "add1" result.env))
 
 let test_check_program_defun_sequence () =
@@ -89,15 +91,19 @@ let test_check_program_defun_sequence () =
   let result = Check.check_program sexps in
   Alcotest.(check int) "two forms" 2 (List.length result.forms);
   (* Both should be bound *)
-  Alcotest.(check bool) "foo bound" true
+  Alcotest.(check bool)
+    "foo bound" true
     (Option.is_some (Env.lookup "foo" result.env));
-  Alcotest.(check bool) "bar bound" true
+  Alcotest.(check bool)
+    "bar bound" true
     (Option.is_some (Env.lookup "bar" result.env))
 
 let test_check_program_defun_calls_previous () =
   (* bar calls foo - should type check correctly *)
   let sexps = parse_many "(defun foo () 42) (defun bar () (+ (foo) 1))" in
-  let env = Env.extend_mono "+" (arrow [Prim.int; Prim.int] Prim.int) Env.empty in
+  let env =
+    Env.extend_mono "+" (arrow [ Prim.int; Prim.int ] Prim.int) Env.empty
+  in
   let result = Check.check_program ~env sexps in
   Alcotest.(check int) "no errors" 0 (List.length result.errors)
 
@@ -105,9 +111,8 @@ let test_check_program_defun_calls_previous () =
    R8: Built-in function types Tests
    ============================================================================= *)
 
-(** Test that car on a quoted list returns Option Any.
-    (car '(1 2 3)) should infer (Option Any) because '(1 2 3) has type (List Any).
-*)
+(** Test that car on a quoted list returns Option Any. (car '(1 2 3)) should
+    infer (Option Any) because '(1 2 3) has type (List Any). *)
 let test_builtin_car_returns_option () =
   let sexp = parse "(car '(1 2 3))" in
   let ty, errors = Check.check_expr sexp in
@@ -115,9 +120,8 @@ let test_builtin_car_returns_option () =
   Alcotest.(check int) "no errors" 0 (List.length errors);
   Alcotest.(check string) "car returns Option Any" "(Option Any)" (to_string ty)
 
-(** Test that (+ 1 "x") produces a type error.
-    The built-in + expects Int arguments, not String.
-*)
+(** Test that (+ 1 "x") produces a type error. The built-in + expects Int
+    arguments, not String. *)
 let test_builtin_plus_type_error () =
   let sexp = parse "(+ 1 \"x\")" in
   let _, errors = Check.check_expr sexp in
@@ -156,10 +160,11 @@ let test_builtin_null () =
    ============================================================================= *)
 
 let test_form_result_defun_string () =
-  let result = Check.DefunForm { name = "foo"; fn_type = arrow [Prim.int] Prim.string } in
+  let result =
+    Check.DefunForm { name = "foo"; fn_type = arrow [ Prim.int ] Prim.string }
+  in
   let str = Check.form_result_to_string result in
-  Alcotest.(check bool) "contains defun" true
-    (String.sub str 0 6 = "(defun")
+  Alcotest.(check bool) "contains defun" true (String.sub str 0 6 = "(defun")
 
 let test_form_result_expr_string () =
   let result = Check.ExprForm { ty = Prim.int } in
@@ -187,9 +192,12 @@ let () =
       ( "check_program",
         [
           Alcotest.test_case "empty" `Quick test_check_program_empty;
-          Alcotest.test_case "single defun" `Quick test_check_program_single_defun;
-          Alcotest.test_case "defun sequence" `Quick test_check_program_defun_sequence;
-          Alcotest.test_case "defun calls previous" `Quick test_check_program_defun_calls_previous;
+          Alcotest.test_case "single defun" `Quick
+            test_check_program_single_defun;
+          Alcotest.test_case "defun sequence" `Quick
+            test_check_program_defun_sequence;
+          Alcotest.test_case "defun calls previous" `Quick
+            test_check_program_defun_calls_previous;
         ] );
       ( "form_result_to_string",
         [
@@ -198,7 +206,8 @@ let () =
         ] );
       ( "builtin_types",
         [
-          Alcotest.test_case "car returns Option" `Quick test_builtin_car_returns_option;
+          Alcotest.test_case "car returns Option" `Quick
+            test_builtin_car_returns_option;
           Alcotest.test_case "+ type error" `Quick test_builtin_plus_type_error;
           Alcotest.test_case "+ ok" `Quick test_builtin_plus_ok;
           Alcotest.test_case "concat" `Quick test_builtin_concat;

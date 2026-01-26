@@ -1,46 +1,47 @@
 (** Runtime value representation for Elisp interpreter.
 
-    This module defines the tagged value representation used by the
-    interpreter. Values mirror Emacs's internal types, with closures
-    capturing lexical environments for proper scoping.
+    This module defines the tagged value representation used by the interpreter.
+    Values mirror Emacs's internal types, with closures capturing lexical
+    environments for proper scoping.
 
-    This is a pure interpreter - values requiring effects (buffers,
-    processes, etc.) are represented as opaque boundaries. *)
+    This is a pure interpreter - values requiring effects (buffers, processes,
+    etc.) are represented as opaque boundaries. *)
 
 (** {1 Types} *)
 
-(** Parameter specification for functions. *)
 type params = {
-  required : string list;                    (** Required positional parameters *)
-  optional : (string * value option) list;   (** [&optional] params with defaults *)
-  rest : string option;                      (** [&rest] parameter name *)
+  required : string list;  (** Required positional parameters *)
+  optional : (string * value option) list;
+      (** [&optional] params with defaults *)
+  rest : string option;  (** [&rest] parameter name *)
 }
+(** Parameter specification for functions. *)
 
-(** Lexical environment: a list of scopes, each scope is a list of bindings. *)
 and env = (string * value ref) list list
+(** Lexical environment: a list of scopes, each scope is a list of bindings. *)
 
-(** A closure captures its parameter list, body, and lexical environment. *)
 and closure = {
   params : params;
-  body : Syntax.Sexp.t list;   (** Body forms *)
-  env : env;                   (** Captured lexical environment *)
-  name : string option;        (** Optional name for error messages *)
+  body : Syntax.Sexp.t list;  (** Body forms *)
+  env : env;  (** Captured lexical environment *)
+  name : string option;  (** Optional name for error messages *)
 }
+(** A closure captures its parameter list, body, and lexical environment. *)
 
-(** A built-in function implemented in OCaml. *)
 and builtin = {
   builtin_name : string;
   builtin_arity : int * int option;  (** (min, max) - None means variadic *)
   builtin_fn : value list -> (value, string) result;
 }
+(** A built-in function implemented in OCaml. *)
 
-(** Macro representation. *)
 and macro = {
   macro_name : string;
   macro_params : params;
   macro_body : Syntax.Sexp.t list;
   macro_env : env;
 }
+(** Macro representation. *)
 
 (** Elisp runtime values. *)
 and value =
@@ -50,16 +51,16 @@ and value =
   | Float of float
   | String of string
   | Symbol of string
-  | Keyword of string          (** Keywords like [:foo] *)
+  | Keyword of string  (** Keywords like [:foo] *)
   | Cons of value * value
   | Vector of value array
   | Closure of closure
   | Builtin of builtin
   | Macro of macro
-  | Opaque of string           (** Opaque boundary - requires type annotation *)
+  | Opaque of string  (** Opaque boundary - requires type annotation *)
 
-(** Alias for value for external use. *)
 type t = value
+(** Alias for value for external use. *)
 
 (** {1 Comparison} *)
 
@@ -88,15 +89,15 @@ val to_string : value -> string
 (** Pretty-print a value in Elisp syntax. *)
 
 val to_list : value -> value list option
-(** Convert a proper list value to an OCaml list.
-    Returns [None] for improper lists or non-list values. *)
+(** Convert a proper list value to an OCaml list. Returns [None] for improper
+    lists or non-list values. *)
 
 val of_list : value list -> value
 (** Convert an OCaml list to a proper Elisp list value. *)
 
 val to_alist : value -> (value * value) list option
-(** Convert value to association list (list of cons cells).
-    Returns [None] if the value is not a proper alist. *)
+(** Convert value to association list (list of cons cells). Returns [None] if
+    the value is not a proper alist. *)
 
 (** {1 Type inspection} *)
 
@@ -130,5 +131,5 @@ val lookup : string -> env -> value option
 (** Look up a variable in the environment. *)
 
 val set : string -> value -> env -> bool
-(** Set a variable in the environment (for setq).
-    Returns [true] if the variable was found and updated. *)
+(** Set a variable in the environment (for setq). Returns [true] if the variable
+    was found and updated. *)

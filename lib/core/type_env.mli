@@ -12,17 +12,15 @@
 
     Type schemes are created during let-generalization when the RHS is a
     syntactic value (lambda, literal, variable, constructor application). *)
-type scheme =
-  | Mono of Types.typ
-  | Poly of string list * Types.typ
+type scheme = Mono of Types.typ | Poly of string list * Types.typ
 
 (** {1 Environment} *)
 
-(** Type environment: maps names to type schemes. *)
 type t = {
   bindings : (string * scheme) list;
   level : int;  (** Current scope level for generalization *)
 }
+(** Type environment: maps names to type schemes. *)
 
 (** {1 Creation} *)
 
@@ -67,8 +65,8 @@ val extend_poly : string -> string list -> Types.typ -> t -> t
 val instantiate : scheme -> t -> Types.typ
 (** [instantiate scheme env] instantiates a type scheme at the current level.
 
-    For monomorphic types, returns the type as-is.
-    For polymorphic types, replaces bound variables with fresh type variables. *)
+    For monomorphic types, returns the type as-is. For polymorphic types,
+    replaces bound variables with fresh type variables. *)
 
 (** {1 Pretty-printing} *)
 

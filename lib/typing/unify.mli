@@ -1,8 +1,8 @@
 (** Unification with union-find for type inference.
 
-    This module solves equality constraints by unifying types using
-    the union-find data structure. Type variables are mutable refs
-    that can either be Unbound or Link to another type.
+    This module solves equality constraints by unifying types using the
+    union-find data structure. Type variables are mutable refs that can either
+    be Unbound or Link to another type.
 
     The occurs check prevents infinite types like [a = List a]. *)
 
@@ -28,22 +28,22 @@ val error_location : error -> Syntax.Location.span
 type 'a result = ('a, error) Result.t
 (** Result type for unification operations. *)
 
-val unify : Core.Types.typ -> Core.Types.typ -> Syntax.Location.span -> unit result
+val unify :
+  Core.Types.typ -> Core.Types.typ -> Syntax.Location.span -> unit result
 (** [unify t1 t2 loc] unifies two types.
 
-    This is the core unification algorithm. It follows links and
-    handles each type constructor case. Type variables are linked
-    to the other type when unified.
+    This is the core unification algorithm. It follows links and handles each
+    type constructor case. Type variables are linked to the other type when
+    unified.
 
     The occurs check prevents infinite types. *)
 
 (** {1 Constraint solving} *)
 
 val solve : Constraint.set -> unit result
-(** [solve constraints] solves a set of constraints.
-    Returns [Ok ()] if all constraints can be satisfied,
-    or the first error encountered. *)
+(** [solve constraints] solves a set of constraints. Returns [Ok ()] if all
+    constraints can be satisfied, or the first error encountered. *)
 
 val solve_all : Constraint.set -> error list
-(** [solve_all constraints] solves constraints and returns all errors.
-    Useful for reporting multiple type errors at once. *)
+(** [solve_all constraints] solves constraints and returns all errors. Useful
+    for reporting multiple type errors at once. *)
