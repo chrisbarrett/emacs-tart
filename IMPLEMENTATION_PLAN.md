@@ -345,12 +345,12 @@ Enable polymorphism over type constructors via kind inference.
 ### 14.3 Kind Inference
 
 - [x] [R2] Implement kind inference algorithm in kind_infer.ml
-- [ ] [R3] Add kind checking to type applications
+- [x] [R3] Add kind checking to type applications
 - [x] Verify: HK type variable `f` inferred as `* -> *`
 
 ### 14.4 Explicit Annotations and Errors
 
-- [ ] [R4] Parse explicit kind annotations `(f : (* -> *))`
+- [x] [R4] Parse explicit kind annotations `(f : (* -> *))`
 - [ ] [R6] Implement kind error formatting
 - [ ] Verify: Kind mismatch shows expected/found
 

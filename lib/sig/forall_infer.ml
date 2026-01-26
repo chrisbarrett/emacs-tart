@@ -118,9 +118,11 @@ let infer_defun ~(known_types : string list) (d : defun_decl) : defun_decl =
     let all_vars =
       List.fold_left (fun acc v -> add_unique v acc) param_vars ret_vars
     in
-    (* Create binders (no bounds) *)
+    (* Create binders (no bounds or kind annotations) *)
     let binders =
-      List.map (fun name -> { name; bound = None; loc = d.defun_loc }) all_vars
+      List.map
+        (fun name -> { name; bound = None; kind = None; loc = d.defun_loc })
+        all_vars
     in
     { d with defun_tvar_binders = binders }
 
@@ -140,7 +142,9 @@ let infer_type_decl ~(known_types : string list) (d : type_decl) : type_decl =
         (* Collect type variables from body *)
         let vars = collect_sig_type ~bound:[] ~known_types body in
         let params =
-          List.map (fun name -> { name; bound = None; loc = d.type_loc }) vars
+          List.map
+            (fun name -> { name; bound = None; kind = None; loc = d.type_loc })
+            vars
         in
         { d with type_params = params }
 
@@ -171,7 +175,9 @@ let infer_sig_type ~(known_types : string list) (ty : sig_type) : sig_type =
       if all_vars = [] then ty
       else
         let binders =
-          List.map (fun name -> { name; bound = None; loc }) all_vars
+          List.map
+            (fun name -> { name; bound = None; kind = None; loc })
+            all_vars
         in
         STForall (binders, ty, loc)
   | _ ->
@@ -180,7 +186,9 @@ let infer_sig_type ~(known_types : string list) (ty : sig_type) : sig_type =
       if vars = [] then ty
       else
         let loc = sig_type_loc ty in
-        let binders = List.map (fun name -> { name; bound = None; loc }) vars in
+        let binders =
+          List.map (fun name -> { name; bound = None; kind = None; loc }) vars
+        in
         STForall (binders, ty, loc)
 
 (** {1 Signature Inference}

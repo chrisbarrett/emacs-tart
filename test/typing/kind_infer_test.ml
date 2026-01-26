@@ -310,6 +310,114 @@ let test_existing_compose_unchanged () =
   Alcotest.(check string) "c has kind *" "*" (to_string k_c)
 
 (* =============================================================================
+   Explicit Kind Annotation Tests (R4 from spec 17)
+   ============================================================================= *)
+
+let test_explicit_kind_star () =
+  (* (defun identity [(a : [*])] (a) -> a)
+     Explicit kind annotation [*] should be respected *)
+  let d = parse_defun "(defun identity [(a : *)] (a) -> a)" in
+  let result = infer_defun_kinds d in
+  Alcotest.(check (list string))
+    "no errors" []
+    (List.map kind_error_to_string result.errors);
+  let k = lookup_kind result "a" in
+  Alcotest.(check string) "a has explicit kind *" "*" (to_string k)
+
+let test_explicit_kind_arrow () =
+  (* (defun fmap [(f : [* -> *]) a b] (((a -> b)) (f a)) -> (f b))
+     Explicit kind annotation [* -> *] for f, all in single vector *)
+  let d =
+    parse_defun "(defun fmap [(f : (* -> *)) a b] (((a -> b)) (f a)) -> (f b))"
+  in
+  let result = infer_defun_kinds d in
+  Alcotest.(check (list string))
+    "no errors" []
+    (List.map kind_error_to_string result.errors);
+  let k_f = lookup_kind result "f" in
+  let k_a = lookup_kind result "a" in
+  Alcotest.(check string) "f has explicit kind * -> *" "* -> *" (to_string k_f);
+  Alcotest.(check string) "a inferred as *" "*" (to_string k_a)
+
+let test_explicit_kind_binary () =
+  (* (defun bimap [(f : [* -> * -> *]) a b c d] (...) -> (...))
+     Explicit kind annotation [* -> * -> *] for f *)
+  let d =
+    parse_defun
+      "(defun bimap [(f : (* -> * -> *)) a b c d] (((a -> b)) ((c -> d)) (f a \
+       c)) -> (f b d))"
+  in
+  let result = infer_defun_kinds d in
+  Alcotest.(check (list string))
+    "no errors" []
+    (List.map kind_error_to_string result.errors);
+  let k_f = lookup_kind result "f" in
+  Alcotest.(check string)
+    "f has explicit kind * -> * -> *" "* -> * -> *" (to_string k_f)
+
+let test_explicit_kind_constrains_inference () =
+  (* (defun wrap [(f : [* -> *]) a] (a) -> (f a))
+     Even though f is only used once, explicit annotation constrains it *)
+  let d = parse_defun "(defun wrap [(f : (* -> *)) a] (a) -> (f a))" in
+  let result = infer_defun_kinds d in
+  Alcotest.(check (list string))
+    "no errors" []
+    (List.map kind_error_to_string result.errors);
+  let k_f = lookup_kind result "f" in
+  Alcotest.(check string)
+    "f has explicit kind even with minimal usage" "* -> *" (to_string k_f)
+
+let test_explicit_kind_wrong_arity () =
+  (* (defun bad [(f : [*]) a] ((f a)) -> int)
+     f has explicit kind [*] but is applied to an argument - should error *)
+  let d = parse_defun "(defun bad [(f : *) a] ((f a)) -> int)" in
+  let result = infer_defun_kinds d in
+  Alcotest.(check bool)
+    "should have kind error" true
+    (List.length result.errors > 0)
+
+let test_explicit_kind_in_type_decl () =
+  (* (type wrapped [(f : [* -> *]) a] (f a))
+     Explicit kind annotation in type declaration *)
+  let d = parse_type_decl "(type wrapped [(f : (* -> *)) a] (f a))" in
+  let result = infer_type_decl_kinds d in
+  Alcotest.(check (list string))
+    "no errors" []
+    (List.map kind_error_to_string result.errors);
+  let k_f = lookup_kind result "f" in
+  Alcotest.(check string) "f has explicit kind * -> *" "* -> *" (to_string k_f)
+
+let test_explicit_kind_in_data_decl () =
+  (* (data container [(f : [* -> *]) a] (Container (f a)))
+     Explicit kind annotation in data declaration *)
+  let d = parse_data "(data container [(f : (* -> *)) a] (Container (f a)))" in
+  let result = infer_data_kinds d in
+  Alcotest.(check (list string))
+    "no errors" []
+    (List.map kind_error_to_string result.errors);
+  let k_f = lookup_kind result "f" in
+  Alcotest.(check string) "f has explicit kind * -> *" "* -> *" (to_string k_f)
+
+let test_mixed_explicit_and_inferred () =
+  (* (defun traverse [(f : [* -> *]) a b] (((a -> (f b))) (list a)) -> (f (list b)))
+     f has explicit kind, a and b are inferred *)
+  let d =
+    parse_defun
+      "(defun traverse [(f : (* -> *)) a b] (((a -> (f b))) (list a)) -> (f \
+       (list b)))"
+  in
+  let result = infer_defun_kinds d in
+  Alcotest.(check (list string))
+    "no errors" []
+    (List.map kind_error_to_string result.errors);
+  let k_f = lookup_kind result "f" in
+  let k_a = lookup_kind result "a" in
+  let k_b = lookup_kind result "b" in
+  Alcotest.(check string) "f has explicit kind * -> *" "* -> *" (to_string k_f);
+  Alcotest.(check string) "a inferred as *" "*" (to_string k_a);
+  Alcotest.(check string) "b inferred as *" "*" (to_string k_b)
+
+(* =============================================================================
    Test Suite
    ============================================================================= *)
 
@@ -360,6 +468,20 @@ let kind_error_tests =
     ("valid_higher_kinded_type", `Quick, test_valid_higher_kinded_type);
   ]
 
+let explicit_kind_tests =
+  [
+    ("explicit_kind_star", `Quick, test_explicit_kind_star);
+    ("explicit_kind_arrow", `Quick, test_explicit_kind_arrow);
+    ("explicit_kind_binary", `Quick, test_explicit_kind_binary);
+    ( "explicit_kind_constrains_inference",
+      `Quick,
+      test_explicit_kind_constrains_inference );
+    ("explicit_kind_wrong_arity", `Quick, test_explicit_kind_wrong_arity);
+    ("explicit_kind_in_type_decl", `Quick, test_explicit_kind_in_type_decl);
+    ("explicit_kind_in_data_decl", `Quick, test_explicit_kind_in_data_decl);
+    ("mixed_explicit_and_inferred", `Quick, test_mixed_explicit_and_inferred);
+  ]
+
 let () =
   Alcotest.run "Kind Inference"
     [
@@ -369,4 +491,5 @@ let () =
       ("default", default_tests);
       ("backward_compat", backward_compat_tests);
       ("kind_errors", kind_error_tests);
+      ("explicit_kinds", explicit_kind_tests);
     ]

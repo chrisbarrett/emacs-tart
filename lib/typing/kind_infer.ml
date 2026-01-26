@@ -205,15 +205,29 @@ type infer_result = {
 }
 (** Result of kind inference for a declaration. *)
 
+(** Build a kind environment from type variable binders, respecting explicit
+    kind annotations. Variables with explicit kinds get that kind; others get
+    fresh kind variables for inference. *)
+let env_from_binders (binders : tvar_binder list) : Kind.env =
+  List.fold_left
+    (fun env (b : tvar_binder) ->
+      match b.kind with
+      | Some sk ->
+          (* Explicit kind annotation - use it *)
+          Kind.extend_env b.name (Kind.KConcrete (Kind.of_sig_kind sk)) env
+      | None ->
+          (* No explicit kind - create fresh kind variable for inference *)
+          Kind.extend_env b.name (Kind.fresh_kvar ()) env)
+    Kind.empty_env binders
+
 (** Infer kinds for a defun declaration's type parameters.
 
     @param d The defun declaration to analyze
     @return The inferred kind environment and any errors *)
 let infer_defun_kinds (d : defun_decl) : infer_result =
   Kind.reset_kvar_counter ();
-  (* Create fresh kind variables for each type parameter *)
-  let tvar_names = List.map (fun b -> b.name) d.defun_tvar_binders in
-  let env = Kind.extend_fresh tvar_names Kind.empty_env in
+  (* Create kind environment from binders, respecting explicit annotations *)
+  let env = env_from_binders d.defun_tvar_binders in
 
   (* Infer kinds from parameter types *)
   let errors =
@@ -245,9 +259,8 @@ let infer_defun_kinds (d : defun_decl) : infer_result =
     @return The inferred kind environment and any errors *)
 let infer_type_decl_kinds (d : type_decl) : infer_result =
   Kind.reset_kvar_counter ();
-  (* Create fresh kind variables for each type parameter *)
-  let param_names = List.map (fun b -> b.name) d.type_params in
-  let env = Kind.extend_fresh param_names Kind.empty_env in
+  (* Create kind environment from binders, respecting explicit annotations *)
+  let env = env_from_binders d.type_params in
 
   (* Infer kinds from body if present *)
   let errors =
@@ -272,9 +285,8 @@ let infer_type_decl_kinds (d : type_decl) : infer_result =
     @return The inferred kind environment and any errors *)
 let infer_data_kinds (d : data_decl) : infer_result =
   Kind.reset_kvar_counter ();
-  (* Create fresh kind variables for each type parameter *)
-  let param_names = List.map (fun b -> b.name) d.data_params in
-  let env = Kind.extend_fresh param_names Kind.empty_env in
+  (* Create kind environment from binders, respecting explicit annotations *)
+  let env = env_from_binders d.data_params in
 
   (* Infer kinds from constructor fields *)
   let errors =

@@ -25,6 +25,51 @@ type 'a result = ('a, parse_error) Result.t
 (** Create an error *)
 let error message span : 'a result = Error { message; span }
 
+(** {1 Kind Parsing} *)
+
+(** Parse a kind expression.
+
+    Grammar:
+    - kind ::= * | (kind -> kind)
+
+    Examples:
+    - * - concrete type kind
+    - (* -> *) - unary type constructor
+    - (* -> * -> *) - binary type constructor *)
+let rec parse_kind (sexp : Sexp.t) : Sig_ast.sig_kind result =
+  match sexp with
+  | Sexp.Symbol ("*", _) -> Ok Sig_ast.SKStar
+  | Sexp.List (contents, span) -> parse_kind_arrow contents span
+  | _ -> error "Expected kind expression (* or (* -> *))" (Sexp.span_of sexp)
+
+(** Parse an arrow kind: (* -> *) or (* -> * -> *) etc. *)
+and parse_kind_arrow (contents : Sexp.t list) (span : Loc.span) :
+    Sig_ast.sig_kind result =
+  (* Find the -> and split *)
+  let rec find_arrow before = function
+    | [] -> None
+    | Sexp.Symbol ("->", _) :: after -> Some (List.rev before, after)
+    | x :: rest -> find_arrow (x :: before) rest
+  in
+  match find_arrow [] contents with
+  | None -> error "Expected -> in kind expression" span
+  | Some ([ left ], right) -> (
+      match parse_kind left with
+      | Error e -> Error e
+      | Ok k1 -> (
+          (* Right side: either a single kind or another arrow *)
+          match right with
+          | [ single ] -> (
+              match parse_kind single with
+              | Error e -> Error e
+              | Ok k2 -> Ok (Sig_ast.SKArrow (k1, k2)))
+          | _ -> (
+              (* Multiple items on right: treat as nested arrow *)
+              match parse_kind_arrow right span with
+              | Error e -> Error e
+              | Ok k2 -> Ok (Sig_ast.SKArrow (k1, k2)))))
+  | Some (_, _) -> error "Expected single kind before ->" span
+
 (** {1 Primitive Type Names} *)
 
 (** Check if a name is a primitive type *)
@@ -43,22 +88,54 @@ let is_type_constructor name =
 
 (** {1 Type Syntax Parsing} *)
 
+(** Check if an S-expression looks like a kind expression (starts with [*] or is
+    a list containing [->] with [*] on the left). *)
+let rec is_kind_expr (sexp : Sexp.t) : bool =
+  match sexp with
+  | Sexp.Symbol ("*", _) -> true
+  | Sexp.List (contents, _) -> (
+      (* Check if this looks like [* -> ...] *)
+      match contents with
+      | Sexp.Symbol ("*", _) :: _ -> true
+      | first :: _ -> is_kind_expr first
+      | [] -> false)
+  | _ -> false
+
 (** Parse a type variable binder.
 
     Syntax:
     - [a] - unbounded
-    - [(a : bound)] - bounded *)
+    - [(a : bound)] - bounded by a type
+    - [(f : ([*] -> [*]))] - kind-annotated *)
 let rec parse_tvar_binder (sexp : Sexp.t) : tvar_binder result =
   match sexp with
-  | Sexp.Symbol (name, span) -> Ok { name; bound = None; loc = span }
-  | Sexp.List ([ Sexp.Symbol (name, _); Sexp.Symbol (":", _); bound_sexp ], span)
+  | Sexp.Symbol (name, span) ->
+      Ok { name; bound = None; kind = None; loc = span }
+  | Sexp.List ([ Sexp.Symbol (name, _); Sexp.Symbol (":", _); annot_sexp ], span)
     -> (
-      match parse_sig_type bound_sexp with
-      | Ok bound -> Ok { name; bound = Some bound; loc = span }
-      | Error e -> Error e)
-  | _ ->
-      error "Expected type variable binder (name or (name : bound))"
-        (Sexp.span_of sexp)
+      if
+        (* Distinguish between type bound and kind annotation *)
+        is_kind_expr annot_sexp
+      then
+        match parse_kind annot_sexp with
+        | Ok kind -> Ok { name; bound = None; kind = Some kind; loc = span }
+        | Error e -> Error e
+      else
+        match parse_sig_type annot_sexp with
+        | Ok bound -> Ok { name; bound = Some bound; kind = None; loc = span }
+        | Error e -> Error e)
+  | Sexp.List (_, span)
+  | Sexp.Vector (_, span)
+  | Sexp.Keyword (_, span)
+  | Sexp.Int (_, span)
+  | Sexp.Float (_, span)
+  | Sexp.String (_, span)
+  | Sexp.Char (_, span)
+  | Sexp.Cons (_, _, span)
+  | Sexp.Error (_, span) ->
+      error
+        "Expected type variable binder (name, (name : bound), or (name : kind))"
+        span
 
 (** Parse a list of type variable binders enclosed in [...] *)
 and parse_tvar_binders (sexp : Sexp.t) : tvar_binder list result =

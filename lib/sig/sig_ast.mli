@@ -18,18 +18,30 @@
 
 open Syntax.Location
 
+(** {1 Kinds} *)
+
+(** Kind expressions in signature files.
+
+    These are surface syntax kinds that mirror the internal kind representation.
+    Used for explicit kind annotations on type variable binders. *)
+type sig_kind =
+  | SKStar  (** Concrete type kind [*] *)
+  | SKArrow of sig_kind * sig_kind  (** Type constructor kind [* -> *] *)
+
 (** {1 Type Variable Binders} *)
 
 type tvar_binder = {
   name : string;
   bound : sig_type option;  (** Upper bound, if any *)
+  kind : sig_kind option;  (** Explicit kind annotation, if any *)
   loc : span;
 }
-(** A type variable binder, optionally with an upper bound.
+(** A type variable binder, optionally with an upper bound or kind annotation.
 
     Examples:
     - [a] - unbounded type variable
-    - [(a : truthy)] - bounded type variable *)
+    - [(a : truthy)] - bounded type variable
+    - [(f : (* -> *))] - kind-annotated type variable *)
 
 (** {1 Type Expressions} *)
 
@@ -178,6 +190,10 @@ val make_tvar_binder : name:string -> loc:span -> tvar_binder
 val make_bounded_tvar_binder :
   name:string -> bound:sig_type -> loc:span -> tvar_binder
 (** Create a bounded type variable binder *)
+
+val make_kinded_tvar_binder :
+  name:string -> kind:sig_kind -> loc:span -> tvar_binder
+(** Create a kind-annotated type variable binder *)
 
 val st_con : string -> span -> sig_type
 (** Create a type constant *)

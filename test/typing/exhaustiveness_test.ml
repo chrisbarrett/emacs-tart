@@ -185,7 +185,14 @@ let test_build_registry_from_signature () =
     {
       data_name = "option";
       data_params =
-        [ { Sig_ast.name = "a"; bound = None; loc = Loc.dummy_span } ];
+        [
+          {
+            Sig_ast.name = "a";
+            bound = None;
+            kind = None;
+            loc = Loc.dummy_span;
+          };
+        ];
       data_ctors =
         [
           { ctor_name = "Some"; ctor_fields = []; ctor_loc = Loc.dummy_span };

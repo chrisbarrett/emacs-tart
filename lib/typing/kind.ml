@@ -132,3 +132,14 @@ let default_all (env : env) : unit =
 
 (** Get all names in the environment. *)
 let names (env : env) : string list = List.map fst env
+
+(** {1 Conversion from Signature Kinds} *)
+
+(** Convert a signature kind to an internal kind.
+
+    @param sk The signature kind from parsing
+    @return The internal kind representation *)
+let rec of_sig_kind (sk : Sig.Sig_ast.sig_kind) : kind =
+  match sk with
+  | Sig.Sig_ast.SKStar -> KStar
+  | Sig.Sig_ast.SKArrow (k1, k2) -> KArrow (of_sig_kind k1, of_sig_kind k2)

@@ -200,8 +200,8 @@ Error: kind mismatch
 - [x] [R1] Add `kind` type to lib/typing
 - [x] [R5] Default existing type variables to kind `*`
 - [x] [R2] Implement kind inference algorithm
-- [ ] [R3] Add kind checking to type application
-- [ ] [R4] Parse explicit kind annotations
+- [x] [R3] Add kind checking to type application
+- [x] [R4] Parse explicit kind annotations
 - [ ] [R6] Implement kind error formatting
 - [ ] [R7] Update unification for HK instantiation
 - [ ] [R8] Test nested/partial type constructors
