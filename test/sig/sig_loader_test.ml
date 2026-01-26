@@ -1185,6 +1185,115 @@ let test_data_predicate_lowercase () =
   | None -> Alcotest.fail "point-point2d-p predicate not found"
   | Some _ -> ()
 
+(** {1 Data Accessor Tests - R3} *)
+
+(** Test that data generates accessor functions for single-field constructors.
+*)
+let test_data_generates_accessors () =
+  let sig_src = {|
+    (data result [a e] (Ok a) (Err e))
+  |} in
+  let env = load_sig_str sig_src in
+  (* Check result-ok-value accessor *)
+  (match Type_env.lookup "result-ok-value" env with
+  | None -> Alcotest.fail "result-ok-value accessor not found"
+  | Some _ -> ());
+  (* Check result-err-value accessor *)
+  match Type_env.lookup "result-err-value" env with
+  | None -> Alcotest.fail "result-err-value accessor not found"
+  | Some _ -> ()
+
+(** Test that accessor returns the correct field type. R3: returns field type *)
+let test_data_accessor_type () =
+  let sig_src = {|
+    (data result [a e] (Ok a) (Err e))
+  |} in
+  let env = load_sig_str sig_src in
+  (* Accessor should take ADT value and return the field type *)
+  let ty, errors = check_expr_str ~env {|(result-ok-value (Ok 42))|} in
+  Alcotest.(check int) "no type errors" 0 (List.length errors);
+  Alcotest.(check string) "accessor returns Int" "Int" (Types.to_string ty)
+
+(** Test accessor with ADT value returns correct type *)
+let test_data_accessor_with_adt () =
+  let sig_src = {|
+    (data result [a e] (Ok a) (Err e))
+  |} in
+  let env = load_sig_str sig_src in
+  (* Err accessor should return the error type *)
+  let ty, errors = check_expr_str ~env {|(result-err-value (Err "error"))|} in
+  Alcotest.(check int) "no type errors" 0 (List.length errors);
+  Alcotest.(check string)
+    "accessor returns String" "String" (Types.to_string ty)
+
+(** Test nullary constructors have no accessors *)
+let test_data_nullary_no_accessor () =
+  let sig_src = {|
+    (data bool (True) (False))
+  |} in
+  let env = load_sig_str sig_src in
+  (* Nullary constructors should NOT have accessors *)
+  (match Type_env.lookup "bool-true-value" env with
+  | None -> () (* Expected - no accessor for nullary *)
+  | Some _ -> Alcotest.fail "bool-true-value should not exist");
+  match Type_env.lookup "bool-false-value" env with
+  | None -> () (* Expected - no accessor for nullary *)
+  | Some _ -> Alcotest.fail "bool-false-value should not exist"
+
+(** Test multi-field constructors generate indexed accessors *)
+let test_data_multi_field_accessors () =
+  let sig_src =
+    {|
+    (data point (Point2D int int) (Point3D int int int))
+  |}
+  in
+  let env = load_sig_str sig_src in
+  (* Point2D should have -1 and -2 accessors *)
+  (match Type_env.lookup "point-point2d-1" env with
+  | None -> Alcotest.fail "point-point2d-1 accessor not found"
+  | Some _ -> ());
+  (match Type_env.lookup "point-point2d-2" env with
+  | None -> Alcotest.fail "point-point2d-2 accessor not found"
+  | Some _ -> ());
+  (* Point3D should have -1, -2, -3 accessors *)
+  (match Type_env.lookup "point-point3d-1" env with
+  | None -> Alcotest.fail "point-point3d-1 accessor not found"
+  | Some _ -> ());
+  (match Type_env.lookup "point-point3d-2" env with
+  | None -> Alcotest.fail "point-point3d-2 accessor not found"
+  | Some _ -> ());
+  match Type_env.lookup "point-point3d-3" env with
+  | None -> Alcotest.fail "point-point3d-3 accessor not found"
+  | Some _ -> ()
+
+(** Test multi-field accessor returns correct type *)
+let test_data_multi_field_accessor_type () =
+  let sig_src = {|
+    (data point (Point2D int int))
+  |} in
+  let env = load_sig_str sig_src in
+  (* Both accessors should return Int *)
+  let ty1, errors1 = check_expr_str ~env {|(point-point2d-1 (Point2D 1 2))|} in
+  Alcotest.(check int) "no type errors" 0 (List.length errors1);
+  Alcotest.(check string) "accessor 1 returns Int" "Int" (Types.to_string ty1);
+  let ty2, errors2 = check_expr_str ~env {|(point-point2d-2 (Point2D 1 2))|} in
+  Alcotest.(check int) "no type errors" 0 (List.length errors2);
+  Alcotest.(check string) "accessor 2 returns Int" "Int" (Types.to_string ty2)
+
+(** Test accessor naming uses lowercase constructor *)
+let test_data_accessor_lowercase () =
+  let sig_src = {|
+    (data result [a e] (OK a) (ERR e))
+  |} in
+  let env = load_sig_str sig_src in
+  (* Accessor names should be lowercase *)
+  (match Type_env.lookup "result-ok-value" env with
+  | None -> Alcotest.fail "result-ok-value accessor not found"
+  | Some _ -> ());
+  match Type_env.lookup "result-err-value" env with
+  | None -> Alcotest.fail "result-err-value accessor not found"
+  | Some _ -> ()
+
 let () =
   Alcotest.run "sig_loader"
     [
@@ -1327,5 +1436,18 @@ let () =
             test_data_nullary_predicates;
           Alcotest.test_case "predicate lowercase" `Quick
             test_data_predicate_lowercase;
+          Alcotest.test_case "generates accessors" `Quick
+            test_data_generates_accessors;
+          Alcotest.test_case "accessor type" `Quick test_data_accessor_type;
+          Alcotest.test_case "accessor with adt" `Quick
+            test_data_accessor_with_adt;
+          Alcotest.test_case "nullary no accessor" `Quick
+            test_data_nullary_no_accessor;
+          Alcotest.test_case "multi-field accessors" `Quick
+            test_data_multi_field_accessors;
+          Alcotest.test_case "multi-field accessor type" `Quick
+            test_data_multi_field_accessor_type;
+          Alcotest.test_case "accessor lowercase" `Quick
+            test_data_accessor_lowercase;
         ] );
     ]

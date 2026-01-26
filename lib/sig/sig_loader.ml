@@ -781,7 +781,71 @@ let load_data (module_name : string) (d : data_decl) (state : load_state) :
         Type_env.Mono
           (Types.TArrow ([ Types.PPositional Types.Prim.any ], Types.Prim.bool))
       in
-      add_value_to_state pred_name pred_scheme state)
+      let state = add_value_to_state pred_name pred_scheme state in
+
+      (* Add accessor functions for fields.
+         - Nullary constructors: no accessors
+         - Single-field: <adt>-<ctor-lowercase>-value
+         - Multi-field: <adt>-<ctor-lowercase>-1, <adt>-<ctor-lowercase>-2, ...
+
+         Accessors take the ADT type and return the field type.
+         For polymorphic ADTs, accessors are also polymorphic. *)
+      let ctor_lower = String.lowercase_ascii ctor_name in
+      let num_fields = List.length ctor.ctor_fields in
+      let state =
+        if num_fields = 0 then
+          (* Nullary constructor - no accessor *)
+          state
+        else if num_fields = 1 then
+          (* Single-field constructor: <adt>-<ctor>-value *)
+          let accessor_name = data_name ^ "-" ^ ctor_lower ^ "-value" in
+          let field_ty = List.hd ctor.ctor_fields in
+          let field_typ =
+            sig_type_to_typ_with_ctx state.ls_type_ctx type_params field_ty
+          in
+          (* Input type is the ADT type *)
+          let input_typ =
+            if type_params = [] then Types.TCon opaque.opaque_con
+            else
+              Types.TApp
+                (opaque.opaque_con, List.map (fun p -> Types.TCon p) type_params)
+          in
+          let accessor_typ =
+            Types.TArrow ([ Types.PPositional input_typ ], field_typ)
+          in
+          let accessor_scheme =
+            if type_params = [] then Type_env.Mono accessor_typ
+            else Type_env.Poly (type_params, accessor_typ)
+          in
+          add_value_to_state accessor_name accessor_scheme state
+        else
+          (* Multi-field constructor: <adt>-<ctor>-1, <adt>-<ctor>-2, ... *)
+          let input_typ =
+            if type_params = [] then Types.TCon opaque.opaque_con
+            else
+              Types.TApp
+                (opaque.opaque_con, List.map (fun p -> Types.TCon p) type_params)
+          in
+          List.fold_left
+            (fun (state, idx) field_ty ->
+              let accessor_name =
+                data_name ^ "-" ^ ctor_lower ^ "-" ^ string_of_int idx
+              in
+              let field_typ =
+                sig_type_to_typ_with_ctx state.ls_type_ctx type_params field_ty
+              in
+              let accessor_typ =
+                Types.TArrow ([ Types.PPositional input_typ ], field_typ)
+              in
+              let accessor_scheme =
+                if type_params = [] then Type_env.Mono accessor_typ
+                else Type_env.Poly (type_params, accessor_typ)
+              in
+              (add_value_to_state accessor_name accessor_scheme state, idx + 1))
+            (state, 1) ctor.ctor_fields
+          |> fst
+      in
+      state)
     state d.data_ctors
 
 (** {1 Open and Include Processing}

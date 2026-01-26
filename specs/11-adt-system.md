@@ -150,7 +150,7 @@ value for `Some` when the value is truthy.
 
 - [x] [R1] Generate constructor functions from ADT definitions
 - [x] [R2] Generate predicate functions
-- [ ] [R3] Generate accessor functions
+- [x] [R3] Generate accessor functions
 - [ ] [R4] Implement pcase type narrowing
 - [ ] [R5] Implement exhaustiveness checking
 - [x] [R6] Handle multi-field constructors
