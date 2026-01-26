@@ -151,6 +151,38 @@ let infer_decl ~(known_types : string list) (decl : decl) : decl =
   | DType d -> DType (infer_type_decl ~known_types d)
   | _ -> decl
 
+(** Infer quantifiers for a standalone sig_type.
+
+    If the type is an arrow without explicit forall, collect type variables and
+    wrap in STForall. Used for inline type annotations like (declare (tart
+    ...)). *)
+let infer_sig_type ~(known_types : string list) (ty : sig_type) : sig_type =
+  match ty with
+  | STForall (_, _, _) ->
+      (* Already has explicit quantifiers *)
+      ty
+  | STArrow (params, ret, loc) ->
+      (* Arrow type - collect variables and maybe wrap in forall *)
+      let param_vars = collect_params ~bound:[] ~known_types params in
+      let ret_vars = collect_sig_type ~bound:[] ~known_types ret in
+      let all_vars =
+        List.fold_left (fun acc v -> add_unique v acc) param_vars ret_vars
+      in
+      if all_vars = [] then ty
+      else
+        let binders =
+          List.map (fun name -> { name; bound = None; loc }) all_vars
+        in
+        STForall (binders, ty, loc)
+  | _ ->
+      (* Non-arrow types: collect variables and wrap if needed *)
+      let vars = collect_sig_type ~bound:[] ~known_types ty in
+      if vars = [] then ty
+      else
+        let loc = sig_type_loc ty in
+        let binders = List.map (fun name -> { name; bound = None; loc }) vars in
+        STForall (binders, ty, loc)
+
 (** {1 Signature Inference}
 
     Process an entire signature file to infer quantifiers for all declarations.

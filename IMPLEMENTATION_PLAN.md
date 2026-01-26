@@ -147,7 +147,14 @@ Improve error message quality.
 
 ## Phase 7: Emacs REPL Integration (Spec 10)
 
-Interactive development workflow.
+Interactive development workflow. All tooling lives in `tart-mode.el`, separate
+from the runtime macros in `tart.el`.
+
+### 7.0 File Split
+
+- [ ] Split current `tart.el` into `tart.el` (macros only) and `tart-mode.el`
+      (dev tooling)
+- [ ] Verify: `(require 'tart)` loads only macros, no eglot/comint deps
 
 ### 7.1 Inferior Mode
 
@@ -164,9 +171,11 @@ Interactive development workflow.
 
 ## Phase 8: tart.el Runtime (Spec 14)
 
-Inline type annotations in `.el` files.
+Inline type annotations in `.el` files. The runtime macros live in `tart.el`
+(minimal, no dependencies). Development tooling is in `tart-mode.el` (see
+Phase 7).
 
-### 8.1 Macro Definitions
+### 8.1 Macro Definitions (in tart.el)
 
 - [x] [R8] Implement `tart` macro (expands to form)
 - [x] [R8] Implement `tart-type` macro (expands to nil)
@@ -175,7 +184,7 @@ Inline type annotations in `.el` files.
 
 ### 8.2 Type Checker Recognition
 
-- [ ] [R1] Recognize `(declare (tart ...))` in function definitions
+- [x] [R1] Recognize `(declare (tart ...))` in function definitions
 - [ ] [R2] Add expression annotation checking (`(tart TYPE FORM)`)
 - [ ] [R3,R4] Track variable types from annotations
 - [ ] [R3] Check `setq`/`setf` against declared variable types

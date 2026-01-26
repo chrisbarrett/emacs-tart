@@ -156,6 +156,47 @@ let test_builtin_null () =
   Alcotest.(check string) "null returns Bool" "Bool" (to_string ty)
 
 (* =============================================================================
+   declare tart Tests
+   ============================================================================= *)
+
+(** Test that defun with (declare (tart ...)) uses declared type *)
+let test_declare_tart_uses_type () =
+  let sexps =
+    parse_many
+      {|(defun my-add (x y)
+                             (declare (tart (int int) -> int))
+                             (+ x y))
+                           (my-add 1 2)|}
+  in
+  let result = Check.check_program sexps in
+  Alcotest.(check int) "no errors" 0 (List.length result.errors)
+
+(** Test that declare tart produces error when body doesn't match return type *)
+let test_declare_tart_return_mismatch () =
+  let sexps =
+    parse_many
+      {|(defun bad (x)
+          (declare (tart (int) -> string))
+          x)|}
+  in
+  let result = Check.check_program sexps in
+  (* Should have type error: Int (x) doesn't match String (return) *)
+  Alcotest.(check bool) "has error" true (List.length result.errors > 0)
+
+(** Test that polymorphic declare tart works correctly *)
+let test_declare_tart_polymorphic () =
+  let sexps =
+    parse_many
+      {|(defun my-id (x)
+          (declare (tart (a) -> a))
+          x)
+        (my-id 42)
+        (my-id "hello")|}
+  in
+  let result = Check.check_program sexps in
+  Alcotest.(check int) "no errors" 0 (List.length result.errors)
+
+(* =============================================================================
    form_result_to_string Tests
    ============================================================================= *)
 
@@ -213,5 +254,13 @@ let () =
           Alcotest.test_case "concat" `Quick test_builtin_concat;
           Alcotest.test_case "length" `Quick test_builtin_length;
           Alcotest.test_case "null" `Quick test_builtin_null;
+        ] );
+      ( "declare_tart",
+        [
+          Alcotest.test_case "uses declared type" `Quick
+            test_declare_tart_uses_type;
+          Alcotest.test_case "return mismatch error" `Quick
+            test_declare_tart_return_mismatch;
+          Alcotest.test_case "polymorphic" `Quick test_declare_tart_polymorphic;
         ] );
     ]

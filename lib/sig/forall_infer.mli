@@ -41,6 +41,11 @@ val infer_type_decl : known_types:string list -> type_decl -> type_decl
 val infer_decl : known_types:string list -> decl -> decl
 (** Infer quantifiers for a single declaration *)
 
+val infer_sig_type : known_types:string list -> sig_type -> sig_type
+(** Infer quantifiers for a standalone sig_type. If the type is an arrow without
+    explicit forall, collect type variables and wrap in STForall. Used for
+    inline type annotations like [(declare (tart ...))]. *)
+
 (** {1 Signature Inference} *)
 
 val get_type_names : signature -> string list

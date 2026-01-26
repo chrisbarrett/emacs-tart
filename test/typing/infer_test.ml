@@ -329,6 +329,125 @@ let test_defun_not_defun () =
   | None -> ()
 
 (* =============================================================================
+   Declare Tart Tests
+   ============================================================================= *)
+
+let test_defun_declare_tart_monomorphic () =
+  (* Defun with (declare (tart ...)) should use declared type *)
+  reset_tvar_counter ();
+  let sexp =
+    parse
+      {|(defun my-add (x y)
+              (declare (tart (int int) -> int))
+              (+ x y))|}
+  in
+  let env =
+    Env.extend_mono "+" (arrow [ Prim.int; Prim.int ] Prim.int) Env.empty
+  in
+  match Infer.infer_defun env sexp with
+  | Some result ->
+      Alcotest.(check string) "defun name" "my-add" result.name;
+      let ty_str = to_string result.fn_type in
+      Alcotest.(check string) "declared type" "(-> (Int Int) Int)" ty_str
+  | None -> Alcotest.fail "expected defun result"
+
+let test_defun_declare_tart_polymorphic () =
+  (* Defun with polymorphic declaration returns type with fresh TVars.
+     The forall is added by check_form via generalize, not by infer_defun. *)
+  reset_tvar_counter ();
+  let sexp =
+    parse
+      {|(defun my-id (x)
+              (declare (tart (a) -> a))
+              x)|}
+  in
+  match Infer.infer_defun Env.empty sexp with
+  | Some result ->
+      Alcotest.(check string) "defun name" "my-id" result.name;
+      let ty_str = to_string result.fn_type in
+      (* The raw fn_type has fresh TVars; check_form will generalize to forall *)
+      Alcotest.(check bool)
+        "has arrow type" true
+        (String.sub ty_str 0 4 = "(-> ")
+  | None -> Alcotest.fail "expected defun result"
+
+let test_defun_declare_tart_explicit_forall () =
+  (* Defun with explicit [a b] quantifiers returns type with fresh TVars.
+     check_form will generalize to proper forall. *)
+  reset_tvar_counter ();
+  let sexp =
+    parse
+      {|(defun my-const (x y)
+              (declare (tart [a b] (a b) -> a))
+              x)|}
+  in
+  match Infer.infer_defun Env.empty sexp with
+  | Some result ->
+      let ty_str = to_string result.fn_type in
+      (* Raw type has TVars; check_form generalizes to forall *)
+      Alcotest.(check bool)
+        "has arrow type" true
+        (String.sub ty_str 0 4 = "(-> ")
+  | None -> Alcotest.fail "expected defun result"
+
+let test_defun_declare_tart_body_mismatch () =
+  (* Body type should generate constraint with declared return type *)
+  reset_tvar_counter ();
+  let sexp =
+    parse
+      {|(defun bad-fn (x)
+              (declare (tart (int) -> string))
+              x)|}
+  in
+  match Infer.infer_defun Env.empty sexp with
+  | Some result ->
+      (* Function should still have the declared type *)
+      let ty_str = to_string result.fn_type in
+      Alcotest.(check string) "declared type" "(-> (Int) String)" ty_str;
+      (* But there should be a constraint that x = String,
+         which will produce an error when solved *)
+      Alcotest.(check bool)
+        "has constraints" true
+        (List.length result.defun_constraints > 0)
+  | None -> Alcotest.fail "expected defun result"
+
+let test_defun_no_declare_still_infers () =
+  (* Without declaration, defun should still infer as before *)
+  reset_tvar_counter ();
+  let sexp = parse {|(defun foo (x)
+              (+ x 1))|} in
+  let env =
+    Env.extend_mono "+" (arrow [ Prim.int; Prim.int ] Prim.int) Env.empty
+  in
+  match Infer.infer_defun env sexp with
+  | Some result ->
+      Alcotest.(check string) "defun name" "foo" result.name;
+      let ty_str = to_string result.fn_type in
+      (* Should infer Int -> Int due to + constraint *)
+      Alcotest.(check string) "inferred type" "(-> (Int) Int)" ty_str
+  | None -> Alcotest.fail "expected defun result"
+
+let test_defun_declare_tart_with_body () =
+  (* Declaration followed by actual body expressions *)
+  reset_tvar_counter ();
+  let sexp =
+    parse
+      {|(defun greet (name)
+              (declare (tart (string) -> string))
+              (concat "Hello, " name))|}
+  in
+  let env =
+    Env.extend_mono "concat"
+      (arrow [ Prim.string; Prim.string ] Prim.string)
+      Env.empty
+  in
+  match Infer.infer_defun env sexp with
+  | Some result ->
+      let ty_str = to_string result.fn_type in
+      Alcotest.(check string) "declared type" "(-> (String) String)" ty_str
+  | None -> Alcotest.fail "expected defun result"
+
+(* =============================================================================
    Constraint Content Tests
    ============================================================================= *)
 
@@ -444,6 +563,21 @@ let () =
           Alcotest.test_case "infer simple" `Quick test_defun_infer_simple;
           Alcotest.test_case "infer identity" `Quick test_defun_infer_identity;
           Alcotest.test_case "not defun" `Quick test_defun_not_defun;
+        ] );
+      ( "declare-tart",
+        [
+          Alcotest.test_case "monomorphic" `Quick
+            test_defun_declare_tart_monomorphic;
+          Alcotest.test_case "polymorphic" `Quick
+            test_defun_declare_tart_polymorphic;
+          Alcotest.test_case "explicit forall" `Quick
+            test_defun_declare_tart_explicit_forall;
+          Alcotest.test_case "body mismatch" `Quick
+            test_defun_declare_tart_body_mismatch;
+          Alcotest.test_case "no declare infers" `Quick
+            test_defun_no_declare_still_infers;
+          Alcotest.test_case "with body" `Quick
+            test_defun_declare_tart_with_body;
         ] );
       ( "constraints",
         [
