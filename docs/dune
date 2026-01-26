@@ -2,13 +2,13 @@
 ; Build manpage: dune build docs/build/tart.1
 ; Build HTML: run asciidoctor directly (not integrated with dune)
 
-(rule
- (targets build/tart.1)
- (deps ; todo
- )
- (action
-  (progn
-   (run mkdir -p build)
-   (run asciidoctor -b manpage -o %{targets} %{deps}))))
+; TODO: Add manpage build rule when source doc exists
+; (rule
+;  (targets build/tart.1)
+;  (deps tart.1.adoc)
+;  (action
+;   (progn
+;    (run mkdir -p build)
+;    (run asciidoctor -b manpage -o %{targets} %{deps}))))
 
 (data_only_dirs build)

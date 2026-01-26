@@ -517,6 +517,93 @@ let test_tart_type_in_result () =
   Alcotest.(check bool) "alias found" true (Option.is_some alias_opt)
 
 (* =============================================================================
+   Invariance Tests (parameterized types)
+   ============================================================================= *)
+
+(** Test that (list int) is not compatible with (list any) parameter type. This
+    tests the spec example from R7: invariant type constructors. *)
+let test_invariance_list_int_not_list_any () =
+  let sexps =
+    parse_many
+      {|
+(defun takes-any-list (xs)
+  (declare (tart ((list any)) -> nil))
+  nil)
+(defun get-int-list ()
+  (declare (tart () -> (list int)))
+  (list 1 2 3))
+(takes-any-list (get-int-list))
+|}
+  in
+  let result = Check.check_program sexps in
+  Alcotest.(check bool) "has type error" true (List.length result.errors > 0)
+
+(** Test that (list any) passed to (list any) parameter is ok. Note: '(1
+    "hello") infers to (List Any), so no annotation needed. *)
+let test_invariance_list_any_to_list_any () =
+  let sexps =
+    parse_many
+      {|
+(defun takes-any-list (xs)
+  (declare (tart ((list any)) -> nil))
+  nil)
+(takes-any-list '(1 "hello"))
+|}
+  in
+  let result = Check.check_program sexps in
+  Alcotest.(check int) "no errors" 0 (List.length result.errors)
+
+(** Test invariance with option type *)
+let test_invariance_option () =
+  let sexps =
+    parse_many
+      {|
+(defun takes-option-any (x)
+  (declare (tart ((option any)) -> nil))
+  nil)
+(defun get-option-int ()
+  (declare (tart () -> (option int)))
+  42)
+(takes-option-any (get-option-int))
+|}
+  in
+  let result = Check.check_program sexps in
+  Alcotest.(check bool) "has type error" true (List.length result.errors > 0)
+
+(** Test invariance with hash-table - first type param *)
+let test_invariance_hash_table_key () =
+  let sexps =
+    parse_many
+      {|
+(defun takes-any-key (h)
+  (declare (tart ((hash-table any int)) -> nil))
+  nil)
+(defun get-string-int-ht ()
+  (declare (tart () -> (hash-table string int)))
+  (make-hash-table))
+(takes-any-key (get-string-int-ht))
+|}
+  in
+  let result = Check.check_program sexps in
+  Alcotest.(check bool) "has type error" true (List.length result.errors > 0)
+
+(** Test that polymorphic functions still work with lists. Note: We use (list 1
+    2 3) not '(1 2 3) because quoted lists infer to (List Any) and can't be
+    narrowed to (List Int) due to invariance. *)
+let test_invariance_poly_function_ok () =
+  let sexps =
+    parse_many
+      {|
+(defun my-car (xs)
+  (declare (tart [a] ((list a)) -> (option a)))
+  (car xs))
+(my-car (list 1 2 3))
+|}
+  in
+  let result = Check.check_program sexps in
+  Alcotest.(check int) "no errors" 0 (List.length result.errors)
+
+(* =============================================================================
    Test Suite
    ============================================================================= *)
 
@@ -623,5 +710,18 @@ let () =
             test_tart_type_to_string_params;
           Alcotest.test_case "union alias" `Quick test_tart_type_union;
           Alcotest.test_case "in result" `Quick test_tart_type_in_result;
+        ] );
+      ( "invariance",
+        [
+          Alcotest.test_case "list int != list any" `Quick
+            test_invariance_list_int_not_list_any;
+          Alcotest.test_case "list any = list any" `Quick
+            test_invariance_list_any_to_list_any;
+          Alcotest.test_case "option int != option any" `Quick
+            test_invariance_option;
+          Alcotest.test_case "hash-table invariance" `Quick
+            test_invariance_hash_table_key;
+          Alcotest.test_case "polymorphic function ok" `Quick
+            test_invariance_poly_function_ok;
         ] );
     ]

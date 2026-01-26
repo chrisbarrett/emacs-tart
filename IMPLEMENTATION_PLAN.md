@@ -193,14 +193,14 @@ Phase 7).
 ### 8.3 Type Aliases
 
 - [x] [R5,R6] Implement file-local type alias scope
-- [ ] [R7] Enforce invariance for parameterized types
+- [x] [R7] Enforce invariance for parameterized types
 - [x] Verify: Aliases usable in same file, not exported
 
 ### 8.4 Integration
 
-- [ ] [R10] Verify inline annotations match `.tart` declarations
+- [x] [R10] Verify inline annotations match `.tart` declarations
 - [ ] [R9] Format error messages for annotation mismatches
-- [ ] Verify: Mismatched inline/`.tart` produces error
+- [x] Verify: Mismatched inline/`.tart` produces error
 
 ## Phase 9: ADT System (Spec 11)
 

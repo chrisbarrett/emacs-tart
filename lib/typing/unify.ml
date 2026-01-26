@@ -108,8 +108,13 @@ type 'a internal_result = ('a, internal_error) Result.t
 (** Unify two types.
 
     This is the core unification algorithm. It follows links and handles each
-    type constructor case. *)
-let rec unify t1 t2 loc : unit internal_result =
+    type constructor case.
+
+    The [invariant] parameter controls whether Any acts as a wildcard. When true
+    (inside type application arguments), Any must match exactly - this enforces
+    invariance for parameterized types like [(list int)] not unifying with
+    [(list any)]. *)
+let rec unify ?(invariant = false) t1 t2 loc : unit internal_result =
   let t1 = repr t1 in
   let t2 = repr t2 in
   if t1 == t2 then
@@ -128,22 +133,31 @@ let rec unify t1 t2 loc : unit internal_result =
             | Ok () ->
                 tv := Link ty;
                 Ok ()))
-    (* Any is the top type - unifies with anything *)
-    | TCon "Any", _ | _, TCon "Any" -> Ok ()
+    (* Any is the top type - unifies with anything, EXCEPT in invariant contexts
+       (inside type application arguments). This enforces invariance for
+       parameterized types: (list int) does NOT unify with (list any). *)
+    | TCon "Any", _ | _, TCon "Any" ->
+        if invariant then
+          (* In invariant context, Any only unifies with Any *)
+          match (t1, t2) with
+          | TCon "Any", TCon "Any" -> Ok ()
+          | _ -> Error (ITypeMismatch (t1, t2, loc))
+        else Ok ()
     (* Type constants must match exactly *)
     | TCon n1, TCon n2 ->
         if n1 = n2 then Ok () else Error (ITypeMismatch (t1, t2, loc))
-    (* Type applications: constructor and args must match *)
+    (* Type applications: constructor and args must match.
+       Arguments are unified with invariant=true to enforce invariance. *)
     | TApp (c1, args1), TApp (c2, args2) ->
         if c1 <> c2 then Error (ITypeMismatch (t1, t2, loc))
         else if List.length args1 <> List.length args2 then
           Error (IArityMismatch (List.length args1, List.length args2, loc))
-        else unify_list args1 args2 loc
+        else unify_list ~invariant:true args1 args2 loc
     (* Function types: params and return must match.
        Handle rest/optional parameters specially. *)
     | TArrow (ps1, r1), TArrow (ps2, r2) ->
-        let* () = unify_param_lists ps1 ps2 loc in
-        unify r1 r2 loc
+        let* () = unify_param_lists ~invariant ps1 ps2 loc in
+        unify ~invariant r1 r2 loc
     (* Forall types: for now, require same structure.
        Full higher-rank polymorphism would need more sophisticated handling. *)
     | TForall (vs1, b1), TForall (vs2, b2) ->
@@ -152,26 +166,26 @@ let rec unify t1 t2 loc : unit internal_result =
         else
           (* Unify bodies directly - this is simplified.
              A full implementation would alpha-rename. *)
-          unify b1 b2 loc
+          unify ~invariant b1 b2 loc
     (* Union types: for now, require structural equality.
        Full union handling would need subtyping. *)
     | TUnion ts1, TUnion ts2 ->
         if List.length ts1 <> List.length ts2 then
           Error (ITypeMismatch (t1, t2, loc))
-        else unify_list ts1 ts2 loc
+        else unify_list ~invariant ts1 ts2 loc
     (* Tuple types: element-wise unification *)
     | TTuple ts1, TTuple ts2 ->
         if List.length ts1 <> List.length ts2 then
           Error (IArityMismatch (List.length ts1, List.length ts2, loc))
-        else unify_list ts1 ts2 loc
+        else unify_list ~invariant ts1 ts2 loc
     (* All other combinations are type mismatches *)
     | _ -> Error (ITypeMismatch (t1, t2, loc))
 
-and unify_list ts1 ts2 loc =
+and unify_list ?(invariant = false) ts1 ts2 loc =
   List.fold_left2
     (fun acc t1 t2 ->
       let* () = acc in
-      unify t1 t2 loc)
+      unify ~invariant t1 t2 loc)
     (Ok ()) ts1 ts2
 
 (** Check if a param is a rest param *)
@@ -183,7 +197,7 @@ and is_rest_param = function PRest _ -> true | _ -> false
     strategy is: 1. If both lists have the same length, unify element-wise 2. If
     one has rest args, consume extra args from the other side 3. Otherwise, it's
     an arity mismatch *)
-and unify_param_lists ps1 ps2 loc =
+and unify_param_lists ?(invariant = false) ps1 ps2 loc =
   match (ps1, ps2) with
   (* Both empty - success *)
   | [], [] -> Ok ()
@@ -195,8 +209,8 @@ and unify_param_lists ps1 ps2 loc =
           let* () = acc in
           match p2 with
           | PPositional t2 | POptional t2 | PKey (_, t2) ->
-              unify elem_ty1 t2 loc
-          | PRest t2 -> unify elem_ty1 t2 loc)
+              unify ~invariant elem_ty1 t2 loc
+          | PRest t2 -> unify ~invariant elem_ty1 t2 loc)
         (Ok ()) params2
   (* Right side has rest param at end - consume all remaining from left *)
   | params1, [ PRest elem_ty2 ] ->
@@ -205,8 +219,8 @@ and unify_param_lists ps1 ps2 loc =
           let* () = acc in
           match p1 with
           | PPositional t1 | POptional t1 | PKey (_, t1) ->
-              unify t1 elem_ty2 loc
-          | PRest t1 -> unify t1 elem_ty2 loc)
+              unify ~invariant t1 elem_ty2 loc
+          | PRest t1 -> unify ~invariant t1 elem_ty2 loc)
         (Ok ()) params1
   (* Non-rest params on both sides - unify element-wise *)
   | p1 :: rest1, p2 :: rest2 ->
@@ -219,36 +233,38 @@ and unify_param_lists ps1 ps2 loc =
               match p2 with
               | PPositional t | POptional t | PKey (_, t) | PRest t -> t
             in
-            let* () = unify elem_ty1 t2 loc in
-            unify_param_lists ps1 rest2 loc (* Keep consuming with same rest *)
+            let* () = unify ~invariant elem_ty1 t2 loc in
+            unify_param_lists ~invariant ps1 rest2 loc
+            (* Keep consuming with same rest *)
         | _, PRest elem_ty2 ->
             (* Right is rest, left is not *)
             let t1 =
               match p1 with
               | PPositional t | POptional t | PKey (_, t) | PRest t -> t
             in
-            let* () = unify t1 elem_ty2 loc in
-            unify_param_lists rest1 ps2 loc (* Keep consuming with same rest *)
+            let* () = unify ~invariant t1 elem_ty2 loc in
+            unify_param_lists ~invariant rest1 ps2 loc
+            (* Keep consuming with same rest *)
         | _, _ ->
             (* Neither is rest - unreachable given the guard, but needed for exhaustiveness *)
-            let* () = unify_param p1 p2 loc in
-            unify_param_lists rest1 rest2 loc
+            let* () = unify_param ~invariant p1 p2 loc in
+            unify_param_lists ~invariant rest1 rest2 loc
       else
         (* Neither is rest param - normal element-wise unification *)
-        let* () = unify_param p1 p2 loc in
-        unify_param_lists rest1 rest2 loc
+        let* () = unify_param ~invariant p1 p2 loc in
+        unify_param_lists ~invariant rest1 rest2 loc
   (* Left exhausted but right has more (and no rest on left) *)
   | [], _ :: _ -> Error (IArityMismatch (0, List.length ps2, loc))
   (* Right exhausted but left has more (and no rest on right) *)
   | _ :: _, [] -> Error (IArityMismatch (List.length ps1, 0, loc))
 
-and unify_param p1 p2 loc =
+and unify_param ?(invariant = false) p1 p2 loc =
   match (p1, p2) with
-  | PPositional t1, PPositional t2 -> unify t1 t2 loc
-  | POptional t1, POptional t2 -> unify t1 t2 loc
-  | PRest t1, PRest t2 -> unify t1 t2 loc
+  | PPositional t1, PPositional t2 -> unify ~invariant t1 t2 loc
+  | POptional t1, POptional t2 -> unify ~invariant t1 t2 loc
+  | PRest t1, PRest t2 -> unify ~invariant t1 t2 loc
   | PKey (n1, t1), PKey (n2, t2) ->
-      if n1 = n2 then unify t1 t2 loc
+      if n1 = n2 then unify ~invariant t1 t2 loc
       else
         Error
           (ITypeMismatch

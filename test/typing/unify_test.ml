@@ -293,6 +293,67 @@ let test_union_different_order () =
     "(Int | String) != (String | Int)" true (unify_fails t1 t2)
 
 (* =============================================================================
+   Invariance Tests (Any inside type applications)
+   ============================================================================= *)
+
+(** Test that Any at top level unifies with anything *)
+let test_any_top_level () =
+  Alcotest.(check bool) "Any = Int" true (unify_ok Prim.any Prim.int);
+  Alcotest.(check bool) "Int = Any" true (unify_ok Prim.int Prim.any);
+  Alcotest.(check bool) "Any = String" true (unify_ok Prim.any Prim.string)
+
+(** Test that Any inside List does NOT unify with other types (invariance) *)
+let test_list_int_not_list_any () =
+  (* (list int) should NOT unify with (list any) - enforces invariance *)
+  Alcotest.(check bool)
+    "(List Int) != (List Any)" true
+    (unify_fails (list_of Prim.int) (list_of Prim.any))
+
+(** Test that (list any) unifies with itself *)
+let test_list_any_list_any () =
+  Alcotest.(check bool)
+    "(List Any) = (List Any)" true
+    (unify_ok (list_of Prim.any) (list_of Prim.any))
+
+(** Test invariance with Option type *)
+let test_option_int_not_option_any () =
+  Alcotest.(check bool)
+    "(Option Int) != (Option Any)" true
+    (unify_fails (option_of Prim.int) (option_of Prim.any))
+
+(** Test invariance with nested type applications *)
+let test_nested_invariance () =
+  (* List (Option Int) should not unify with List (Option Any) *)
+  Alcotest.(check bool)
+    "(List (Option Int)) != (List (Option Any))" true
+    (unify_fails (list_of (option_of Prim.int)) (list_of (option_of Prim.any)))
+
+(** Test invariance with hash tables (multiple type params) *)
+let test_hash_table_invariance () =
+  (* (hash-table string int) != (hash-table any int) *)
+  Alcotest.(check bool)
+    "(HashTable String Int) != (HashTable Any Int)" true
+    (unify_fails
+       (hash_table_of Prim.string Prim.int)
+       (hash_table_of Prim.any Prim.int));
+  (* (hash-table string int) != (hash-table string any) *)
+  Alcotest.(check bool)
+    "(HashTable String Int) != (HashTable String Any)" true
+    (unify_fails
+       (hash_table_of Prim.string Prim.int)
+       (hash_table_of Prim.string Prim.any))
+
+(** Test that type variables inside type applications still work *)
+let test_tvar_in_tapp_with_any () =
+  setup ();
+  let tv = fresh () in
+  (* (list 'a) = (list int) should still work - tvars are not restricted *)
+  Alcotest.(check bool)
+    "(List 'a) = (List Int)" true
+    (unify_ok (list_of tv) (list_of Prim.int));
+  Alcotest.(check string) "tv = Int" "Int" (to_string tv)
+
+(* =============================================================================
    Complex Tests
    ============================================================================= *)
 
@@ -417,6 +478,20 @@ let () =
         [
           Alcotest.test_case "same union" `Quick test_union_same;
           Alcotest.test_case "different order" `Quick test_union_different_order;
+        ] );
+      ( "invariance",
+        [
+          Alcotest.test_case "Any at top level" `Quick test_any_top_level;
+          Alcotest.test_case "List Int != List Any" `Quick
+            test_list_int_not_list_any;
+          Alcotest.test_case "List Any = List Any" `Quick test_list_any_list_any;
+          Alcotest.test_case "Option Int != Option Any" `Quick
+            test_option_int_not_option_any;
+          Alcotest.test_case "nested invariance" `Quick test_nested_invariance;
+          Alcotest.test_case "hash table invariance" `Quick
+            test_hash_table_invariance;
+          Alcotest.test_case "tvar in TApp with Any" `Quick
+            test_tvar_in_tapp_with_any;
         ] );
       ( "complex",
         [

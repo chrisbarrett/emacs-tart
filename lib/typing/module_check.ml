@@ -348,7 +348,13 @@ let check_module ~(config : config) ~(filename : string)
                 (* Find the inferred type for this function *)
                 let name = d.defun_name in
                 match Env.lookup name check_result.env with
-                | Some (Env.Mono inferred) | Some (Env.Poly (_, inferred)) ->
+                | Some scheme ->
+                    (* Convert scheme to type, preserving polymorphism *)
+                    let inferred =
+                      match scheme with
+                      | Env.Mono ty -> ty
+                      | Env.Poly (vars, ty) -> Types.TForall (vars, ty)
+                    in
                     (* Get the declared type from the signature *)
                     let declared = Loader.load_defun d in
                     let declared_ty =

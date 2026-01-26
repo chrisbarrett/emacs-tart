@@ -506,6 +506,101 @@ let test_autoload_search_path () =
     raise e
 
 (* =============================================================================
+   Inline Annotation / .tart File Mismatch Tests (R10)
+   ============================================================================= *)
+
+(** R10: Inline annotation that matches .tart declaration is OK *)
+let test_inline_matches_tart_ok () =
+  let files =
+    [
+      ( "foo.el",
+        "(defun foo-add (a b)\n  (declare (tart (int int) -> int))\n  (+ a b))"
+      );
+      ("foo.tart", "(defun foo-add (int int) -> int)");
+    ]
+  in
+  with_temp_dir files (fun dir ->
+      let config = Module_check.default_config () in
+      let el_path = Filename.concat dir "foo.el" in
+      let sexps =
+        parse
+          "(defun foo-add (a b)\n\
+          \  (declare (tart (int int) -> int))\n\
+          \  (+ a b))"
+      in
+      let result = Module_check.check_module ~config ~filename:el_path sexps in
+      Alcotest.(check int)
+        "no mismatch errors" 0
+        (List.length result.mismatch_errors);
+      Alcotest.(check int) "no type errors" 0 (List.length result.type_errors))
+
+(** R10: Inline annotation that conflicts with .tart declaration is an error *)
+let test_inline_conflicts_with_tart () =
+  let files =
+    [
+      ( "foo.el",
+        "(defun foo-add (a b)\n\
+        \  (declare (tart (string string) -> string))\n\
+        \  (concat a b))" );
+      (* .tart says int, inline says string - MISMATCH! *)
+      ("foo.tart", "(defun foo-add (int int) -> int)");
+    ]
+  in
+  with_temp_dir files (fun dir ->
+      let config = Module_check.default_config () in
+      let el_path = Filename.concat dir "foo.el" in
+      let sexps =
+        parse
+          "(defun foo-add (a b)\n\
+          \  (declare (tart (string string) -> string))\n\
+          \  (concat a b))"
+      in
+      let result = Module_check.check_module ~config ~filename:el_path sexps in
+      (* Should have mismatch because inline says string, .tart says int *)
+      Alcotest.(check bool)
+        "has mismatch error" true
+        (List.length result.mismatch_errors > 0))
+
+(** R10: Polymorphic inline annotation matching .tart is OK *)
+let test_inline_polymorphic_matches_tart () =
+  let files =
+    [
+      ("foo.el", "(defun foo-id (x)\n  (declare (tart [a] (a) -> a))\n  x)");
+      ("foo.tart", "(defun foo-id [a] (a) -> a)");
+    ]
+  in
+  with_temp_dir files (fun dir ->
+      let config = Module_check.default_config () in
+      let el_path = Filename.concat dir "foo.el" in
+      let sexps =
+        parse "(defun foo-id (x)\n  (declare (tart [a] (a) -> a))\n  x)"
+      in
+      let result = Module_check.check_module ~config ~filename:el_path sexps in
+      Alcotest.(check int)
+        "no mismatch errors" 0
+        (List.length result.mismatch_errors);
+      Alcotest.(check int) "no type errors" 0 (List.length result.type_errors))
+
+(** R10: When no inline annotation, inferred type checked against .tart *)
+let test_no_inline_uses_inferred () =
+  let files =
+    [
+      (* No inline annotation, body infers to int -> int *)
+      ("foo.el", "(defun foo-inc (x) (+ x 1))");
+      ("foo.tart", "(defun foo-inc (int) -> int)");
+    ]
+  in
+  with_temp_dir files (fun dir ->
+      let config = Module_check.default_config () in
+      let el_path = Filename.concat dir "foo.el" in
+      let sexps = parse "(defun foo-inc (x) (+ x 1))" in
+      let result = Module_check.check_module ~config ~filename:el_path sexps in
+      Alcotest.(check int)
+        "no mismatch errors" 0
+        (List.length result.mismatch_errors);
+      Alcotest.(check int) "no type errors" 0 (List.length result.type_errors))
+
+(* =============================================================================
    Circular Dependency Tests (R9)
    ============================================================================= *)
 
@@ -689,5 +784,16 @@ let () =
             test_mutual_require_dependencies;
           Alcotest.test_case "three-way circular deps" `Quick
             test_three_way_circular_deps;
+        ] );
+      ( "inline_annotation_vs_tart",
+        [
+          Alcotest.test_case "inline matches tart ok" `Quick
+            test_inline_matches_tart_ok;
+          Alcotest.test_case "inline conflicts with tart" `Quick
+            test_inline_conflicts_with_tart;
+          Alcotest.test_case "polymorphic inline matches tart" `Quick
+            test_inline_polymorphic_matches_tart;
+          Alcotest.test_case "no inline uses inferred" `Quick
+            test_no_inline_uses_inferred;
         ] );
     ]
