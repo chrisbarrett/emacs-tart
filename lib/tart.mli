@@ -63,6 +63,7 @@ module Check = Typing.Check
 module Module_check = Typing.Module_check
 module Diagnostic = Typing.Diagnostic
 module Levenshtein = Typing.Levenshtein
+module Exhaustiveness = Typing.Exhaustiveness
 
 (** {1 Signatures} *)
 

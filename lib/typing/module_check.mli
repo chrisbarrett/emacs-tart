@@ -48,6 +48,8 @@ type check_result = {
   missing_signature_warnings : missing_signature_warning list;
       (** Warnings for public functions not in signature *)
   undefined_errors : Infer.undefined_var list;  (** Undefined variable errors *)
+  exhaustiveness_warnings : Exhaustiveness.warning list;
+      (** Warnings for non-exhaustive pcase matches *)
   signature_env : Core.Type_env.t option;
       (** Environment from loaded signature, if any *)
   final_env : Core.Type_env.t;  (** Final type environment after checking *)

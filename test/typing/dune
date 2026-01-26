@@ -25,3 +25,7 @@
 (test
  (name module_check_test)
  (libraries tart alcotest unix))
+
+(test
+ (name exhaustiveness_test)
+ (libraries tart alcotest))

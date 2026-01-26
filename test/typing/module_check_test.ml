@@ -187,6 +187,7 @@ let test_diagnostics_empty () =
       mismatch_errors = [];
       missing_signature_warnings = [];
       undefined_errors = [];
+      exhaustiveness_warnings = [];
       signature_env = None;
       final_env = Core.Type_env.empty;
     }

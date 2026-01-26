@@ -192,3 +192,10 @@ val is_error : t -> bool
 
 val count_errors : t list -> int
 (** Count errors in a list of diagnostics. *)
+
+val non_exhaustive_match :
+  span:Syntax.Location.span -> message:string -> unit -> t
+(** Create a non-exhaustive pattern match warning.
+
+    Used when a pcase expression doesn't cover all constructors of an ADT.
+    Includes a help suggestion to add a wildcard pattern. *)

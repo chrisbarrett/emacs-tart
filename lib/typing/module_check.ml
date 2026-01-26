@@ -62,6 +62,8 @@ type check_result = {
   missing_signature_warnings : missing_signature_warning list;
       (** Warnings for public functions not in signature *)
   undefined_errors : Infer.undefined_var list;  (** Undefined variable errors *)
+  exhaustiveness_warnings : Exhaustiveness.warning list;
+      (** Warnings for non-exhaustive pcase matches *)
   signature_env : Env.t option;
       (** Environment from loaded signature, if any *)
   final_env : Env.t;  (** Final type environment after checking *)
@@ -414,11 +416,23 @@ let check_module ~(config : config) ~(filename : string)
           defined_fns
   in
 
+  (* Step 8: Check exhaustiveness for pcase expressions (R5 from spec 11) *)
+  let exhaustiveness_warnings =
+    (* Build ADT registry from loaded signature *)
+    let registry =
+      match sig_ast_opt with
+      | Some sig_ast -> Exhaustiveness.build_registry_from_signature sig_ast
+      | None -> Exhaustiveness.empty_registry
+    in
+    Exhaustiveness.check_all_pcases ~registry ~env:check_result.Check.env sexps
+  in
+
   {
     type_errors = check_result.Check.errors;
     mismatch_errors;
     missing_signature_warnings;
     undefined_errors = check_result.Check.undefineds;
+    exhaustiveness_warnings;
     signature_env =
       (match sibling_result with Some (env, _) -> Some env | None -> None);
     final_env = check_result.Check.env;
@@ -441,6 +455,11 @@ let undefined_to_diagnostic (candidates : string list)
     (err : Infer.undefined_var) : Diagnostic.t =
   Diagnostic.undefined_variable ~span:err.span ~name:err.name ~candidates ()
 
+(** Convert an exhaustiveness warning to a diagnostic *)
+let exhaustiveness_to_diagnostic (warn : Exhaustiveness.warning) : Diagnostic.t
+    =
+  Diagnostic.non_exhaustive_match ~span:warn.span ~message:warn.message ()
+
 (** Get all diagnostics from a check result *)
 let diagnostics_of_result (result : check_result) : Diagnostic.t list =
   let type_diagnostics = Diagnostic.of_unify_errors result.type_errors in
@@ -454,5 +473,8 @@ let diagnostics_of_result (result : check_result) : Diagnostic.t list =
   let undefined_diagnostics =
     List.map (undefined_to_diagnostic candidates) result.undefined_errors
   in
+  let exhaustiveness_diagnostics =
+    List.map exhaustiveness_to_diagnostic result.exhaustiveness_warnings
+  in
   type_diagnostics @ mismatch_diagnostics @ missing_sig_diagnostics
-  @ undefined_diagnostics
+  @ undefined_diagnostics @ exhaustiveness_diagnostics

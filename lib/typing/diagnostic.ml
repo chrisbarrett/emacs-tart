@@ -643,3 +643,18 @@ let is_error (d : t) : bool =
 
 (** Count errors in a list of diagnostics *)
 let count_errors (ds : t list) : int = List.length (List.filter is_error ds)
+
+(** Create a non-exhaustive pattern match warning.
+
+    Used when a pcase expression doesn't cover all constructors of an ADT. *)
+let non_exhaustive_match ~span ~message () =
+  {
+    severity = Warning;
+    code = None;
+    span;
+    message;
+    expected = None;
+    actual = None;
+    related = [];
+    help = [ "add a wildcard pattern (_) to handle remaining cases" ];
+  }
