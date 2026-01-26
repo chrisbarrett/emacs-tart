@@ -778,12 +778,155 @@ let handle_references (server : t) (params : Yojson.Safe.t option) :
                     let locations = List.map location_of_span ref_spans in
                     Ok (Protocol.references_result_to_json (Some locations)))))
 
+(** {1 Type to Signature Format Conversion} *)
+
+(** Convert a type to signature file format string.
+
+    Signature format uses `(params) -> return` for functions, not `(-> (params)
+    return)`. Type variables are rendered without the underscore prefix. *)
+let rec type_to_sig_string (ty : Core.Types.typ) : string =
+  match Core.Types.repr ty with
+  | Core.Types.TVar tv -> (
+      match !tv with
+      | Core.Types.Unbound (id, _) -> Printf.sprintf "'t%d" id
+      | Core.Types.Link _ -> failwith "repr should have followed link")
+  | Core.Types.TCon name -> String.lowercase_ascii name
+  | Core.Types.TApp (con, args) ->
+      let con_lower = String.lowercase_ascii con in
+      Printf.sprintf "(%s %s)" con_lower
+        (String.concat " " (List.map type_to_sig_string args))
+  | Core.Types.TArrow (params, ret) ->
+      Printf.sprintf "((%s) -> %s)"
+        (String.concat " " (List.map param_to_sig_string params))
+        (type_to_sig_string ret)
+  | Core.Types.TForall (vars, body) ->
+      (* Don't render the forall wrapper - the type variables will be inferred *)
+      type_to_sig_string_with_vars vars body
+  | Core.Types.TUnion types ->
+      Printf.sprintf "(%s)"
+        (String.concat " | " (List.map type_to_sig_string types))
+  | Core.Types.TTuple types ->
+      Printf.sprintf "(tuple %s)"
+        (String.concat " " (List.map type_to_sig_string types))
+
+and param_to_sig_string = function
+  | Core.Types.PPositional ty -> type_to_sig_string ty
+  | Core.Types.POptional ty ->
+      Printf.sprintf "&optional %s" (type_to_sig_string ty)
+  | Core.Types.PRest ty -> Printf.sprintf "&rest %s" (type_to_sig_string ty)
+  | Core.Types.PKey (name, ty) ->
+      Printf.sprintf "&key :%s %s" name (type_to_sig_string ty)
+
+(** Format a polymorphic type with explicit type variable binders *)
+and type_to_sig_string_with_vars (vars : string list) (body : Core.Types.typ) :
+    string =
+  let body_str =
+    match Core.Types.repr body with
+    | Core.Types.TArrow (params, ret) ->
+        Printf.sprintf "(%s) -> %s"
+          (String.concat " " (List.map param_to_sig_string params))
+          (type_to_sig_string ret)
+    | _ -> type_to_sig_string body
+  in
+  if vars = [] then body_str
+  else Printf.sprintf "[%s] %s" (String.concat " " vars) body_str
+
+(** Generate a defun signature declaration string.
+
+    Given a function name and its type, generates: `(defun name (params) ->
+    return)` or `(defun name [vars] (params) -> return)` for polymorphic
+    functions *)
+let generate_defun_signature (name : string) (ty : Core.Types.typ) : string =
+  match Core.Types.repr ty with
+  | Core.Types.TForall (vars, Core.Types.TArrow (params, ret)) ->
+      Printf.sprintf "(defun %s [%s] (%s) -> %s)" name (String.concat " " vars)
+        (String.concat " " (List.map param_to_sig_string params))
+        (type_to_sig_string ret)
+  | Core.Types.TArrow (params, ret) ->
+      Printf.sprintf "(defun %s (%s) -> %s)" name
+        (String.concat " " (List.map param_to_sig_string params))
+        (type_to_sig_string ret)
+  | _ ->
+      (* Not a function type - shouldn't happen for defuns but handle gracefully *)
+      Printf.sprintf "(defvar %s %s)" name (type_to_sig_string ty)
+
+(** {1 Code Action Generation} *)
+
+(** Get the sibling .tart file path for an .el file *)
+let get_tart_path (el_filename : string) : string =
+  let dir = Filename.dirname el_filename in
+  let basename = Filename.basename el_filename in
+  let module_name =
+    if Filename.check_suffix basename ".el" then
+      Filename.chop_suffix basename ".el"
+    else basename
+  in
+  Filename.concat dir (module_name ^ ".tart")
+
+(** Read the content of a .tart file if it exists, or return empty string *)
+let read_tart_file (tart_path : string) : string option =
+  if Sys.file_exists tart_path then
+    try
+      let ic = In_channel.open_text tart_path in
+      let content = In_channel.input_all ic in
+      In_channel.close ic;
+      Some content
+    with _ -> None
+  else None
+
+(** Generate "Add type annotation" quickfix for a missing signature warning.
+
+    Creates a workspace edit that appends the function signature to the .tart
+    file. *)
+let generate_add_signature_action ~(name : string) ~(ty : Core.Types.typ)
+    ~(tart_path : string) ~(tart_content : string option) :
+    Protocol.code_action option =
+  let signature_str = generate_defun_signature name ty in
+  let tart_uri = "file://" ^ tart_path in
+
+  (* Calculate the position to insert - append at end of file *)
+  let insert_pos, new_text =
+    match tart_content with
+    | Some content ->
+        let lines = String.split_on_char '\n' content in
+        let line_count = List.length lines in
+        (* Insert on a new line at the end *)
+        let last_line_len =
+          match List.rev lines with [] -> 0 | last :: _ -> String.length last
+        in
+        ( { Protocol.line = line_count - 1; character = last_line_len },
+          "\n" ^ signature_str )
+    | None ->
+        (* File doesn't exist - create with just the signature *)
+        ({ Protocol.line = 0; character = 0 }, signature_str ^ "\n")
+  in
+
+  let edit : Protocol.text_edit =
+    { te_range = { start = insert_pos; end_ = insert_pos }; new_text }
+  in
+  let doc_edit : Protocol.text_document_edit =
+    { tde_uri = tart_uri; tde_version = None; edits = [ edit ] }
+  in
+  let workspace_edit : Protocol.workspace_edit =
+    { document_changes = [ doc_edit ] }
+  in
+
+  Some
+    {
+      Protocol.ca_title =
+        Printf.sprintf "Add signature for `%s` to .tart file" name;
+      ca_kind = Some Protocol.QuickFix;
+      ca_diagnostics = [];
+      ca_is_preferred = true;
+      ca_edit = Some workspace_edit;
+    }
+
 (** Handle textDocument/codeAction request.
 
-    Returns code actions available for the given range and context. The code
-    action framework provides hooks for quickfixes and refactorings. For now,
-    this returns an empty list as the base framework - specific actions like
-    "Add type annotation" will be added in subsequent tasks. *)
+    Returns code actions available for the given range and context. Generates
+    quickfixes for:
+    - Missing signature warnings: offers to add the function signature to the
+      .tart file *)
 let handle_code_action (server : t) (params : Yojson.Safe.t option) :
     (Yojson.Safe.t, Rpc.response_error) result =
   match params with
@@ -794,7 +937,7 @@ let handle_code_action (server : t) (params : Yojson.Safe.t option) :
           message = "Missing code action params";
           data = None;
         }
-  | Some json ->
+  | Some json -> (
       let ca_params = Protocol.parse_code_action_params json in
       let uri = ca_params.ca_text_document in
       let range = ca_params.ca_range in
@@ -806,8 +949,67 @@ let handle_code_action (server : t) (params : Yojson.Safe.t option) :
       debug server
         (Printf.sprintf "Context has %d diagnostics"
            (List.length context.cac_diagnostics));
-      (* Return empty list for now - framework is in place for adding actions *)
-      Ok (Protocol.code_action_result_to_json (Some []))
+
+      match Document.get_doc server.documents uri with
+      | None ->
+          debug server (Printf.sprintf "Document not found: %s" uri);
+          Ok (Protocol.code_action_result_to_json (Some []))
+      | Some doc ->
+          let filename = filename_of_uri uri in
+          let parse_result = Syntax.Read.parse_string ~filename doc.text in
+
+          if parse_result.sexps = [] then
+            Ok (Protocol.code_action_result_to_json (Some []))
+          else
+            (* Type-check to get missing signature warnings *)
+            let config = default_module_config () in
+            let check_result =
+              Typing.Module_check.check_module ~config ~filename
+                parse_result.sexps
+            in
+
+            (* Generate code actions for missing signatures *)
+            let tart_path = get_tart_path filename in
+            let tart_content = read_tart_file tart_path in
+
+            let missing_sig_actions =
+              List.filter_map
+                (fun (warn : Typing.Module_check.missing_signature_warning) ->
+                  (* Check if this warning's range overlaps with the request range *)
+                  let warn_range = range_of_span warn.span in
+                  let overlaps =
+                    warn_range.start.line <= range.end_.line
+                    && warn_range.end_.line >= range.start.line
+                  in
+                  if overlaps then (
+                    debug server
+                      (Printf.sprintf "Found missing signature for: %s"
+                         warn.name);
+                    (* Look up the inferred type from the environment *)
+                    match
+                      Core.Type_env.lookup warn.name check_result.final_env
+                    with
+                    | Some scheme ->
+                        let ty =
+                          match scheme with
+                          | Core.Type_env.Mono t -> t
+                          | Core.Type_env.Poly (vars, t) ->
+                              Core.Types.TForall (vars, t)
+                        in
+                        generate_add_signature_action ~name:warn.name ~ty
+                          ~tart_path ~tart_content
+                    | None ->
+                        debug server
+                          (Printf.sprintf "No type found for: %s" warn.name);
+                        None)
+                  else None)
+                check_result.missing_signature_warnings
+            in
+
+            debug server
+              (Printf.sprintf "Generated %d code actions"
+                 (List.length missing_sig_actions));
+            Ok (Protocol.code_action_result_to_json (Some missing_sig_actions)))
 
 (** Dispatch a request to its handler *)
 let dispatch_request (server : t) (msg : Rpc.message) :

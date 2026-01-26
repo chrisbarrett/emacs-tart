@@ -2325,6 +2325,304 @@ let test_code_action_capability_advertised () =
         "codeActionProvider is true" true
         (code_action_provider = `Bool true)
 
+(** Test that code action returns quickfix for missing signature.
+
+    Creates temp files with a .el file defining a function and an empty .tart
+    file, then verifies that a quickfix to add the signature is generated. *)
+let test_code_action_missing_signature_quickfix () =
+  (* Create temp directory with .el and .tart files *)
+  let temp_dir = Filename.temp_dir "tart_test" "" in
+  let el_path = Filename.concat temp_dir "test.el" in
+  let tart_path = Filename.concat temp_dir "test.tart" in
+
+  (* Write .el file with a function *)
+  Out_channel.with_open_text el_path (fun oc ->
+      output_string oc "(defun my-add (x y) (+ x y))");
+
+  (* Write empty .tart file (no declaration for my-add) *)
+  Out_channel.with_open_text tart_path (fun oc ->
+      output_string oc "; empty signature file\n");
+
+  let uri = "file://" ^ el_path in
+  let el_content = "(defun my-add (x y) (+ x y))" in
+
+  let init_msg =
+    make_message ~id:(`Int 1) ~method_:"initialize"
+      ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+      ()
+  in
+  let did_open_msg =
+    make_message ~method_:"textDocument/didOpen"
+      ~params:
+        (`Assoc
+           [
+             ( "textDocument",
+               `Assoc
+                 [
+                   ("uri", `String uri);
+                   ("languageId", `String "elisp");
+                   ("version", `Int 1);
+                   ("text", `String el_content);
+                 ] );
+           ])
+      ()
+  in
+  (* Code action request on line 0 where the defun is *)
+  let code_action_msg =
+    make_message ~id:(`Int 2) ~method_:"textDocument/codeAction"
+      ~params:
+        (`Assoc
+           [
+             ("textDocument", `Assoc [ ("uri", `String uri) ]);
+             ( "range",
+               `Assoc
+                 [
+                   ("start", `Assoc [ ("line", `Int 0); ("character", `Int 0) ]);
+                   ("end", `Assoc [ ("line", `Int 0); ("character", `Int 28) ]);
+                 ] );
+             ("context", `Assoc [ ("diagnostics", `List []) ]);
+           ])
+      ()
+  in
+  let shutdown_msg = make_message ~id:(`Int 3) ~method_:"shutdown" () in
+  let exit_msg = make_message ~method_:"exit" () in
+  let input =
+    init_msg ^ did_open_msg ^ code_action_msg ^ shutdown_msg ^ exit_msg
+  in
+  let in_file = Filename.temp_file "lsp_in" ".json" in
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
+  let ic = In_channel.open_bin in_file in
+  let out_file = Filename.temp_file "lsp_out" ".json" in
+  let oc = Out_channel.open_bin out_file in
+  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let exit_code = Server.run server in
+  In_channel.close ic;
+  Out_channel.close oc;
+  Alcotest.(check int) "exit code" 0 exit_code;
+  (* Parse output and find code action response *)
+  let output = In_channel.with_open_bin out_file In_channel.input_all in
+  let messages = parse_messages output in
+  match find_response messages 2 with
+  | None -> Alcotest.fail "No code action response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      Alcotest.(check bool) "result is not null" true (result <> `Null);
+      let actions = result |> to_list in
+      (* Should have exactly one quickfix action *)
+      Alcotest.(check int) "has one quickfix" 1 (List.length actions);
+      let action = List.hd actions in
+      (* Check the action title *)
+      let title = action |> member "title" |> to_string in
+      Alcotest.(check bool)
+        "title contains function name" true
+        (try
+           let _ = Str.search_forward (Str.regexp_string "my-add") title 0 in
+           true
+         with Not_found -> false);
+      (* Check action kind is quickfix *)
+      let kind = action |> member "kind" |> to_string in
+      Alcotest.(check string) "kind is quickfix" "quickfix" kind
+
+(** Test that the quickfix contains a valid workspace edit *)
+let test_code_action_quickfix_has_edit () =
+  let temp_dir = Filename.temp_dir "tart_test" "" in
+  let el_path = Filename.concat temp_dir "test.el" in
+  let tart_path = Filename.concat temp_dir "test.tart" in
+
+  Out_channel.with_open_text el_path (fun oc ->
+      output_string oc "(defun my-add (x y) (+ x y))");
+  Out_channel.with_open_text tart_path (fun oc -> output_string oc "");
+
+  let uri = "file://" ^ el_path in
+  let el_content = "(defun my-add (x y) (+ x y))" in
+
+  let init_msg =
+    make_message ~id:(`Int 1) ~method_:"initialize"
+      ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+      ()
+  in
+  let did_open_msg =
+    make_message ~method_:"textDocument/didOpen"
+      ~params:
+        (`Assoc
+           [
+             ( "textDocument",
+               `Assoc
+                 [
+                   ("uri", `String uri);
+                   ("languageId", `String "elisp");
+                   ("version", `Int 1);
+                   ("text", `String el_content);
+                 ] );
+           ])
+      ()
+  in
+  let code_action_msg =
+    make_message ~id:(`Int 2) ~method_:"textDocument/codeAction"
+      ~params:
+        (`Assoc
+           [
+             ("textDocument", `Assoc [ ("uri", `String uri) ]);
+             ( "range",
+               `Assoc
+                 [
+                   ("start", `Assoc [ ("line", `Int 0); ("character", `Int 0) ]);
+                   ("end", `Assoc [ ("line", `Int 0); ("character", `Int 28) ]);
+                 ] );
+             ("context", `Assoc [ ("diagnostics", `List []) ]);
+           ])
+      ()
+  in
+  let shutdown_msg = make_message ~id:(`Int 3) ~method_:"shutdown" () in
+  let exit_msg = make_message ~method_:"exit" () in
+  let input =
+    init_msg ^ did_open_msg ^ code_action_msg ^ shutdown_msg ^ exit_msg
+  in
+  let in_file = Filename.temp_file "lsp_in" ".json" in
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
+  let ic = In_channel.open_bin in_file in
+  let out_file = Filename.temp_file "lsp_out" ".json" in
+  let oc = Out_channel.open_bin out_file in
+  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let exit_code = Server.run server in
+  In_channel.close ic;
+  Out_channel.close oc;
+  Alcotest.(check int) "exit code" 0 exit_code;
+  let output = In_channel.with_open_bin out_file In_channel.input_all in
+  let messages = parse_messages output in
+  match find_response messages 2 with
+  | None -> Alcotest.fail "No code action response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      let actions = result |> to_list in
+      let action = List.hd actions in
+      (* Check that edit is present *)
+      let edit = action |> member "edit" in
+      Alcotest.(check bool) "has edit" true (edit <> `Null);
+      (* Check edit has documentChanges *)
+      let doc_changes = edit |> member "documentChanges" |> to_list in
+      Alcotest.(check int) "has one document change" 1 (List.length doc_changes);
+      (* Check the URI points to .tart file *)
+      let doc_change = List.hd doc_changes in
+      let text_document = doc_change |> member "textDocument" in
+      let target_uri = text_document |> member "uri" |> to_string in
+      Alcotest.(check bool)
+        "edit targets .tart file" true
+        (try
+           let _ =
+             Str.search_forward (Str.regexp_string ".tart") target_uri 0
+           in
+           true
+         with Not_found -> false);
+      (* Check the edit contains defun *)
+      let edits = doc_change |> member "edits" |> to_list in
+      let text_edit = List.hd edits in
+      let new_text = text_edit |> member "newText" |> to_string in
+      Alcotest.(check bool)
+        "new text contains defun" true
+        (try
+           let _ = Str.search_forward (Str.regexp_string "defun") new_text 0 in
+           true
+         with Not_found -> false);
+      Alcotest.(check bool)
+        "new text contains function name" true
+        (try
+           let _ = Str.search_forward (Str.regexp_string "my-add") new_text 0 in
+           true
+         with Not_found -> false)
+
+(** Test that code action respects range - only returns actions for overlapping
+    warnings *)
+let test_code_action_respects_range () =
+  let temp_dir = Filename.temp_dir "tart_test" "" in
+  let el_path = Filename.concat temp_dir "test.el" in
+  let tart_path = Filename.concat temp_dir "test.tart" in
+
+  (* Two functions: one on line 0, one on line 1 *)
+  Out_channel.with_open_text el_path (fun oc ->
+      output_string oc "(defun fn-one (x) (+ x 1))\n(defun fn-two (y) (+ y 2))");
+  Out_channel.with_open_text tart_path (fun oc -> output_string oc "");
+
+  let uri = "file://" ^ el_path in
+  let el_content = "(defun fn-one (x) (+ x 1))\n(defun fn-two (y) (+ y 2))" in
+
+  let init_msg =
+    make_message ~id:(`Int 1) ~method_:"initialize"
+      ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+      ()
+  in
+  let did_open_msg =
+    make_message ~method_:"textDocument/didOpen"
+      ~params:
+        (`Assoc
+           [
+             ( "textDocument",
+               `Assoc
+                 [
+                   ("uri", `String uri);
+                   ("languageId", `String "elisp");
+                   ("version", `Int 1);
+                   ("text", `String el_content);
+                 ] );
+           ])
+      ()
+  in
+  (* Request code action only on line 1 (second function) *)
+  let code_action_msg =
+    make_message ~id:(`Int 2) ~method_:"textDocument/codeAction"
+      ~params:
+        (`Assoc
+           [
+             ("textDocument", `Assoc [ ("uri", `String uri) ]);
+             ( "range",
+               `Assoc
+                 [
+                   ("start", `Assoc [ ("line", `Int 1); ("character", `Int 0) ]);
+                   ("end", `Assoc [ ("line", `Int 1); ("character", `Int 26) ]);
+                 ] );
+             ("context", `Assoc [ ("diagnostics", `List []) ]);
+           ])
+      ()
+  in
+  let shutdown_msg = make_message ~id:(`Int 3) ~method_:"shutdown" () in
+  let exit_msg = make_message ~method_:"exit" () in
+  let input =
+    init_msg ^ did_open_msg ^ code_action_msg ^ shutdown_msg ^ exit_msg
+  in
+  let in_file = Filename.temp_file "lsp_in" ".json" in
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
+  let ic = In_channel.open_bin in_file in
+  let out_file = Filename.temp_file "lsp_out" ".json" in
+  let oc = Out_channel.open_bin out_file in
+  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let exit_code = Server.run server in
+  In_channel.close ic;
+  Out_channel.close oc;
+  Alcotest.(check int) "exit code" 0 exit_code;
+  let output = In_channel.with_open_bin out_file In_channel.input_all in
+  let messages = parse_messages output in
+  match find_response messages 2 with
+  | None -> Alcotest.fail "No code action response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      let actions = result |> to_list in
+      (* Should only return action for fn-two, not fn-one *)
+      Alcotest.(check int) "returns one action" 1 (List.length actions);
+      let action = List.hd actions in
+      let title = action |> member "title" |> to_string in
+      Alcotest.(check bool)
+        "action is for fn-two" true
+        (try
+           let _ = Str.search_forward (Str.regexp_string "fn-two") title 0 in
+           true
+         with Not_found -> false)
+
 let () =
   Alcotest.run "server"
     [
@@ -2408,5 +2706,11 @@ let () =
             test_code_action_parses_context;
           Alcotest.test_case "capability advertised" `Quick
             test_code_action_capability_advertised;
+          Alcotest.test_case "missing signature quickfix" `Quick
+            test_code_action_missing_signature_quickfix;
+          Alcotest.test_case "quickfix has edit" `Quick
+            test_code_action_quickfix_has_edit;
+          Alcotest.test_case "respects range" `Quick
+            test_code_action_respects_range;
         ] );
     ]
