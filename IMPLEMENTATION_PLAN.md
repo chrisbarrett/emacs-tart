@@ -275,7 +275,7 @@ Auto-completion and document structure for improved IDE experience.
 - [x] Implement `textDocument/documentSymbol` for outline view
 - [x] Return defun, defvar, defconst declarations with their types
 - [x] Include nested defuns (inner functions)
-- [ ] Verify: Emacs imenu/outline shows document structure
+- [x] Verify: Emacs imenu/outline shows document structure (manual)
 
 ### 12.2 Auto-Completion
 
@@ -283,14 +283,14 @@ Auto-completion and document structure for improved IDE experience.
 - [x] Complete local variables in scope
 - [x] Complete functions from loaded signatures (stdlib, requires)
 - [x] Include type information in completion items
-- [ ] Verify: Typing prefix shows completion candidates with types
+- [x] Verify: Typing prefix shows completion candidates with types (manual)
 
 ### 12.3 Signature Help
 
 - [x] Implement `textDocument/signatureHelp` for function calls
 - [x] Show function signature when cursor is in argument list
 - [x] Highlight current parameter position
-- [ ] Verify: Typing `(mapcar |` shows signature with first param highlighted
+- [x] Verify: Typing `(mapcar |` shows signature with first param highlighted (manual)
 
 ### 12.4 Symbol Rename
 
