@@ -262,6 +262,65 @@ let build_alias_context (sig_file : signature) : alias_context =
        | _ -> ctx)
     empty_aliases sig_file.sig_decls
 
+(** {1 Opaque Type Context}
+
+    Opaque types are abstract types with no exposed structure.
+    Each opaque type generates a unique type constructor that cannot
+    unify with any other type except itself.
+
+    For a module "mymod" with opaque type "buffer", we generate
+    the type constructor "mymod/buffer" to ensure uniqueness.
+
+    Opaque types may have phantom type parameters, e.g.,
+    [(type tagged [a])] creates a type that can be instantiated
+    as [(tagged int)] or [(tagged string)], which are distinct. *)
+
+(** An opaque type declaration with its parameters *)
+type opaque_type = {
+  opaque_params : string list;  (** Phantom type parameters (e.g., [a] in tagged) *)
+  opaque_con : string;          (** The generated type constructor name *)
+}
+
+(** Context for opaque type lookup *)
+type opaque_context = (string * opaque_type) list
+
+(** Empty opaque context *)
+let empty_opaques : opaque_context = []
+
+(** Look up an opaque type *)
+let lookup_opaque (name : string) (ctx : opaque_context) : opaque_type option =
+  List.assoc_opt name ctx
+
+(** Add an opaque type to the context *)
+let add_opaque (name : string) (opaque : opaque_type) (ctx : opaque_context) : opaque_context =
+  (name, opaque) :: ctx
+
+(** Generate a unique type constructor name for an opaque type.
+    Format: module_name/type_name *)
+let opaque_con_name (module_name : string) (type_name : string) : string =
+  module_name ^ "/" ^ type_name
+
+(** Build opaque context from signature declarations.
+    Only includes type declarations without bodies (opaque types). *)
+let build_opaque_context (module_name : string) (sig_file : signature) : opaque_context =
+  List.fold_left
+    (fun ctx decl ->
+       match decl with
+       | DType d -> (
+           match d.type_body with
+           | None ->
+               (* Opaque type - generate unique constructor *)
+               let opaque = {
+                 opaque_params = List.map (fun b -> b.name) d.type_params;
+                 opaque_con = opaque_con_name module_name d.type_name;
+               } in
+               add_opaque d.type_name opaque ctx
+           | Some _ ->
+               (* Type alias - not opaque *)
+               ctx)
+       | _ -> ctx)
+    empty_opaques sig_file.sig_decls
+
 (** {1 Type Conversion}
 
     These functions convert signature AST types to the core type representation.
@@ -338,85 +397,137 @@ and substitute_sig_param subst = function
   | SPRest ty -> SPRest (substitute_sig_type subst ty)
   | SPKey (name, ty) -> SPKey (name, substitute_sig_type subst ty)
 
+(** {1 Type Context}
+
+    Combined context for type resolution during signature loading.
+    Contains both aliases and opaque types. *)
+
+type type_context = {
+  tc_aliases : alias_context;
+  tc_opaques : opaque_context;
+}
+
+let empty_type_context = {
+  tc_aliases = empty_aliases;
+  tc_opaques = empty_opaques;
+}
+
 (** Convert a signature type to a core type.
-    [aliases] is the alias context for expansion.
+    [ctx] is the type context containing aliases and opaques.
     [tvar_names] is the list of bound type variable names in scope. *)
-let rec sig_type_to_typ_with_aliases
-    (aliases : alias_context)
+let rec sig_type_to_typ_with_ctx
+    (ctx : type_context)
     (tvar_names : string list)
     (ty : sig_type) : Types.typ =
   match ty with
   | STVar (name, _) -> (
-      (* Type variable - could be a type variable OR a non-parameterized alias.
-         Check for alias first if not in tvar_names scope. *)
+      (* Type variable - could be a type variable, alias, or opaque.
+         Check for alias/opaque first if not in tvar_names scope. *)
       if List.mem name tvar_names then
         (* Definitely a bound type variable - keep as TCon for later substitution *)
         Types.TCon name
       else
-        match lookup_alias name aliases with
+        match lookup_alias name ctx.tc_aliases with
         | Some alias when alias.alias_params = [] ->
             (* Non-parameterized alias - expand it *)
-            sig_type_to_typ_with_aliases aliases tvar_names alias.alias_body
+            sig_type_to_typ_with_ctx ctx tvar_names alias.alias_body
         | _ ->
-            (* Not an alias or has parameters - treat as type variable/constructor *)
-            Types.TCon name)
+            (* Check for opaque type *)
+            match lookup_opaque name ctx.tc_opaques with
+            | Some opaque when opaque.opaque_params = [] ->
+                (* Non-parameterized opaque - use the unique constructor *)
+                Types.TCon opaque.opaque_con
+            | _ ->
+                (* Not an alias/opaque or has parameters - treat as type variable/constructor *)
+                Types.TCon name)
 
   | STCon (name, _) -> (
-      (* Type constant - check for alias first, then map primitives *)
-      match lookup_alias name aliases with
+      (* Type constant - check for alias first, then opaque, then map primitives *)
+      match lookup_alias name ctx.tc_aliases with
       | Some alias when alias.alias_params = [] ->
           (* Non-parameterized alias - expand it *)
-          sig_type_to_typ_with_aliases aliases tvar_names alias.alias_body
+          sig_type_to_typ_with_ctx ctx tvar_names alias.alias_body
       | _ ->
-          (* Not an alias or has parameters (needs args) *)
-          sig_name_to_prim name)
+          (* Check for opaque type *)
+          match lookup_opaque name ctx.tc_opaques with
+          | Some opaque when opaque.opaque_params = [] ->
+              (* Non-parameterized opaque - use the unique constructor *)
+              Types.TCon opaque.opaque_con
+          | _ ->
+              (* Not an alias/opaque or has parameters (needs args) *)
+              sig_name_to_prim name)
 
   | STApp (name, args, _) -> (
-      (* Type application - check for alias expansion *)
-      match lookup_alias name aliases with
+      (* Type application - check for alias expansion first *)
+      match lookup_alias name ctx.tc_aliases with
       | Some alias when List.length alias.alias_params = List.length args ->
           (* Parameterized alias - substitute args into body and expand *)
           let subst = List.combine alias.alias_params args in
           let expanded = substitute_sig_type subst alias.alias_body in
-          sig_type_to_typ_with_aliases aliases tvar_names expanded
+          sig_type_to_typ_with_ctx ctx tvar_names expanded
       | _ ->
-          (* Not an alias or arity mismatch - treat as type application *)
-          let arg_types = List.map (sig_type_to_typ_with_aliases aliases tvar_names) args in
-          Types.TApp (canonicalize_type_name name, arg_types))
+          (* Check for opaque type with phantom parameters *)
+          match lookup_opaque name ctx.tc_opaques with
+          | Some opaque when List.length opaque.opaque_params = List.length args ->
+              (* Parameterized opaque - create TApp with unique constructor and args *)
+              let arg_types = List.map (sig_type_to_typ_with_ctx ctx tvar_names) args in
+              Types.TApp (opaque.opaque_con, arg_types)
+          | _ ->
+              (* Not an alias/opaque or arity mismatch - treat as type application *)
+              let arg_types = List.map (sig_type_to_typ_with_ctx ctx tvar_names) args in
+              Types.TApp (canonicalize_type_name name, arg_types))
 
   | STArrow (params, ret, _) ->
       (* Function type *)
-      let param_types = List.map (sig_param_to_param_with_aliases aliases tvar_names) params in
-      let ret_type = sig_type_to_typ_with_aliases aliases tvar_names ret in
+      let param_types = List.map (sig_param_to_param_with_ctx ctx tvar_names) params in
+      let ret_type = sig_type_to_typ_with_ctx ctx tvar_names ret in
       Types.TArrow (param_types, ret_type)
 
   | STForall (binders, body, _) ->
       (* Polymorphic type - add binders to scope *)
       let new_vars = List.map (fun b -> b.name) binders in
       let inner_names = new_vars @ tvar_names in
-      let body_type = sig_type_to_typ_with_aliases aliases inner_names body in
+      let body_type = sig_type_to_typ_with_ctx ctx inner_names body in
       Types.TForall (new_vars, body_type)
 
   | STUnion (types, _) ->
       (* Union type *)
-      let type_list = List.map (sig_type_to_typ_with_aliases aliases tvar_names) types in
+      let type_list = List.map (sig_type_to_typ_with_ctx ctx tvar_names) types in
       Types.TUnion type_list
 
   | STTuple (types, _) ->
       (* Tuple type *)
-      let type_list = List.map (sig_type_to_typ_with_aliases aliases tvar_names) types in
+      let type_list = List.map (sig_type_to_typ_with_ctx ctx tvar_names) types in
       Types.TTuple type_list
 
-(** Convert a signature parameter to a core parameter with alias expansion *)
-and sig_param_to_param_with_aliases
-    (aliases : alias_context)
+(** Convert a signature parameter to a core parameter with type context *)
+and sig_param_to_param_with_ctx
+    (ctx : type_context)
     (tvar_names : string list)
     (p : sig_param) : Types.param =
   match p with
-  | SPPositional ty -> Types.PPositional (sig_type_to_typ_with_aliases aliases tvar_names ty)
-  | SPOptional ty -> Types.POptional (sig_type_to_typ_with_aliases aliases tvar_names ty)
-  | SPRest ty -> Types.PRest (sig_type_to_typ_with_aliases aliases tvar_names ty)
-  | SPKey (name, ty) -> Types.PKey (name, sig_type_to_typ_with_aliases aliases tvar_names ty)
+  | SPPositional ty -> Types.PPositional (sig_type_to_typ_with_ctx ctx tvar_names ty)
+  | SPOptional ty -> Types.POptional (sig_type_to_typ_with_ctx ctx tvar_names ty)
+  | SPRest ty -> Types.PRest (sig_type_to_typ_with_ctx ctx tvar_names ty)
+  | SPKey (name, ty) -> Types.PKey (name, sig_type_to_typ_with_ctx ctx tvar_names ty)
+
+(** Convert a signature type to a core type with alias expansion.
+    [aliases] is the alias context for expansion.
+    [tvar_names] is the list of bound type variable names in scope. *)
+let sig_type_to_typ_with_aliases
+    (aliases : alias_context)
+    (tvar_names : string list)
+    (ty : sig_type) : Types.typ =
+  let ctx = { tc_aliases = aliases; tc_opaques = empty_opaques } in
+  sig_type_to_typ_with_ctx ctx tvar_names ty
+
+(** Convert a signature parameter to a core parameter with alias expansion *)
+let sig_param_to_param_with_aliases
+    (aliases : alias_context)
+    (tvar_names : string list)
+    (p : sig_param) : Types.param =
+  let ctx = { tc_aliases = aliases; tc_opaques = empty_opaques } in
+  sig_param_to_param_with_ctx ctx tvar_names p
 
 (** Convert a signature type to a core type (without alias expansion).
     [tvar_names] is the list of bound type variable names in scope. *)
@@ -431,40 +542,40 @@ let sig_param_to_param (tvar_names : string list) (p : sig_param) : Types.param 
 
     These functions convert signature declarations to type environment entries. *)
 
-(** Convert a defun declaration to a type scheme with alias expansion.
+(** Convert a defun declaration to a type scheme with full type context.
     Returns a Poly scheme if the function has type parameters,
     otherwise a Mono scheme with an arrow type. *)
-let load_defun_with_aliases (aliases : alias_context) (d : defun_decl) : Type_env.scheme =
+let load_defun_with_ctx (ctx : type_context) (d : defun_decl) : Type_env.scheme =
   let tvar_names = List.map (fun b -> b.name) d.defun_tvar_binders in
-  let params = List.map (sig_param_to_param_with_aliases aliases tvar_names) d.defun_params in
-  let ret = sig_type_to_typ_with_aliases aliases tvar_names d.defun_return in
+  let params = List.map (sig_param_to_param_with_ctx ctx tvar_names) d.defun_params in
+  let ret = sig_type_to_typ_with_ctx ctx tvar_names d.defun_return in
   let arrow = Types.TArrow (params, ret) in
   if tvar_names = [] then
     Type_env.Mono arrow
   else
     Type_env.Poly (tvar_names, arrow)
 
-(** Convert a defvar declaration to a type scheme with alias expansion.
+(** Convert a defvar declaration to a type scheme with full type context.
     The type may be polymorphic if it contains a forall. *)
-let load_defvar_with_aliases (aliases : alias_context) (d : defvar_decl) : Type_env.scheme =
+let load_defvar_with_ctx (ctx : type_context) (d : defvar_decl) : Type_env.scheme =
   match d.defvar_type with
   | STForall (binders, body, _) ->
       (* Polymorphic variable - extract quantifiers *)
       let tvar_names = List.map (fun b -> b.name) binders in
-      let body_type = sig_type_to_typ_with_aliases aliases tvar_names body in
+      let body_type = sig_type_to_typ_with_ctx ctx tvar_names body in
       Type_env.Poly (tvar_names, body_type)
   | _ ->
       (* Monomorphic variable *)
-      let ty = sig_type_to_typ_with_aliases aliases [] d.defvar_type in
+      let ty = sig_type_to_typ_with_ctx ctx [] d.defvar_type in
       Type_env.Mono ty
 
-(** Convert a defun declaration to a type scheme (without alias expansion). *)
+(** Convert a defun declaration to a type scheme (without alias/opaque expansion). *)
 let load_defun (d : defun_decl) : Type_env.scheme =
-  load_defun_with_aliases empty_aliases d
+  load_defun_with_ctx empty_type_context d
 
-(** Convert a defvar declaration to a type scheme (without alias expansion). *)
+(** Convert a defvar declaration to a type scheme (without alias/opaque expansion). *)
 let load_defvar (d : defvar_decl) : Type_env.scheme =
-  load_defvar_with_aliases empty_aliases d
+  load_defvar_with_ctx empty_type_context d
 
 (** {1 Signature Loading}
 
@@ -472,12 +583,14 @@ let load_defvar (d : defvar_decl) : Type_env.scheme =
 
 (** Load a validated signature into a type environment.
     Adds all function and variable declarations to the environment.
-    Type aliases are expanded during loading.
+    Type aliases are expanded and opaque types are resolved during loading.
     Returns the extended environment. *)
 let load_signature (env : Type_env.t) (sig_file : signature) : Type_env.t =
-  (* First pass: collect type aliases for expansion *)
+  (* First pass: collect type aliases and opaque types *)
   let aliases = build_alias_context sig_file in
-  (* Second pass: load declarations with alias expansion *)
+  let opaques = build_opaque_context sig_file.sig_module sig_file in
+  let ctx = { tc_aliases = aliases; tc_opaques = opaques } in
+  (* Second pass: load declarations with full type context *)
   List.fold_left
     (fun acc decl ->
        match decl with
@@ -485,10 +598,10 @@ let load_signature (env : Type_env.t) (sig_file : signature) : Type_env.t =
            (* Module directives - not handled yet *)
            acc
        | DDefun d ->
-           let scheme = load_defun_with_aliases aliases d in
+           let scheme = load_defun_with_ctx ctx d in
            Type_env.extend d.defun_name scheme acc
        | DDefvar d ->
-           let scheme = load_defvar_with_aliases aliases d in
+           let scheme = load_defvar_with_ctx ctx d in
            Type_env.extend d.defvar_name scheme acc
        | DType _ | DImportStruct _ ->
            (* Type declarations - not adding to value environment *)

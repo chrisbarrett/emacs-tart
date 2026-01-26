@@ -304,6 +304,95 @@ let test_type_alias_with_poly_fn () =
   (* (wrapper Int) expands to (List Int) *)
   Alcotest.(check string) "result is list int" "(List Int)" (Types.to_string ty)
 
+(** {1 Opaque Type Tests (R9, R10)}
+
+    These tests verify that opaque types work as distinct abstract types. *)
+
+(** Test that opaque types are distinct from each other.
+    R9: buffer and handle are separate distinct opaque types *)
+let test_opaque_types_distinct () =
+  let sig_src = {|
+    (type buffer)
+    (type handle)
+    (defun get-buffer () -> buffer)
+    (defun get-handle () -> handle)
+    (defun use-buffer (buffer) -> nil)
+  |} in
+  let env = load_sig_str sig_src in
+  (* Trying to use a handle where buffer is expected should fail *)
+  let _, errors = check_expr_str ~env "(use-buffer (get-handle))" in
+  Alcotest.(check bool) "type error for wrong opaque type" true (List.length errors > 0)
+
+(** Test that opaque types can only be created/consumed via declared functions.
+    R9: Values can only be created/consumed via functions declared in the same module *)
+let test_opaque_type_creation () =
+  let sig_src = {|
+    (type buffer)
+    (defun get-buffer () -> buffer)
+    (defun use-buffer (buffer) -> nil)
+  |} in
+  let env = load_sig_str sig_src in
+  (* Valid: use buffer returned from get-buffer *)
+  let _, errors = check_expr_str ~env "(use-buffer (get-buffer))" in
+  Alcotest.(check int) "no errors for valid opaque use" 0 (List.length errors)
+
+(** Test that opaque types don't unify with other types.
+    R9: Opaque types are not unifiable with other types *)
+let test_opaque_vs_other_types () =
+  let sig_src = {|
+    (type buffer)
+    (defun use-buffer (buffer) -> nil)
+  |} in
+  let env = load_sig_str sig_src in
+  (* Trying to pass an int where buffer is expected should fail *)
+  let _, errors = check_expr_str ~env "(use-buffer 42)" in
+  Alcotest.(check bool) "type error for int vs opaque" true (List.length errors > 0)
+
+(** Test opaque types with phantom type parameters.
+    R10: (tagged int) and (tagged string) are distinct types *)
+let test_opaque_phantom_params () =
+  let sig_src = {|
+    (type tagged [a])
+    (defun make-int-tagged () -> (tagged int))
+    (defun make-string-tagged () -> (tagged string))
+    (defun use-int-tagged ((tagged int)) -> nil)
+  |} in
+  let env = load_sig_str sig_src in
+  (* Valid: use int-tagged with int-tagged *)
+  let _, errors1 = check_expr_str ~env "(use-int-tagged (make-int-tagged))" in
+  Alcotest.(check int) "no errors for matching phantom" 0 (List.length errors1);
+  (* Invalid: use string-tagged where int-tagged expected *)
+  let _, errors2 = check_expr_str ~env "(use-int-tagged (make-string-tagged))" in
+  Alcotest.(check bool) "type error for mismatched phantom" true (List.length errors2 > 0)
+
+(** Test opaque type in return position.
+    R9: Opaque types work correctly in function return types *)
+let test_opaque_return_type () =
+  let sig_src = {|
+    (type buffer)
+    (defun create-buffer (string) -> buffer)
+  |} in
+  let env = load_sig_str sig_src in
+  let ty, errors = check_expr_str ~env "(create-buffer \"test\")" in
+  Alcotest.(check int) "no type errors" 0 (List.length errors);
+  (* The type should contain the module-qualified opaque name *)
+  Alcotest.(check bool) "returns opaque buffer type"
+    true (String.sub (Types.to_string ty) 0 4 = "test")
+
+(** Test opaque type used in polymorphic function.
+    R9, R10: Opaque types work with polymorphic signatures *)
+let test_opaque_with_polymorphism () =
+  let sig_src = {|
+    (type box [a])
+    (defun box [a] (a) -> (box a))
+    (defun unbox [a] ((box a)) -> a)
+  |} in
+  let env = load_sig_str sig_src in
+  (* Boxing and unboxing should preserve the inner type *)
+  let ty, errors = check_expr_str ~env "(unbox (box 42))" in
+  Alcotest.(check int) "no type errors" 0 (List.length errors);
+  Alcotest.(check string) "unbox returns inner type" "Int" (Types.to_string ty)
+
 let () =
   Alcotest.run "sig_loader"
     [
@@ -346,5 +435,14 @@ let () =
           Alcotest.test_case "type alias defvar" `Quick test_type_alias_defvar;
           Alcotest.test_case "nested type alias" `Quick test_nested_type_alias;
           Alcotest.test_case "type alias with poly fn" `Quick test_type_alias_with_poly_fn;
+        ] );
+      ( "opaque-types",
+        [
+          Alcotest.test_case "opaque types distinct" `Quick test_opaque_types_distinct;
+          Alcotest.test_case "opaque type creation" `Quick test_opaque_type_creation;
+          Alcotest.test_case "opaque vs other types" `Quick test_opaque_vs_other_types;
+          Alcotest.test_case "opaque phantom params" `Quick test_opaque_phantom_params;
+          Alcotest.test_case "opaque return type" `Quick test_opaque_return_type;
+          Alcotest.test_case "opaque with polymorphism" `Quick test_opaque_with_polymorphism;
         ] );
     ]

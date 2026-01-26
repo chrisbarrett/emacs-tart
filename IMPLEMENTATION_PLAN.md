@@ -17,9 +17,9 @@ Foundation for module boundaries and type-checked code.
 - [x] Verify: Aliases expand correctly in type expressions
 
 ### 1.3 Opaque Types
-- [ ] [R9] Load opaque types (no definition) as distinct abstract types
-- [ ] [R10] Handle opaque types with phantom type parameters
-- [ ] Verify: Opaque types not unifiable with other types
+- [x] [R9] Load opaque types (no definition) as distinct abstract types
+- [x] [R10] Handle opaque types with phantom type parameters
+- [x] Verify: Opaque types not unifiable with other types
 
 ### 1.4 Module Directives
 - [ ] [R12] Implement `open` directive (import types, not re-export)

@@ -77,6 +77,31 @@ val lookup_alias : string -> alias_context -> type_alias option
     Only includes type declarations with bodies (aliases, not opaque types). *)
 val build_alias_context : Sig_ast.signature -> alias_context
 
+(** {1 Opaque Type Context} *)
+
+(** An opaque type declaration with its parameters *)
+type opaque_type = {
+  opaque_params : string list;  (** Phantom type parameters (e.g., [a] in tagged) *)
+  opaque_con : string;          (** The generated type constructor name *)
+}
+
+(** Context for opaque type lookup *)
+type opaque_context
+
+(** Empty opaque context *)
+val empty_opaques : opaque_context
+
+(** Look up an opaque type *)
+val lookup_opaque : string -> opaque_context -> opaque_type option
+
+(** Generate a unique type constructor name for an opaque type.
+    Format: module_name/type_name *)
+val opaque_con_name : string -> string -> string
+
+(** Build opaque context from signature declarations.
+    Only includes type declarations without bodies (opaque types). *)
+val build_opaque_context : string -> Sig_ast.signature -> opaque_context
+
 (** {1 Type Conversion} *)
 
 (** Convert a signature type to a core type with alias expansion.

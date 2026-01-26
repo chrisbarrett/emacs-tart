@@ -254,8 +254,8 @@ Minimum coverage:
 - [x] [R6] Handle variable declarations
 - [x] [R7] Handle type aliases (with definition)
 - [x] [R8] Handle parameterized type aliases
-- [ ] [R9] Handle opaque types (no definition)
-- [ ] [R10] Handle opaque types with phantom parameters
+- [x] [R9] Handle opaque types (no definition)
+- [x] [R10] Handle opaque types with phantom parameters
 - [ ] [R11] Handle struct imports
 - [ ] [R12] Handle open directive (import types)
 - [ ] [R13] Handle include directive (re-export declarations)
