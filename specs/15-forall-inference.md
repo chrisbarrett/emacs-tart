@@ -106,11 +106,11 @@ No new files; extends `lib/sig/sig_parser.ml` and related modules.
 
 ## Tasks
 
-- [ ] [R1] Collect type vars; order by first occurrence
-- [ ] [R2] Detect explicit quantifiers; error on unbound vars
-- [ ] [R3] Handle phantom type variables
-- [ ] [R4] Distinguish literals from type variables
-- [ ] [R5] Traverse nested arrow types
-- [ ] [R6] Deduplicate quantifier list
+- [x] [R1] Collect type vars; order by first occurrence
+- [x] [R2] Detect explicit quantifiers; error on unbound vars
+- [x] [R3] Handle phantom type variables
+- [x] [R4] Distinguish literals from type variables
+- [x] [R5] Traverse nested arrow types
+- [x] [R6] Deduplicate quantifier list
 
 Run review agent after R1 and R2 work before proceeding to other specs.

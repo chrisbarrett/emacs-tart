@@ -86,17 +86,17 @@ Reduces boilerplate in signature files.
 
 ### 4.1 Implicit Quantification
 
-- [ ] [R1] Collect type variables in left-to-right first-occurrence order
-- [ ] [R2] Explicit quantifiers disable inference; error on unbound vars
-- [ ] Verify: `(defun seq-map (((a -> b)) (seq a)) -> (list b))` infers `[a b]`
+- [x] [R1] Collect type variables in left-to-right first-occurrence order
+- [x] [R2] Explicit quantifiers disable inference; error on unbound vars
+- [x] Verify: `(defun seq-map (((a -> b)) (seq a)) -> (list b))` infers `[a b]`
 
 ### 4.2 Edge Cases
 
-- [ ] [R3] Handle phantom type variables (only in return type)
-- [ ] [R4] Distinguish quoted literals from type variables
-- [ ] [R5] Traverse nested arrow types for variable collection
-- [ ] [R6] Deduplicate quantifier list
-- [ ] Verify: Inference handles all grammar productions
+- [x] [R3] Handle phantom type variables (only in return type)
+- [x] [R4] Distinguish quoted literals from type variables
+- [x] [R5] Traverse nested arrow types for variable collection
+- [x] [R6] Deduplicate quantifier list
+- [x] Verify: Inference handles all grammar productions
 
 ## Phase 5: Module Boundaries (Spec 12)
 

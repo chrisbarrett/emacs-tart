@@ -687,6 +687,13 @@ let load_import_struct
     - open: Import types for use in signatures (not re-exported to value env)
     - include: Inline all declarations (types available AND values re-exported) *)
 
+(** Get the names of all known types from the current state.
+    This is used to avoid inferring type constructors as type variables. *)
+let get_known_types_from_state (state : load_state) : string list =
+  let alias_names = List.map fst state.ls_type_ctx.tc_aliases in
+  let opaque_names = List.map fst state.ls_type_ctx.tc_opaques in
+  alias_names @ opaque_names
+
 (** Process an 'open' directive.
     Imports types from another module for use in type expressions.
     Types are NOT re-exported; they are only available for signature writing.
@@ -743,7 +750,9 @@ let rec process_include (module_name : string) (state : load_state) : load_state
         load_decls_into_state included_sig state
 
 (** Load declarations from a signature into the load state.
-    Handles all declaration types including open/include recursively. *)
+    Handles all declaration types including open/include recursively.
+    Forall inference is applied per-declaration using the accumulated
+    type context, so types from includes/opens are known. *)
 and load_decls_into_state (sig_file : signature) (state : load_state) : load_state =
   List.fold_left
     (fun state decl ->
@@ -753,6 +762,9 @@ and load_decls_into_state (sig_file : signature) (state : load_state) : load_sta
        | DInclude (name, _) ->
            process_include name state
        | DType d ->
+           (* Apply inference to type declaration using current known types *)
+           let known_types = get_known_types_from_state state in
+           let d = Forall_infer.infer_type_decl ~known_types d in
            (* Add to type context *)
            (match d.type_body with
             | Some body ->
@@ -770,6 +782,9 @@ and load_decls_into_state (sig_file : signature) (state : load_state) : load_sta
                 } in
                 add_opaque_to_state d.type_name opaque state)
        | DDefun d ->
+           (* Apply inference to defun using current known types *)
+           let known_types = get_known_types_from_state state in
+           let d = Forall_infer.infer_defun ~known_types d in
            let scheme = load_defun_with_ctx state.ls_type_ctx d in
            add_value_to_state d.defun_name scheme state
        | DDefvar d ->
@@ -784,6 +799,8 @@ and load_decls_into_state (sig_file : signature) (state : load_state) : load_sta
     Load an entire signature file into a type environment. *)
 
 (** Load a validated signature into a type environment with module resolution.
+    Applies forall inference per-declaration during loading, using accumulated
+    type context so that types from includes/opens are recognized.
     Adds all function and variable declarations to the environment.
     Type aliases are expanded and opaque types are resolved during loading.
     Open directives import types only; include directives re-export values.
@@ -802,6 +819,7 @@ let load_signature_with_resolver
 
 (** Load a validated signature into a type environment.
     This is the simple interface without module resolution.
+    Applies forall inference per-declaration during loading.
     Open and include directives will be ignored (no resolver provided).
     Adds all function and variable declarations to the environment.
     Type aliases are expanded and opaque types are resolved during loading.
