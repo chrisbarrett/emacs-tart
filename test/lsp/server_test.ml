@@ -2890,6 +2890,353 @@ let test_extract_function_captures_free_vars () =
            true
          with Not_found -> false)
 
+(** {1 Document Symbol Tests} *)
+
+(** Test that document symbol returns defun definitions *)
+let test_document_symbol_defun () =
+  let init_msg =
+    make_message ~id:(`Int 1) ~method_:"initialize"
+      ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+      ()
+  in
+  let did_open_msg =
+    make_message ~method_:"textDocument/didOpen"
+      ~params:
+        (`Assoc
+           [
+             ( "textDocument",
+               `Assoc
+                 [
+                   ("uri", `String "file:///test.el");
+                   ("languageId", `String "elisp");
+                   ("version", `Int 1);
+                   ("text", `String "(defun my-func (x y) (+ x y))");
+                 ] );
+           ])
+      ()
+  in
+  let doc_symbol_msg =
+    make_message ~id:(`Int 2) ~method_:"textDocument/documentSymbol"
+      ~params:
+        (`Assoc
+           [ ("textDocument", `Assoc [ ("uri", `String "file:///test.el") ]) ])
+      ()
+  in
+  let shutdown_msg = make_message ~id:(`Int 3) ~method_:"shutdown" () in
+  let exit_msg = make_message ~method_:"exit" () in
+  let input =
+    init_msg ^ did_open_msg ^ doc_symbol_msg ^ shutdown_msg ^ exit_msg
+  in
+  let in_file = Filename.temp_file "lsp_in" ".json" in
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
+  let ic = In_channel.open_bin in_file in
+  let out_file = Filename.temp_file "lsp_out" ".json" in
+  let oc = Out_channel.open_bin out_file in
+  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let exit_code = Server.run server in
+  In_channel.close ic;
+  Out_channel.close oc;
+  Alcotest.(check int) "exit code" 0 exit_code;
+  let output = In_channel.with_open_bin out_file In_channel.input_all in
+  let messages = parse_messages output in
+  match find_response messages 2 with
+  | None -> Alcotest.fail "No document symbol response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      Alcotest.(check bool) "result is not null" true (result <> `Null);
+      let symbols = result |> to_list in
+      Alcotest.(check int) "has one symbol" 1 (List.length symbols);
+      let symbol = List.hd symbols in
+      let name = symbol |> member "name" |> to_string in
+      Alcotest.(check string) "name is my-func" "my-func" name;
+      (* kind 12 = Function *)
+      let kind = symbol |> member "kind" |> to_int in
+      Alcotest.(check int) "kind is Function" 12 kind;
+      (* Check detail includes params *)
+      let detail = symbol |> member "detail" |> to_string in
+      Alcotest.(check string) "detail shows params" "(x y)" detail
+
+(** Test that document symbol returns defvar definitions *)
+let test_document_symbol_defvar () =
+  let init_msg =
+    make_message ~id:(`Int 1) ~method_:"initialize"
+      ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+      ()
+  in
+  let did_open_msg =
+    make_message ~method_:"textDocument/didOpen"
+      ~params:
+        (`Assoc
+           [
+             ( "textDocument",
+               `Assoc
+                 [
+                   ("uri", `String "file:///test.el");
+                   ("languageId", `String "elisp");
+                   ("version", `Int 1);
+                   ("text", `String "(defvar my-var 42)");
+                 ] );
+           ])
+      ()
+  in
+  let doc_symbol_msg =
+    make_message ~id:(`Int 2) ~method_:"textDocument/documentSymbol"
+      ~params:
+        (`Assoc
+           [ ("textDocument", `Assoc [ ("uri", `String "file:///test.el") ]) ])
+      ()
+  in
+  let shutdown_msg = make_message ~id:(`Int 3) ~method_:"shutdown" () in
+  let exit_msg = make_message ~method_:"exit" () in
+  let input =
+    init_msg ^ did_open_msg ^ doc_symbol_msg ^ shutdown_msg ^ exit_msg
+  in
+  let in_file = Filename.temp_file "lsp_in" ".json" in
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
+  let ic = In_channel.open_bin in_file in
+  let out_file = Filename.temp_file "lsp_out" ".json" in
+  let oc = Out_channel.open_bin out_file in
+  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let exit_code = Server.run server in
+  In_channel.close ic;
+  Out_channel.close oc;
+  Alcotest.(check int) "exit code" 0 exit_code;
+  let output = In_channel.with_open_bin out_file In_channel.input_all in
+  let messages = parse_messages output in
+  match find_response messages 2 with
+  | None -> Alcotest.fail "No document symbol response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      let symbols = result |> to_list in
+      Alcotest.(check int) "has one symbol" 1 (List.length symbols);
+      let symbol = List.hd symbols in
+      let name = symbol |> member "name" |> to_string in
+      Alcotest.(check string) "name is my-var" "my-var" name;
+      (* kind 13 = Variable *)
+      let kind = symbol |> member "kind" |> to_int in
+      Alcotest.(check int) "kind is Variable" 13 kind
+
+(** Test that document symbol returns defconst definitions *)
+let test_document_symbol_defconst () =
+  let init_msg =
+    make_message ~id:(`Int 1) ~method_:"initialize"
+      ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+      ()
+  in
+  let did_open_msg =
+    make_message ~method_:"textDocument/didOpen"
+      ~params:
+        (`Assoc
+           [
+             ( "textDocument",
+               `Assoc
+                 [
+                   ("uri", `String "file:///test.el");
+                   ("languageId", `String "elisp");
+                   ("version", `Int 1);
+                   ("text", `String "(defconst my-const 100)");
+                 ] );
+           ])
+      ()
+  in
+  let doc_symbol_msg =
+    make_message ~id:(`Int 2) ~method_:"textDocument/documentSymbol"
+      ~params:
+        (`Assoc
+           [ ("textDocument", `Assoc [ ("uri", `String "file:///test.el") ]) ])
+      ()
+  in
+  let shutdown_msg = make_message ~id:(`Int 3) ~method_:"shutdown" () in
+  let exit_msg = make_message ~method_:"exit" () in
+  let input =
+    init_msg ^ did_open_msg ^ doc_symbol_msg ^ shutdown_msg ^ exit_msg
+  in
+  let in_file = Filename.temp_file "lsp_in" ".json" in
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
+  let ic = In_channel.open_bin in_file in
+  let out_file = Filename.temp_file "lsp_out" ".json" in
+  let oc = Out_channel.open_bin out_file in
+  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let exit_code = Server.run server in
+  In_channel.close ic;
+  Out_channel.close oc;
+  Alcotest.(check int) "exit code" 0 exit_code;
+  let output = In_channel.with_open_bin out_file In_channel.input_all in
+  let messages = parse_messages output in
+  match find_response messages 2 with
+  | None -> Alcotest.fail "No document symbol response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      let symbols = result |> to_list in
+      Alcotest.(check int) "has one symbol" 1 (List.length symbols);
+      let symbol = List.hd symbols in
+      let name = symbol |> member "name" |> to_string in
+      Alcotest.(check string) "name is my-const" "my-const" name;
+      (* kind 14 = Constant *)
+      let kind = symbol |> member "kind" |> to_int in
+      Alcotest.(check int) "kind is Constant" 14 kind
+
+(** Test that document symbol returns defmacro definitions *)
+let test_document_symbol_defmacro () =
+  let init_msg =
+    make_message ~id:(`Int 1) ~method_:"initialize"
+      ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+      ()
+  in
+  let did_open_msg =
+    make_message ~method_:"textDocument/didOpen"
+      ~params:
+        (`Assoc
+           [
+             ( "textDocument",
+               `Assoc
+                 [
+                   ("uri", `String "file:///test.el");
+                   ("languageId", `String "elisp");
+                   ("version", `Int 1);
+                   ("text", `String "(defmacro my-macro (body) `(progn ,body))");
+                 ] );
+           ])
+      ()
+  in
+  let doc_symbol_msg =
+    make_message ~id:(`Int 2) ~method_:"textDocument/documentSymbol"
+      ~params:
+        (`Assoc
+           [ ("textDocument", `Assoc [ ("uri", `String "file:///test.el") ]) ])
+      ()
+  in
+  let shutdown_msg = make_message ~id:(`Int 3) ~method_:"shutdown" () in
+  let exit_msg = make_message ~method_:"exit" () in
+  let input =
+    init_msg ^ did_open_msg ^ doc_symbol_msg ^ shutdown_msg ^ exit_msg
+  in
+  let in_file = Filename.temp_file "lsp_in" ".json" in
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
+  let ic = In_channel.open_bin in_file in
+  let out_file = Filename.temp_file "lsp_out" ".json" in
+  let oc = Out_channel.open_bin out_file in
+  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let exit_code = Server.run server in
+  In_channel.close ic;
+  Out_channel.close oc;
+  Alcotest.(check int) "exit code" 0 exit_code;
+  let output = In_channel.with_open_bin out_file In_channel.input_all in
+  let messages = parse_messages output in
+  match find_response messages 2 with
+  | None -> Alcotest.fail "No document symbol response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      let symbols = result |> to_list in
+      Alcotest.(check int) "has one symbol" 1 (List.length symbols);
+      let symbol = List.hd symbols in
+      let name = symbol |> member "name" |> to_string in
+      Alcotest.(check string) "name is my-macro" "my-macro" name;
+      (* kind 6 = Method (used for macros) *)
+      let kind = symbol |> member "kind" |> to_int in
+      Alcotest.(check int) "kind is Method" 6 kind;
+      let detail = symbol |> member "detail" |> to_string in
+      Alcotest.(check string) "detail shows params" "(body)" detail
+
+(** Test that document symbol capability is advertised *)
+let test_document_symbol_capability () =
+  let init_msg =
+    make_message ~id:(`Int 1) ~method_:"initialize"
+      ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+      ()
+  in
+  let shutdown_msg = make_message ~id:(`Int 2) ~method_:"shutdown" () in
+  let exit_msg = make_message ~method_:"exit" () in
+  let input = init_msg ^ shutdown_msg ^ exit_msg in
+  let in_file = Filename.temp_file "lsp_in" ".json" in
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
+  let ic = In_channel.open_bin in_file in
+  let out_file = Filename.temp_file "lsp_out" ".json" in
+  let oc = Out_channel.open_bin out_file in
+  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let exit_code = Server.run server in
+  In_channel.close ic;
+  Out_channel.close oc;
+  Alcotest.(check int) "exit code" 0 exit_code;
+  let output = In_channel.with_open_bin out_file In_channel.input_all in
+  let messages = parse_messages output in
+  match find_response messages 1 with
+  | None -> Alcotest.fail "No initialize response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      let caps = result |> member "capabilities" in
+      let doc_symbol_provider = caps |> member "documentSymbolProvider" in
+      Alcotest.(check bool)
+        "documentSymbolProvider is true" true
+        (doc_symbol_provider = `Bool true)
+
+(** Test that document symbol returns empty list for document with no defs *)
+let test_document_symbol_empty () =
+  let init_msg =
+    make_message ~id:(`Int 1) ~method_:"initialize"
+      ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+      ()
+  in
+  let did_open_msg =
+    make_message ~method_:"textDocument/didOpen"
+      ~params:
+        (`Assoc
+           [
+             ( "textDocument",
+               `Assoc
+                 [
+                   ("uri", `String "file:///test.el");
+                   ("languageId", `String "elisp");
+                   ("version", `Int 1);
+                   ("text", `String "(+ 1 2)");
+                 ] );
+           ])
+      ()
+  in
+  let doc_symbol_msg =
+    make_message ~id:(`Int 2) ~method_:"textDocument/documentSymbol"
+      ~params:
+        (`Assoc
+           [ ("textDocument", `Assoc [ ("uri", `String "file:///test.el") ]) ])
+      ()
+  in
+  let shutdown_msg = make_message ~id:(`Int 3) ~method_:"shutdown" () in
+  let exit_msg = make_message ~method_:"exit" () in
+  let input =
+    init_msg ^ did_open_msg ^ doc_symbol_msg ^ shutdown_msg ^ exit_msg
+  in
+  let in_file = Filename.temp_file "lsp_in" ".json" in
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
+  let ic = In_channel.open_bin in_file in
+  let out_file = Filename.temp_file "lsp_out" ".json" in
+  let oc = Out_channel.open_bin out_file in
+  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let exit_code = Server.run server in
+  In_channel.close ic;
+  Out_channel.close oc;
+  Alcotest.(check int) "exit code" 0 exit_code;
+  let output = In_channel.with_open_bin out_file In_channel.input_all in
+  let messages = parse_messages output in
+  match find_response messages 2 with
+  | None -> Alcotest.fail "No document symbol response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      Alcotest.(check bool) "result is not null" true (result <> `Null);
+      let symbols = result |> to_list in
+      Alcotest.(check int) "no symbols" 0 (List.length symbols)
+
 (** Test that extract function does not appear without selection *)
 let test_extract_function_no_cursor () =
   let init_msg =
@@ -3059,5 +3406,17 @@ let () =
             test_extract_function_captures_free_vars;
           Alcotest.test_case "extract function no cursor" `Quick
             test_extract_function_no_cursor;
+        ] );
+      ( "document-symbol",
+        [
+          Alcotest.test_case "returns defun" `Quick test_document_symbol_defun;
+          Alcotest.test_case "returns defvar" `Quick test_document_symbol_defvar;
+          Alcotest.test_case "returns defconst" `Quick
+            test_document_symbol_defconst;
+          Alcotest.test_case "returns defmacro" `Quick
+            test_document_symbol_defmacro;
+          Alcotest.test_case "capability advertised" `Quick
+            test_document_symbol_capability;
+          Alcotest.test_case "empty document" `Quick test_document_symbol_empty;
         ] );
     ]

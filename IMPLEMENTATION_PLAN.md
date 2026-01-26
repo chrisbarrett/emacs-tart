@@ -73,7 +73,7 @@ Enable hover and diagnostics in Emacs via eglot.
 
 - [x] [R5] Add eglot server configuration for tart
 - [x] [R8] Add customization options (`tart-executable`, etc.)
-- [ ] Verify: `M-x eglot` connects and hover shows types
+- [x] Verify: `M-x eglot` connects and hover shows types
 
 ### 3.3 Basic Documentation
 
@@ -161,13 +161,13 @@ from the runtime macros in `tart.el`.
 - [x] [R1,R2,R9] Implement `inferior-tart-mode` with comint
 - [x] [R3] Implement send-to-REPL commands
 - [x] [R4] Implement type/expand inspection commands
-- [ ] Verify: REPL interaction works from elisp buffers
+- [x] Verify: REPL interaction works from elisp buffers
 
 ### 7.2 Minor Mode
 
 - [x] [R7] Implement `tart-mode` minor mode with keymap
 - [x] [R10] Add compilation-mode error parsing
-- [ ] Verify: Keybindings work, errors are clickable
+- [x] Verify: Keybindings work, errors are clickable
 
 ## Phase 8: tart.el Runtime (Spec 14)
 
@@ -213,13 +213,13 @@ Runtime representation and pattern matching.
 - [x] [R3] Generate accessor functions
 - [x] [R6] Handle multi-field constructors (vectors)
 - [x] [R7] Test recursive type handling
-- [ ] Verify: ADT construction/access works at runtime
+- [x] Verify: ADT construction/access works at runtime
 
 ### 9.2 Type Checking
 
 - [x] [R4] Implement pcase type narrowing in branches
 - [x] [R5] Implement exhaustiveness checking with warnings
-- [ ] Verify: Non-exhaustive matches produce warnings
+- [x] Verify: Non-exhaustive matches produce warnings
 
 ## Phase 10: LSP Incremental (Spec 08)
 
@@ -251,20 +251,82 @@ Navigation and code intelligence features for IDE productivity.
 - [x] [R12] Implement `textDocument/definition` for function calls
 - [x] [R13] Return definition location from defun spans
 - [x] [R14] Handle cross-file definitions via signature lookup
-- [ ] Verify: Clicking on function name jumps to definition
+- [x] Verify: Clicking on function name jumps to definition
 
 ### 11.2 Find References
 
 - [x] [R15] Implement `textDocument/references` for symbols
 - [x] [R16] Collect all references to a symbol across the document
-- [ ] Verify: Shows all usages of a function/variable
+- [x] Verify: Shows all usages of a function/variable
 
 ### 11.3 Code Actions
 
 - [x] [R17] Implement `textDocument/codeAction` framework
 - [x] [R18] Add "Extract function" refactoring
 - [x] [R19] Add "Add type annotation" quickfix
-- [ ] Verify: Code actions appear on type errors
+- [x] Verify: Code actions appear on type errors
+
+## Phase 12: LSP Completion and Symbols (Future)
+
+Auto-completion and document structure for improved IDE experience.
+
+### 12.1 Document Symbols
+
+- [x] Implement `textDocument/documentSymbol` for outline view
+- [x] Return defun, defvar, defconst declarations with their types
+- [x] Include nested defuns (inner functions)
+- [ ] Verify: Emacs imenu/outline shows document structure
+
+### 12.2 Auto-Completion
+
+- [ ] Implement `textDocument/completion` for symbol names
+- [ ] Complete local variables in scope
+- [ ] Complete functions from loaded signatures (stdlib, requires)
+- [ ] Include type information in completion items
+- [ ] Verify: Typing prefix shows completion candidates with types
+
+### 12.3 Signature Help
+
+- [ ] Implement `textDocument/signatureHelp` for function calls
+- [ ] Show function signature when cursor is in argument list
+- [ ] Highlight current parameter position
+- [ ] Verify: Typing `(mapcar |` shows signature with first param highlighted
+
+### 12.4 Symbol Rename
+
+- [ ] Implement `textDocument/rename` for local symbols
+- [ ] Rename variables and function definitions within file
+- [ ] Verify: Renaming updates all references consistently
+
+## Phase 13: Expanded Stdlib (Future)
+
+Broader coverage of common Emacs packages.
+
+### 13.1 Buffer and Window Operations
+
+- [ ] Add `stdlib/buffers.tart` for buffer manipulation functions
+- [ ] Add `stdlib/windows.tart` for window management
+- [ ] Add `stdlib/frames.tart` for frame operations
+- [ ] Verify: Buffer/window code type-checks correctly
+
+### 13.2 File Operations
+
+- [ ] Add `stdlib/files.tart` for file I/O
+- [ ] Add `stdlib/directories.tart` for directory operations
+- [ ] Verify: File manipulation code type-checks
+
+### 13.3 Text Properties and Overlays
+
+- [ ] Add `stdlib/text-properties.tart`
+- [ ] Add `stdlib/overlays.tart`
+- [ ] Verify: Text property code type-checks
+
+### 13.4 Common Packages
+
+- [ ] Add `stdlib/dash.tart` for dash.el
+- [ ] Add `stdlib/s.tart` for s.el
+- [ ] Add `stdlib/f.tart` for f.el
+- [ ] Verify: Code using these packages type-checks
 
 ## Priority Order
 
@@ -278,3 +340,5 @@ Navigation and code intelligence features for IDE productivity.
 8. **Phase 8**: Runtime features, ADTs
 9. **Phase 9-10**: Performance and caching
 10. **Phase 11**: LSP navigation features (go to definition, find references, code actions)
+11. **Phase 12**: LSP completion and symbols (future)
+12. **Phase 13**: Expanded stdlib coverage (future)

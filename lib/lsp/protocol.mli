@@ -40,6 +40,7 @@ type server_capabilities = {
   definition_provider : bool;
   references_provider : bool;
   code_action_provider : bool;
+  document_symbol_provider : bool;
 }
 (** Server capabilities *)
 
@@ -222,3 +223,56 @@ type code_action_result = code_action list option
 
 val code_action_result_to_json : code_action_result -> Yojson.Safe.t
 (** Encode code action result to JSON *)
+
+(** {1 Document Symbols} *)
+
+(** Symbol kind as defined by LSP *)
+type symbol_kind =
+  | SKFile
+  | SKModule
+  | SKNamespace
+  | SKPackage
+  | SKClass
+  | SKMethod
+  | SKProperty
+  | SKField
+  | SKConstructor
+  | SKEnum
+  | SKInterface
+  | SKFunction
+  | SKVariable
+  | SKConstant
+  | SKString
+  | SKNumber
+  | SKBoolean
+  | SKArray
+  | SKObject
+  | SKKey
+  | SKNull
+  | SKEnumMember
+  | SKStruct
+  | SKEvent
+  | SKOperator
+  | SKTypeParameter
+
+type document_symbol = {
+  ds_name : string;
+  ds_detail : string option;
+  ds_kind : symbol_kind;
+  ds_range : range;
+  ds_selection_range : range;
+  ds_children : document_symbol list;
+}
+(** Document symbol with hierarchical structure *)
+
+type document_symbol_params = { dsp_text_document : string }
+(** Document symbol request params *)
+
+val parse_document_symbol_params : Yojson.Safe.t -> document_symbol_params
+(** Parse document symbol params from JSON *)
+
+type document_symbol_result = document_symbol list option
+(** Document symbol result *)
+
+val document_symbol_result_to_json : document_symbol_result -> Yojson.Safe.t
+(** Encode document symbol result to JSON *)

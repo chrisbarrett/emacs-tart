@@ -46,6 +46,7 @@ type server_capabilities = {
   definition_provider : bool;
   references_provider : bool;
   code_action_provider : bool;
+  document_symbol_provider : bool;
 }
 (** Server capabilities *)
 
@@ -127,6 +128,9 @@ let server_capabilities_to_json (caps : server_capabilities) : Yojson.Safe.t =
   in
   let fields =
     ("codeActionProvider", `Bool caps.code_action_provider) :: fields
+  in
+  let fields =
+    ("documentSymbolProvider", `Bool caps.document_symbol_provider) :: fields
   in
   `Assoc fields
 
@@ -563,4 +567,116 @@ type code_action_result = code_action list option
 let code_action_result_to_json (result : code_action_result) : Yojson.Safe.t =
   match result with
   | Some actions -> `List (List.map code_action_to_json actions)
+  | None -> `Null
+
+(** {1 Document Symbols} *)
+
+(** Symbol kind as defined by LSP *)
+type symbol_kind =
+  | SKFile
+  | SKModule
+  | SKNamespace
+  | SKPackage
+  | SKClass
+  | SKMethod
+  | SKProperty
+  | SKField
+  | SKConstructor
+  | SKEnum
+  | SKInterface
+  | SKFunction
+  | SKVariable
+  | SKConstant
+  | SKString
+  | SKNumber
+  | SKBoolean
+  | SKArray
+  | SKObject
+  | SKKey
+  | SKNull
+  | SKEnumMember
+  | SKStruct
+  | SKEvent
+  | SKOperator
+  | SKTypeParameter
+
+let symbol_kind_to_int = function
+  | SKFile -> 1
+  | SKModule -> 2
+  | SKNamespace -> 3
+  | SKPackage -> 4
+  | SKClass -> 5
+  | SKMethod -> 6
+  | SKProperty -> 7
+  | SKField -> 8
+  | SKConstructor -> 9
+  | SKEnum -> 10
+  | SKInterface -> 11
+  | SKFunction -> 12
+  | SKVariable -> 13
+  | SKConstant -> 14
+  | SKString -> 15
+  | SKNumber -> 16
+  | SKBoolean -> 17
+  | SKArray -> 18
+  | SKObject -> 19
+  | SKKey -> 20
+  | SKNull -> 21
+  | SKEnumMember -> 22
+  | SKStruct -> 23
+  | SKEvent -> 24
+  | SKOperator -> 25
+  | SKTypeParameter -> 26
+
+type document_symbol = {
+  ds_name : string;
+  ds_detail : string option;
+  ds_kind : symbol_kind;
+  ds_range : range;
+  ds_selection_range : range;
+  ds_children : document_symbol list;
+}
+(** Document symbol with hierarchical structure *)
+
+type document_symbol_params = { dsp_text_document : string }
+(** Document symbol request params *)
+
+let parse_document_symbol_params (json : Yojson.Safe.t) : document_symbol_params
+    =
+  let open Yojson.Safe.Util in
+  {
+    dsp_text_document =
+      json |> member "textDocument" |> member "uri" |> to_string;
+  }
+
+let rec document_symbol_to_json (sym : document_symbol) : Yojson.Safe.t =
+  let fields =
+    [
+      ("name", `String sym.ds_name);
+      ("kind", `Int (symbol_kind_to_int sym.ds_kind));
+      ("range", range_to_json sym.ds_range);
+      ("selectionRange", range_to_json sym.ds_selection_range);
+    ]
+  in
+  let fields =
+    match sym.ds_detail with
+    | Some d -> ("detail", `String d) :: fields
+    | None -> fields
+  in
+  let fields =
+    match sym.ds_children with
+    | [] -> fields
+    | children ->
+        ("children", `List (List.map document_symbol_to_json children))
+        :: fields
+  in
+  `Assoc fields
+
+type document_symbol_result = document_symbol list option
+(** Document symbol result *)
+
+let document_symbol_result_to_json (result : document_symbol_result) :
+    Yojson.Safe.t =
+  match result with
+  | Some symbols -> `List (List.map document_symbol_to_json symbols)
   | None -> `Null

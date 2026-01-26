@@ -62,6 +62,7 @@ let capabilities () : Protocol.server_capabilities =
     definition_provider = true;
     references_provider = true;
     code_action_provider = true;
+    document_symbol_provider = true;
   }
 
 (** Extract filename from a file:// URI. Returns the path portion, or the raw
@@ -1337,6 +1338,192 @@ let handle_code_action (server : t) (params : Yojson.Safe.t option) :
                  (List.length all_actions));
             Ok (Protocol.code_action_result_to_json (Some all_actions)))
 
+(** {1 Document Symbols} *)
+
+(** Extract a symbol from a definition form.
+
+    For defun, extracts function with type from environment if available. For
+    defvar/defconst, extracts variable/constant with its span. *)
+let rec extract_symbol_from_def (sexp : Syntax.Sexp.t) :
+    Protocol.document_symbol option =
+  let open Syntax.Sexp in
+  match sexp with
+  | List (Symbol ("defun", _) :: Symbol (name, name_span) :: args :: body, span)
+    ->
+      (* Get the selection range from the name symbol *)
+      let selection_range =
+        {
+          Protocol.start =
+            {
+              line = name_span.start_pos.line - 1;
+              character = name_span.start_pos.col;
+            };
+          end_ =
+            {
+              line = name_span.end_pos.line - 1;
+              character = name_span.end_pos.col;
+            };
+        }
+      in
+      (* Extract parameter names for detail *)
+      let param_detail =
+        match args with
+        | List (params, _) ->
+            let param_strs =
+              List.filter_map
+                (function
+                  | Symbol (p, _) when not (String.length p > 0 && p.[0] = '&')
+                    ->
+                      Some p
+                  | _ -> None)
+                params
+            in
+            if param_strs = [] then "()"
+            else "(" ^ String.concat " " param_strs ^ ")"
+        | _ -> "()"
+      in
+      (* Look for nested defuns in the body *)
+      let children =
+        List.filter_map extract_symbol_from_def
+          (List.concat_map (function List (elems, _) -> elems | _ -> []) body)
+      in
+      Some
+        {
+          Protocol.ds_name = name;
+          ds_detail = Some param_detail;
+          ds_kind = Protocol.SKFunction;
+          ds_range = range_of_span span;
+          ds_selection_range = selection_range;
+          ds_children = children;
+        }
+  | List (Symbol ("defvar", _) :: Symbol (name, name_span) :: _, span) ->
+      let selection_range =
+        {
+          Protocol.start =
+            {
+              line = name_span.start_pos.line - 1;
+              character = name_span.start_pos.col;
+            };
+          end_ =
+            {
+              line = name_span.end_pos.line - 1;
+              character = name_span.end_pos.col;
+            };
+        }
+      in
+      Some
+        {
+          Protocol.ds_name = name;
+          ds_detail = None;
+          ds_kind = Protocol.SKVariable;
+          ds_range = range_of_span span;
+          ds_selection_range = selection_range;
+          ds_children = [];
+        }
+  | List (Symbol ("defconst", _) :: Symbol (name, name_span) :: _, span) ->
+      let selection_range =
+        {
+          Protocol.start =
+            {
+              line = name_span.start_pos.line - 1;
+              character = name_span.start_pos.col;
+            };
+          end_ =
+            {
+              line = name_span.end_pos.line - 1;
+              character = name_span.end_pos.col;
+            };
+        }
+      in
+      Some
+        {
+          Protocol.ds_name = name;
+          ds_detail = None;
+          ds_kind = Protocol.SKConstant;
+          ds_range = range_of_span span;
+          ds_selection_range = selection_range;
+          ds_children = [];
+        }
+  | List (Symbol ("defmacro", _) :: Symbol (name, name_span) :: args :: _, span)
+    ->
+      let selection_range =
+        {
+          Protocol.start =
+            {
+              line = name_span.start_pos.line - 1;
+              character = name_span.start_pos.col;
+            };
+          end_ =
+            {
+              line = name_span.end_pos.line - 1;
+              character = name_span.end_pos.col;
+            };
+        }
+      in
+      let param_detail =
+        match args with
+        | List (params, _) ->
+            let param_strs =
+              List.filter_map
+                (function
+                  | Symbol (p, _) when not (String.length p > 0 && p.[0] = '&')
+                    ->
+                      Some p
+                  | _ -> None)
+                params
+            in
+            if param_strs = [] then "()"
+            else "(" ^ String.concat " " param_strs ^ ")"
+        | _ -> "()"
+      in
+      Some
+        {
+          Protocol.ds_name = name;
+          ds_detail = Some param_detail;
+          ds_kind = Protocol.SKMethod;
+          (* Use Method for macros to distinguish from functions *)
+          ds_range = range_of_span span;
+          ds_selection_range = selection_range;
+          ds_children = [];
+        }
+  | _ -> None
+
+(** Handle textDocument/documentSymbol request.
+
+    Returns a list of symbols (functions, variables, constants, macros) defined
+    in the document, with their types as details when available. *)
+let handle_document_symbol (server : t) (params : Yojson.Safe.t option) :
+    (Yojson.Safe.t, Rpc.response_error) result =
+  match params with
+  | None ->
+      Error
+        {
+          Rpc.code = Rpc.invalid_params;
+          message = "Missing document symbol params";
+          data = None;
+        }
+  | Some json -> (
+      let dsp_params = Protocol.parse_document_symbol_params json in
+      let uri = dsp_params.dsp_text_document in
+      debug server (Printf.sprintf "Document symbol request for %s" uri);
+      match Document.get_doc server.documents uri with
+      | None ->
+          debug server (Printf.sprintf "Document not found: %s" uri);
+          Ok (Protocol.document_symbol_result_to_json None)
+      | Some doc ->
+          let filename = filename_of_uri uri in
+          let parse_result = Syntax.Read.parse_string ~filename doc.text in
+          if parse_result.sexps = [] then (
+            debug server "No S-expressions parsed";
+            Ok (Protocol.document_symbol_result_to_json (Some [])))
+          else
+            let symbols =
+              List.filter_map extract_symbol_from_def parse_result.sexps
+            in
+            debug server
+              (Printf.sprintf "Found %d symbols" (List.length symbols));
+            Ok (Protocol.document_symbol_result_to_json (Some symbols)))
+
 (** Dispatch a request to its handler *)
 let dispatch_request (server : t) (msg : Rpc.message) :
     (Yojson.Safe.t, Rpc.response_error) result =
@@ -1348,6 +1535,7 @@ let dispatch_request (server : t) (msg : Rpc.message) :
   | "textDocument/definition" -> handle_definition server msg.params
   | "textDocument/references" -> handle_references server msg.params
   | "textDocument/codeAction" -> handle_code_action server msg.params
+  | "textDocument/documentSymbol" -> handle_document_symbol server msg.params
   | _ ->
       Error
         {
