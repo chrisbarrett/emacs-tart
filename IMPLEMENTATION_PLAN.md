@@ -448,8 +448,8 @@ Additional commonly-used Emacs libraries for broader type checking coverage.
 
 ### 17.4 Expanded cl-lib
 
-- [ ] [R6] Expand stdlib/cl-lib.tart with additional functions
-- [ ] Verify: Expanded cl-lib.tart loads
+- [x] [R6] Expand stdlib/cl-lib.tart with additional functions
+- [x] Verify: Expanded cl-lib.tart loads
 
 ---
 
@@ -484,4 +484,4 @@ The following areas are mentioned as future work in the specs:
 14. **Phase 14**: Higher-Kinded Types ✓
 15. **Phase 15**: Explicit Type Instantiation ✓
 16. **Phase 16**: Scoped Type Variables ✓
-17. **Phase 17**: Expanded Stdlib Phase 2
+17. **Phase 17**: Expanded Stdlib Phase 2 ✓

@@ -84,7 +84,109 @@
 (defun cl-lcm (&rest int) -> int)
 (defun cl-isqrt (int) -> int)
 
-;; Misc
+;; List accessors (sixth through tenth)
+(defun cl-sixth [a] ((list a)) -> (a | nil))
+(defun cl-seventh [a] ((list a)) -> (a | nil))
+(defun cl-eighth [a] ((list a)) -> (a | nil))
+(defun cl-ninth [a] ((list a)) -> (a | nil))
+(defun cl-tenth [a] ((list a)) -> (a | nil))
+
+;; Additional list operations
+(defun cl-list-length [a] ((list a)) -> (int | nil))
+(defun cl-ldiff [a] ((list a) (list a)) -> (list a))
+(defun cl-tailp [a] ((list a) (list a)) -> bool)
+(defun cl-revappend [a] ((list a) (list a)) -> (list a))
+(defun cl-nreconc [a] ((list a) (list a)) -> (list a))
+(defun cl-butlast [a] ((list a) &optional int) -> (list a))
+(defun cl-nbutlast [a] ((list a) &optional int) -> (list a))
+
+;; Fill and replace operations
+(defun cl-fill [a] ((list a) a &key :start int :end int) -> (list a))
+(defun cl-replace [a] ((list a) (list a) &key :start1 int :end1 int :start2 int :end2 int) -> (list a))
+
+;; Search operations
+(defun cl-search [a] ((list a) (list a) &key :test ((a a) -> bool) :key ((a) -> any) :from-end bool :start1 int :end1 int :start2 int :end2 int) -> (int | nil))
+(defun cl-mismatch [a] ((list a) (list a) &key :test ((a a) -> bool) :key ((a) -> any) :from-end bool :start1 int :end1 int :start2 int :end2 int) -> (int | nil))
+
+;; Concatenation
+(defun cl-concatenate [a] (symbol &rest (list a)) -> (list a))
+
+;; Additional sequence operations
+(defun cl-remove-duplicates [a] ((list a) &key :test ((a a) -> bool) :key ((a) -> any) :from-end bool :start int :end int) -> (list a))
+(defun cl-delete-duplicates [a] ((list a) &key :test ((a a) -> bool) :key ((a) -> any) :from-end bool :start int :end int) -> (list a))
+(defun cl-substitute-if [a] (a ((a) -> truthy) (list a) &key :key ((a) -> any) :count int :from-end bool) -> (list a))
+(defun cl-substitute-if-not [a] (a ((a) -> truthy) (list a) &key :key ((a) -> any) :count int :from-end bool) -> (list a))
+(defun cl-nsubstitute-if [a] (a ((a) -> truthy) (list a) &key :key ((a) -> any) :count int :from-end bool) -> (list a))
+(defun cl-nsubstitute-if-not [a] (a ((a) -> truthy) (list a) &key :key ((a) -> any) :count int :from-end bool) -> (list a))
+
+;; Place modification (these are generalized setf-able)
+;; Note: cl-incf, cl-decf, cl-pushnew are macros that modify places
+;; We type them as functions taking a number/list and returning the new value
+(defun cl-incf (num &optional num) -> num)
+(defun cl-decf (num &optional num) -> num)
+(defun cl-pushnew [a] (a (list a) &key :test ((a a) -> bool) :key ((a) -> any)) -> (list a))
+
+;; Predicate functions
+(defun cl-oddp (int) -> bool)
+(defun cl-evenp (int) -> bool)
+(defun cl-minusp (num) -> bool)
+(defun cl-plusp (num) -> bool)
+(defun cl-digit-char-p (string &optional int) -> (int | nil))
+
+;; Character functions
+(defun cl-char-upcase (string) -> string)
+(defun cl-char-downcase (string) -> string)
+(defun cl-digit-char (int &optional int) -> (string | nil))
+
+;; Floating point operations
+(defun cl-float (num &optional num) -> float)
+(defun cl-float-limits () -> nil)
+
+;; Bit operations
+(defun cl-logand (&rest int) -> int)
+(defun cl-logior (&rest int) -> int)
+(defun cl-logxor (&rest int) -> int)
+(defun cl-lognot (int) -> int)
+(defun cl-logandc1 (int int) -> int)
+(defun cl-logandc2 (int int) -> int)
+(defun cl-logorc1 (int int) -> int)
+(defun cl-logorc2 (int int) -> int)
+(defun cl-lognand (int int) -> int)
+(defun cl-lognor (int int) -> int)
+(defun cl-logeqv (&rest int) -> int)
+(defun cl-logbitp (int int) -> bool)
+(defun cl-logtest (int int) -> bool)
+(defun cl-logcount (int) -> int)
+(defun cl-ash (int int) -> int)
+
+;; Additional alist operations
+(defun cl-pairlis [k v] ((list k) (list v) &optional (list (pair k v))) -> (list (pair k v)))
+
+;; Additional property list operations
+(defun cl-get (symbol symbol &optional any) -> any)
+(defun cl-remf ((list any) symbol) -> (list any))
+
+;; Multiple value operations (return multiple values as list)
+(defun cl-values (&rest any) -> any)
+(defun cl-values-list ((list any)) -> any)
+(defun cl-multiple-value-list (any) -> (list any))
+
+;; Structure operations (generic accessors)
+;; Note: cl-defstruct creates specific accessors like NAME-SLOT
+;; These are generic structure utilities
+(defun cl-struct-slot-info (symbol) -> (list any))
+(defun cl-struct-slot-offset (symbol symbol) -> int)
+
+;; Type checking
+(defun cl-typep (any symbol) -> bool)
+
+;; Additional misc
 (defun cl-coerce [a] (any symbol) -> a)
 (defun cl-equalp (any any) -> bool)
 (defun cl-type-of (any) -> symbol)
+(defun cl-make-random-state (&optional any) -> any)
+(defun cl-random-state-p (any) -> bool)
+(defun cl-subst [a] (a a a &key :test ((a a) -> bool) :key ((a) -> any)) -> a)
+(defun cl-nsubst [a] (a a a &key :test ((a a) -> bool) :key ((a) -> any)) -> a)
+(defun cl-sublis [k v] ((list (pair k v)) any &key :test ((k k) -> bool) :key ((any) -> k)) -> any)
+(defun cl-nsublis [k v] ((list (pair k v)) any &key :test ((k k) -> bool) :key ((any) -> k)) -> any)
