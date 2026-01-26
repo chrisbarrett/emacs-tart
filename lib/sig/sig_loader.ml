@@ -11,6 +11,8 @@
 
 open Sig_ast
 module Loc = Syntax.Location
+module Types = Core.Types
+module Type_env = Core.Type_env
 
 (** {1 Load Errors} *)
 
@@ -215,3 +217,129 @@ let validate_signature_all (sig_file : signature) : load_error list =
        | Ok () -> None
        | Error e -> Some e)
     sig_file.sig_decls
+
+(** {1 Type Conversion}
+
+    These functions convert signature AST types to the core type representation.
+    They assume the signature has been validated (type variables are in scope). *)
+
+(** Convert a signature type name to a primitive type or TCon *)
+let sig_name_to_prim (name : string) : Types.typ =
+  match name with
+  | "int" -> Types.Prim.int
+  | "float" -> Types.Prim.float
+  | "num" -> Types.Prim.num
+  | "string" -> Types.Prim.string
+  | "symbol" -> Types.Prim.symbol
+  | "keyword" -> Types.Prim.keyword
+  | "nil" -> Types.Prim.nil
+  | "t" -> Types.Prim.t
+  | "bool" -> Types.Prim.bool
+  | "truthy" -> Types.Prim.truthy
+  | "any" -> Types.Prim.any
+  | "never" -> Types.Prim.never
+  | _ -> Types.TCon name
+
+(** Convert a signature type to a core type.
+    [tvar_names] is the list of bound type variable names in scope. *)
+let rec sig_type_to_typ (tvar_names : string list) (ty : sig_type) : Types.typ =
+  match ty with
+  | STVar (name, _) ->
+      (* Type variable - represented as TCon for later substitution *)
+      Types.TCon name
+
+  | STCon (name, _) ->
+      (* Type constant - map primitives and preserve others *)
+      sig_name_to_prim name
+
+  | STApp (name, args, _) ->
+      (* Type application *)
+      let arg_types = List.map (sig_type_to_typ tvar_names) args in
+      Types.TApp (name, arg_types)
+
+  | STArrow (params, ret, _) ->
+      (* Function type *)
+      let param_types = List.map (sig_param_to_param tvar_names) params in
+      let ret_type = sig_type_to_typ tvar_names ret in
+      Types.TArrow (param_types, ret_type)
+
+  | STForall (binders, body, _) ->
+      (* Polymorphic type - add binders to scope *)
+      let new_vars = List.map (fun b -> b.name) binders in
+      let inner_names = new_vars @ tvar_names in
+      let body_type = sig_type_to_typ inner_names body in
+      Types.TForall (new_vars, body_type)
+
+  | STUnion (types, _) ->
+      (* Union type *)
+      let type_list = List.map (sig_type_to_typ tvar_names) types in
+      Types.TUnion type_list
+
+  | STTuple (types, _) ->
+      (* Tuple type *)
+      let type_list = List.map (sig_type_to_typ tvar_names) types in
+      Types.TTuple type_list
+
+(** Convert a signature parameter to a core parameter *)
+and sig_param_to_param (tvar_names : string list) (p : sig_param) : Types.param =
+  match p with
+  | SPPositional ty -> Types.PPositional (sig_type_to_typ tvar_names ty)
+  | SPOptional ty -> Types.POptional (sig_type_to_typ tvar_names ty)
+  | SPRest ty -> Types.PRest (sig_type_to_typ tvar_names ty)
+  | SPKey (name, ty) -> Types.PKey (name, sig_type_to_typ tvar_names ty)
+
+(** {1 Declaration Loading}
+
+    These functions convert signature declarations to type environment entries. *)
+
+(** Convert a defun declaration to a type scheme.
+    Returns a Poly scheme if the function has type parameters,
+    otherwise a Mono scheme with an arrow type. *)
+let load_defun (d : defun_decl) : Type_env.scheme =
+  let tvar_names = List.map (fun b -> b.name) d.defun_tvar_binders in
+  let params = List.map (sig_param_to_param tvar_names) d.defun_params in
+  let ret = sig_type_to_typ tvar_names d.defun_return in
+  let arrow = Types.TArrow (params, ret) in
+  if tvar_names = [] then
+    Type_env.Mono arrow
+  else
+    Type_env.Poly (tvar_names, arrow)
+
+(** Convert a defvar declaration to a type scheme.
+    The type may be polymorphic if it contains a forall. *)
+let load_defvar (d : defvar_decl) : Type_env.scheme =
+  match d.defvar_type with
+  | STForall (binders, body, _) ->
+      (* Polymorphic variable - extract quantifiers *)
+      let tvar_names = List.map (fun b -> b.name) binders in
+      let body_type = sig_type_to_typ tvar_names body in
+      Type_env.Poly (tvar_names, body_type)
+  | _ ->
+      (* Monomorphic variable *)
+      let ty = sig_type_to_typ [] d.defvar_type in
+      Type_env.Mono ty
+
+(** {1 Signature Loading}
+
+    Load an entire signature file into a type environment. *)
+
+(** Load a validated signature into a type environment.
+    Adds all function and variable declarations to the environment.
+    Returns the extended environment. *)
+let load_signature (env : Type_env.t) (sig_file : signature) : Type_env.t =
+  List.fold_left
+    (fun acc decl ->
+       match decl with
+       | DOpen _ | DInclude _ ->
+           (* Module directives - not handled yet *)
+           acc
+       | DDefun d ->
+           let scheme = load_defun d in
+           Type_env.extend d.defun_name scheme acc
+       | DDefvar d ->
+           let scheme = load_defvar d in
+           Type_env.extend d.defvar_name scheme acc
+       | DType _ | DImportStruct _ ->
+           (* Type declarations - not adding to value environment *)
+           acc)
+    env sig_file.sig_decls

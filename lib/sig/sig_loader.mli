@@ -55,3 +55,31 @@ val validate_signature : Sig_ast.signature -> (unit, load_error) result
 
 (** Validate a signature and collect all errors (not just the first). *)
 val validate_signature_all : Sig_ast.signature -> load_error list
+
+(** {1 Type Conversion} *)
+
+(** Convert a signature type to a core type.
+    [tvar_names] is the list of bound type variable names in scope.
+    Type variables are represented as TCon for later substitution. *)
+val sig_type_to_typ : string list -> Sig_ast.sig_type -> Core.Types.typ
+
+(** Convert a signature parameter to a core parameter *)
+val sig_param_to_param : string list -> Sig_ast.sig_param -> Core.Types.param
+
+(** {1 Declaration Loading} *)
+
+(** Convert a defun declaration to a type scheme.
+    Returns a Poly scheme if the function has type parameters,
+    otherwise a Mono scheme with an arrow type. *)
+val load_defun : Sig_ast.defun_decl -> Core.Type_env.scheme
+
+(** Convert a defvar declaration to a type scheme.
+    The type may be polymorphic if it contains a forall. *)
+val load_defvar : Sig_ast.defvar_decl -> Core.Type_env.scheme
+
+(** {1 Signature Loading} *)
+
+(** Load a validated signature into a type environment.
+    Adds all function and variable declarations to the environment.
+    Returns the extended environment. *)
+val load_signature : Core.Type_env.t -> Sig_ast.signature -> Core.Type_env.t

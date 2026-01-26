@@ -1,6 +1,10 @@
 (** Tests for signature loader/validator *)
 
 open Sig
+module Types = Core.Types
+module Type_env = Core.Type_env
+module Check = Typing.Check
+module Unify = Typing.Unify
 
 (** Helper to parse and validate a signature *)
 let validate_str s =
@@ -8,6 +12,23 @@ let validate_str s =
   match Sig_parser.parse_signature ~module_name:"test" parse_result.sexps with
   | Error _ -> failwith "Parse error in test"
   | Ok sig_file -> Sig_loader.validate_signature sig_file
+
+(** Helper to parse a signature string and load it into an environment *)
+let load_sig_str ?(env = Type_env.empty) s =
+  let parse_result = Syntax.Read.parse_string s in
+  match Sig_parser.parse_signature ~module_name:"test" parse_result.sexps with
+  | Error _ -> failwith "Parse error in test"
+  | Ok sig_file ->
+      match Sig_loader.validate_signature sig_file with
+      | Error e -> failwith ("Validation error: " ^ e.message)
+      | Ok () -> Sig_loader.load_signature env sig_file
+
+(** Helper to parse and type-check an expression *)
+let check_expr_str ~env s =
+  Types.reset_tvar_counter ();
+  match Syntax.Read.parse_one ~filename:"<test>" s with
+  | Error msg -> failwith ("parse error: " ^ msg)
+  | Ok sexp -> Check.check_expr ~env sexp
 
 (** Helper to parse and validate, expecting an error containing a message *)
 let expect_error_containing msg s =
@@ -124,6 +145,81 @@ let test_validate_all_multiple_errors () =
       let errors = Sig_loader.validate_signature_all sig_file in
       Alcotest.(check int) "should have 2 errors" 2 (List.length errors)
 
+(** {1 End-to-End Signature Loading Tests (R5, R6)}
+
+    These tests verify that loaded signatures are actually used by the
+    type checker for calls and variable references. *)
+
+(** Test that defun signatures are loaded and used for type checking calls.
+    R5: "Verify: Signature loaded; type checker uses it for calls to foo" *)
+let test_defun_signature_used_for_calls () =
+  let sig_src = "(defun my-add (int int) -> int)" in
+  let env = load_sig_str sig_src in
+  (* Call with correct types should succeed *)
+  let ty, errors = check_expr_str ~env "(my-add 1 2)" in
+  Alcotest.(check int) "no type errors" 0 (List.length errors);
+  Alcotest.(check string) "result type is Int" "Int" (Types.to_string ty)
+
+(** Test that defun signature causes type error with wrong argument types.
+    R5: Type checker uses loaded signature to detect type errors. *)
+let test_defun_signature_type_error () =
+  let sig_src = "(defun string-len (string) -> int)" in
+  let env = load_sig_str sig_src in
+  (* Call with wrong type should produce error *)
+  let _, errors = check_expr_str ~env "(string-len 42)" in
+  Alcotest.(check bool) "has type error" true (List.length errors > 0)
+
+(** Test that polymorphic defun signatures work correctly.
+    R5: Polymorphic functions can be instantiated at call sites. *)
+let test_poly_defun_signature () =
+  let sig_src = "(defun identity [a] (a) -> a)" in
+  let env = load_sig_str sig_src in
+  (* Call with int *)
+  let ty1, errors1 = check_expr_str ~env "(identity 42)" in
+  Alcotest.(check int) "no errors for int" 0 (List.length errors1);
+  Alcotest.(check string) "returns Int" "Int" (Types.to_string ty1);
+  (* Call with string *)
+  let ty2, errors2 = check_expr_str ~env "(identity \"hello\")" in
+  Alcotest.(check int) "no errors for string" 0 (List.length errors2);
+  Alcotest.(check string) "returns String" "String" (Types.to_string ty2)
+
+(** Test that defvar declarations are loaded and used for variable references.
+    R6: "Verify: References to my-var have type string" *)
+let test_defvar_type_used () =
+  let sig_src = "(defvar my-config string)" in
+  let env = load_sig_str sig_src in
+  (* Variable reference should have declared type *)
+  let ty, errors = check_expr_str ~env "my-config" in
+  Alcotest.(check int) "no type errors" 0 (List.length errors);
+  Alcotest.(check string) "variable type is String" "String" (Types.to_string ty)
+
+(** Test that defvar with complex type works.
+    R6: Function-typed variables are usable. *)
+let test_defvar_function_type () =
+  let sig_src = "(defvar my-handler ((string) -> int))" in
+  let env = load_sig_str sig_src in
+  (* Variable is a function, can be called *)
+  let ty, errors = check_expr_str ~env "(my-handler \"test\")" in
+  Alcotest.(check int) "no type errors" 0 (List.length errors);
+  Alcotest.(check string) "result type is Int" "Int" (Types.to_string ty)
+
+(** Test that multiple declarations can be loaded together.
+    R5, R6: Both defun and defvar work in the same signature. *)
+let test_combined_declarations () =
+  let sig_src = {|
+    (defvar debug-mode bool)
+    (defun process (string) -> int)
+  |} in
+  let env = load_sig_str sig_src in
+  (* Check defvar *)
+  let ty1, errors1 = check_expr_str ~env "debug-mode" in
+  Alcotest.(check int) "no errors for defvar" 0 (List.length errors1);
+  Alcotest.(check string) "defvar type is Bool" "Bool" (Types.to_string ty1);
+  (* Check defun *)
+  let ty2, errors2 = check_expr_str ~env "(process \"input\")" in
+  Alcotest.(check int) "no errors for defun" 0 (List.length errors2);
+  Alcotest.(check string) "defun result is Int" "Int" (Types.to_string ty2)
+
 let () =
   Alcotest.run "sig_loader"
     [
@@ -148,5 +244,14 @@ let () =
       ( "validate-all",
         [
           Alcotest.test_case "multiple errors" `Quick test_validate_all_multiple_errors;
+        ] );
+      ( "end-to-end-loading",
+        [
+          Alcotest.test_case "defun signature used for calls" `Quick test_defun_signature_used_for_calls;
+          Alcotest.test_case "defun signature type error" `Quick test_defun_signature_type_error;
+          Alcotest.test_case "poly defun signature" `Quick test_poly_defun_signature;
+          Alcotest.test_case "defvar type used" `Quick test_defvar_type_used;
+          Alcotest.test_case "defvar function type" `Quick test_defvar_function_type;
+          Alcotest.test_case "combined declarations" `Quick test_combined_declarations;
         ] );
     ]
