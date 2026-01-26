@@ -64,6 +64,19 @@ val arity_mismatch :
   t
 (** Create an arity mismatch diagnostic. *)
 
+val arity_mismatch_with_context :
+  span:Syntax.Location.span ->
+  expected:int ->
+  actual:int ->
+  context:Constraint.context ->
+  unit ->
+  t
+(** Create an arity mismatch diagnostic with function context.
+
+    When context is [FunctionArg], includes a note showing the function
+    signature and formats expected arity as a range for optional params (e.g.,
+    "2-3 arguments" or "1+ arguments" for rest params). *)
+
 val occurs_check :
   span:Syntax.Location.span ->
   tvar_id:Core.Types.tvar_id ->

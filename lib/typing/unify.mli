@@ -18,8 +18,9 @@ type error =
       (** Two concrete types that cannot unify, with optional context. *)
   | OccursCheck of Core.Types.tvar_id * Core.Types.typ * Syntax.Location.span
       (** Type variable occurs in the type it's being unified with. *)
-  | ArityMismatch of int * int * Syntax.Location.span
-      (** Function arities don't match: expected, actual. *)
+  | ArityMismatch of int * int * Syntax.Location.span * Constraint.context
+      (** Function arities don't match: expected, actual, with optional context.
+      *)
 
 val error_to_string : error -> string
 (** Format an error for display. *)

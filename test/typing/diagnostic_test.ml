@@ -197,7 +197,7 @@ let test_of_unify_occurs_check () =
 
 let test_of_unify_arity_mismatch () =
   let span = Loc.dummy_span in
-  let err = Unify.ArityMismatch (2, 3, span) in
+  let err = Unify.ArityMismatch (2, 3, span, Constraint.NoContext) in
   let d = Diag.of_unify_error err in
   Alcotest.(check bool) "is error" true (Diag.is_error d);
   Alcotest.(check bool)
@@ -210,7 +210,7 @@ let test_of_unify_errors_list () =
     [
       Unify.TypeMismatch
         (Types.Prim.int, Types.Prim.string, span, Constraint.NoContext);
-      Unify.ArityMismatch (1, 2, span);
+      Unify.ArityMismatch (1, 2, span, Constraint.NoContext);
     ]
   in
   let diagnostics = Diag.of_unify_errors errors in
@@ -646,6 +646,119 @@ let test_end_to_end_undefined_with_suggestion () =
     (contains_pattern (Str.regexp "length") help_combined)
 
 (* =============================================================================
+   Arity Mismatch Tests (R5)
+   ============================================================================= *)
+
+let test_arity_mismatch_with_context () =
+  let span = Loc.dummy_span in
+  let fn_type =
+    Types.TArrow
+      ( [ Types.PPositional Types.Prim.string; Types.PPositional Types.Prim.int ],
+        Types.Prim.string )
+  in
+  let context =
+    Constraint.FunctionArg
+      { fn_name = "substring"; fn_type; arg_index = 0; arg_expr_source = None }
+  in
+  let err = Unify.ArityMismatch (2, 1, span, context) in
+  let d = Diag.of_unify_error err in
+  Alcotest.(check bool) "is error" true (Diag.is_error d);
+  Alcotest.(
+    check
+      (option
+         (of_pp (fun fmt c ->
+              Format.fprintf fmt "%s" (Diag.error_code_to_string c)))))
+    "code is E0061" (Some Diag.E0061) d.code;
+  Alcotest.(check bool) "has related info" true (List.length d.Diag.related > 0)
+
+let test_arity_mismatch_shows_function_name () =
+  let span = Loc.dummy_span in
+  let fn_type =
+    Types.TArrow
+      ( [ Types.PPositional Types.Prim.string; Types.PPositional Types.Prim.int ],
+        Types.Prim.string )
+  in
+  let context =
+    Constraint.FunctionArg
+      { fn_name = "substring"; fn_type; arg_index = 0; arg_expr_source = None }
+  in
+  let err = Unify.ArityMismatch (2, 1, span, context) in
+  let d = Diag.of_unify_error err in
+  let related_msg = (List.hd d.Diag.related).message in
+  Alcotest.(check bool)
+    "mentions function name" true
+    (contains_pattern (Str.regexp "substring") related_msg)
+
+let test_arity_mismatch_shows_signature () =
+  let span = Loc.dummy_span in
+  let fn_type =
+    Types.TArrow
+      ( [ Types.PPositional Types.Prim.string; Types.PPositional Types.Prim.int ],
+        Types.Prim.string )
+  in
+  let context =
+    Constraint.FunctionArg
+      { fn_name = "substring"; fn_type; arg_index = 0; arg_expr_source = None }
+  in
+  let err = Unify.ArityMismatch (2, 1, span, context) in
+  let d = Diag.of_unify_error err in
+  let str = Diag.to_string d in
+  (* Should show signature with types *)
+  Alcotest.(check bool)
+    "shows String type" true
+    (contains_pattern (Str.regexp "String") str);
+  Alcotest.(check bool)
+    "shows Int type" true
+    (contains_pattern (Str.regexp "Int") str)
+
+let test_arity_mismatch_optional_range () =
+  let span = Loc.dummy_span in
+  (* Function with 2 required + 1 optional param *)
+  let fn_type =
+    Types.TArrow
+      ( [
+          Types.PPositional Types.Prim.string;
+          Types.PPositional Types.Prim.int;
+          Types.POptional Types.Prim.int;
+        ],
+        Types.Prim.string )
+  in
+  let context =
+    Constraint.FunctionArg
+      { fn_name = "substring"; fn_type; arg_index = 0; arg_expr_source = None }
+  in
+  let err = Unify.ArityMismatch (2, 1, span, context) in
+  let d = Diag.of_unify_error err in
+  Alcotest.(check bool)
+    "message shows range" true
+    (contains_pattern (Str.regexp "2-3 arguments") d.message)
+
+let test_arity_mismatch_rest_args () =
+  let span = Loc.dummy_span in
+  (* Function with 1 required + rest params *)
+  let fn_type =
+    Types.TArrow
+      ( [ Types.PPositional Types.Prim.string; Types.PRest Types.Prim.any ],
+        Types.Prim.string )
+  in
+  let context =
+    Constraint.FunctionArg
+      { fn_name = "concat"; fn_type; arg_index = 0; arg_expr_source = None }
+  in
+  let err = Unify.ArityMismatch (1, 0, span, context) in
+  let d = Diag.of_unify_error err in
+  Alcotest.(check bool)
+    "message shows rest indicator" true
+    (contains_pattern (Str.regexp "1\\+ arguments") d.message)
+
+let test_arity_mismatch_no_context () =
+  let span = Loc.dummy_span in
+  let err = Unify.ArityMismatch (2, 1, span, Constraint.NoContext) in
+  let d = Diag.of_unify_error err in
+  Alcotest.(check bool) "is error" true (Diag.is_error d);
+  Alcotest.(check bool) "no related info" true (List.length d.Diag.related = 0)
+
+(* =============================================================================
    Integration Tests with Real Type Checking
    ============================================================================= *)
 
@@ -768,6 +881,19 @@ let () =
             test_end_to_end_undefined_variable;
           Alcotest.test_case "end-to-end with suggestion" `Quick
             test_end_to_end_undefined_with_suggestion;
+        ] );
+      ( "arity_mismatch",
+        [
+          Alcotest.test_case "with context" `Quick
+            test_arity_mismatch_with_context;
+          Alcotest.test_case "shows function name" `Quick
+            test_arity_mismatch_shows_function_name;
+          Alcotest.test_case "shows signature" `Quick
+            test_arity_mismatch_shows_signature;
+          Alcotest.test_case "optional range" `Quick
+            test_arity_mismatch_optional_range;
+          Alcotest.test_case "rest args" `Quick test_arity_mismatch_rest_args;
+          Alcotest.test_case "no context" `Quick test_arity_mismatch_no_context;
         ] );
       ( "integration",
         [

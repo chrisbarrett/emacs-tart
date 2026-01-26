@@ -220,6 +220,84 @@ let function_arg_note fn_name fn_type arg_index expected : related_location list
     };
   ]
 
+(** Format expected arity range for display.
+
+    Takes the minimum required and optional count and formats as:
+    - "1 argument" for fixed arity with 1
+    - "2 arguments" for fixed arity
+    - "2-3 arguments" for range with optionals
+    - "2+ arguments" for functions with rest params *)
+let format_arity_range min_required optionals has_rest =
+  let arg_word n = if n = 1 then "argument" else "arguments" in
+  if has_rest then Printf.sprintf "%d+ %s" min_required (arg_word 2)
+  else if optionals = 0 then
+    Printf.sprintf "%d %s" min_required (arg_word min_required)
+  else
+    let max = min_required + optionals in
+    Printf.sprintf "%d-%d %s" min_required max (arg_word max)
+
+(** Count required vs optional parameters in a function type *)
+let count_params params =
+  let rec aux min_required optionals has_rest = function
+    | [] -> (min_required, optionals, has_rest)
+    | Types.PPositional _ :: rest ->
+        aux (min_required + 1) optionals has_rest rest
+    | Types.POptional _ :: rest ->
+        aux min_required (optionals + 1) has_rest rest
+    | Types.PRest _ :: rest -> aux min_required optionals true rest
+    | Types.PKey _ :: rest -> aux min_required optionals has_rest rest
+  in
+  aux 0 0 false params
+
+(** Generate a note about function signature for arity errors *)
+let arity_function_note fn_name fn_type expected : related_location list =
+  let signature = format_function_signature fn_name fn_type in
+  let min_required, optionals, has_rest =
+    match Types.repr fn_type with
+    | Types.TArrow (params, _) -> count_params params
+    | _ -> (expected, 0, false)
+  in
+  let arity_str = format_arity_range min_required optionals has_rest in
+  [
+    {
+      span = Loc.dummy_span;
+      message =
+        Printf.sprintf "`%s` expects %s\n      %s" fn_name arity_str signature;
+    };
+  ]
+
+(** Create an arity mismatch diagnostic with function context *)
+let arity_mismatch_with_context ~span ~expected ~actual ~context () =
+  match context with
+  | Constraint.FunctionArg { fn_name; fn_type; _ } ->
+      let fn_related = arity_function_note fn_name fn_type expected in
+      let min_required, optionals, has_rest =
+        match Types.repr fn_type with
+        | Types.TArrow (params, _) -> count_params params
+        | _ -> (expected, 0, false)
+      in
+      let expected_str = format_arity_range min_required optionals has_rest in
+      let actual_str =
+        if actual = 1 then "1 argument"
+        else Printf.sprintf "%d arguments" actual
+      in
+      let message =
+        Printf.sprintf "wrong number of arguments: expected %s but got %s"
+          expected_str actual_str
+      in
+      {
+        severity = Error;
+        code = Some E0061;
+        span;
+        message;
+        expected = None;
+        actual = None;
+        related = fn_related;
+        help = [];
+      }
+  | Constraint.NoContext | Constraint.IfBranch _ ->
+      arity_mismatch ~span ~expected ~actual ()
+
 (** Generate a note about the other branch in an if expression *)
 let if_branch_note ~is_then ~other_branch_span ~other_branch_type :
     related_location list =
@@ -348,8 +426,8 @@ let of_unify_error (err : Unify.error) : t =
       type_mismatch_with_context ~span ~expected ~actual ~context ()
   | Unify.OccursCheck (tvar_id, typ, span) ->
       occurs_check ~span ~tvar_id ~typ ()
-  | Unify.ArityMismatch (expected, actual, span) ->
-      arity_mismatch ~span ~expected ~actual ()
+  | Unify.ArityMismatch (expected, actual, span, context) ->
+      arity_mismatch_with_context ~span ~expected ~actual ~context ()
 
 (** Convert a list of unification errors to diagnostics *)
 let of_unify_errors (errors : Unify.error list) : t list =

@@ -15,8 +15,9 @@ type error =
       (** Two concrete types that cannot unify, with optional context *)
   | OccursCheck of tvar_id * typ * Syntax.Location.span
       (** Type variable occurs in the type it's being unified with *)
-  | ArityMismatch of int * int * Syntax.Location.span
-      (** Function arities don't match: expected, actual *)
+  | ArityMismatch of int * int * Syntax.Location.span * C.context
+      (** Function arities don't match: expected, actual, with optional context
+      *)
 
 (** Format an error for display *)
 let error_to_string = function
@@ -26,7 +27,7 @@ let error_to_string = function
   | OccursCheck (id, ty, _) ->
       Printf.sprintf "Occurs check: type variable '_%d occurs in %s" id
         (to_string ty)
-  | ArityMismatch (expected, actual, _) ->
+  | ArityMismatch (expected, actual, _, _) ->
       Printf.sprintf "Arity mismatch: expected %d arguments but got %d" expected
         actual
 
@@ -34,12 +35,13 @@ let error_to_string = function
 let error_location = function
   | TypeMismatch (_, _, loc, _) -> loc
   | OccursCheck (_, _, loc) -> loc
-  | ArityMismatch (_, _, loc) -> loc
+  | ArityMismatch (_, _, loc, _) -> loc
 
 (** Get the context from an error *)
 let error_context = function
   | TypeMismatch (_, _, _, ctx) -> ctx
-  | OccursCheck _ | ArityMismatch _ -> C.NoContext
+  | OccursCheck _ -> C.NoContext
+  | ArityMismatch (_, _, _, ctx) -> ctx
 
 type 'a result = ('a, error) Result.t
 (** Result type for unification *)
@@ -261,7 +263,7 @@ and unify_param p1 p2 loc =
 let to_external_error (ctx : C.context) : internal_error -> error = function
   | ITypeMismatch (t1, t2, loc) -> TypeMismatch (t1, t2, loc, ctx)
   | IOccursCheck (id, ty, loc) -> OccursCheck (id, ty, loc)
-  | IArityMismatch (exp, act, loc) -> ArityMismatch (exp, act, loc)
+  | IArityMismatch (exp, act, loc) -> ArityMismatch (exp, act, loc, ctx)
 
 (** Solve a set of constraints.
 
