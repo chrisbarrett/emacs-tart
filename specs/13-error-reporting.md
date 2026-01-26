@@ -15,6 +15,10 @@ Produce clear, actionable error messages following Elm and Rust conventions.
 - **Contextual**: Show related code that explains "why"
 - **Consistent**: Follow a standard structure
 
+## Output
+
+Extends `lib/typing/diagnostic.ml` and `lib/lsp/handlers.ml`.
+
 ## Message Structure
 
 ```
@@ -64,7 +68,7 @@ help: convert the integer to a string first:
 42 |   (upcase (number-to-string count))
 ```
 
-**Verify:** Error pinpoints argument; suggests conversion
+**Verify:** `dune test`; error pinpoints argument; suggests conversion
 
 ### R2: Branch type mismatch
 
@@ -93,7 +97,7 @@ help: return a string in both cases:
 29 |       (number-to-string n)
 ```
 
-**Verify:** Both branches shown; help suggests fix
+**Verify:** `dune test`; both branches shown; help suggests fix
 
 ### R3: Possible nil errors
 
@@ -124,7 +128,7 @@ help: or provide a default:
 18 |   (upcase (or (get-name user) "Unknown"))
 ```
 
-**Verify:** Multiple help suggestions for nil handling
+**Verify:** `dune test`; multiple help suggestions for nil handling
 
 ### R4: Undefined variable with suggestion
 
@@ -146,7 +150,7 @@ help: a variable with a similar name exists:
 102|     (upcase string)
 ```
 
-**Verify:** Levenshtein-based suggestion for typos
+**Verify:** `dune test`; Levenshtein-based suggestion for typos
 
 ### R5: Arity mismatch
 
@@ -170,12 +174,18 @@ note: substring signature:
       (substring STRING FROM &optional TO) -> String
 ```
 
-**Verify:** Shows expected vs actual arity
+**Verify:** `dune test`; shows expected vs actual arity
 
 ### R6: Signature mismatch
 
-**Given** signature `(sig foo (-> (Int) String))`
-**And** implementation `(defun foo (x) (+ x 1))`
+**Given** signature in `lib.tart`:
+```elisp
+(defun foo (int) -> string)
+```
+**And** implementation in `lib.el`:
+```elisp
+(defun foo (x) (+ x 1))
+```
 **When** type-checked
 **Then** error:
 ```
@@ -184,16 +194,16 @@ error[E0308]: implementation does not match signature
    |
 10 | (defun foo (x) (+ x 1))
    | ^^^^^^^^^^^^^^^^^^^^^^^
-   | signature declares: (-> (Int) String)
-   | implementation has: (-> (Int) Int)
+   | signature declares: (int) -> string
+   | implementation has: (int) -> int
    |
   --> lib.tart:5:1
    |
- 5 | (sig foo (-> (Int) String))
+ 5 | (defun foo (int) -> string)
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^ signature declared here
 ```
 
-**Verify:** Shows both signature and implementation locations
+**Verify:** `dune test`; shows both signature and implementation locations
 
 ### R7: LSP diagnostic mapping
 
@@ -204,7 +214,7 @@ error[E0308]: implementation does not match signature
 - Secondary spans → `DiagnosticRelatedInformation`
 - Help → appended to message or `CodeAction`
 
-**Verify:** LSP clients show related information
+**Verify:** `dune test`; LSP clients show related information
 
 ## Error Codes
 
@@ -227,3 +237,5 @@ error[E0308]: implementation does not match signature
 - [ ] [R5] Implement arity error formatting
 - [ ] [R6] Implement signature mismatch formatting
 - [ ] [R7] Map to LSP diagnostic format
+
+Run review agent after R1-R3 work (basic error formatting) before implementing R4-R6.
