@@ -1449,6 +1449,55 @@ let test_load_subr_x () =
       | None -> Alcotest.fail "string-remove-prefix not found in env"
       | Some _ -> ())
 
+(** Test that rx.tart parses successfully *)
+let test_parse_rx () =
+  let path = Filename.concat stdlib_dir "rx.tart" in
+  if not (Sys.file_exists path) then
+    Alcotest.fail ("rx.tart not found at: " ^ path);
+  match Search_path.parse_signature_file path with
+  | None -> Alcotest.fail "rx.tart failed to parse"
+  | Some sig_file ->
+      Alcotest.(check string) "module name" "rx" sig_file.sig_module;
+      Alcotest.(check bool)
+        "has declarations" true
+        (List.length sig_file.sig_decls >= 1);
+      (* Check key rx functions *)
+      let has_defun name =
+        List.exists
+          (function Sig_ast.DDefun d -> d.defun_name = name | _ -> false)
+          sig_file.sig_decls
+      in
+      Alcotest.(check bool) "has rx-to-string" true (has_defun "rx-to-string")
+
+(** Test that rx can be loaded into type environment *)
+let test_load_rx () =
+  let sp = Search_path.empty |> Search_path.with_stdlib stdlib_dir in
+  (* First load builtins for base types *)
+  let base_env =
+    match
+      Search_path.load_module ~search_path:sp ~env:Type_env.empty "builtins"
+    with
+    | None -> Alcotest.fail "failed to load builtins module"
+    | Some env -> env
+  in
+  match Search_path.load_module ~search_path:sp ~env:base_env "rx" with
+  | None -> Alcotest.fail "failed to load rx module"
+  | Some env ->
+      (* Check that rx-to-string is loaded *)
+      (match Type_env.lookup "rx-to-string" env with
+      | None -> Alcotest.fail "rx-to-string not found in env"
+      | Some _ -> ());
+      (* Verify type checking works - rx-to-string should return String *)
+      let ty, errors = check_expr_str ~env "(rx-to-string '(any))" in
+      Alcotest.(check int) "rx-to-string: no errors" 0 (List.length errors);
+      let ty_str = Types.to_string ty in
+      Alcotest.(check bool)
+        "rx-to-string returns string type" true
+        (try
+           let _ = Str.search_forward (Str.regexp_string "String") ty_str 0 in
+           true
+         with Not_found -> false)
+
 let () =
   Alcotest.run "search_path"
     [
@@ -1524,5 +1573,7 @@ let () =
           Alcotest.test_case "load map into env" `Quick test_load_map;
           Alcotest.test_case "parse subr-x.tart" `Quick test_parse_subr_x;
           Alcotest.test_case "load subr-x into env" `Quick test_load_subr_x;
+          Alcotest.test_case "parse rx.tart" `Quick test_parse_rx;
+          Alcotest.test_case "load rx into env" `Quick test_load_rx;
         ] );
     ]

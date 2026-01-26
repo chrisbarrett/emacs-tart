@@ -1,0 +1,21 @@
+;;; rx.tart --- Type signatures for rx.el (regular expression builder)
+
+;; rx.el provides a macro system for building regular expressions from
+;; s-expressions. Since rx is a macro system, type-checking is limited.
+;; We provide signatures for the functions that take expressions at runtime.
+
+;; rx-to-string converts an rx expression to a string regexp
+;; The first argument is the rx form (as a quoted list), the second is
+;; an optional flag for whether to add grouping.
+(defun rx-to-string (any &optional bool) -> string)
+
+;; rx--translate-form is an internal function but sometimes used directly
+(defun rx--translate-form (any) -> (pair string any))
+
+;; rx-define is a function form of the rx-define macro for runtime definitions
+;; It takes a name symbol and a definition form
+(defun rx-define (symbol &optional any) -> nil)
+
+;; rx-let-eval evaluates body with local rx bindings at runtime
+;; Takes an alist of bindings and a body expression
+(defun rx-let-eval (any any) -> any)
