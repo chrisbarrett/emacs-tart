@@ -413,15 +413,15 @@ Enable type variables to be shared across multiple signatures within a scope.
 
 ### 16.3 Advanced Features
 
-- [ ] [R4] Integrate with kind inference for HK scoped variables
+- [x] [R4] Integrate with kind inference for HK scoped variables
 - [x] [R5] Implement nested scope shadowing
 - [x] [R6] Handle opaque types in scopes
-- [ ] Verify: HK scopes and nesting work correctly
+- [x] Verify: HK scopes and nesting work correctly
 
 ### 16.4 Integration
 
 - [x] [R7] Export scoped declarations with correct polymorphic types
-- [ ] Verify: Exported functions usable from other modules
+- [x] Verify: Exported functions usable from other modules
 
 ---
 
@@ -456,4 +456,4 @@ The following areas are mentioned as future work in the specs:
 13. **Phase 13**: Expanded stdlib ✓
 14. **Phase 14**: Higher-Kinded Types ✓
 15. **Phase 15**: Explicit Type Instantiation ✓
-16. **Phase 16**: Scoped Type Variables
+16. **Phase 16**: Scoped Type Variables ✓

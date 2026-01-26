@@ -692,6 +692,88 @@ let test_three_way_circular_deps () =
       ())
 
 (* =============================================================================
+   Type-Scope Cross-Module Tests (Spec 19 R7)
+   ============================================================================= *)
+
+(** R7: Functions exported from type-scope are usable from other modules *)
+let test_type_scope_cross_module () =
+  let files =
+    [
+      ("iter.el", "(defun make-iter (lst) lst)\n(defun iter-next (it) (car it))");
+      ( "iter.tart",
+        {|
+        (type iter)
+        (type-scope [a]
+          (defun make-iter ((list a)) -> iter)
+          (defun iter-next (iter) -> (a | nil)))
+      |}
+      );
+      ("main.el", "(require 'iter)\n(iter-next (make-iter '(1 2 3)))");
+    ]
+  in
+  with_temp_dir files (fun dir ->
+      let config = Module_check.default_config () in
+      let el_path = Filename.concat dir "main.el" in
+      let main_content = "(require 'iter)\n(iter-next (make-iter '(1 2 3)))" in
+      let sexps = parse main_content in
+      let result = Module_check.check_module ~config ~filename:el_path sexps in
+      (* Type-scope functions should be callable from another module *)
+      Alcotest.(check int) "no type errors" 0 (List.length result.type_errors))
+
+(** R7: Type-scope exported functions detect type errors in other modules *)
+let test_type_scope_cross_module_type_error () =
+  let files =
+    [
+      ("iter.el", "(defun make-iter (lst) lst)");
+      ( "iter.tart",
+        {|
+        (type iter)
+        (type-scope [a]
+          (defun make-iter ((list a)) -> iter))
+      |}
+      );
+      (* Passing string where list is expected *)
+      ("main.el", "(require 'iter)\n(make-iter \"not a list\")");
+    ]
+  in
+  with_temp_dir files (fun dir ->
+      let config = Module_check.default_config () in
+      let el_path = Filename.concat dir "main.el" in
+      let main_content = "(require 'iter)\n(make-iter \"not a list\")" in
+      let sexps = parse main_content in
+      let result = Module_check.check_module ~config ~filename:el_path sexps in
+      (* Should have type error - string is not (list a) *)
+      Alcotest.(check bool)
+        "has type error" true
+        (List.length result.type_errors > 0))
+
+(** R4: HK type-scope functions usable from other modules *)
+let test_hk_type_scope_cross_module () =
+  let files =
+    [
+      ("functor.el", "(defun fmap-f (fn container) (mapcar fn container))");
+      ( "functor.tart",
+        {|
+        (type-scope [(f : (* -> *))]
+          (defun fmap-f [a b] (((a -> b)) (f a)) -> (f b)))
+      |}
+      );
+      (* Use fmap-f from another module - should work polymorphically *)
+      ("main.el", "(require 'functor)\n(fmap-f (lambda (x) (+ x 1)) '(1 2 3))");
+    ]
+  in
+  with_temp_dir files (fun dir ->
+      let config = Module_check.default_config () in
+      let el_path = Filename.concat dir "main.el" in
+      let main_content =
+        "(require 'functor)\n(fmap-f (lambda (x) (+ x 1)) '(1 2 3))"
+      in
+      let sexps = parse main_content in
+      let result = Module_check.check_module ~config ~filename:el_path sexps in
+      (* HK type-scope functions should be callable from other modules *)
+      Alcotest.(check int) "no type errors" 0 (List.length result.type_errors))
+
+(* =============================================================================
    Test Suite
    ============================================================================= *)
 
@@ -797,5 +879,14 @@ let () =
             test_inline_polymorphic_matches_tart;
           Alcotest.test_case "no inline uses inferred" `Quick
             test_no_inline_uses_inferred;
+        ] );
+      ( "type_scope_cross_module",
+        [
+          Alcotest.test_case "basic cross-module" `Quick
+            test_type_scope_cross_module;
+          Alcotest.test_case "type error cross-module" `Quick
+            test_type_scope_cross_module_type_error;
+          Alcotest.test_case "HK cross-module" `Quick
+            test_hk_type_scope_cross_module;
         ] );
     ]
