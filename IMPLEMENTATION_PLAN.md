@@ -323,7 +323,7 @@ Broader coverage of common Emacs packages.
 ### 13.4 Common Packages
 
 - [x] Add `stdlib/dash.tart` for dash.el
-- [ ] Add `stdlib/s.tart` for s.el
+- [x] Add `stdlib/s.tart` for s.el
 - [ ] Add `stdlib/f.tart` for f.el
 - [ ] Verify: Code using these packages type-checks
 

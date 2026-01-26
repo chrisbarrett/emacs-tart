@@ -1084,6 +1084,100 @@ let test_load_dash () =
             "-reduce-from has arrow type" true
             (String.length scheme_str > 0))
 
+(** Test that s.tart parses successfully *)
+let test_parse_s () =
+  let path = Filename.concat stdlib_dir "s.tart" in
+  if not (Sys.file_exists path) then
+    Alcotest.fail ("s.tart not found at: " ^ path);
+  match Search_path.parse_signature_file path with
+  | None -> Alcotest.fail "s.tart failed to parse"
+  | Some sig_file ->
+      Alcotest.(check string) "module name" "s" sig_file.sig_module;
+      Alcotest.(check bool)
+        "has declarations" true
+        (List.length sig_file.sig_decls > 50);
+      (* Check key s.el functions *)
+      let has_defun name =
+        List.exists
+          (function Sig_ast.DDefun d -> d.defun_name = name | _ -> false)
+          sig_file.sig_decls
+      in
+      Alcotest.(check bool) "has s-trim" true (has_defun "s-trim");
+      Alcotest.(check bool) "has s-split" true (has_defun "s-split");
+      Alcotest.(check bool) "has s-join" true (has_defun "s-join");
+      Alcotest.(check bool) "has s-replace" true (has_defun "s-replace");
+      Alcotest.(check bool) "has s-contains?" true (has_defun "s-contains?");
+      Alcotest.(check bool) "has s-downcase" true (has_defun "s-downcase");
+      Alcotest.(check bool) "has s-upcase" true (has_defun "s-upcase");
+      Alcotest.(check bool) "has s-snake-case" true (has_defun "s-snake-case");
+      Alcotest.(check bool)
+        "has s-lower-camel-case" true
+        (has_defun "s-lower-camel-case")
+
+(** Test that s can be loaded into type environment *)
+let test_load_s () =
+  let sp = Search_path.empty |> Search_path.with_stdlib stdlib_dir in
+  (* First load builtins for base types *)
+  let base_env =
+    match
+      Search_path.load_module ~search_path:sp ~env:Type_env.empty "builtins"
+    with
+    | None -> Alcotest.fail "failed to load builtins module"
+    | Some env -> env
+  in
+  match Search_path.load_module ~search_path:sp ~env:base_env "s" with
+  | None -> Alcotest.fail "failed to load s module"
+  | Some env ->
+      (* Check that s-trim is loaded *)
+      (match Type_env.lookup "s-trim" env with
+      | None -> Alcotest.fail "s-trim not found in env"
+      | Some _ -> ());
+      (* Check that s-split is loaded *)
+      (match Type_env.lookup "s-split" env with
+      | None -> Alcotest.fail "s-split not found in env"
+      | Some _ -> ());
+      (* Check that s-join is loaded *)
+      (match Type_env.lookup "s-join" env with
+      | None -> Alcotest.fail "s-join not found in env"
+      | Some _ -> ());
+      (* Check that s-replace is loaded *)
+      (match Type_env.lookup "s-replace" env with
+      | None -> Alcotest.fail "s-replace not found in env"
+      | Some _ -> ());
+      (* Verify type checking works with s.el functions *)
+      let ty, errors = check_expr_str ~env "(s-trim \"  hello  \")" in
+      Alcotest.(check int) "s-trim: no errors" 0 (List.length errors);
+      (* Result should be String *)
+      let ty_str = Types.to_string ty in
+      Alcotest.(check bool)
+        "s-trim returns string type" true
+        (try
+           let _ = Str.search_forward (Str.regexp_string "String") ty_str 0 in
+           true
+         with Not_found -> false);
+      (* Check s-split returns list of strings *)
+      let ty2, errors2 = check_expr_str ~env "(s-split \",\" \"a,b,c\")" in
+      Alcotest.(check int) "s-split: no errors" 0 (List.length errors2);
+      let ty2_str = Types.to_string ty2 in
+      Alcotest.(check bool)
+        "s-split returns list of strings" true
+        (try
+           let _ = Str.search_forward (Str.regexp_string "List") ty2_str 0 in
+           true
+         with Not_found -> false);
+      (* Check s-contains? returns bool *)
+      let ty3, errors3 =
+        check_expr_str ~env "(s-contains? \"hello\" \"hello world\")"
+      in
+      Alcotest.(check int) "s-contains?: no errors" 0 (List.length errors3);
+      let ty3_str = Types.to_string ty3 in
+      Alcotest.(check bool)
+        "s-contains? returns bool" true
+        (try
+           let _ = Str.search_forward (Str.regexp_string "Bool") ty3_str 0 in
+           true
+         with Not_found -> false)
+
 let () =
   Alcotest.run "search_path"
     [
@@ -1149,5 +1243,7 @@ let () =
           Alcotest.test_case "load overlays into env" `Quick test_load_overlays;
           Alcotest.test_case "parse dash.tart" `Quick test_parse_dash;
           Alcotest.test_case "load dash into env" `Quick test_load_dash;
+          Alcotest.test_case "parse s.tart" `Quick test_parse_s;
+          Alcotest.test_case "load s into env" `Quick test_load_s;
         ] );
     ]
