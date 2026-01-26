@@ -19,13 +19,18 @@ the type checker for:
 - **Consistent syntax**: Type expressions use same grammar as `.tart` files
 - **Assert semantics**: Type annotations are checked, not trusted
 - **Invariant containers**: Parameterized types are invariant for soundness
+- **Minimal dependencies**: `tart.el` has no dependencies beyond Emacs core, so
+  packages can `(require 'tart)` without pulling in development tooling
 
 ## Output
 
 ```
 lisp/
-└── tart.el              ; Runtime library (extends Spec 10)
+└── tart.el              ; Runtime macros only (no dev tooling)
 ```
+
+Note: Development tooling (REPL, eglot integration, minor mode) lives in
+`tart-mode.el` (see Spec 10).
 
 ## Requirements
 

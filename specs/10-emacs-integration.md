@@ -6,20 +6,23 @@ Emacs package providing tart REPL, LSP integration, and interactive commands.
 
 ## Goal
 
-Provide `lisp/tart.el` with an inferior process mode for the tart REPL, eglot
-configuration, and commands for interactive type exploration.
+Provide `lisp/tart-mode.el` with an inferior process mode for the tart REPL,
+eglot configuration, and commands for interactive type exploration.
 
 ## Constraints
 
 - **Emacs 29+**: Use built-in eglot; no external dependencies beyond comint
 - **Standard patterns**: Follow inferior-lisp, comint, and eglot conventions
 - **Non-intrusive**: Don't modify elisp-mode globally; use hooks and minor modes
+- **Separate from runtime**: Development tooling is separate from `tart.el`
+  runtime macros, so packages can depend on `tart.el` without loading dev tools
 
 ## Output
 
 ```
 lisp/
-└── tart.el              ; All functionality in one file
+├── tart.el              ; Runtime macros only (see Spec 14)
+└── tart-mode.el         ; Development tooling (REPL, eglot, minor mode)
 ```
 
 ## Requirements
