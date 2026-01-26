@@ -356,6 +356,331 @@ let test_did_close () =
     "doc removed after close" true
     (Option.is_none (Document.get_doc (Server.documents server) "file:///test.el"))
 
+(** {1 Diagnostics Tests} *)
+
+(** Helper to parse all JSON-RPC messages from output *)
+let parse_messages (output : string) : Yojson.Safe.t list =
+  let rec parse_all offset acc =
+    if offset >= String.length output then List.rev acc
+    else
+      (* Find Content-Length header *)
+      let header_end =
+        try String.index_from output offset '\r'
+        with Not_found -> String.length output
+      in
+      if header_end >= String.length output then List.rev acc
+      else
+        let header = String.sub output offset (header_end - offset) in
+        let re = Str.regexp "Content-Length: \\([0-9]+\\)" in
+        if Str.string_match re header 0 then
+          let content_length = int_of_string (Str.matched_group 1 header) in
+          (* Skip past \r\n\r\n to content *)
+          let content_start = header_end + 4 in
+          if content_start + content_length <= String.length output then
+            let content = String.sub output content_start content_length in
+            let json = Yojson.Safe.from_string content in
+            parse_all (content_start + content_length) (json :: acc)
+          else List.rev acc
+        else List.rev acc
+  in
+  parse_all 0 []
+
+(** Helper to find a publishDiagnostics notification in messages *)
+let find_publish_diagnostics (messages : Yojson.Safe.t list) (uri : string) :
+    Yojson.Safe.t option =
+  let open Yojson.Safe.Util in
+  List.find_opt
+    (fun json ->
+      match json |> member "method" with
+      | `String "textDocument/publishDiagnostics" ->
+          let params = json |> member "params" in
+          params |> member "uri" |> to_string = uri
+      | _ -> false)
+    messages
+
+let test_diagnostics_on_open () =
+  let init_msg =
+    make_message ~id:(`Int 1) ~method_:"initialize"
+      ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+      ()
+  in
+  (* Open a document with a type error: adding string to int *)
+  let did_open_msg =
+    make_message ~method_:"textDocument/didOpen"
+      ~params:
+        (`Assoc
+          [
+            ( "textDocument",
+              `Assoc
+                [
+                  ("uri", `String "file:///test.el");
+                  ("languageId", `String "elisp");
+                  ("version", `Int 1);
+                  ("text", `String "(+ 1 \"hello\")");
+                ] );
+          ])
+      ()
+  in
+  let shutdown_msg = make_message ~id:(`Int 2) ~method_:"shutdown" () in
+  let exit_msg = make_message ~method_:"exit" () in
+  let input = init_msg ^ did_open_msg ^ shutdown_msg ^ exit_msg in
+  let in_file = Filename.temp_file "lsp_in" ".json" in
+  Out_channel.with_open_bin in_file (fun oc -> Out_channel.output_string oc input);
+  let ic = In_channel.open_bin in_file in
+  let out_file = Filename.temp_file "lsp_out" ".json" in
+  let oc = Out_channel.open_bin out_file in
+  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let exit_code = Server.run server in
+  In_channel.close ic;
+  Out_channel.close oc;
+  Alcotest.(check int) "exit code" 0 exit_code;
+  (* Parse output and find diagnostics notification *)
+  let output = In_channel.with_open_bin out_file In_channel.input_all in
+  let messages = parse_messages output in
+  match find_publish_diagnostics messages "file:///test.el" with
+  | None -> Alcotest.fail "No publishDiagnostics notification found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let params = json |> member "params" in
+      let diagnostics = params |> member "diagnostics" |> to_list in
+      Alcotest.(check bool) "has diagnostics" true (List.length diagnostics > 0);
+      (* Check the first diagnostic has expected fields *)
+      let first = List.hd diagnostics in
+      Alcotest.(check bool) "has range" true (first |> member "range" <> `Null);
+      Alcotest.(check bool) "has message" true (first |> member "message" <> `Null);
+      Alcotest.(check bool) "has severity" true (first |> member "severity" <> `Null);
+      Alcotest.(check string) "source is tart" "tart"
+        (first |> member "source" |> to_string)
+
+let test_diagnostics_on_change () =
+  let init_msg =
+    make_message ~id:(`Int 1) ~method_:"initialize"
+      ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+      ()
+  in
+  (* Open a valid document first *)
+  let did_open_msg =
+    make_message ~method_:"textDocument/didOpen"
+      ~params:
+        (`Assoc
+          [
+            ( "textDocument",
+              `Assoc
+                [
+                  ("uri", `String "file:///test.el");
+                  ("languageId", `String "elisp");
+                  ("version", `Int 1);
+                  ("text", `String "(+ 1 2)");
+                ] );
+          ])
+      ()
+  in
+  (* Change it to have an error *)
+  let did_change_msg =
+    make_message ~method_:"textDocument/didChange"
+      ~params:
+        (`Assoc
+          [
+            ( "textDocument",
+              `Assoc
+                [ ("uri", `String "file:///test.el"); ("version", `Int 2) ] );
+            ( "contentChanges",
+              `List
+                [
+                  `Assoc
+                    [
+                      ("text", `String "(+ 1 \"bad\")");
+                    ];
+                ] );
+          ])
+      ()
+  in
+  let shutdown_msg = make_message ~id:(`Int 2) ~method_:"shutdown" () in
+  let exit_msg = make_message ~method_:"exit" () in
+  let input = init_msg ^ did_open_msg ^ did_change_msg ^ shutdown_msg ^ exit_msg in
+  let in_file = Filename.temp_file "lsp_in" ".json" in
+  Out_channel.with_open_bin in_file (fun oc -> Out_channel.output_string oc input);
+  let ic = In_channel.open_bin in_file in
+  let out_file = Filename.temp_file "lsp_out" ".json" in
+  let oc = Out_channel.open_bin out_file in
+  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let exit_code = Server.run server in
+  In_channel.close ic;
+  Out_channel.close oc;
+  Alcotest.(check int) "exit code" 0 exit_code;
+  (* Parse output and look for diagnostics *)
+  let output = In_channel.with_open_bin out_file In_channel.input_all in
+  let messages = parse_messages output in
+  (* We should have at least 2 diagnostics notifications (one for open, one for change) *)
+  let diag_notifications =
+    List.filter
+      (fun json ->
+        let open Yojson.Safe.Util in
+        json |> member "method" = `String "textDocument/publishDiagnostics")
+      messages
+  in
+  Alcotest.(check bool)
+    "has multiple diagnostics notifications"
+    true
+    (List.length diag_notifications >= 2)
+
+let test_diagnostics_cleared_on_close () =
+  let init_msg =
+    make_message ~id:(`Int 1) ~method_:"initialize"
+      ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+      ()
+  in
+  let did_open_msg =
+    make_message ~method_:"textDocument/didOpen"
+      ~params:
+        (`Assoc
+          [
+            ( "textDocument",
+              `Assoc
+                [
+                  ("uri", `String "file:///test.el");
+                  ("languageId", `String "elisp");
+                  ("version", `Int 1);
+                  ("text", `String "(+ 1 \"error\")");
+                ] );
+          ])
+      ()
+  in
+  let did_close_msg =
+    make_message ~method_:"textDocument/didClose"
+      ~params:
+        (`Assoc
+          [ ("textDocument", `Assoc [ ("uri", `String "file:///test.el") ]) ])
+      ()
+  in
+  let shutdown_msg = make_message ~id:(`Int 2) ~method_:"shutdown" () in
+  let exit_msg = make_message ~method_:"exit" () in
+  let input = init_msg ^ did_open_msg ^ did_close_msg ^ shutdown_msg ^ exit_msg in
+  let in_file = Filename.temp_file "lsp_in" ".json" in
+  Out_channel.with_open_bin in_file (fun oc -> Out_channel.output_string oc input);
+  let ic = In_channel.open_bin in_file in
+  let out_file = Filename.temp_file "lsp_out" ".json" in
+  let oc = Out_channel.open_bin out_file in
+  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let exit_code = Server.run server in
+  In_channel.close ic;
+  Out_channel.close oc;
+  Alcotest.(check int) "exit code" 0 exit_code;
+  (* Parse output and find the last diagnostics for this file (should be empty) *)
+  let output = In_channel.with_open_bin out_file In_channel.input_all in
+  let messages = parse_messages output in
+  let diag_notifications =
+    List.filter
+      (fun json ->
+        let open Yojson.Safe.Util in
+        match json |> member "method" with
+        | `String "textDocument/publishDiagnostics" ->
+            json |> member "params" |> member "uri" |> to_string = "file:///test.el"
+        | _ -> false)
+      messages
+  in
+  (* The last notification should have empty diagnostics *)
+  match List.rev diag_notifications with
+  | [] -> Alcotest.fail "No diagnostics notifications found"
+  | last :: _ ->
+      let open Yojson.Safe.Util in
+      let diagnostics = last |> member "params" |> member "diagnostics" |> to_list in
+      Alcotest.(check int) "diagnostics cleared" 0 (List.length diagnostics)
+
+let test_diagnostics_valid_document () =
+  let init_msg =
+    make_message ~id:(`Int 1) ~method_:"initialize"
+      ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+      ()
+  in
+  (* Open a valid document - should have no diagnostics *)
+  let did_open_msg =
+    make_message ~method_:"textDocument/didOpen"
+      ~params:
+        (`Assoc
+          [
+            ( "textDocument",
+              `Assoc
+                [
+                  ("uri", `String "file:///test.el");
+                  ("languageId", `String "elisp");
+                  ("version", `Int 1);
+                  ("text", `String "(+ 1 2)");
+                ] );
+          ])
+      ()
+  in
+  let shutdown_msg = make_message ~id:(`Int 2) ~method_:"shutdown" () in
+  let exit_msg = make_message ~method_:"exit" () in
+  let input = init_msg ^ did_open_msg ^ shutdown_msg ^ exit_msg in
+  let in_file = Filename.temp_file "lsp_in" ".json" in
+  Out_channel.with_open_bin in_file (fun oc -> Out_channel.output_string oc input);
+  let ic = In_channel.open_bin in_file in
+  let out_file = Filename.temp_file "lsp_out" ".json" in
+  let oc = Out_channel.open_bin out_file in
+  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let exit_code = Server.run server in
+  In_channel.close ic;
+  Out_channel.close oc;
+  Alcotest.(check int) "exit code" 0 exit_code;
+  (* Parse output and find diagnostics notification *)
+  let output = In_channel.with_open_bin out_file In_channel.input_all in
+  let messages = parse_messages output in
+  match find_publish_diagnostics messages "file:///test.el" with
+  | None -> Alcotest.fail "No publishDiagnostics notification found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let params = json |> member "params" in
+      let diagnostics = params |> member "diagnostics" |> to_list in
+      Alcotest.(check int) "no diagnostics for valid code" 0 (List.length diagnostics)
+
+let test_diagnostics_parse_error () =
+  let init_msg =
+    make_message ~id:(`Int 1) ~method_:"initialize"
+      ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+      ()
+  in
+  (* Open a document with a parse error: unclosed paren *)
+  let did_open_msg =
+    make_message ~method_:"textDocument/didOpen"
+      ~params:
+        (`Assoc
+          [
+            ( "textDocument",
+              `Assoc
+                [
+                  ("uri", `String "file:///test.el");
+                  ("languageId", `String "elisp");
+                  ("version", `Int 1);
+                  ("text", `String "(defun foo (");
+                ] );
+          ])
+      ()
+  in
+  let shutdown_msg = make_message ~id:(`Int 2) ~method_:"shutdown" () in
+  let exit_msg = make_message ~method_:"exit" () in
+  let input = init_msg ^ did_open_msg ^ shutdown_msg ^ exit_msg in
+  let in_file = Filename.temp_file "lsp_in" ".json" in
+  Out_channel.with_open_bin in_file (fun oc -> Out_channel.output_string oc input);
+  let ic = In_channel.open_bin in_file in
+  let out_file = Filename.temp_file "lsp_out" ".json" in
+  let oc = Out_channel.open_bin out_file in
+  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let exit_code = Server.run server in
+  In_channel.close ic;
+  Out_channel.close oc;
+  Alcotest.(check int) "exit code" 0 exit_code;
+  (* Parse output and find diagnostics notification *)
+  let output = In_channel.with_open_bin out_file In_channel.input_all in
+  let messages = parse_messages output in
+  match find_publish_diagnostics messages "file:///test.el" with
+  | None -> Alcotest.fail "No publishDiagnostics notification found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let params = json |> member "params" in
+      let diagnostics = params |> member "diagnostics" |> to_list in
+      Alcotest.(check bool) "has parse error diagnostic" true (List.length diagnostics > 0)
+
 let () =
   Alcotest.run "server"
     [
@@ -373,5 +698,13 @@ let () =
           Alcotest.test_case "didOpen" `Quick test_did_open;
           Alcotest.test_case "didChange incremental" `Quick test_did_change_incremental;
           Alcotest.test_case "didClose" `Quick test_did_close;
+        ] );
+      ( "diagnostics",
+        [
+          Alcotest.test_case "on open with errors" `Quick test_diagnostics_on_open;
+          Alcotest.test_case "on change" `Quick test_diagnostics_on_change;
+          Alcotest.test_case "cleared on close" `Quick test_diagnostics_cleared_on_close;
+          Alcotest.test_case "valid document" `Quick test_diagnostics_valid_document;
+          Alcotest.test_case "parse error" `Quick test_diagnostics_parse_error;
         ] );
     ]

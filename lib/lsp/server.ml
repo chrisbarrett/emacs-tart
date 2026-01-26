@@ -56,6 +56,86 @@ let capabilities () : Protocol.server_capabilities =
     hover_provider = true;
   }
 
+(** Extract filename from a file:// URI.
+    Returns the path portion, or the raw URI if not a file:// URI. *)
+let filename_of_uri (uri : string) : string =
+  if String.length uri > 7 && String.sub uri 0 7 = "file://" then
+    String.sub uri 7 (String.length uri - 7)
+  else
+    uri
+
+(** Convert a source location span to an LSP range.
+    Note: Loc.span has 1-based lines and 0-based columns.
+    LSP uses 0-based lines and 0-based characters (UTF-16 code units, but
+    we approximate with bytes). *)
+let range_of_span (span : Syntax.Location.span) : Protocol.range =
+  {
+    Protocol.start = {
+      line = span.start_pos.line - 1;  (* Convert to 0-based *)
+      character = span.start_pos.col;
+    };
+    end_ = {
+      line = span.end_pos.line - 1;
+      character = span.end_pos.col;
+    };
+  }
+
+(** Convert a Typing.Diagnostic.t to an LSP diagnostic *)
+let lsp_diagnostic_of_diagnostic (d : Typing.Diagnostic.t) : Protocol.diagnostic =
+  let severity =
+    match d.severity with
+    | Typing.Diagnostic.Error -> Protocol.Error
+    | Typing.Diagnostic.Warning -> Protocol.Warning
+    | Typing.Diagnostic.Hint -> Protocol.Hint
+  in
+  {
+    Protocol.range = range_of_span d.span;
+    severity = Some severity;
+    message = d.message;
+    source = Some "tart";
+  }
+
+(** Convert a parse error to an LSP diagnostic *)
+let lsp_diagnostic_of_parse_error (err : Syntax.Read.parse_error) : Protocol.diagnostic =
+  {
+    Protocol.range = range_of_span err.span;
+    severity = Some Protocol.Error;
+    message = err.message;
+    source = Some "tart";
+  }
+
+(** Type-check a document and return LSP diagnostics.
+    Returns parse errors if parsing fails, otherwise type errors. *)
+let check_document (uri : string) (text : string) : Protocol.diagnostic list =
+  let filename = filename_of_uri uri in
+  let parse_result = Syntax.Read.parse_string ~filename text in
+  (* Collect parse errors *)
+  let parse_diagnostics = List.map lsp_diagnostic_of_parse_error parse_result.errors in
+  (* If we have sexps, type-check them *)
+  let type_diagnostics =
+    if parse_result.sexps = [] then []
+    else
+      let check_result = Typing.Check.check_program parse_result.sexps in
+      let typing_diagnostics = Typing.Diagnostic.of_unify_errors check_result.errors in
+      List.map lsp_diagnostic_of_diagnostic typing_diagnostics
+  in
+  parse_diagnostics @ type_diagnostics
+
+(** Publish diagnostics for a document *)
+let publish_diagnostics (server : t) (uri : string) (version : int option) : unit =
+  match Document.get_doc server.documents uri with
+  | None -> ()
+  | Some doc ->
+      let diagnostics = check_document uri doc.text in
+      let params : Protocol.publish_diagnostics_params =
+        { uri; version; diagnostics }
+      in
+      debug server (Printf.sprintf "Publishing %d diagnostics for %s"
+        (List.length diagnostics) uri);
+      Rpc.write_notification server.oc
+        ~method_:"textDocument/publishDiagnostics"
+        ~params:(Protocol.publish_diagnostics_params_to_json params)
+
 (** Handle initialize request *)
 let handle_initialize (server : t) (params : Yojson.Safe.t option) :
     (Yojson.Safe.t, Rpc.response_error) result =
@@ -131,7 +211,9 @@ let handle_did_open (server : t) (params : Yojson.Safe.t option) : unit =
         Document.text_document_item_of_json text_document
       in
       Document.open_doc server.documents ~uri ~version ~text;
-      debug server (Printf.sprintf "Opened document: %s (version %d)" uri version)
+      debug server (Printf.sprintf "Opened document: %s (version %d)" uri version);
+      (* Publish diagnostics for the newly opened document *)
+      publish_diagnostics server uri (Some version)
 
 (** Handle textDocument/didChange notification *)
 let handle_did_change (server : t) (params : Yojson.Safe.t option) : unit =
@@ -150,7 +232,9 @@ let handle_did_change (server : t) (params : Yojson.Safe.t option) : unit =
       (match Document.apply_changes server.documents ~uri ~version changes with
       | Ok () ->
           debug server
-            (Printf.sprintf "Changed document: %s (version %d)" uri version)
+            (Printf.sprintf "Changed document: %s (version %d)" uri version);
+          (* Publish diagnostics for the changed document *)
+          publish_diagnostics server uri (Some version)
       | Error e ->
           info server
             (Printf.sprintf "Error applying changes to %s: %s" uri e))
@@ -164,7 +248,14 @@ let handle_did_close (server : t) (params : Yojson.Safe.t option) : unit =
       let text_document = json |> member "textDocument" in
       let uri = Document.text_document_identifier_of_json text_document in
       Document.close_doc server.documents ~uri;
-      debug server (Printf.sprintf "Closed document: %s" uri)
+      debug server (Printf.sprintf "Closed document: %s" uri);
+      (* Clear diagnostics for the closed document *)
+      let params : Protocol.publish_diagnostics_params =
+        { uri; version = None; diagnostics = [] }
+      in
+      Rpc.write_notification server.oc
+        ~method_:"textDocument/publishDiagnostics"
+        ~params:(Protocol.publish_diagnostics_params_to_json params)
 
 (** Dispatch a request to its handler *)
 let dispatch_request (server : t) (msg : Rpc.message) :

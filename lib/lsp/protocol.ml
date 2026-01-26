@@ -153,3 +153,77 @@ let initialize_response_to_json ~(result : initialize_result)
       ("capabilities", server_capabilities_to_json result.capabilities);
       ("serverInfo", server_info_to_json server_info);
     ]
+
+(** {1 Diagnostics} *)
+
+type diagnostic_severity =
+  | Error
+  | Warning
+  | Information
+  | Hint
+
+type position = {
+  line : int;
+  character : int;
+}
+
+type range = {
+  start : position;
+  end_ : position;
+}
+
+type diagnostic = {
+  range : range;
+  severity : diagnostic_severity option;
+  message : string;
+  source : string option;
+}
+
+type publish_diagnostics_params = {
+  uri : string;
+  version : int option;
+  diagnostics : diagnostic list;
+}
+
+let diagnostic_severity_to_int = function
+  | Error -> 1
+  | Warning -> 2
+  | Information -> 3
+  | Hint -> 4
+
+let position_to_json (pos : position) : Yojson.Safe.t =
+  `Assoc [ ("line", `Int pos.line); ("character", `Int pos.character) ]
+
+let range_to_json (range : range) : Yojson.Safe.t =
+  `Assoc [ ("start", position_to_json range.start); ("end", position_to_json range.end_) ]
+
+let diagnostic_to_json (d : diagnostic) : Yojson.Safe.t =
+  let fields =
+    [ ("range", range_to_json d.range); ("message", `String d.message) ]
+  in
+  let fields =
+    match d.severity with
+    | Some sev -> ("severity", `Int (diagnostic_severity_to_int sev)) :: fields
+    | None -> fields
+  in
+  let fields =
+    match d.source with
+    | Some src -> ("source", `String src) :: fields
+    | None -> fields
+  in
+  `Assoc fields
+
+let publish_diagnostics_params_to_json (params : publish_diagnostics_params) :
+    Yojson.Safe.t =
+  let fields =
+    [
+      ("uri", `String params.uri);
+      ("diagnostics", `List (List.map diagnostic_to_json params.diagnostics));
+    ]
+  in
+  let fields =
+    match params.version with
+    | Some v -> ("version", `Int v) :: fields
+    | None -> fields
+  in
+  `Assoc fields

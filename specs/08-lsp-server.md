@@ -168,13 +168,13 @@ responses with proper headers
 - [x] [R1] Implement JSON-RPC reader/writer
 - [x] [R2] Handle initialize/initialized/shutdown
 - [x] [R3] Implement document manager with incremental sync
-- [ ] [R4] Implement publishDiagnostics on document change
-- [ ] [R5] Ensure diagnostic ranges are accurate
+- [x] [R4] Implement publishDiagnostics on document change
+- [x] [R5] Ensure diagnostic ranges are accurate
 - [ ] [R6] Implement textDocument/hover
 - [ ] [R7] Show instantiated types on hover
 - [ ] [R8] Handle hover gracefully on errors
 - [ ] [R9] Add query-based caching for incrementality
-- [ ] [R10] Handle parse failures gracefully
-- [ ] [R11] Add logging with configurable levels
+- [x] [R10] Handle parse failures gracefully
+- [x] [R11] Add logging with configurable levels
 
 Run review agent after hover works in eglot before tagging v1.0-alpha.

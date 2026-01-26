@@ -69,3 +69,42 @@ type server_info = {
 (** Full initialize response with server info *)
 val initialize_response_to_json :
   result:initialize_result -> server_info:server_info -> Yojson.Safe.t
+
+(** {1 Diagnostics} *)
+
+(** LSP diagnostic severity *)
+type diagnostic_severity =
+  | Error
+  | Warning
+  | Information
+  | Hint
+
+(** A position in a document (0-based line and character) *)
+type position = {
+  line : int;
+  character : int;
+}
+
+(** A range in a document *)
+type range = {
+  start : position;
+  end_ : position;
+}
+
+(** A diagnostic represents a compiler error or warning *)
+type diagnostic = {
+  range : range;
+  severity : diagnostic_severity option;
+  message : string;
+  source : string option;
+}
+
+(** Parameters for textDocument/publishDiagnostics notification *)
+type publish_diagnostics_params = {
+  uri : string;
+  version : int option;
+  diagnostics : diagnostic list;
+}
+
+(** Encode publishDiagnostics params to JSON *)
+val publish_diagnostics_params_to_json : publish_diagnostics_params -> Yojson.Safe.t
