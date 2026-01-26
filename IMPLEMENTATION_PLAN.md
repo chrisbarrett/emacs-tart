@@ -54,10 +54,10 @@ Foundation for module boundaries and type-checked code.
 
 Faster git hooks improve every development iteration.
 
-- [ ] [R1] Add prek to flake.nix devShell packages
-- [ ] [R2] Update any docs referencing pre-commit
-- [ ] [R3] Run `prek install -f` to reinstall hooks
-- [ ] [R4] Verify all hooks pass with prek
+- [x] [R1] Add prek to flake.nix devShell packages
+- [x] [R2] Update any docs referencing pre-commit
+- [x] [R3] Run `prek install -f` to reinstall hooks
+- [x] [R4] Verify all hooks pass with prek
 
 ## Phase 3: Emacs LSP Integration (Specs 09, 10)
 

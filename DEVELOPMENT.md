@@ -80,10 +80,10 @@ This provides OCaml, dune, menhir, and all dependencies.
 dune test
 ```
 
-## Pre-commit Hooks
+## Git Hooks
 
-Install pre-commit hooks to run build, test, and format checks:
+Install git hooks to run build, test, and format checks:
 
 ```bash
-pre-commit install
+prek install
 ```
