@@ -181,7 +181,7 @@ macros.el
 
 ## Tasks
 
-- [ ] [R11] Refactor main.ml to use subcommand dispatch (cmdliner or manual)
+- [x] [R11] Refactor main.ml to use subcommand dispatch (cmdliner or manual)
 - [x] [R1] Implement default type-check command
 - [ ] [R2] Implement multi-file processing with definition accumulation
 - [ ] [R3,R4] Implement `eval` subcommand
