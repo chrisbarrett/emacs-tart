@@ -1,0 +1,206 @@
+# Implementation Plan
+
+Based on specs 07-15, this plan prioritizes tasks by dependencies and impact.
+
+## Phase 1: Complete Signature System (Spec 07)
+
+Foundation for module boundaries and type-checked code.
+
+### 1.1 Function and Variable Loading
+- [ ] [R5] Load `defun` signatures into type environment
+- [ ] [R6] Load `defvar` declarations into type environment
+- [ ] Verify: Type checker uses loaded signatures for calls
+
+### 1.2 Type Aliases
+- [ ] [R7] Load type aliases (with definition) into type context
+- [ ] [R8] Load parameterized type aliases with instantiation
+- [ ] Verify: Aliases expand correctly in type expressions
+
+### 1.3 Opaque Types
+- [ ] [R9] Load opaque types (no definition) as distinct abstract types
+- [ ] [R10] Handle opaque types with phantom type parameters
+- [ ] Verify: Opaque types not unifiable with other types
+
+### 1.4 Module Directives
+- [ ] [R12] Implement `open` directive (import types, not re-export)
+- [ ] [R13] Implement `include` directive (inline and re-export)
+- [ ] Verify: Opened types available but not exported
+
+### 1.5 Struct Imports
+- [ ] [R11] Implement `import-struct` to generate type, constructor, predicate, accessors
+- [ ] Verify: Struct accessor calls type-check based on slot types
+
+### 1.6 Signature Search Path
+- [ ] [R15] Implement `tart-type-path` search path configuration
+- [ ] [R16] Implement module discovery order (sibling, search path, stdlib)
+- [ ] Verify: `(require 'cl-lib)` loads signatures from search path
+
+### 1.7 Stdlib Signatures
+- [ ] [R17] Create `stdlib/builtins.tart` with arithmetic, list, string, predicate signatures
+- [ ] [R17] Create `stdlib/cl-lib.tart` with basic cl-lib signatures
+- [ ] [R17] Create `stdlib/seq.tart` with seq.el signatures
+- [ ] Verify: Built-in calls type-check correctly
+
+## Phase 2: Forall Inference (Spec 15)
+
+Reduces boilerplate in signature files.
+
+### 2.1 Implicit Quantification
+- [ ] [R1] Collect type variables in left-to-right first-occurrence order
+- [ ] [R2] Explicit quantifiers disable inference; error on unbound vars
+- [ ] Verify: `(defun seq-map (((a -> b)) (seq a)) -> (list b))` infers `[a b]`
+
+### 2.2 Edge Cases
+- [ ] [R3] Handle phantom type variables (only in return type)
+- [ ] [R4] Distinguish quoted literals from type variables
+- [ ] [R5] Traverse nested arrow types for variable collection
+- [ ] [R6] Deduplicate quantifier list
+- [ ] Verify: Inference handles all grammar productions
+
+## Phase 3: Module Boundaries (Spec 12)
+
+Enables type-checked module interactions.
+
+### 3.1 Basic Module Loading
+- [ ] [R1] Enable type checking for any `.el` file via LSP
+- [ ] [R2] Verify implementations match `.tart` signatures
+- [ ] [R3] Load signatures from search path for required modules
+- [ ] Verify: Mismatched implementations produce errors
+
+### 3.2 Public/Private Distinction
+- [ ] [R5] Distinguish public (in `.tart`) vs internal (not listed) functions
+- [ ] [R8] Warn on functions defined but not in signature file
+- [ ] Verify: Internal functions inferred but not exported
+
+### 3.3 Module Dependencies
+- [ ] [R6] Load signatures when `(require 'module)` is encountered
+- [ ] [R7] Handle autoloaded function lookup via prefix-based search
+- [ ] [R9] Handle circular module dependencies with lazy loading
+- [ ] Verify: Required module signatures available for type checking
+
+## Phase 4: LSP Incremental (Spec 08)
+
+Performance optimization for large codebases.
+
+### 4.1 Query-Based Caching
+- [ ] [R9] Implement query-based caching for incremental type checking
+- [ ] Verify: Edit one function; others not recomputed (log check)
+
+## Phase 5: CLI LSP Command (Spec 09)
+
+Complete CLI for LSP integration.
+
+### 5.1 LSP Subcommand
+- [ ] [R9] Wire `tart lsp` to start LSP server on stdio
+- [ ] [R10] Add `--port` option for TCP mode
+- [ ] Verify: LSP client connects and receives diagnostics
+
+## Phase 6: Error Reporting (Spec 13)
+
+Improve error message quality.
+
+### 6.1 Type Mismatch Formatting
+- [ ] [R1] Format type mismatch errors with expected/found
+- [ ] [R2] Format branch type mismatch errors
+- [ ] [R3] Format Option/nil errors with suggestions
+- [ ] Verify: Errors show context and suggestions
+
+### 6.2 Name Errors
+- [ ] [R4] Implement Levenshtein-based typo suggestions
+- [ ] [R5] Format arity mismatch errors with signature
+- [ ] [R6] Format signature mismatch errors with both locations
+- [ ] Verify: Typos suggest similar names
+
+### 6.3 LSP Integration
+- [ ] [R7] Map rich diagnostics to LSP format with related info
+- [ ] Verify: LSP clients show related information
+
+## Phase 7: tart.el Runtime (Spec 14)
+
+Inline type annotations in `.el` files.
+
+### 7.1 Macro Definitions
+- [ ] [R8] Implement `tart` macro (expands to form)
+- [ ] [R8] Implement `tart-type` macro (expands to nil)
+- [ ] [R8] Implement `tart-declare` macro (expands to nil)
+- [ ] Verify: Macros expand correctly at runtime
+
+### 7.2 Type Checker Recognition
+- [ ] [R1] Recognize `(declare (tart ...))` in function definitions
+- [ ] [R2] Add expression annotation checking (`(tart TYPE FORM)`)
+- [ ] [R3,R4] Track variable types from annotations
+- [ ] [R3] Check `setq`/`setf` against declared variable types
+- [ ] Verify: Type errors on annotation mismatches
+
+### 7.3 Type Aliases
+- [ ] [R5,R6] Implement file-local type alias scope
+- [ ] [R7] Enforce invariance for parameterized types
+- [ ] Verify: Aliases usable in same file, not exported
+
+### 7.4 Integration
+- [ ] [R10] Verify inline annotations match `.tart` declarations
+- [ ] [R9] Format error messages for annotation mismatches
+- [ ] Verify: Mismatched inline/`.tart` produces error
+
+## Phase 8: ADT System (Spec 11)
+
+Runtime representation and pattern matching.
+
+### 8.1 Code Generation
+- [ ] [R1] Generate constructor functions from ADT definitions
+- [ ] [R2] Generate predicate functions
+- [ ] [R3] Generate accessor functions
+- [ ] [R6] Handle multi-field constructors (vectors)
+- [ ] [R7] Test recursive type handling
+- [ ] Verify: ADT construction/access works at runtime
+
+### 8.2 Type Checking
+- [ ] [R4] Implement pcase type narrowing in branches
+- [ ] [R5] Implement exhaustiveness checking with warnings
+- [ ] Verify: Non-exhaustive matches produce warnings
+
+## Phase 9: Emacs Integration (Spec 10)
+
+Complete Emacs package for development workflow.
+
+### 9.1 Inferior Mode
+- [ ] [R1,R2,R9] Implement `inferior-tart-mode` with comint
+- [ ] [R3] Implement send-to-REPL commands
+- [ ] [R4] Implement type/expand inspection commands
+- [ ] Verify: REPL interaction works from elisp buffers
+
+### 9.2 Minor Mode
+- [ ] [R7] Implement `tart-mode` minor mode with keymap
+- [ ] [R8] Add customization options (`tart-executable`, etc.)
+- [ ] [R10] Add compilation-mode error parsing
+- [ ] Verify: Keybindings work, errors are clickable
+
+### 9.3 LSP Integration
+- [ ] [R5] Add eglot server configuration for tart
+- [ ] Verify: `M-x eglot` connects and hover shows types
+
+### 9.4 Documentation
+- [ ] [R11] Add setup instructions to README
+- [ ] Verify: README contains installation and usage examples
+
+## Dependencies
+
+```
+Spec 07 (Signatures) ──┬─> Spec 15 (Forall Inference)
+                       ├─> Spec 12 (Module Boundaries)
+                       ├─> Spec 14 (tart.el Runtime)
+                       └─> Spec 11 (ADT System)
+
+Spec 08 (LSP) ─────────┬─> Spec 09 (CLI) ──> Spec 10 (Emacs)
+                       └─> Spec 13 (Error Reporting)
+```
+
+## Priority Order
+
+1. **Phase 1.1-1.2**: Core signature loading - enables basic type checking
+2. **Phase 2**: Forall inference - reduces friction in writing signatures
+3. **Phase 1.6-1.7**: Stdlib - makes tart usable for real Elisp code
+4. **Phase 3.1-3.2**: Module boundaries - enables multi-file projects
+5. **Phase 5**: LSP command - connects CLI to editors
+6. **Phase 9.3**: Eglot integration - primary UX for developers
+7. **Remaining phases**: Polish and advanced features
