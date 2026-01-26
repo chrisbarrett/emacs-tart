@@ -12,9 +12,9 @@ Foundation for module boundaries and type-checked code.
 - [x] Verify: Type checker uses loaded signatures for calls
 
 ### 1.2 Type Aliases
-- [ ] [R7] Load type aliases (with definition) into type context
-- [ ] [R8] Load parameterized type aliases with instantiation
-- [ ] Verify: Aliases expand correctly in type expressions
+- [x] [R7] Load type aliases (with definition) into type context
+- [x] [R8] Load parameterized type aliases with instantiation
+- [x] Verify: Aliases expand correctly in type expressions
 
 ### 1.3 Opaque Types
 - [ ] [R9] Load opaque types (no definition) as distinct abstract types

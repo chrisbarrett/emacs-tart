@@ -218,10 +218,68 @@ let validate_signature_all (sig_file : signature) : load_error list =
        | Error e -> Some e)
     sig_file.sig_decls
 
+(** {1 Type Alias Context}
+
+    Type aliases map names to their definitions for expansion during loading. *)
+
+(** A type alias definition with optional parameters *)
+type type_alias = {
+  alias_params : string list;  (** Type parameters (e.g., [a e] in result) *)
+  alias_body : sig_type;       (** The definition body *)
+}
+
+(** Context for type alias expansion *)
+type alias_context = (string * type_alias) list
+
+(** Empty alias context *)
+let empty_aliases : alias_context = []
+
+(** Look up a type alias *)
+let lookup_alias (name : string) (ctx : alias_context) : type_alias option =
+  List.assoc_opt name ctx
+
+(** Add a type alias to the context *)
+let add_alias (name : string) (alias : type_alias) (ctx : alias_context) : alias_context =
+  (name, alias) :: ctx
+
+(** Build alias context from signature declarations.
+    Only includes type declarations with bodies (aliases, not opaque types). *)
+let build_alias_context (sig_file : signature) : alias_context =
+  List.fold_left
+    (fun ctx decl ->
+       match decl with
+       | DType d -> (
+           match d.type_body with
+           | Some body ->
+               let alias = {
+                 alias_params = List.map (fun b -> b.name) d.type_params;
+                 alias_body = body;
+               } in
+               add_alias d.type_name alias ctx
+           | None ->
+               (* Opaque type - not an alias *)
+               ctx)
+       | _ -> ctx)
+    empty_aliases sig_file.sig_decls
+
 (** {1 Type Conversion}
 
     These functions convert signature AST types to the core type representation.
     They assume the signature has been validated (type variables are in scope). *)
+
+(** Canonicalize a type constructor name to match core types convention.
+    Signature files use lowercase; core types use capitalized names. *)
+let canonicalize_type_name (name : string) : string =
+  match name with
+  | "list" -> "List"
+  | "vector" -> "Vector"
+  | "option" -> "Option"
+  | "pair" -> "Pair"
+  | "hash-table" -> "HashTable"
+  | "tuple" -> "Tuple"
+  | "ok" -> "ok"      (* Variant tags stay as-is *)
+  | "err" -> "err"    (* Variant tags stay as-is *)
+  | _ -> name
 
 (** Convert a signature type name to a primitive type or TCon *)
 let sig_name_to_prim (name : string) : Types.typ =
@@ -238,86 +296,175 @@ let sig_name_to_prim (name : string) : Types.typ =
   | "truthy" -> Types.Prim.truthy
   | "any" -> Types.Prim.any
   | "never" -> Types.Prim.never
-  | _ -> Types.TCon name
+  | _ -> Types.TCon (canonicalize_type_name name)
+
+(** Substitute type variables in a sig_type with other sig_types.
+    Used for expanding parameterized type aliases. *)
+let rec substitute_sig_type (subst : (string * sig_type) list) (ty : sig_type) : sig_type =
+  let loc = sig_type_loc ty in
+  match ty with
+  | STVar (name, _) -> (
+      match List.assoc_opt name subst with
+      | Some replacement -> replacement
+      | None -> ty)
+  | STCon (name, _) -> (
+      (* Type constants might also need substitution if they're type params *)
+      match List.assoc_opt name subst with
+      | Some replacement -> replacement
+      | None -> ty)
+  | STApp (name, args, _) ->
+      let args' = List.map (substitute_sig_type subst) args in
+      STApp (name, args', loc)
+  | STArrow (params, ret, _) ->
+      let params' = List.map (substitute_sig_param subst) params in
+      let ret' = substitute_sig_type subst ret in
+      STArrow (params', ret', loc)
+  | STForall (binders, body, _) ->
+      (* Remove bound variables from substitution to avoid capture *)
+      let bound_names = List.map (fun b -> b.name) binders in
+      let subst' = List.filter (fun (n, _) -> not (List.mem n bound_names)) subst in
+      let body' = substitute_sig_type subst' body in
+      STForall (binders, body', loc)
+  | STUnion (types, _) ->
+      let types' = List.map (substitute_sig_type subst) types in
+      STUnion (types', loc)
+  | STTuple (types, _) ->
+      let types' = List.map (substitute_sig_type subst) types in
+      STTuple (types', loc)
+
+and substitute_sig_param subst = function
+  | SPPositional ty -> SPPositional (substitute_sig_type subst ty)
+  | SPOptional ty -> SPOptional (substitute_sig_type subst ty)
+  | SPRest ty -> SPRest (substitute_sig_type subst ty)
+  | SPKey (name, ty) -> SPKey (name, substitute_sig_type subst ty)
 
 (** Convert a signature type to a core type.
+    [aliases] is the alias context for expansion.
     [tvar_names] is the list of bound type variable names in scope. *)
-let rec sig_type_to_typ (tvar_names : string list) (ty : sig_type) : Types.typ =
+let rec sig_type_to_typ_with_aliases
+    (aliases : alias_context)
+    (tvar_names : string list)
+    (ty : sig_type) : Types.typ =
   match ty with
-  | STVar (name, _) ->
-      (* Type variable - represented as TCon for later substitution *)
-      Types.TCon name
+  | STVar (name, _) -> (
+      (* Type variable - could be a type variable OR a non-parameterized alias.
+         Check for alias first if not in tvar_names scope. *)
+      if List.mem name tvar_names then
+        (* Definitely a bound type variable - keep as TCon for later substitution *)
+        Types.TCon name
+      else
+        match lookup_alias name aliases with
+        | Some alias when alias.alias_params = [] ->
+            (* Non-parameterized alias - expand it *)
+            sig_type_to_typ_with_aliases aliases tvar_names alias.alias_body
+        | _ ->
+            (* Not an alias or has parameters - treat as type variable/constructor *)
+            Types.TCon name)
 
-  | STCon (name, _) ->
-      (* Type constant - map primitives and preserve others *)
-      sig_name_to_prim name
+  | STCon (name, _) -> (
+      (* Type constant - check for alias first, then map primitives *)
+      match lookup_alias name aliases with
+      | Some alias when alias.alias_params = [] ->
+          (* Non-parameterized alias - expand it *)
+          sig_type_to_typ_with_aliases aliases tvar_names alias.alias_body
+      | _ ->
+          (* Not an alias or has parameters (needs args) *)
+          sig_name_to_prim name)
 
-  | STApp (name, args, _) ->
-      (* Type application *)
-      let arg_types = List.map (sig_type_to_typ tvar_names) args in
-      Types.TApp (name, arg_types)
+  | STApp (name, args, _) -> (
+      (* Type application - check for alias expansion *)
+      match lookup_alias name aliases with
+      | Some alias when List.length alias.alias_params = List.length args ->
+          (* Parameterized alias - substitute args into body and expand *)
+          let subst = List.combine alias.alias_params args in
+          let expanded = substitute_sig_type subst alias.alias_body in
+          sig_type_to_typ_with_aliases aliases tvar_names expanded
+      | _ ->
+          (* Not an alias or arity mismatch - treat as type application *)
+          let arg_types = List.map (sig_type_to_typ_with_aliases aliases tvar_names) args in
+          Types.TApp (canonicalize_type_name name, arg_types))
 
   | STArrow (params, ret, _) ->
       (* Function type *)
-      let param_types = List.map (sig_param_to_param tvar_names) params in
-      let ret_type = sig_type_to_typ tvar_names ret in
+      let param_types = List.map (sig_param_to_param_with_aliases aliases tvar_names) params in
+      let ret_type = sig_type_to_typ_with_aliases aliases tvar_names ret in
       Types.TArrow (param_types, ret_type)
 
   | STForall (binders, body, _) ->
       (* Polymorphic type - add binders to scope *)
       let new_vars = List.map (fun b -> b.name) binders in
       let inner_names = new_vars @ tvar_names in
-      let body_type = sig_type_to_typ inner_names body in
+      let body_type = sig_type_to_typ_with_aliases aliases inner_names body in
       Types.TForall (new_vars, body_type)
 
   | STUnion (types, _) ->
       (* Union type *)
-      let type_list = List.map (sig_type_to_typ tvar_names) types in
+      let type_list = List.map (sig_type_to_typ_with_aliases aliases tvar_names) types in
       Types.TUnion type_list
 
   | STTuple (types, _) ->
       (* Tuple type *)
-      let type_list = List.map (sig_type_to_typ tvar_names) types in
+      let type_list = List.map (sig_type_to_typ_with_aliases aliases tvar_names) types in
       Types.TTuple type_list
 
-(** Convert a signature parameter to a core parameter *)
-and sig_param_to_param (tvar_names : string list) (p : sig_param) : Types.param =
+(** Convert a signature parameter to a core parameter with alias expansion *)
+and sig_param_to_param_with_aliases
+    (aliases : alias_context)
+    (tvar_names : string list)
+    (p : sig_param) : Types.param =
   match p with
-  | SPPositional ty -> Types.PPositional (sig_type_to_typ tvar_names ty)
-  | SPOptional ty -> Types.POptional (sig_type_to_typ tvar_names ty)
-  | SPRest ty -> Types.PRest (sig_type_to_typ tvar_names ty)
-  | SPKey (name, ty) -> Types.PKey (name, sig_type_to_typ tvar_names ty)
+  | SPPositional ty -> Types.PPositional (sig_type_to_typ_with_aliases aliases tvar_names ty)
+  | SPOptional ty -> Types.POptional (sig_type_to_typ_with_aliases aliases tvar_names ty)
+  | SPRest ty -> Types.PRest (sig_type_to_typ_with_aliases aliases tvar_names ty)
+  | SPKey (name, ty) -> Types.PKey (name, sig_type_to_typ_with_aliases aliases tvar_names ty)
+
+(** Convert a signature type to a core type (without alias expansion).
+    [tvar_names] is the list of bound type variable names in scope. *)
+let sig_type_to_typ (tvar_names : string list) (ty : sig_type) : Types.typ =
+  sig_type_to_typ_with_aliases empty_aliases tvar_names ty
+
+(** Convert a signature parameter to a core parameter *)
+let sig_param_to_param (tvar_names : string list) (p : sig_param) : Types.param =
+  sig_param_to_param_with_aliases empty_aliases tvar_names p
 
 (** {1 Declaration Loading}
 
     These functions convert signature declarations to type environment entries. *)
 
-(** Convert a defun declaration to a type scheme.
+(** Convert a defun declaration to a type scheme with alias expansion.
     Returns a Poly scheme if the function has type parameters,
     otherwise a Mono scheme with an arrow type. *)
-let load_defun (d : defun_decl) : Type_env.scheme =
+let load_defun_with_aliases (aliases : alias_context) (d : defun_decl) : Type_env.scheme =
   let tvar_names = List.map (fun b -> b.name) d.defun_tvar_binders in
-  let params = List.map (sig_param_to_param tvar_names) d.defun_params in
-  let ret = sig_type_to_typ tvar_names d.defun_return in
+  let params = List.map (sig_param_to_param_with_aliases aliases tvar_names) d.defun_params in
+  let ret = sig_type_to_typ_with_aliases aliases tvar_names d.defun_return in
   let arrow = Types.TArrow (params, ret) in
   if tvar_names = [] then
     Type_env.Mono arrow
   else
     Type_env.Poly (tvar_names, arrow)
 
-(** Convert a defvar declaration to a type scheme.
+(** Convert a defvar declaration to a type scheme with alias expansion.
     The type may be polymorphic if it contains a forall. *)
-let load_defvar (d : defvar_decl) : Type_env.scheme =
+let load_defvar_with_aliases (aliases : alias_context) (d : defvar_decl) : Type_env.scheme =
   match d.defvar_type with
   | STForall (binders, body, _) ->
       (* Polymorphic variable - extract quantifiers *)
       let tvar_names = List.map (fun b -> b.name) binders in
-      let body_type = sig_type_to_typ tvar_names body in
+      let body_type = sig_type_to_typ_with_aliases aliases tvar_names body in
       Type_env.Poly (tvar_names, body_type)
   | _ ->
       (* Monomorphic variable *)
-      let ty = sig_type_to_typ [] d.defvar_type in
+      let ty = sig_type_to_typ_with_aliases aliases [] d.defvar_type in
       Type_env.Mono ty
+
+(** Convert a defun declaration to a type scheme (without alias expansion). *)
+let load_defun (d : defun_decl) : Type_env.scheme =
+  load_defun_with_aliases empty_aliases d
+
+(** Convert a defvar declaration to a type scheme (without alias expansion). *)
+let load_defvar (d : defvar_decl) : Type_env.scheme =
+  load_defvar_with_aliases empty_aliases d
 
 (** {1 Signature Loading}
 
@@ -325,8 +472,12 @@ let load_defvar (d : defvar_decl) : Type_env.scheme =
 
 (** Load a validated signature into a type environment.
     Adds all function and variable declarations to the environment.
+    Type aliases are expanded during loading.
     Returns the extended environment. *)
 let load_signature (env : Type_env.t) (sig_file : signature) : Type_env.t =
+  (* First pass: collect type aliases for expansion *)
+  let aliases = build_alias_context sig_file in
+  (* Second pass: load declarations with alias expansion *)
   List.fold_left
     (fun acc decl ->
        match decl with
@@ -334,10 +485,10 @@ let load_signature (env : Type_env.t) (sig_file : signature) : Type_env.t =
            (* Module directives - not handled yet *)
            acc
        | DDefun d ->
-           let scheme = load_defun d in
+           let scheme = load_defun_with_aliases aliases d in
            Type_env.extend d.defun_name scheme acc
        | DDefvar d ->
-           let scheme = load_defvar d in
+           let scheme = load_defvar_with_aliases aliases d in
            Type_env.extend d.defvar_name scheme acc
        | DType _ | DImportStruct _ ->
            (* Type declarations - not adding to value environment *)

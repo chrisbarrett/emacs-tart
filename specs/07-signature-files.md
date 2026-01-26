@@ -252,8 +252,8 @@ Minimum coverage:
 - [x] [R4] Implement bounded quantifiers
 - [x] [R5] Handle function signatures
 - [x] [R6] Handle variable declarations
-- [ ] [R7] Handle type aliases (with definition)
-- [ ] [R8] Handle parameterized type aliases
+- [x] [R7] Handle type aliases (with definition)
+- [x] [R8] Handle parameterized type aliases
 - [ ] [R9] Handle opaque types (no definition)
 - [ ] [R10] Handle opaque types with phantom parameters
 - [ ] [R11] Handle struct imports

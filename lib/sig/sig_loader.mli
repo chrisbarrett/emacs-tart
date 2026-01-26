@@ -56,9 +56,37 @@ val validate_signature : Sig_ast.signature -> (unit, load_error) result
 (** Validate a signature and collect all errors (not just the first). *)
 val validate_signature_all : Sig_ast.signature -> load_error list
 
+(** {1 Type Alias Context} *)
+
+(** A type alias definition with optional parameters *)
+type type_alias = {
+  alias_params : string list;  (** Type parameters (e.g., [a e] in result) *)
+  alias_body : Sig_ast.sig_type;       (** The definition body *)
+}
+
+(** Context for type alias expansion *)
+type alias_context
+
+(** Empty alias context *)
+val empty_aliases : alias_context
+
+(** Look up a type alias *)
+val lookup_alias : string -> alias_context -> type_alias option
+
+(** Build alias context from signature declarations.
+    Only includes type declarations with bodies (aliases, not opaque types). *)
+val build_alias_context : Sig_ast.signature -> alias_context
+
 (** {1 Type Conversion} *)
 
-(** Convert a signature type to a core type.
+(** Convert a signature type to a core type with alias expansion.
+    [aliases] is the alias context for expansion.
+    [tvar_names] is the list of bound type variable names in scope.
+    Type variables are represented as TCon for later substitution. *)
+val sig_type_to_typ_with_aliases :
+  alias_context -> string list -> Sig_ast.sig_type -> Core.Types.typ
+
+(** Convert a signature type to a core type (without alias expansion).
     [tvar_names] is the list of bound type variable names in scope.
     Type variables are represented as TCon for later substitution. *)
 val sig_type_to_typ : string list -> Sig_ast.sig_type -> Core.Types.typ
@@ -81,5 +109,6 @@ val load_defvar : Sig_ast.defvar_decl -> Core.Type_env.scheme
 
 (** Load a validated signature into a type environment.
     Adds all function and variable declarations to the environment.
+    Type aliases are expanded during loading.
     Returns the extended environment. *)
 val load_signature : Core.Type_env.t -> Sig_ast.signature -> Core.Type_env.t

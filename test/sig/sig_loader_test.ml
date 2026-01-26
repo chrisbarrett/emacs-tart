@@ -220,6 +220,90 @@ let test_combined_declarations () =
   Alcotest.(check int) "no errors for defun" 0 (List.length errors2);
   Alcotest.(check string) "defun result is Int" "Int" (Types.to_string ty2)
 
+(** {1 Type Alias Tests (R7, R8)}
+
+    These tests verify that type aliases are expanded correctly during loading. *)
+
+(** Test simple type alias expansion.
+    R7: int-list expands to (list int) *)
+let test_simple_type_alias () =
+  let sig_src = {|
+    (type int-list (list int))
+    (defun sum (int-list) -> int)
+  |} in
+  let env = load_sig_str sig_src in
+  (* Function parameter should accept (list int) *)
+  let ty, errors = check_expr_str ~env "(sum (list 1 2 3))" in
+  Alcotest.(check int) "no type errors" 0 (List.length errors);
+  Alcotest.(check string) "result type is Int" "Int" (Types.to_string ty)
+
+(** Test type alias used in return type.
+    R7: Alias in return position expands correctly. *)
+let test_type_alias_return () =
+  let sig_src = {|
+    (type int-list (list int))
+    (defun make-ints () -> int-list)
+  |} in
+  let env = load_sig_str sig_src in
+  let ty, errors = check_expr_str ~env "(make-ints)" in
+  Alcotest.(check int) "no type errors" 0 (List.length errors);
+  (* Return type should be (List Int) after expansion *)
+  Alcotest.(check string) "result is list int" "(List Int)" (Types.to_string ty)
+
+(** Test parameterized type alias.
+    R8: (result int string) expands with substitution. *)
+let test_parameterized_type_alias () =
+  let sig_src = {|
+    (type result [a e] ((ok a) | (err e)))
+    (defun parse (string) -> (result int string))
+  |} in
+  let env = load_sig_str sig_src in
+  let ty, errors = check_expr_str ~env "(parse \"42\")" in
+  Alcotest.(check int) "no type errors" 0 (List.length errors);
+  (* Should expand to union type (Or (ok Int) (err String)) *)
+  Alcotest.(check string) "result is union" "(Or (ok Int) (err String))" (Types.to_string ty)
+
+(** Test type alias in variable declaration.
+    R7: defvar with alias type works. *)
+let test_type_alias_defvar () =
+  let sig_src = {|
+    (type string-list (list string))
+    (defvar names string-list)
+  |} in
+  let env = load_sig_str sig_src in
+  let ty, errors = check_expr_str ~env "names" in
+  Alcotest.(check int) "no type errors" 0 (List.length errors);
+  Alcotest.(check string) "variable type is list string" "(List String)" (Types.to_string ty)
+
+(** Test nested type alias expansion.
+    R7, R8: Alias referencing another alias. *)
+let test_nested_type_alias () =
+  let sig_src = {|
+    (type pair [a b] (tuple a b))
+    (type int-pair (pair int int))
+    (defun make-pair () -> int-pair)
+  |} in
+  let env = load_sig_str sig_src in
+  let ty, errors = check_expr_str ~env "(make-pair)" in
+  Alcotest.(check int) "no type errors" 0 (List.length errors);
+  (* int-pair -> (pair int int) -> (tuple int int) *)
+  Alcotest.(check string) "result is tuple" "(Tuple Int Int)" (Types.to_string ty)
+
+(** Test type alias with polymorphic function.
+    R7, R8: Alias works within polymorphic signatures.
+    Note: This test checks that alias expansion in return position works,
+    but union types with polymorphic variables may not fully unify yet. *)
+let test_type_alias_with_poly_fn () =
+  let sig_src = {|
+    (type wrapper [a] (list a))
+    (defun wrap [a] (a) -> (wrapper a))
+  |} in
+  let env = load_sig_str sig_src in
+  let ty, errors = check_expr_str ~env "(wrap 42)" in
+  Alcotest.(check int) "no type errors" 0 (List.length errors);
+  (* (wrapper Int) expands to (List Int) *)
+  Alcotest.(check string) "result is list int" "(List Int)" (Types.to_string ty)
+
 let () =
   Alcotest.run "sig_loader"
     [
@@ -253,5 +337,14 @@ let () =
           Alcotest.test_case "defvar type used" `Quick test_defvar_type_used;
           Alcotest.test_case "defvar function type" `Quick test_defvar_function_type;
           Alcotest.test_case "combined declarations" `Quick test_combined_declarations;
+        ] );
+      ( "type-aliases",
+        [
+          Alcotest.test_case "simple type alias" `Quick test_simple_type_alias;
+          Alcotest.test_case "type alias return" `Quick test_type_alias_return;
+          Alcotest.test_case "parameterized type alias" `Quick test_parameterized_type_alias;
+          Alcotest.test_case "type alias defvar" `Quick test_type_alias_defvar;
+          Alcotest.test_case "nested type alias" `Quick test_nested_type_alias;
+          Alcotest.test_case "type alias with poly fn" `Quick test_type_alias_with_poly_fn;
         ] );
     ]
