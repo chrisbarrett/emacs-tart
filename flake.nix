@@ -50,6 +50,7 @@
           inputsFrom = [ scope.tart ];
           buildInputs = devPackages ++ [
             pkgs-unstable.prek
+            pkgs.asciidoctor
           ];
         };
       }

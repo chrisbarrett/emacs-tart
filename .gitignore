@@ -16,3 +16,6 @@ progress.txt
 
 # opam local switch
 _opam/
+
+# Generated documentation
+docs/build/
