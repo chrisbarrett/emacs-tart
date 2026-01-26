@@ -45,6 +45,52 @@
 (require 'compile)
 (require 'eglot)
 
+;;; Type Annotation Macros
+
+;;;###autoload
+(defmacro tart (_type form)
+  "Type assertion macro for the Tart type checker.
+TYPE is a type expression (ignored at runtime).
+FORM is evaluated and returned unchanged.
+
+At compile time with the Tart type checker, this asserts that FORM
+has the specified TYPE.  At runtime, this simply returns FORM.
+
+Example:
+  (tart string \"hello\")     ; Asserts the string literal has type string
+  (tart int (+ 1 2))         ; Asserts the expression has type int"
+  form)
+
+;;;###autoload
+(defmacro tart-type (_name &rest _definition)
+  "Define a file-local type alias for the Tart type checker.
+NAME is the alias name.
+DEFINITION is the type expression, optionally preceded by [VARS]
+for type parameters.
+
+This form is recognized by the Tart type checker to define a type alias
+that is available within the current file.  At runtime, this expands to nil.
+
+Example:
+  (tart-type int-pair (tuple int int))
+  (tart-type predicate [a] ((a) -> bool))"
+  nil)
+
+;;;###autoload
+(defmacro tart-declare (_name _type)
+  "Declare a variable's type for the Tart type checker.
+NAME is the variable name.
+TYPE is the type expression.
+
+This form declares that NAME has the specified TYPE, allowing the
+type checker to verify subsequent reads and writes.  At runtime,
+this expands to nil.
+
+Example:
+  (tart-declare my-buffer buffer)
+  (defvar my-buffer)"
+  nil)
+
 ;;; Customization
 
 (defgroup tart nil

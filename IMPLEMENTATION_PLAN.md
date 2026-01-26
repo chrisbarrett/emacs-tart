@@ -168,10 +168,10 @@ Inline type annotations in `.el` files.
 
 ### 8.1 Macro Definitions
 
-- [ ] [R8] Implement `tart` macro (expands to form)
-- [ ] [R8] Implement `tart-type` macro (expands to nil)
-- [ ] [R8] Implement `tart-declare` macro (expands to nil)
-- [ ] Verify: Macros expand correctly at runtime
+- [x] [R8] Implement `tart` macro (expands to form)
+- [x] [R8] Implement `tart-type` macro (expands to nil)
+- [x] [R8] Implement `tart-declare` macro (expands to nil)
+- [x] Verify: Macros expand correctly at runtime
 
 ### 8.2 Type Checker Recognition
 
