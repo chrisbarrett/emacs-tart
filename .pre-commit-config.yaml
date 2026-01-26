@@ -17,7 +17,7 @@ repos:
 
       - id: dune-fmt
         name: dune fmt
-        entry: nix develop -c dune fmt
+        entry: nix develop -c scripts/dune-fmt-hook.sh
         language: system
         pass_filenames: false
         files: \.(ml|mli)$
