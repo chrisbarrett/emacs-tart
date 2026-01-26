@@ -26,6 +26,7 @@ type error_code =
   | E0061  (** Wrong number of arguments (arity) *)
   | E0106  (** Infinite type (occurs check) *)
   | E0425  (** Undefined variable *)
+  | E0509  (** Kind mismatch *)
 
 (** Format an error code for display. *)
 let error_code_to_string = function
@@ -34,6 +35,7 @@ let error_code_to_string = function
   | E0061 -> "E0061"
   | E0106 -> "E0106"
   | E0425 -> "E0425"
+  | E0509 -> "E0509"
 
 (** Severity level for diagnostics *)
 type severity = Error | Warning | Hint
@@ -658,3 +660,58 @@ let non_exhaustive_match ~span ~message () =
     related = [];
     help = [ "add a wildcard pattern (_) to handle remaining cases" ];
   }
+
+(** Create a kind mismatch diagnostic (E0509).
+
+    Used when a type application has mismatched kinds. *)
+let kind_mismatch ~span ~expected ~found ~location () =
+  let message =
+    Printf.sprintf "kind mismatch in %s: expected %s, found %s" location
+      (Kind.to_string expected) (Kind.to_string found)
+  in
+  {
+    severity = Error;
+    code = Some E0509;
+    span;
+    message;
+    expected = None;
+    actual = None;
+    related = [];
+    help = [];
+  }
+
+(** Convert a kind inference error to a diagnostic. *)
+let of_kind_error span (err : Kind_infer.kind_error) : t =
+  match err with
+  | Kind_infer.KindMismatch { expected; found; location } ->
+      kind_mismatch ~span ~expected ~found ~location ()
+  | Kind_infer.OccursCheckFailed { kvar_id; kind } ->
+      let message =
+        Printf.sprintf "infinite kind: kind variable ?k%d occurs in %s" kvar_id
+          (Kind.to_string kind)
+      in
+      {
+        severity = Error;
+        code = Some E0509;
+        span;
+        message;
+        expected = None;
+        actual = None;
+        related = [];
+        help = [];
+      }
+  | Kind_infer.ArityMismatch { type_con; expected; found } ->
+      let message =
+        Printf.sprintf "type constructor `%s` expects %d argument(s), found %d"
+          type_con expected found
+      in
+      {
+        severity = Error;
+        code = Some E0509;
+        span;
+        message;
+        expected = None;
+        actual = None;
+        related = [];
+        help = [];
+      }

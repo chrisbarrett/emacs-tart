@@ -242,6 +242,43 @@ let test_multiple_unconstrained_default () =
   Alcotest.(check string) "c defaults to *" "*" (to_string k_c)
 
 (* =============================================================================
+   Kind Error Detection Tests (R3 from spec 17)
+   ============================================================================= *)
+
+let test_conflicting_kind_constraints () =
+  (* (defun bad [a] ((a int)) -> (list a))
+     a is used both as * -> * (applied to int) and as * (argument to list)
+     This should produce a kind mismatch error *)
+  let d = parse_defun "(defun bad [a] ((a int)) -> (list a))" in
+  let result = infer_defun_kinds d in
+  Alcotest.(check bool)
+    "should have kind error" true
+    (List.length result.errors > 0);
+  let error_strings = List.map kind_error_to_string result.errors in
+  let has_mismatch = List.exists (fun s -> String.length s > 0) error_strings in
+  Alcotest.(check bool) "has error message" true has_mismatch
+
+let test_nested_conflicting_kinds () =
+  (* A type variable used at different arities in the same signature *)
+  let d =
+    parse_defun "(defun nested-conflict [f a] ((f a) (f a int)) -> int)"
+  in
+  let result = infer_defun_kinds d in
+  (* f is applied to 1 arg in (f a) but 2 args in (f a int) - should error *)
+  Alcotest.(check bool)
+    "should have kind error for inconsistent arity" true
+    (List.length result.errors > 0)
+
+let test_valid_higher_kinded_type () =
+  (* (defun fmap [f a b] (((a -> b)) (f a)) -> (f b))
+     This is valid - f consistently has kind * -> * *)
+  let d = parse_defun "(defun fmap [f a b] (((a -> b)) (f a)) -> (f b))" in
+  let result = infer_defun_kinds d in
+  Alcotest.(check (list string))
+    "no errors for valid HKT" []
+    (List.map kind_error_to_string result.errors)
+
+(* =============================================================================
    Backward Compatibility Tests
    ============================================================================= *)
 
@@ -316,6 +353,13 @@ let backward_compat_tests =
     ("existing_compose_unchanged", `Quick, test_existing_compose_unchanged);
   ]
 
+let kind_error_tests =
+  [
+    ("conflicting_kind_constraints", `Quick, test_conflicting_kind_constraints);
+    ("nested_conflicting_kinds", `Quick, test_nested_conflicting_kinds);
+    ("valid_higher_kinded_type", `Quick, test_valid_higher_kinded_type);
+  ]
+
 let () =
   Alcotest.run "Kind Inference"
     [
@@ -324,4 +368,5 @@ let () =
       ("data", data_tests);
       ("default", default_tests);
       ("backward_compat", backward_compat_tests);
+      ("kind_errors", kind_error_tests);
     ]

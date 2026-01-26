@@ -19,6 +19,7 @@ type error_code =
   | E0061  (** Wrong number of arguments (arity) *)
   | E0106  (** Infinite type (occurs check) *)
   | E0425  (** Undefined variable *)
+  | E0509  (** Kind mismatch *)
 
 val error_code_to_string : error_code -> string
 (** Format an error code for display. *)
@@ -199,3 +200,20 @@ val non_exhaustive_match :
 
     Used when a pcase expression doesn't cover all constructors of an ADT.
     Includes a help suggestion to add a wildcard pattern. *)
+
+val kind_mismatch :
+  span:Syntax.Location.span ->
+  expected:Kind.kind ->
+  found:Kind.kind ->
+  location:string ->
+  unit ->
+  t
+(** Create a kind mismatch diagnostic (E0509).
+
+    Used when a type application has mismatched kinds, e.g., applying a type
+    variable of kind [*] as if it were kind [* -> *]. *)
+
+val of_kind_error : Syntax.Location.span -> Kind_infer.kind_error -> t
+(** Convert a kind inference error to a diagnostic.
+
+    The span is the location of the declaration that failed kind checking. *)

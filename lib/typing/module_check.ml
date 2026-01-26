@@ -56,6 +56,14 @@ type mismatch_error = {
 type missing_signature_warning = { name : string; span : Syntax.Location.span }
 (** Warning when a public function is not in the signature file *)
 
+(** {1 Kind Errors} *)
+
+type kind_check_error = {
+  kind_error : Kind_infer.kind_error;
+  span : Syntax.Location.span;
+}
+(** A kind error with its source location *)
+
 (** {1 Module Check Result} *)
 
 type check_result = {
@@ -66,6 +74,8 @@ type check_result = {
   undefined_errors : Infer.undefined_var list;  (** Undefined variable errors *)
   exhaustiveness_warnings : Exhaustiveness.warning list;
       (** Warnings for non-exhaustive pcase matches *)
+  kind_errors : kind_check_error list;
+      (** Kind mismatch errors in signatures *)
   signature_env : Env.t option;
       (** Environment from loaded signature, if any *)
   final_env : Env.t;  (** Final type environment after checking *)
@@ -285,6 +295,33 @@ let verify_defun_type ~(name : string) ~(declared : Types.typ)
       (* Types don't match - report mismatch *)
       Some { name; expected = declared; actual = inferred; impl_span; sig_span }
 
+(** {1 Kind Checking} *)
+
+(** Check kinds for a single declaration. Returns any kind errors found. *)
+let check_decl_kinds (decl : Sig.Sig_ast.decl) : kind_check_error list =
+  match decl with
+  | Sig.Sig_ast.DDefun d ->
+      let result = Kind_infer.infer_defun_kinds d in
+      List.map (fun e -> { kind_error = e; span = d.defun_loc }) result.errors
+  | Sig.Sig_ast.DType d ->
+      let result = Kind_infer.infer_type_decl_kinds d in
+      List.map (fun e -> { kind_error = e; span = d.type_loc }) result.errors
+  | Sig.Sig_ast.DData d ->
+      let result = Kind_infer.infer_data_kinds d in
+      List.map (fun e -> { kind_error = e; span = d.data_loc }) result.errors
+  | Sig.Sig_ast.DDefvar _ | Sig.Sig_ast.DOpen _ | Sig.Sig_ast.DInclude _
+  | Sig.Sig_ast.DImportStruct _ ->
+      (* These declarations don't have type parameters to kind-check *)
+      []
+
+(** Check kinds for all declarations in a signature file.
+
+    Returns a list of kind errors with their source locations. An empty list
+    means all kind checks passed. *)
+let check_signature_kinds (sig_file : Sig.Sig_ast.signature) :
+    kind_check_error list =
+  List.concat_map check_decl_kinds sig_file.sig_decls
+
 (** {1 Main Check Function} *)
 
 (** Type-check an elisp file with module awareness.
@@ -429,12 +466,20 @@ let check_module ~(config : config) ~(filename : string)
     Exhaustiveness.check_all_pcases ~registry ~env:check_result.Check.env sexps
   in
 
+  (* Step 9: Check kinds in signature file (R3 from spec 17) *)
+  let kind_errors =
+    match sig_ast_opt with
+    | Some sig_ast -> check_signature_kinds sig_ast
+    | None -> []
+  in
+
   {
     type_errors = check_result.Check.errors;
     mismatch_errors;
     missing_signature_warnings;
     undefined_errors = check_result.Check.undefineds;
     exhaustiveness_warnings;
+    kind_errors;
     signature_env =
       (match sibling_result with Some (env, _) -> Some env | None -> None);
     final_env = check_result.Check.env;
@@ -462,6 +507,10 @@ let exhaustiveness_to_diagnostic (warn : Exhaustiveness.warning) : Diagnostic.t
     =
   Diagnostic.non_exhaustive_match ~span:warn.span ~message:warn.message ()
 
+(** Convert a kind error to a diagnostic *)
+let kind_error_to_diagnostic (err : kind_check_error) : Diagnostic.t =
+  Diagnostic.of_kind_error err.span err.kind_error
+
 (** Get all diagnostics from a check result *)
 let diagnostics_of_result (result : check_result) : Diagnostic.t list =
   let type_diagnostics = Diagnostic.of_unify_errors result.type_errors in
@@ -478,5 +527,6 @@ let diagnostics_of_result (result : check_result) : Diagnostic.t list =
   let exhaustiveness_diagnostics =
     List.map exhaustiveness_to_diagnostic result.exhaustiveness_warnings
   in
+  let kind_diagnostics = List.map kind_error_to_diagnostic result.kind_errors in
   type_diagnostics @ mismatch_diagnostics @ missing_sig_diagnostics
-  @ undefined_diagnostics @ exhaustiveness_diagnostics
+  @ undefined_diagnostics @ exhaustiveness_diagnostics @ kind_diagnostics

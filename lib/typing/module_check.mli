@@ -43,6 +43,14 @@ type mismatch_error = {
 type missing_signature_warning = { name : string; span : Syntax.Location.span }
 (** Warning when a public function is not in the signature file *)
 
+(** {1 Kind Errors} *)
+
+type kind_check_error = {
+  kind_error : Kind_infer.kind_error;
+  span : Syntax.Location.span;
+}
+(** A kind error with its source location *)
+
 (** {1 Check Result} *)
 
 type check_result = {
@@ -53,6 +61,8 @@ type check_result = {
   undefined_errors : Infer.undefined_var list;  (** Undefined variable errors *)
   exhaustiveness_warnings : Exhaustiveness.warning list;
       (** Warnings for non-exhaustive pcase matches *)
+  kind_errors : kind_check_error list;
+      (** Kind mismatch errors in signatures *)
   signature_env : Core.Type_env.t option;
       (** Environment from loaded signature, if any *)
   final_env : Core.Type_env.t;  (** Final type environment after checking *)
