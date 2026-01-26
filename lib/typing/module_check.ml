@@ -298,7 +298,7 @@ let verify_defun_type ~(name : string) ~(declared : Types.typ)
 (** {1 Kind Checking} *)
 
 (** Check kinds for a single declaration. Returns any kind errors found. *)
-let check_decl_kinds (decl : Sig.Sig_ast.decl) : kind_check_error list =
+let rec check_decl_kinds (decl : Sig.Sig_ast.decl) : kind_check_error list =
   match decl with
   | Sig.Sig_ast.DDefun d ->
       let result = Kind_infer.infer_defun_kinds d in
@@ -309,6 +309,9 @@ let check_decl_kinds (decl : Sig.Sig_ast.decl) : kind_check_error list =
   | Sig.Sig_ast.DData d ->
       let result = Kind_infer.infer_data_kinds d in
       List.map (fun e -> { kind_error = e; span = d.data_loc }) result.errors
+  | Sig.Sig_ast.DTypeScope d ->
+      (* Recursively check kinds for declarations inside the scope *)
+      List.concat_map check_decl_kinds d.scope_decls
   | Sig.Sig_ast.DDefvar _ | Sig.Sig_ast.DOpen _ | Sig.Sig_ast.DInclude _
   | Sig.Sig_ast.DImportStruct _ ->
       (* These declarations don't have type parameters to kind-check *)

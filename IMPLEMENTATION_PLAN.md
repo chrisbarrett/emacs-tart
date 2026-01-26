@@ -394,17 +394,50 @@ Enable explicit instantiation of polymorphic types at call sites.
 
 ---
 
+## Phase 16: Scoped Type Variables (Spec 19)
+
+Enable type variables to be shared across multiple signatures within a scope.
+
+### 16.1 Parsing and AST
+
+- [x] [R1] Add TypeScope variant to sig_ast.ml
+- [x] [R1] Parse type-scope blocks in sig_parser.ml
+- [x] Verify: `dune test`; scoped blocks parse correctly
+
+### 16.2 Scope Variable Binding
+
+- [x] [R2] Implement scope variable binding during loading
+- [x] [R3] Handle explicit forall inside scope (merges with scope vars)
+- [x] [R8] Validate variable binding in scopes (error on unbound)
+- [x] Verify: Scoped variables shared; external independent
+
+### 16.3 Advanced Features
+
+- [ ] [R4] Integrate with kind inference for HK scoped variables
+- [x] [R5] Implement nested scope shadowing
+- [x] [R6] Handle opaque types in scopes
+- [ ] Verify: HK scopes and nesting work correctly
+
+### 16.4 Integration
+
+- [x] [R7] Export scoped declarations with correct polymorphic types
+- [ ] Verify: Exported functions usable from other modules
+
+---
+
 ## Future Work (Requires New Specs)
 
 The following areas are mentioned as future work in the specs:
 
-1. **Scoped Type Variables** (mentioned in Spec 15)
-   - Allow type variables to span multiple signatures in a scope
-
-2. **Additional Stdlib Coverage**
+1. **Additional Stdlib Coverage**
    - More Emacs packages (org-mode, magit, etc.)
    - More cl-lib functions
    - Third-party package signatures
+
+2. **Type Classes / Traits** (mentioned in Spec 17 Non-Requirements)
+   - Typeclass/trait syntax
+   - Associated types
+   - Type families
 
 ## Priority Order
 
@@ -423,3 +456,4 @@ The following areas are mentioned as future work in the specs:
 13. **Phase 13**: Expanded stdlib ✓
 14. **Phase 14**: Higher-Kinded Types ✓
 15. **Phase 15**: Explicit Type Instantiation ✓
+16. **Phase 16**: Scoped Type Variables

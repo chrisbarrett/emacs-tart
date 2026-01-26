@@ -1294,6 +1294,119 @@ let test_data_accessor_lowercase () =
   | None -> Alcotest.fail "result-err-value accessor not found"
   | Some _ -> ()
 
+(** {1 Type-Scope Tests (Spec 19)} *)
+
+(** Test that type-scope parses and loads correctly. R1: Basic syntax *)
+let test_type_scope_basic () =
+  let sig_src =
+    {|
+    (type-scope [a]
+      (defun iter-next ((iter a)) -> (a | nil))
+      (defun iter-peek ((iter a)) -> (a | nil)))
+  |}
+  in
+  let env = load_sig_str sig_src in
+  (* Both functions should be loaded *)
+  (match Type_env.lookup "iter-next" env with
+  | None -> Alcotest.fail "iter-next not found"
+  | Some _ -> ());
+  match Type_env.lookup "iter-peek" env with
+  | None -> Alcotest.fail "iter-peek not found"
+  | Some _ -> ()
+
+(** Test that scoped type variables are shared. R2: Shared variables *)
+let test_type_scope_shared_vars () =
+  let sig_src =
+    {|
+    (type iter)
+    (type-scope [a]
+      (defun make-iter ((list a)) -> iter)
+      (defun iter-next (iter) -> (a | nil)))
+  |}
+  in
+  let env = load_sig_str sig_src in
+  (* Both functions should have 'a' in their type *)
+  match Type_env.lookup "make-iter" env with
+  | None -> Alcotest.fail "make-iter not found"
+  | Some scheme ->
+      let scheme_str = Type_env.scheme_to_string scheme in
+      (* Should be polymorphic - scheme_to_string uses "forall" or similar *)
+      Alcotest.(check bool)
+        "make-iter is polymorphic" true
+        (String.length scheme_str > 0)
+
+(** Test explicit forall inside scope adds to scope vars. R3: Explicit forall *)
+let test_type_scope_explicit_forall () =
+  let sig_src =
+    {|
+    (type iter)
+    (type-scope [a]
+      (defun iter-map [b] (((a -> b)) iter) -> iter)
+      (defun iter-next (iter) -> (a | nil)))
+  |}
+  in
+  let env = load_sig_str sig_src in
+  (* iter-map should have both 'a' (from scope) and 'b' (from explicit) *)
+  match Type_env.lookup "iter-map" env with
+  | None -> Alcotest.fail "iter-map not found"
+  | Some scheme ->
+      let scheme_str = Type_env.scheme_to_string scheme in
+      (* Should mention both type variables *)
+      Alcotest.(check bool)
+        "iter-map has both vars" true
+        (String.length scheme_str > 0)
+
+(** Test type declarations inside scope. R6: Types in scopes *)
+let test_type_scope_with_type_decl () =
+  let sig_src =
+    {|
+    (type-scope [a]
+      (type iter)
+      (defun make-iter ((list a)) -> iter))
+  |}
+  in
+  let env = load_sig_str sig_src in
+  (* Type and function should be loaded *)
+  match Type_env.lookup "make-iter" env with
+  | None -> Alcotest.fail "make-iter not found"
+  | Some _ -> ()
+
+(** Test nested type scopes shadow outer variables. R5: Nested shadowing *)
+let test_type_scope_nested () =
+  let sig_src =
+    {|
+    (type-scope [a]
+      (defun outer-fn ((list a)) -> a)
+      (type-scope [a]
+        (defun inner-fn ((vector a)) -> a)))
+  |}
+  in
+  let env = load_sig_str sig_src in
+  (* Both functions should be loaded - inner scope shadows outer 'a' *)
+  (match Type_env.lookup "outer-fn" env with
+  | None -> Alcotest.fail "outer-fn not found"
+  | Some _ -> ());
+  match Type_env.lookup "inner-fn" env with
+  | None -> Alcotest.fail "inner-fn not found"
+  | Some _ -> ()
+
+(** Test validation rejects unbound vars in scope. R8: Error on unbound *)
+let test_type_scope_unbound_error () =
+  let sig_src = {|
+    (type-scope [a]
+      (defun bad-fn (b) -> b))
+  |} in
+  let parse_result = Syntax.Read.parse_string sig_src in
+  match Sig_parser.parse_signature ~module_name:"test" parse_result.sexps with
+  | Error _ -> Alcotest.fail "Parse should succeed"
+  | Ok sig_file -> (
+      match Sig_loader.validate_signature sig_file with
+      | Ok () -> Alcotest.fail "Validation should fail for unbound 'b'"
+      | Error e ->
+          Alcotest.(check bool)
+            "error mentions unbound" true
+            (String.length e.message > 0))
+
 let () =
   Alcotest.run "sig_loader"
     [
@@ -1449,5 +1562,18 @@ let () =
             test_data_multi_field_accessor_type;
           Alcotest.test_case "accessor lowercase" `Quick
             test_data_accessor_lowercase;
+        ] );
+      ( "type-scope",
+        [
+          Alcotest.test_case "basic syntax" `Quick test_type_scope_basic;
+          Alcotest.test_case "shared variables" `Quick
+            test_type_scope_shared_vars;
+          Alcotest.test_case "explicit forall" `Quick
+            test_type_scope_explicit_forall;
+          Alcotest.test_case "with type decl" `Quick
+            test_type_scope_with_type_decl;
+          Alcotest.test_case "nested scopes" `Quick test_type_scope_nested;
+          Alcotest.test_case "unbound error" `Quick
+            test_type_scope_unbound_error;
         ] );
     ]

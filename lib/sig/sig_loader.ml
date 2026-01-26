@@ -180,7 +180,7 @@ let validate_data ctx (d : data_decl) : unit result =
     (Ok ()) d.data_ctors
 
 (** Validate a single declaration *)
-let validate_decl ctx (decl : decl) : unit result =
+let rec validate_decl ctx (decl : decl) : unit result =
   match decl with
   | DOpen (_, _) -> Ok () (* Opens are handled separately *)
   | DInclude (_, _) -> Ok () (* Includes are handled separately *)
@@ -189,20 +189,32 @@ let validate_decl ctx (decl : decl) : unit result =
   | DType d -> validate_type_decl ctx d
   | DImportStruct d -> validate_import_struct ctx d
   | DData d -> validate_data ctx d
+  | DTypeScope d ->
+      (* Add scope type variables to context, then validate inner decls *)
+      let scope_var_names = List.map (fun b -> b.name) d.scope_tvar_binders in
+      let scope_ctx = with_tvars ctx scope_var_names in
+      List.fold_left
+        (fun acc inner_decl ->
+          let* () = acc in
+          validate_decl scope_ctx inner_decl)
+        (Ok ()) d.scope_decls
 
 (** {1 Signature Validation} *)
 
 (** Build context from declarations. Adds all type declarations to the context
     so they can be referenced. *)
 let build_context (sig_file : signature) : tvar_context =
-  List.fold_left
-    (fun ctx decl ->
-      match decl with
-      | DType d -> with_type ctx d.type_name
-      | DImportStruct d -> with_type ctx d.struct_name
-      | DData d -> with_type ctx d.data_name
-      | _ -> ctx)
-    empty_context sig_file.sig_decls
+  let rec add_decl_types ctx decl =
+    match decl with
+    | DType d -> with_type ctx d.type_name
+    | DImportStruct d -> with_type ctx d.struct_name
+    | DData d -> with_type ctx d.data_name
+    | DTypeScope d ->
+        (* Recursively collect types from scope declarations *)
+        List.fold_left add_decl_types ctx d.scope_decls
+    | _ -> ctx
+  in
+  List.fold_left add_decl_types empty_context sig_file.sig_decls
 
 (** Validate an entire signature file. Returns Ok () if all declarations are
     valid, or the first error. *)
@@ -559,6 +571,104 @@ let sig_param_to_param (tvar_names : string list) (p : sig_param) : Types.param
     =
   sig_param_to_param_with_aliases empty_aliases tvar_names p
 
+(** {1 Scope Type Variable Conversion}
+
+    For type-scope blocks, we need to use pre-created TVars for scope type
+    variables so they are shared across all declarations in the scope. *)
+
+(** Convert a signature type to a core type, using pre-created TVars for scope
+    type variables. [scope_tvars] maps scope type var names to their shared
+    TVars. [tvar_names] is the list of function-local type variable names. *)
+let rec sig_type_to_typ_with_scope_ctx (ctx : type_context)
+    (scope_tvars : (string * Types.typ) list) (tvar_names : string list)
+    (ty : sig_type) : Types.typ =
+  match ty with
+  | STVar (name, _) -> (
+      (* First check if it's a scope type variable *)
+      match List.assoc_opt name scope_tvars with
+      | Some tvar -> tvar (* Use the pre-created TVar *)
+      | None ->
+          if List.mem name tvar_names then
+            (* Function-local type variable *)
+            Types.TCon name
+          else
+            (* Fall through to alias/opaque/primitive handling *)
+            sig_type_to_typ_with_ctx ctx
+              (List.map fst scope_tvars @ tvar_names)
+              ty)
+  | STCon (name, _) -> (
+      (* Check scope tvars first (in case someone uses a scope var as a type name) *)
+      match List.assoc_opt name scope_tvars with
+      | Some tvar -> tvar
+      | None ->
+          sig_type_to_typ_with_ctx ctx
+            (List.map fst scope_tvars @ tvar_names)
+            ty)
+  | STApp (name, args, loc) -> (
+      (* Check if the constructor is a scope tvar *)
+      match List.assoc_opt name scope_tvars with
+      | Some tvar ->
+          (* HK scope variable - convert args and create TApp *)
+          let arg_types =
+            List.map
+              (sig_type_to_typ_with_scope_ctx ctx scope_tvars tvar_names)
+              args
+          in
+          Types.TApp (tvar, arg_types)
+      | None ->
+          (* Not a scope tvar - use regular conversion *)
+          let combined_tvars = List.map fst scope_tvars @ tvar_names in
+          sig_type_to_typ_with_ctx ctx combined_tvars (STApp (name, args, loc)))
+  | STArrow (params, ret, _) ->
+      let param_types =
+        List.map
+          (sig_param_to_param_with_scope_ctx ctx scope_tvars tvar_names)
+          params
+      in
+      let ret_type =
+        sig_type_to_typ_with_scope_ctx ctx scope_tvars tvar_names ret
+      in
+      Types.TArrow (param_types, ret_type)
+  | STForall (binders, body, _) ->
+      let new_vars = List.map (fun b -> b.name) binders in
+      let inner_names = new_vars @ tvar_names in
+      let body_type =
+        sig_type_to_typ_with_scope_ctx ctx scope_tvars inner_names body
+      in
+      Types.TForall (new_vars, body_type)
+  | STUnion (types, _) ->
+      let type_list =
+        List.map
+          (sig_type_to_typ_with_scope_ctx ctx scope_tvars tvar_names)
+          types
+      in
+      Types.TUnion type_list
+  | STTuple (types, _) ->
+      let type_list =
+        List.map
+          (sig_type_to_typ_with_scope_ctx ctx scope_tvars tvar_names)
+          types
+      in
+      Types.TTuple type_list
+
+(** Convert a signature parameter to a core parameter with scope type variables
+*)
+and sig_param_to_param_with_scope_ctx (ctx : type_context)
+    (scope_tvars : (string * Types.typ) list) (tvar_names : string list)
+    (p : sig_param) : Types.param =
+  match p with
+  | SPPositional ty ->
+      Types.PPositional
+        (sig_type_to_typ_with_scope_ctx ctx scope_tvars tvar_names ty)
+  | SPOptional ty ->
+      Types.POptional
+        (sig_type_to_typ_with_scope_ctx ctx scope_tvars tvar_names ty)
+  | SPRest ty ->
+      Types.PRest (sig_type_to_typ_with_scope_ctx ctx scope_tvars tvar_names ty)
+  | SPKey (name, ty) ->
+      Types.PKey
+        (name, sig_type_to_typ_with_scope_ctx ctx scope_tvars tvar_names ty)
+
 (** {1 Declaration Loading}
 
     These functions convert signature declarations to type environment entries.
@@ -577,6 +687,32 @@ let load_defun_with_ctx (ctx : type_context) (d : defun_decl) : Type_env.scheme
   let arrow = Types.TArrow (params, ret) in
   if tvar_names = [] then Type_env.Mono arrow
   else Type_env.Poly (tvar_names, arrow)
+
+(** Convert a defun declaration inside a type-scope to a type scheme. The scope
+    type variables are added to the function's quantifier list. Uses the
+    pre-created TVars from the scope for consistency across declarations. *)
+let load_defun_with_scope (ctx : type_context)
+    (scope_tvars : (string * Types.typ) list) (d : defun_decl) : Type_env.scheme
+    =
+  (* Get function's own type variables *)
+  let fn_tvar_names = List.map (fun b -> b.name) d.defun_tvar_binders in
+  (* Scope type variable names that are actually used in this function
+     (we include all scope vars in the quantifier for consistency) *)
+  let scope_tvar_names = List.map fst scope_tvars in
+  (* Combined tvar names: scope vars first, then function's own vars *)
+  let all_tvar_names = scope_tvar_names @ fn_tvar_names in
+  (* Build params and return type, recognizing scope tvars as type variables *)
+  let params =
+    List.map
+      (sig_param_to_param_with_scope_ctx ctx scope_tvars fn_tvar_names)
+      d.defun_params
+  in
+  let ret =
+    sig_type_to_typ_with_scope_ctx ctx scope_tvars fn_tvar_names d.defun_return
+  in
+  let arrow = Types.TArrow (params, ret) in
+  if all_tvar_names = [] then Type_env.Mono arrow
+  else Type_env.Poly (all_tvar_names, arrow)
 
 (** Convert a defvar declaration to a type scheme with full type context. The
     type may be polymorphic if it contains a forall. *)
@@ -628,6 +764,8 @@ type load_state = {
   ls_env : Type_env.t;  (** Values exported by this module *)
   ls_resolver : module_resolver;  (** How to find other modules *)
   ls_loaded : string list;  (** Modules already loaded (cycle detection) *)
+  ls_scope_tvars : (string * Types.typ) list;
+      (** Type variables from enclosing type-scope blocks *)
 }
 (** State accumulated during loading *)
 
@@ -639,6 +777,7 @@ let init_load_state ~resolver ~base_env ~module_name =
     ls_resolver = resolver;
     ls_loaded = [ module_name ];
     (* Mark self as loaded to prevent self-import *)
+    ls_scope_tvars = [];
   }
 
 (** Add a type alias to the load state *)
@@ -971,8 +1110,74 @@ and load_decls_into_state (sig_file : signature) (state : load_state) :
           let scheme = load_defvar_with_ctx state.ls_type_ctx d in
           add_value_to_state d.defvar_name scheme state
       | DImportStruct d -> load_import_struct sig_file.sig_module d state
-      | DData d -> load_data sig_file.sig_module d state)
+      | DData d -> load_data sig_file.sig_module d state
+      | DTypeScope d -> load_type_scope sig_file d state)
     state sig_file.sig_decls
+
+(** Load a type-scope block. Creates fresh type variables for the scope's
+    binders and processes each inner declaration with those variables available
+    in the type context. *)
+and load_type_scope (sig_file : signature) (scope : type_scope_decl)
+    (state : load_state) : load_state =
+  (* Create fresh TVars for each scope binder.
+     Level 0 is used for signature-level type variables. *)
+  let scope_tvars =
+    List.map
+      (fun binder -> (binder.name, Types.fresh_tvar 0))
+      scope.scope_tvar_binders
+  in
+  (* Extend state with scope type variables *)
+  let state_with_scope =
+    { state with ls_scope_tvars = scope_tvars @ state.ls_scope_tvars }
+  in
+  (* Process inner declarations with the scope context *)
+  List.fold_left
+    (fun st decl -> load_scoped_decl sig_file scope_tvars decl st)
+    state_with_scope scope.scope_decls
+
+(** Load a declaration inside a type-scope. Adds scope type variables to the
+    defun's quantifier list. *)
+and load_scoped_decl (sig_file : signature)
+    (scope_tvars : (string * Types.typ) list) (decl : decl) (state : load_state)
+    : load_state =
+  match decl with
+  | DOpen (name, _) -> process_open name state
+  | DInclude (name, _) -> process_include name state
+  | DType d -> (
+      (* Type declarations in scopes work the same way *)
+      let known_types = get_known_types_from_state state in
+      let d = Forall_infer.infer_type_decl ~known_types d in
+      match d.type_body with
+      | Some body ->
+          let alias =
+            {
+              alias_params = List.map (fun b -> b.name) d.type_params;
+              alias_body = body;
+            }
+          in
+          add_alias_to_state d.type_name alias state
+      | None ->
+          let opaque =
+            {
+              opaque_params = List.map (fun b -> b.name) d.type_params;
+              opaque_con = opaque_con_name sig_file.sig_module d.type_name;
+            }
+          in
+          add_opaque_to_state d.type_name opaque state)
+  | DDefun d ->
+      (* For defuns in scope, combine scope tvars with function's own tvars *)
+      let known_types = get_known_types_from_state state in
+      let d = Forall_infer.infer_defun ~known_types d in
+      let scheme = load_defun_with_scope state.ls_type_ctx scope_tvars d in
+      add_value_to_state d.defun_name scheme state
+  | DDefvar d ->
+      let scheme = load_defvar_with_ctx state.ls_type_ctx d in
+      add_value_to_state d.defvar_name scheme state
+  | DImportStruct d -> load_import_struct sig_file.sig_module d state
+  | DData d -> load_data sig_file.sig_module d state
+  | DTypeScope nested ->
+      (* Handle nested scopes recursively *)
+      load_type_scope sig_file nested state
 
 (** {1 Signature Loading}
 

@@ -604,7 +604,7 @@ let parse_data (contents : Sexp.t list) (span : Loc.span) : decl result =
 (** {1 Top-Level Parsing} *)
 
 (** Parse a single declaration *)
-let parse_decl (sexp : Sexp.t) : decl result =
+let rec parse_decl (sexp : Sexp.t) : decl result =
   match sexp with
   | Sexp.List ((Sexp.Symbol ("defun", _) :: _ as contents), span) ->
       parse_defun contents span
@@ -620,11 +620,53 @@ let parse_decl (sexp : Sexp.t) : decl result =
       parse_import_struct contents span
   | Sexp.List ((Sexp.Symbol ("data", _) :: _ as contents), span) ->
       parse_data contents span
+  | Sexp.List ((Sexp.Symbol ("type-scope", _) :: _ as contents), span) ->
+      parse_type_scope contents span
   | _ ->
       error
-        "Expected declaration (defun, defvar, type, data, open, include, or \
-         import-struct)"
+        "Expected declaration (defun, defvar, type, data, open, include, \
+         import-struct, or type-scope)"
         (Sexp.span_of sexp)
+
+(** Parse a type-scope declaration.
+
+    Grammar: (type-scope [vars] decl...)
+
+    Examples:
+    - (type-scope [a] (defun iter-next ((iter a)) -> (a | nil)) (defun iter-peek
+      ((iter a)) -> (a | nil))) *)
+and parse_type_scope (contents : Sexp.t list) (span : Loc.span) : decl result =
+  match contents with
+  | [ Sexp.Symbol ("type-scope", _) ] ->
+      error "Expected type variables [a b ...] after type-scope" span
+  | [ Sexp.Symbol ("type-scope", _); _ ] ->
+      error "Expected declarations after type-scope [vars]" span
+  | Sexp.Symbol ("type-scope", _) :: (Sexp.Vector (_, _) as binders) :: decls
+    -> (
+      match parse_tvar_binders binders with
+      | Ok tvar_binders -> (
+          (* Parse each inner declaration *)
+          let rec parse_all acc = function
+            | [] -> Ok (List.rev acc)
+            | sexp :: rest -> (
+                match parse_decl sexp with
+                | Ok d -> parse_all (d :: acc) rest
+                | Error e -> Error e)
+          in
+          match parse_all [] decls with
+          | Ok scope_decls ->
+              Ok
+                (DTypeScope
+                   {
+                     scope_tvar_binders = tvar_binders;
+                     scope_decls;
+                     scope_loc = span;
+                   })
+          | Error e -> Error e)
+      | Error e -> Error e)
+  | Sexp.Symbol ("type-scope", _) :: _ ->
+      error "Expected type variables [a b ...] after type-scope" span
+  | _ -> error "Invalid type-scope declaration syntax" span
 
 (** Parse a signature file from S-expressions.
 
