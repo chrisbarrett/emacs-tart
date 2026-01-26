@@ -323,6 +323,96 @@ let test_multiple_hkt_instances () =
       Alcotest.fail
         (Printf.sprintf "Expected Ok, got Error (%s %s)" cls (to_string ty))
 
+(** {1 Overlap Detection Tests (R9)} *)
+
+(** R9: No overlap between different classes *)
+let test_no_overlap_different_classes () =
+  let eq_int = simple_instance "Eq" "Int" in
+  let ord_int = simple_instance "Ord" "Int" in
+  Alcotest.(check bool)
+    "different classes don't overlap" false
+    (instances_overlap eq_int ord_int)
+
+(** R9: No overlap between different concrete types *)
+let test_no_overlap_different_types () =
+  let eq_int = simple_instance "Eq" "Int" in
+  let eq_string = simple_instance "Eq" "String" in
+  Alcotest.(check bool)
+    "different types don't overlap" false
+    (instances_overlap eq_int eq_string)
+
+(** R9: Overlap between specific and parameterized instance *)
+let test_overlap_specific_and_parameterized () =
+  (* (instance (Eq (list int))) and (instance [a] (Eq (list a)))
+     overlap because the parameterized instance can match (list int) *)
+  let eq_list_int =
+    {
+      inst_class = "Eq";
+      inst_type = TApp (TCon "List", [ TCon "Int" ]);
+      inst_tvars = [];
+      inst_constraints = [];
+    }
+  in
+  let eq_list_a =
+    {
+      inst_class = "Eq";
+      inst_type = TApp (TCon "List", [ TCon "a" ]);
+      inst_tvars = [ "a" ];
+      inst_constraints = [ ("Eq", TCon "a") ];
+    }
+  in
+  Alcotest.(check bool)
+    "specific and parameterized overlap" true
+    (instances_overlap eq_list_int eq_list_a)
+
+(** R9: No overlap between different type constructors *)
+let test_no_overlap_different_constructors () =
+  let eq_list_a = parameterized_instance "Eq" "List" "a" "Eq" in
+  let eq_option_a =
+    {
+      inst_class = "Eq";
+      inst_type = TApp (TCon "Option", [ TCon "a" ]);
+      inst_tvars = [ "a" ];
+      inst_constraints = [ ("Eq", TCon "a") ];
+    }
+  in
+  Alcotest.(check bool)
+    "different constructors don't overlap" false
+    (instances_overlap eq_list_a eq_option_a)
+
+(** R9: find_overlaps returns overlapping pairs *)
+let test_find_overlaps () =
+  let eq_list_int =
+    {
+      inst_class = "Eq";
+      inst_type = TApp (TCon "List", [ TCon "Int" ]);
+      inst_tvars = [];
+      inst_constraints = [];
+    }
+  in
+  let eq_list_a = parameterized_instance "Eq" "List" "a" "Eq" in
+  let eq_string = simple_instance "Eq" "String" in
+  let reg =
+    empty_registry |> add_instance eq_list_int |> add_instance eq_list_a
+    |> add_instance eq_string
+  in
+  let overlaps = find_overlaps reg in
+  Alcotest.(check int) "one overlap found" 1 (List.length overlaps);
+  let overlap = List.hd overlaps in
+  Alcotest.(check string) "overlap class" "Eq" overlap.overlap_class
+
+(** R9: find_overlaps returns empty for no overlaps *)
+let test_find_overlaps_none () =
+  let eq_int = simple_instance "Eq" "Int" in
+  let eq_string = simple_instance "Eq" "String" in
+  let ord_int = simple_instance "Ord" "Int" in
+  let reg =
+    empty_registry |> add_instance eq_int |> add_instance eq_string
+    |> add_instance ord_int
+  in
+  let overlaps = find_overlaps reg in
+  Alcotest.(check int) "no overlaps" 0 (List.length overlaps)
+
 (** {1 Test Runner} *)
 
 let () =
@@ -374,6 +464,19 @@ let () =
             test_hkt_instance_not_found;
           Alcotest.test_case "multiple HKT instances" `Quick
             test_multiple_hkt_instances;
+        ] );
+      ( "overlap-detection",
+        [
+          Alcotest.test_case "different classes no overlap" `Quick
+            test_no_overlap_different_classes;
+          Alcotest.test_case "different types no overlap" `Quick
+            test_no_overlap_different_types;
+          Alcotest.test_case "specific and parameterized overlap" `Quick
+            test_overlap_specific_and_parameterized;
+          Alcotest.test_case "different constructors no overlap" `Quick
+            test_no_overlap_different_constructors;
+          Alcotest.test_case "find overlaps" `Quick test_find_overlaps;
+          Alcotest.test_case "find overlaps none" `Quick test_find_overlaps_none;
         ] );
       ( "load-instance",
         [

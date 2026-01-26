@@ -494,8 +494,8 @@ Enable ad-hoc polymorphism through type classes and instances.
 
 ### 18.6 Error Handling
 
-- [ ] [R8] Implement missing instance error formatting
-- [ ] [R9] Add overlapping instance detection
+- [x] [R8] Implement missing instance error formatting
+- [x] [R9] Add overlapping instance detection
 - [ ] [R10] Implement default method support
 - [ ] Verify: Error messages are clear and actionable
 

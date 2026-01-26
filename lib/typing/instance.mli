@@ -95,6 +95,27 @@ val load_class : Sig.Sig_ast.class_decl -> registry -> registry
     Extracts class name, type parameter, and superclass names for use during
     instance resolution. *)
 
+(** {1 Overlap Detection (R9)} *)
+
+type overlap = {
+  overlap_class : string;  (** The class where overlap occurs *)
+  overlap_inst1 : instance;  (** First overlapping instance *)
+  overlap_inst2 : instance;  (** Second overlapping instance *)
+}
+(** An overlap between two instances. *)
+
+val instances_overlap : instance -> instance -> bool
+(** Check if two instances for the same class overlap.
+
+    Two instances overlap if they could both match the same concrete type.
+    Example: [(Eq (list int))] and [(Eq (list a))] overlap because the
+    parameterized instance can match [(list int)] when [a=int]. *)
+
+val find_overlaps : registry -> overlap list
+(** Find all overlapping instance pairs in a registry.
+
+    Returns a list of overlaps. Each pair is reported once (not twice). *)
+
 (** {1 Debugging} *)
 
 val instance_to_string : instance -> string
@@ -102,3 +123,6 @@ val instance_to_string : instance -> string
 
 val registry_to_string : registry -> string
 (** Pretty-print the registry for debugging *)
+
+val overlap_to_string : overlap -> string
+(** Pretty-print an overlap for debugging *)

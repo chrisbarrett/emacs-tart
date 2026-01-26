@@ -278,6 +278,82 @@ let load_class (decl : Sig.Sig_ast.class_decl) (registry : registry) : registry
   in
   add_class cls registry
 
+(** {1 Overlap Detection (R9)} *)
+
+type overlap = {
+  overlap_class : string;  (** The class where overlap occurs *)
+  overlap_inst1 : instance;  (** First overlapping instance *)
+  overlap_inst2 : instance;  (** Second overlapping instance *)
+}
+(** An overlap between two instances. *)
+
+(** Check if two types could unify (overlap).
+
+    This is a simplified overlap check - we check if one type can be made to
+    match the other by substituting type variables. Two instances overlap if
+    their types could match the same concrete type.
+
+    Examples:
+    - `(list int)` and `(list a)` overlap because `(list a)` with a=int matches
+      `(list int)`
+    - `(list int)` and `(list string)` don't overlap (different concrete types)
+    - `(list a)` and `(option b)` don't overlap (different type constructors) *)
+let types_could_overlap (ty1 : typ) (tvars1 : string list) (ty2 : typ)
+    (tvars2 : string list) : bool =
+  (* Check if one type could match the other via variable substitution *)
+  let rec could_match t1 t2 =
+    match (repr t1, repr t2) with
+    | TCon a, _ when List.mem a tvars1 ->
+        (* t1 is a type variable - it can match anything *)
+        true
+    | _, TCon b when List.mem b tvars2 ->
+        (* t2 is a type variable - it can match anything *)
+        true
+    | TCon a, TCon b ->
+        (* Both concrete - must be equal *)
+        a = b
+    | TApp (con1, args1), TApp (con2, args2)
+      when List.length args1 = List.length args2 ->
+        (* Must match constructor and all args *)
+        could_match con1 con2 && List.for_all2 could_match args1 args2
+    | TTuple elems1, TTuple elems2 when List.length elems1 = List.length elems2
+      ->
+        List.for_all2 could_match elems1 elems2
+    | _, _ -> false
+  in
+  could_match ty1 ty2
+
+(** Check if two instances for the same class overlap. *)
+let instances_overlap (inst1 : instance) (inst2 : instance) : bool =
+  inst1.inst_class = inst2.inst_class
+  && types_could_overlap inst1.inst_type inst1.inst_tvars inst2.inst_type
+       inst2.inst_tvars
+
+(** Find all overlapping instance pairs in a registry.
+
+    Returns a list of overlaps. Each pair is reported once (not twice). *)
+let find_overlaps (registry : registry) : overlap list =
+  let instances = registry.instances in
+  let rec check_pairs acc = function
+    | [] -> acc
+    | inst :: rest ->
+        let overlaps_with_inst =
+          List.filter_map
+            (fun other ->
+              if instances_overlap inst other then
+                Some
+                  {
+                    overlap_class = inst.inst_class;
+                    overlap_inst1 = inst;
+                    overlap_inst2 = other;
+                  }
+              else None)
+            rest
+        in
+        check_pairs (overlaps_with_inst @ acc) rest
+  in
+  check_pairs [] instances
+
 (** {1 Debugging} *)
 
 (** Pretty-print an instance for debugging *)
@@ -301,3 +377,10 @@ let instance_to_string inst =
 (** Pretty-print the registry for debugging *)
 let registry_to_string registry =
   String.concat "\n" (List.map instance_to_string registry.instances)
+
+(** Pretty-print an overlap for debugging *)
+let overlap_to_string overlap =
+  Printf.sprintf "overlapping instances for %s:\n  %s\n  %s"
+    overlap.overlap_class
+    (instance_to_string overlap.overlap_inst1)
+    (instance_to_string overlap.overlap_inst2)
