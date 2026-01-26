@@ -40,6 +40,7 @@
 
 ;;; Code:
 
+(require 'cl-lib)
 (require 'comint)
 (require 'eglot)
 
@@ -226,6 +227,86 @@ Ensures the REPL is running before sending."
   (interactive)
   (tart--ensure-repl)
   (pop-to-buffer (tart--repl-buffer)))
+
+;;; Type/Expand Inspection Commands
+
+(defvar tart--repl-response nil
+  "Accumulated response from REPL command.")
+
+(defvar tart--repl-waiting nil
+  "Non-nil when waiting for REPL response.")
+
+(defun tart--repl-output-filter (output)
+  "Filter function to capture REPL output.
+OUTPUT is the string received from the process."
+  (when tart--repl-waiting
+    (setq tart--repl-response (concat tart--repl-response output)))
+  output)
+
+(defun tart--extract-repl-result (output)
+  "Extract the result from REPL OUTPUT, removing prompts."
+  (let ((lines (split-string output "\n" t)))
+    ;; Filter out prompt lines and empty lines
+    (setq lines (cl-remove-if
+                 (lambda (line)
+                   (or (string-match-p tart--prompt-regexp line)
+                       (string-empty-p (string-trim line))))
+                 lines))
+    (string-trim (string-join lines "\n"))))
+
+(defun tart--send-repl-command (command)
+  "Send COMMAND to REPL and return the response string.
+Blocks until the REPL responds with a new prompt."
+  (let ((proc (tart--ensure-repl))
+        (buf (tart--repl-buffer)))
+    (setq tart--repl-response ""
+          tart--repl-waiting t)
+    (with-current-buffer buf
+      (add-hook 'comint-preoutput-filter-functions #'tart--repl-output-filter nil t))
+    (unwind-protect
+        (progn
+          (comint-send-string proc command)
+          (unless (string-suffix-p "\n" command)
+            (comint-send-string proc "\n"))
+          ;; Wait for response (prompt indicates completion)
+          (with-timeout (5 (error "Timeout waiting for REPL response"))
+            (while (not (string-match-p tart--prompt-regexp tart--repl-response))
+              (accept-process-output proc 0.1)))
+          (tart--extract-repl-result tart--repl-response))
+      (setq tart--repl-waiting nil)
+      (with-current-buffer buf
+        (remove-hook 'comint-preoutput-filter-functions #'tart--repl-output-filter t)))))
+
+(defun tart--sexp-at-point ()
+  "Return the sexp at or before point as a string."
+  (save-excursion
+    (let ((bounds (bounds-of-thing-at-point 'sexp)))
+      (if bounds
+          (buffer-substring-no-properties (car bounds) (cdr bounds))
+        ;; Fall back to sexp before point
+        (let ((end (point))
+              (start (save-excursion
+                       (backward-sexp)
+                       (point))))
+          (buffer-substring-no-properties start end))))))
+
+;;;###autoload
+(defun tart-type-at-point ()
+  "Show the type of the sexp at point in the echo area.
+Sends `,type <sexp>' to the tart REPL and displays the result."
+  (interactive)
+  (let* ((sexp (tart--sexp-at-point))
+         (result (tart--send-repl-command (concat ",type " sexp))))
+    (message "%s" result)))
+
+;;;###autoload
+(defun tart-expand-at-point ()
+  "Show the macro expansion of the sexp at point.
+Sends `,expand <sexp>' to the tart REPL and displays the result."
+  (interactive)
+  (let* ((sexp (tart--sexp-at-point))
+         (result (tart--send-repl-command (concat ",expand " sexp))))
+    (message "%s" result)))
 
 ;;; Eglot Integration
 
