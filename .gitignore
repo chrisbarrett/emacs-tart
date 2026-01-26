@@ -19,3 +19,4 @@ _opam/
 
 # Generated documentation
 docs/build/
+/result
