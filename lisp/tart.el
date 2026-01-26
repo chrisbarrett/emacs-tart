@@ -169,6 +169,64 @@ If a REPL is already running, switch to it."
 (defalias 'inferior-tart #'run-tart
   "Alias for `run-tart' for consistency with other inferior modes.")
 
+;;; Send-to-REPL Commands
+
+(defun tart--ensure-repl ()
+  "Ensure a tart REPL process is running, returning the process.
+Starts the REPL if not already running."
+  (or (tart--repl-process)
+      (progn
+        (save-window-excursion (run-tart))
+        (tart--repl-process))))
+
+(defun tart--send-string (string)
+  "Send STRING to the tart REPL process.
+Ensures the REPL is running before sending."
+  (let ((proc (tart--ensure-repl)))
+    (comint-send-string proc string)
+    ;; Ensure newline at end for evaluation
+    (unless (string-suffix-p "\n" string)
+      (comint-send-string proc "\n"))))
+
+;;;###autoload
+(defun tart-send-region (start end)
+  "Send the region from START to END to the tart REPL."
+  (interactive "r")
+  (tart--send-string (buffer-substring-no-properties start end)))
+
+;;;###autoload
+(defun tart-send-defun ()
+  "Send the defun at point to the tart REPL."
+  (interactive)
+  (save-excursion
+    (end-of-defun)
+    (let ((end (point)))
+      (beginning-of-defun)
+      (tart--send-string (buffer-substring-no-properties (point) end)))))
+
+;;;###autoload
+(defun tart-send-last-sexp ()
+  "Send the sexp before point to the tart REPL."
+  (interactive)
+  (let ((end (point))
+        (start (save-excursion
+                 (backward-sexp)
+                 (point))))
+    (tart--send-string (buffer-substring-no-properties start end))))
+
+;;;###autoload
+(defun tart-send-buffer ()
+  "Send the entire buffer to the tart REPL."
+  (interactive)
+  (tart--send-string (buffer-substring-no-properties (point-min) (point-max))))
+
+;;;###autoload
+(defun tart-switch-to-repl ()
+  "Switch to the tart REPL buffer, starting one if needed."
+  (interactive)
+  (tart--ensure-repl)
+  (pop-to-buffer (tart--repl-buffer)))
+
 ;;; Eglot Integration
 
 (defun tart--eglot-server-program (_interactive)

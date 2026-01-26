@@ -152,7 +152,7 @@ Interactive development workflow.
 ### 7.1 Inferior Mode
 
 - [x] [R1,R2,R9] Implement `inferior-tart-mode` with comint
-- [ ] [R3] Implement send-to-REPL commands
+- [x] [R3] Implement send-to-REPL commands
 - [ ] [R4] Implement type/expand inspection commands
 - [ ] Verify: REPL interaction works from elisp buffers
 
