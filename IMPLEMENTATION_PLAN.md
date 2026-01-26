@@ -480,7 +480,7 @@ Enable ad-hoc polymorphism through type classes and instances.
 
 ### 18.4 Basic Instance Resolution
 
-- [ ] [R4] Create instance.ml with resolution algorithm
+- [x] [R4] Create instance.ml with resolution algorithm
 - [ ] [R4] Resolve monomorphic constraints at call sites
 - [ ] [R4] Integrate resolution with type inference
 - [ ] Verify: `dune test`; basic instance resolution works

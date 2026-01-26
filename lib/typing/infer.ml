@@ -20,14 +20,27 @@ module Sig_ast = Sig.Sig_ast
 type undefined_var = { name : string; span : Loc.span }
 (** An undefined variable reference *)
 
-type result = { ty : typ; constraints : C.set; undefineds : undefined_var list }
-(** Result of inference: the inferred type, constraints, and undefined vars *)
+type class_constraint_with_span = {
+  constraint_ : type_constraint;
+  span : Loc.span;
+}
+(** A type class constraint with its source location for error reporting *)
+
+type result = {
+  ty : typ;
+  constraints : C.set;
+  undefineds : undefined_var list;
+  class_constraints : class_constraint_with_span list;
+}
+(** Result of inference: the inferred type, constraints, undefined vars,
+    and type class constraints that need instance resolution *)
 
 type defun_result = {
   name : string;
   fn_type : typ;
   defun_constraints : C.set;
   defun_undefineds : undefined_var list;
+  defun_class_constraints : class_constraint_with_span list;
 }
 (** Result of inferring a top-level definition *)
 
@@ -35,15 +48,20 @@ type pattern_binding = { pb_name : string; pb_type : typ }
 (** A binding extracted from a pcase pattern: name and its type *)
 
 (** Create a result with no constraints and no undefined vars *)
-let pure ty = { ty; constraints = C.empty; undefineds = [] }
+let pure ty = { ty; constraints = C.empty; undefineds = []; class_constraints = [] }
 
 (** Create a result with a single constraint *)
 let with_constraint ty c =
-  { ty; constraints = C.add c C.empty; undefineds = [] }
+  { ty; constraints = C.add c C.empty; undefineds = []; class_constraints = [] }
 
 (** Create a result with an undefined variable error *)
 let with_undefined ty name span =
-  { ty; constraints = C.empty; undefineds = [ { name; span } ] }
+  { ty; constraints = C.empty; undefineds = [ { name; span } ]; class_constraints = [] }
+
+(** Create a result with type class constraints *)
+let with_class_constraints ty constraints span =
+  let class_constraints = List.map (fun c -> { constraint_ = c; span }) constraints in
+  { ty; constraints = C.empty; undefineds = []; class_constraints }
 
 (** Combine results, merging constraints and undefined vars *)
 let combine_results results =
@@ -51,6 +69,10 @@ let combine_results results =
 
 (** Combine undefined variables from results *)
 let combine_undefineds results = List.concat_map (fun r -> r.undefineds) results
+
+(** Combine type class constraints from results *)
+let combine_class_constraints results =
+  List.concat_map (fun r -> r.class_constraints) results
 
 (** Infer the type of an S-expression.
 
@@ -79,9 +101,11 @@ let rec infer (env : Env.t) (sexp : Syntax.Sexp.t) : result =
   | Symbol (name, span) -> (
       match Env.lookup name env with
       | Some scheme ->
-          (* Instantiate polymorphic types with fresh type variables *)
-          let ty = Env.instantiate scheme env in
-          pure ty
+          (* Instantiate polymorphic types with fresh type variables
+             and collect any type class constraints for resolution *)
+          let ty, constraints = Env.instantiate_with_constraints scheme env in
+          if constraints = [] then pure ty
+          else with_class_constraints ty constraints span
       | None ->
           (* Unbound variable - track as undefined and give fresh type var
              so inference can continue and find more errors *)
@@ -203,6 +227,7 @@ and infer_lambda env params body span =
     ty = fn_type;
     constraints = body_result.constraints;
     undefineds = body_result.undefineds;
+    class_constraints = body_result.class_constraints;
   }
 
 (** Infer the type of an if expression with else branch.
@@ -261,8 +286,16 @@ and infer_if env cond then_branch else_branch _span =
   let all_undefineds =
     combine_undefineds [ cond_result; then_result; else_result ]
   in
+  let all_class_constraints =
+    combine_class_constraints [ cond_result; then_result; else_result ]
+  in
 
-  { ty = result_ty; constraints = all_constraints; undefineds = all_undefineds }
+  {
+    ty = result_ty;
+    constraints = all_constraints;
+    undefineds = all_undefineds;
+    class_constraints = all_class_constraints;
+  }
 
 (** Infer the type of an if expression without else branch.
 
@@ -289,10 +322,18 @@ and infer_if_no_else env cond then_branch span =
       (C.combine then_result.constraints (C.add then_constraint C.empty))
   in
   let all_undefineds = combine_undefineds [ cond_result; then_result ] in
+  let all_class_constraints =
+    combine_class_constraints [ cond_result; then_result ]
+  in
 
   (* The result type should really be (Or then_type Nil),
      but for now we just use the then type. *)
-  { ty = result_ty; constraints = all_constraints; undefineds = all_undefineds }
+  {
+    ty = result_ty;
+    constraints = all_constraints;
+    undefineds = all_undefineds;
+    class_constraints = all_class_constraints;
+  }
 
 (** Infer the type of a let expression with generalization.
 
@@ -317,15 +358,16 @@ and infer_let env bindings body span =
             let _ = Unify.solve result.constraints in
             (* Generalize if it's a syntactic value *)
             let scheme = G.generalize_if_value outer_level result.ty expr in
-            (name, scheme, result.constraints, result.undefineds)
+            (name, scheme, result.constraints, result.undefineds, result.class_constraints)
         | List ([ Symbol (name, _) ], _) ->
             (* Binding without value: nil (not generalizable) *)
-            (name, Env.Mono Prim.nil, C.empty, [])
+            (name, Env.Mono Prim.nil, C.empty, [], [])
         | _ ->
             (* Malformed binding *)
             ( "_",
               Env.Mono (fresh_tvar (Env.current_level inner_env)),
               C.empty,
+              [],
               [] ))
       bindings
   in
@@ -333,17 +375,20 @@ and infer_let env bindings body span =
   (* Collect constraints and undefineds from all bindings *)
   let binding_constraints =
     List.fold_left
-      (fun acc (_, _, constraints, _) -> C.combine acc constraints)
+      (fun acc (_, _, constraints, _, _) -> C.combine acc constraints)
       C.empty binding_schemes
   in
   let binding_undefineds =
-    List.concat_map (fun (_, _, _, undefs) -> undefs) binding_schemes
+    List.concat_map (fun (_, _, _, undefs, _) -> undefs) binding_schemes
+  in
+  let binding_class_constraints =
+    List.concat_map (fun (_, _, _, _, class_cs) -> class_cs) binding_schemes
   in
 
   (* Extend environment with all bindings (now potentially polymorphic) *)
   let body_env =
     List.fold_left
-      (fun env (name, scheme, _, _) -> Env.extend name scheme env)
+      (fun env (name, scheme, _, _, _) -> Env.extend name scheme env)
       env binding_schemes
   in
 
@@ -354,6 +399,8 @@ and infer_let env bindings body span =
     ty = body_result.ty;
     constraints = C.combine binding_constraints body_result.constraints;
     undefineds = binding_undefineds @ body_result.undefineds;
+    class_constraints =
+      binding_class_constraints @ body_result.class_constraints;
   }
 
 (** Infer the type of a let* expression with generalization.
@@ -365,9 +412,9 @@ and infer_let_star env bindings body span =
   let outer_level = Env.current_level env in
 
   (* Process bindings sequentially, each in the extended environment *)
-  let rec process_bindings env bindings constraints undefineds =
+  let rec process_bindings env bindings constraints undefineds class_cs =
     match bindings with
-    | [] -> (env, constraints, undefineds)
+    | [] -> (env, constraints, undefineds, class_cs)
     | binding :: rest -> (
         let inner_env = Env.enter_level env in
         match binding with
@@ -381,14 +428,15 @@ and infer_let_star env bindings body span =
             process_bindings env' rest
               (C.combine constraints result.constraints)
               (undefineds @ result.undefineds)
+              (class_cs @ result.class_constraints)
         | List ([ Symbol (name, _) ], _) ->
             let env' = Env.extend_mono name Prim.nil env in
-            process_bindings env' rest constraints undefineds
-        | _ -> process_bindings env rest constraints undefineds)
+            process_bindings env' rest constraints undefineds class_cs
+        | _ -> process_bindings env rest constraints undefineds class_cs)
   in
 
-  let body_env, binding_constraints, binding_undefineds =
-    process_bindings env bindings C.empty []
+  let body_env, binding_constraints, binding_undefineds, binding_class_cs =
+    process_bindings env bindings C.empty [] []
   in
   let body_result = infer_progn body_env body span in
 
@@ -396,6 +444,7 @@ and infer_let_star env bindings body span =
     ty = body_result.ty;
     constraints = C.combine binding_constraints body_result.constraints;
     undefineds = binding_undefineds @ body_result.undefineds;
+    class_constraints = binding_class_cs @ body_result.class_constraints;
   }
 
 (** Infer the type of a progn expression.
@@ -412,6 +461,8 @@ and infer_progn env exprs span =
         ty = rest_result.ty;
         constraints = C.combine e_result.constraints rest_result.constraints;
         undefineds = e_result.undefineds @ rest_result.undefineds;
+        class_constraints =
+          e_result.class_constraints @ rest_result.class_constraints;
       }
 
 (** Infer the type of a setq expression.
@@ -419,12 +470,12 @@ and infer_progn env exprs span =
     (setq var1 val1 var2 val2 ...) Returns the value of the last assignment. *)
 and infer_setq env pairs span =
   let open Syntax.Sexp in
-  let rec process_pairs pairs constraints undefineds last_ty =
+  let rec process_pairs pairs constraints undefineds class_cs last_ty =
     match pairs with
-    | [] -> { ty = last_ty; constraints; undefineds }
+    | [] -> { ty = last_ty; constraints; undefineds; class_constraints = class_cs }
     | [ _ ] ->
         (* Odd number of args - malformed, return nil *)
-        { ty = Prim.nil; constraints; undefineds }
+        { ty = Prim.nil; constraints; undefineds; class_constraints = class_cs }
     | Symbol (name, _) :: value :: rest ->
         let result = infer env value in
         (* Check if variable exists in env *)
@@ -441,12 +492,13 @@ and infer_setq env pairs span =
         process_pairs rest
           (C.combine constraints constraint_set)
           (undefineds @ result.undefineds)
+          (class_cs @ result.class_constraints)
           result.ty
     | _ :: _ :: rest ->
         (* Non-symbol in var position *)
-        process_pairs rest constraints undefineds last_ty
+        process_pairs rest constraints undefineds class_cs last_ty
   in
-  process_pairs pairs C.empty [] Prim.nil
+  process_pairs pairs C.empty [] [] Prim.nil
 
 (** Infer the type of a cond expression.
 
@@ -455,9 +507,9 @@ and infer_cond env clauses span =
   let open Syntax.Sexp in
   let result_ty = fresh_tvar (Env.current_level env) in
 
-  let rec process_clauses clauses constraints undefineds =
+  let rec process_clauses clauses constraints undefineds class_cs =
     match clauses with
-    | [] -> (constraints, undefineds)
+    | [] -> (constraints, undefineds, class_cs)
     | List (test :: body, _) :: rest ->
         let test_result = infer env test in
         let body_result = infer_progn env body span in
@@ -470,12 +522,22 @@ and infer_cond env clauses span =
         let all_undefineds =
           undefineds @ test_result.undefineds @ body_result.undefineds
         in
-        process_clauses rest all all_undefineds
-    | _ :: rest -> process_clauses rest constraints undefineds
+        let all_class_cs =
+          class_cs @ test_result.class_constraints @ body_result.class_constraints
+        in
+        process_clauses rest all all_undefineds all_class_cs
+    | _ :: rest -> process_clauses rest constraints undefineds class_cs
   in
 
-  let all_constraints, all_undefineds = process_clauses clauses C.empty [] in
-  { ty = result_ty; constraints = all_constraints; undefineds = all_undefineds }
+  let all_constraints, all_undefineds, all_class_constraints =
+    process_clauses clauses C.empty [] []
+  in
+  {
+    ty = result_ty;
+    constraints = all_constraints;
+    undefineds = all_undefineds;
+    class_constraints = all_class_constraints;
+  }
 
 (** Infer the type of an and expression.
 
@@ -485,8 +547,9 @@ and infer_and env args _span =
   let results = List.map (infer env) args in
   let constraints = combine_results results in
   let undefineds = combine_undefineds results in
+  let class_cs = combine_class_constraints results in
   match List.rev results with
-  | last :: _ -> { ty = last.ty; constraints; undefineds }
+  | last :: _ -> { ty = last.ty; constraints; undefineds; class_constraints = class_cs }
   | [] -> pure Prim.t
 
 (** Infer the type of an or expression.
@@ -497,8 +560,9 @@ and infer_or env args _span =
   let results = List.map (infer env) args in
   let constraints = combine_results results in
   let undefineds = combine_undefineds results in
+  let class_cs = combine_class_constraints results in
   match List.rev results with
-  | last :: _ -> { ty = last.ty; constraints; undefineds }
+  | last :: _ -> { ty = last.ty; constraints; undefineds; class_constraints = class_cs }
   | [] -> pure Prim.nil
 
 (** Infer the type of a not expression.
@@ -510,6 +574,7 @@ and infer_not env arg _span =
     ty = Prim.bool;
     constraints = arg_result.constraints;
     undefineds = arg_result.undefineds;
+    class_constraints = arg_result.class_constraints;
   }
 
 (** {1 Pcase Pattern Matching}
@@ -625,9 +690,9 @@ and infer_pcase (env : Env.t) (expr : Syntax.Sexp.t)
   let result_ty = fresh_tvar (Env.current_level env) in
 
   (* Process each clause *)
-  let rec process_clauses clauses constraints undefineds =
+  let rec process_clauses clauses constraints undefineds class_cs =
     match clauses with
-    | [] -> (constraints, undefineds)
+    | [] -> (constraints, undefineds, class_cs)
     | List (pattern :: body, clause_span) :: rest ->
         (* Extract pattern bindings with types *)
         let bindings = extract_pattern_bindings env scrutinee_ty pattern in
@@ -649,22 +714,31 @@ and infer_pcase (env : Env.t) (expr : Syntax.Sexp.t)
           C.combine body_result.constraints (C.add body_constraint constraints)
         in
         let all_undefineds = undefineds @ body_result.undefineds in
+        let all_class_cs = class_cs @ body_result.class_constraints in
 
-        process_clauses rest all_constraints all_undefineds
+        process_clauses rest all_constraints all_undefineds all_class_cs
     | _ :: rest ->
         (* Malformed clause - skip it *)
-        process_clauses rest constraints undefineds
+        process_clauses rest constraints undefineds class_cs
   in
 
-  let clause_constraints, clause_undefineds =
-    process_clauses clauses C.empty []
+  let clause_constraints, clause_undefineds, clause_class_constraints =
+    process_clauses clauses C.empty [] []
   in
 
   (* Combine all constraints *)
   let all_constraints = C.combine expr_result.constraints clause_constraints in
   let all_undefineds = expr_result.undefineds @ clause_undefineds in
+  let all_class_constraints =
+    expr_result.class_constraints @ clause_class_constraints
+  in
 
-  { ty = result_ty; constraints = all_constraints; undefineds = all_undefineds }
+  {
+    ty = result_ty;
+    constraints = all_constraints;
+    undefineds = all_undefineds;
+    class_constraints = all_class_constraints;
+  }
 
 (** Infer the type of a tart annotation expression.
 
@@ -710,6 +784,7 @@ and infer_tart_annotation env type_sexp form _span =
         ty = declared_ty;
         constraints = C.add annotation_constraint form_result.constraints;
         undefineds = form_result.undefineds;
+        class_constraints = form_result.class_constraints;
       }
   | None ->
       (* Parse failed - return form's type unchanged with a fresh tvar *)
@@ -845,8 +920,14 @@ and infer_explicit_instantiation (env : Env.t) (type_arg_sexps : Syntax.Sexp.t l
     | None -> base_constraints
   in
   let all_undefineds = combine_undefineds arg_results in
+  let all_class_constraints = combine_class_constraints arg_results in
 
-  { ty = result_ty; constraints = all_constraints; undefineds = all_undefineds }
+  {
+    ty = result_ty;
+    constraints = all_constraints;
+    undefineds = all_undefineds;
+    class_constraints = all_class_constraints;
+  }
 
 (** Extract function name from a function expression for error context *)
 and get_fn_name (fn : Syntax.Sexp.t) : string option =
@@ -928,8 +1009,16 @@ and infer_application env fn args span =
       (C.combine arg_constraints (C.add fn_constraint arg_type_constraints))
   in
   let all_undefineds = fn_result.undefineds @ combine_undefineds arg_results in
+  let all_class_constraints =
+    fn_result.class_constraints @ combine_class_constraints arg_results
+  in
 
-  { ty = result_ty; constraints = all_constraints; undefineds = all_undefineds }
+  {
+    ty = result_ty;
+    constraints = all_constraints;
+    undefineds = all_undefineds;
+    class_constraints = all_class_constraints;
+  }
 
 (** Infer a defun as an expression.
 
@@ -977,6 +1066,7 @@ and infer_defun_as_expr env _name params body span =
     ty = Prim.symbol;
     constraints = fn_result.constraints;
     undefineds = fn_result.undefineds;
+    class_constraints = fn_result.class_constraints;
   }
 
 (** Infer the type of a defun and return the binding information.
@@ -1138,6 +1228,7 @@ and infer_defun_with_declaration (env : Env.t) (name : string)
       fn_type;
       defun_constraints = all_constraints;
       defun_undefineds = body_result.undefineds;
+      defun_class_constraints = body_result.class_constraints;
     }
 
 (** Infer a defun without type declaration (original behavior). *)
@@ -1189,6 +1280,7 @@ and infer_defun_inferred (env : Env.t) (name : string)
       fn_type = generalized_ty;
       defun_constraints = body_result.constraints;
       defun_undefineds = body_result.undefineds;
+      defun_class_constraints = body_result.class_constraints;
     }
 
 (** Infer the type of a vector literal.
@@ -1220,9 +1312,13 @@ and infer_vector env elems span =
       let all_undefineds =
         first_result.undefineds @ combine_undefineds rest_results
       in
+      let all_class_constraints =
+        first_result.class_constraints @ combine_class_constraints rest_results
+      in
 
       {
         ty = vector_of first_result.ty;
         constraints = all_constraints;
         undefineds = all_undefineds;
+        class_constraints = all_class_constraints;
       }

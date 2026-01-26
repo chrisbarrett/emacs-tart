@@ -18,18 +18,27 @@
 type undefined_var = { name : string; span : Syntax.Location.span }
 (** An undefined variable reference. *)
 
+type class_constraint_with_span = {
+  constraint_ : Core.Types.type_constraint;
+  span : Syntax.Location.span;
+}
+(** A type class constraint with its source location for error reporting. *)
+
 type result = {
   ty : Core.Types.typ;
   constraints : Constraint.set;
   undefineds : undefined_var list;
+  class_constraints : class_constraint_with_span list;
 }
-(** Result of inference: the inferred type, constraints, and undefined vars. *)
+(** Result of inference: the inferred type, constraints, undefined vars, and
+    type class constraints that need instance resolution. *)
 
 type defun_result = {
   name : string;
   fn_type : Core.Types.typ;
   defun_constraints : Constraint.set;
   defun_undefineds : undefined_var list;
+  defun_class_constraints : class_constraint_with_span list;
 }
 (** Result of inferring a top-level definition. *)
 
@@ -61,3 +70,6 @@ val combine_results : result list -> Constraint.set
 
 val combine_undefineds : result list -> undefined_var list
 (** Combine undefined variables from results. *)
+
+val combine_class_constraints : result list -> class_constraint_with_span list
+(** Combine type class constraints from results. *)
