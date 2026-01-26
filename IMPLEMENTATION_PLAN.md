@@ -482,13 +482,13 @@ Enable ad-hoc polymorphism through type classes and instances.
 
 - [x] [R4] Create instance.ml with resolution algorithm
 - [x] [R4] Track class constraints through inference (result types)
-- [ ] [R4] Resolve monomorphic constraints at call sites (check/module_check integration)
-- [ ] Verify: `dune test`; basic instance resolution works
+- [x] [R4] Resolve monomorphic constraints at call sites (check/module_check integration)
+- [x] Verify: `dune test`; basic instance resolution works
 
 ### 18.5 Advanced Resolution
 
-- [ ] [R5] Implement recursive constraint resolution
-- [ ] [R6] Implement superclass constraint checking
+- [x] [R5] Implement recursive constraint resolution
+- [x] [R6] Implement superclass constraint checking
 - [ ] [R7] Add HKT class support (Functor-like)
 - [ ] Verify: `dune test`; nested and HKT constraints resolve
 

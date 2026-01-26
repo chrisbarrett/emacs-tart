@@ -181,6 +181,98 @@ let test_load_parameterized_instance () =
   Alcotest.(check (list string)) "tvars" [ "a" ] inst.inst_tvars;
   Alcotest.(check int) "one constraint" 1 (List.length inst.inst_constraints)
 
+(** {1 Superclass Constraint Tests (R6)} *)
+
+(** Create a class with superclass constraints *)
+let make_class name tvar superclasses =
+  { cls_name = name; cls_tvar = tvar; cls_superclasses = superclasses }
+
+(** R6: Superclass constraint satisfied *)
+let test_superclass_constraint_satisfied () =
+  (* (class (Ord a) (Eq a) ...) requires Eq
+     If we have (Eq int) and (Ord int), resolving (Ord int) should succeed *)
+  let ord_class = make_class "Ord" "a" [ "Eq" ] in
+  let eq_int = simple_instance "Eq" "Int" in
+  let ord_int = simple_instance "Ord" "Int" in
+  let reg =
+    empty_registry |> add_instance eq_int |> add_instance ord_int
+    |> add_class ord_class
+  in
+  match resolve_all reg [ ("Ord", TCon "Int") ] with
+  | Ok () -> ()
+  | Error (cls, ty) ->
+      Alcotest.fail
+        (Printf.sprintf "Expected Ok, got Error (%s %s)" cls (to_string ty))
+
+(** R6: Superclass constraint missing *)
+let test_superclass_constraint_missing () =
+  (* (class (Ord a) (Eq a) ...) requires Eq
+     If we have only (Ord int) but no (Eq int), resolving (Ord int) should fail *)
+  let ord_class = make_class "Ord" "a" [ "Eq" ] in
+  let ord_int = simple_instance "Ord" "Int" in
+  let reg = empty_registry |> add_instance ord_int |> add_class ord_class in
+  match resolve_all reg [ ("Ord", TCon "Int") ] with
+  | Error (cls, ty) ->
+      Alcotest.(check string) "missing superclass" "Eq" cls;
+      Alcotest.(check string) "for type" "Int" (to_string ty)
+  | Ok () -> Alcotest.fail "Expected Error for missing superclass (Eq Int)"
+
+(** R6: Multiple superclass constraints *)
+let test_multiple_superclasses () =
+  (* (class (Num a) (Eq a) (Ord a) ...) requires both Eq and Ord *)
+  let num_class = make_class "Num" "a" [ "Eq"; "Ord" ] in
+  let ord_class = make_class "Ord" "a" [ "Eq" ] in
+  (* We need: Eq int, Ord int, Num int *)
+  let eq_int = simple_instance "Eq" "Int" in
+  let ord_int = simple_instance "Ord" "Int" in
+  let num_int = simple_instance "Num" "Int" in
+  let reg =
+    empty_registry |> add_instance eq_int |> add_instance ord_int
+    |> add_instance num_int |> add_class num_class |> add_class ord_class
+  in
+  match resolve_all reg [ ("Num", TCon "Int") ] with
+  | Ok () -> ()
+  | Error (cls, ty) ->
+      Alcotest.fail
+        (Printf.sprintf "Expected Ok, got Error (%s %s)" cls (to_string ty))
+
+(** R6: Transitive superclass constraints *)
+let test_transitive_superclasses () =
+  (* Num requires Ord, Ord requires Eq
+     So Num transitively requires Eq int via Ord int *)
+  let ord_class = make_class "Ord" "a" [ "Eq" ] in
+  let num_class = make_class "Num" "a" [ "Ord" ] in
+  let eq_int = simple_instance "Eq" "Int" in
+  let ord_int = simple_instance "Ord" "Int" in
+  let num_int = simple_instance "Num" "Int" in
+  let reg =
+    empty_registry |> add_instance eq_int |> add_instance ord_int
+    |> add_instance num_int |> add_class ord_class |> add_class num_class
+  in
+  match resolve_all reg [ ("Num", TCon "Int") ] with
+  | Ok () -> ()
+  | Error (cls, ty) ->
+      Alcotest.fail
+        (Printf.sprintf "Expected Ok, got Error (%s %s)" cls (to_string ty))
+
+(** R6: Transitive superclass missing deep in chain *)
+let test_transitive_superclass_missing () =
+  (* Num requires Ord, Ord requires Eq
+     Missing Eq int should fail when resolving Num int *)
+  let ord_class = make_class "Ord" "a" [ "Eq" ] in
+  let num_class = make_class "Num" "a" [ "Ord" ] in
+  let ord_int = simple_instance "Ord" "Int" in
+  let num_int = simple_instance "Num" "Int" in
+  let reg =
+    empty_registry |> add_instance ord_int |> add_instance num_int
+    |> add_class ord_class |> add_class num_class
+  in
+  match resolve_all reg [ ("Num", TCon "Int") ] with
+  | Error (cls, _ty) ->
+      (* Should fail because Eq int is missing (required by Ord) *)
+      Alcotest.(check string) "missing is Eq" "Eq" cls
+  | Ok () -> Alcotest.fail "Expected Error for missing transitive superclass"
+
 (** {1 Test Runner} *)
 
 let () =
@@ -212,6 +304,17 @@ let () =
             test_resolve_all_recursive;
           Alcotest.test_case "recursive missing" `Quick
             test_resolve_all_recursive_missing;
+        ] );
+      ( "superclass-constraints",
+        [
+          Alcotest.test_case "satisfied" `Quick
+            test_superclass_constraint_satisfied;
+          Alcotest.test_case "missing" `Quick test_superclass_constraint_missing;
+          Alcotest.test_case "multiple superclasses" `Quick
+            test_multiple_superclasses;
+          Alcotest.test_case "transitive" `Quick test_transitive_superclasses;
+          Alcotest.test_case "transitive missing" `Quick
+            test_transitive_superclass_missing;
         ] );
       ( "load-instance",
         [

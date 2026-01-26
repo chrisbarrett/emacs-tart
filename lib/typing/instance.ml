@@ -12,6 +12,25 @@
 
 open Core.Types
 
+(** Binding operator for Result *)
+let ( let* ) = Result.bind
+
+(** {1 Class Registry} *)
+
+(** Information about a type class, including its superclass constraints.
+
+    Used during instance resolution to ensure superclass instances exist. *)
+type class_info = {
+  cls_name : string;  (** Class name (e.g., "Eq", "Ord") *)
+  cls_tvar : string;  (** The class type parameter name *)
+  cls_superclasses : string list;
+      (** Superclass names (e.g., ["Eq"] for Ord which requires Eq) *)
+}
+(** Type class information.
+
+    Example: Ord with superclass Eq would be:
+    {cls_name="Ord"; cls_tvar="a"; cls_superclasses=["Eq"]} *)
+
 (** {1 Instance Registry} *)
 
 (** A loaded instance ready for resolution.
@@ -34,18 +53,25 @@ type instance = {
     - Parameterized: {inst_class="Eq"; inst_type=(List a); inst_tvars=["a"];
                       inst_constraints=[("Eq", a)]} *)
 
-type registry = { instances : instance list  (** All loaded instances *) }
-(** Instance registry: maps class names to their instances.
+type registry = {
+  instances : instance list;  (** All loaded instances *)
+  classes : class_info list;  (** All loaded class definitions *)
+}
+(** Instance registry: stores both instances and class definitions.
 
     The registry is populated during signature loading and queried during type
     checking. Multiple instances for the same class are allowed as long as they
     have non-overlapping types. *)
 
 (** Empty registry *)
-let empty_registry = { instances = [] }
+let empty_registry = { instances = []; classes = [] }
 
 (** Add an instance to the registry *)
-let add_instance inst registry = { instances = inst :: registry.instances }
+let add_instance inst registry =
+  { registry with instances = inst :: registry.instances }
+
+(** Add a class to the registry *)
+let add_class cls registry = { registry with classes = cls :: registry.classes }
 
 (** Get all instances for a given class *)
 let instances_for_class class_name registry =
@@ -54,9 +80,16 @@ let instances_for_class class_name registry =
 (** Get all instances in the registry *)
 let all_instances registry = registry.instances
 
-(** Merge two registries. Instances from the second are added after the first.
-*)
-let merge r1 r2 = { instances = r1.instances @ r2.instances }
+(** Get all classes in the registry *)
+let all_classes registry = registry.classes
+
+(** Look up a class by name *)
+let find_class class_name registry =
+  List.find_opt (fun c -> c.cls_name = class_name) registry.classes
+
+(** Merge two registries. Items from the second are added after the first. *)
+let merge r1 r2 =
+  { instances = r1.instances @ r2.instances; classes = r1.classes @ r2.classes }
 
 (** {1 Instance Resolution} *)
 
@@ -149,15 +182,34 @@ let resolve_constraint (registry : registry)
 
 (** Resolve all constraints, recursively resolving any sub-constraints.
 
+    Also checks superclass constraints (R6 from spec 21): when resolving (Ord
+    int), we also verify that (Eq int) exists because Eq is a superclass of Ord.
+
     Returns Ok () if all constraints can be satisfied, or Error with the first
     unsatisfied constraint. *)
 let resolve_all (registry : registry) (constraints : type_constraint list) :
     (unit, string * typ) result =
-  let rec resolve_one c =
+  let rec resolve_one ((class_name, target_type) as c) =
     match resolve_constraint registry c with
-    | Resolved -> Ok ()
+    | Resolved ->
+        (* Check superclass constraints (R6) *)
+        check_superclasses class_name target_type
     | NotFound (cls, ty) -> Error (cls, ty)
-    | Recursive sub_constraints -> resolve_many sub_constraints
+    | Recursive sub_constraints ->
+        (* First resolve sub-constraints, then check superclasses *)
+        let* () = resolve_many sub_constraints in
+        check_superclasses class_name target_type
+  and check_superclasses class_name target_type =
+    match find_class class_name registry with
+    | None ->
+        (* Class not in registry - this is okay, we just can't check superclasses *)
+        Ok ()
+    | Some cls_info ->
+        (* For each superclass, add a constraint with the same target type *)
+        let super_constraints =
+          List.map (fun super -> (super, target_type)) cls_info.cls_superclasses
+        in
+        resolve_many super_constraints
   and resolve_many constraints =
     List.fold_left
       (fun acc c -> match acc with Error _ -> acc | Ok () -> resolve_one c)
@@ -207,6 +259,24 @@ let load_instance (decl : Sig.Sig_ast.instance_decl) (registry : registry) :
     { inst_class = decl.inst_class; inst_type; inst_tvars; inst_constraints }
   in
   add_instance instance registry
+
+(** Load a class declaration into the registry.
+
+    Extracts class name, type parameter, and superclass names for use during
+    instance resolution (R6 from spec 21). *)
+let load_class (decl : Sig.Sig_ast.class_decl) (registry : registry) : registry
+    =
+  let cls_superclasses =
+    List.map (fun (super_name, _sig_ty) -> super_name) decl.class_superclasses
+  in
+  let cls =
+    {
+      cls_name = decl.class_name;
+      cls_tvar = decl.class_tvar_binder.Sig.Sig_ast.name;
+      cls_superclasses;
+    }
+  in
+  add_class cls registry
 
 (** {1 Debugging} *)
 

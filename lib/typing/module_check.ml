@@ -356,22 +356,24 @@ let check_signature_kinds (sig_file : Sig.Sig_ast.signature) :
     kind_check_error list =
   List.concat_map check_decl_kinds sig_file.sig_decls
 
-(** {1 Instance Extraction} *)
+(** {1 Instance and Class Extraction} *)
 
-(** Extract all type class instances from a signature into a registry.
+(** Extract all type class instances and class definitions from a signature.
 
     Walks the signature AST recursively (including type-scope blocks) and loads
-    each DInstance declaration using Instance.load_instance. *)
+    each DInstance and DClass declaration into the registry. Class definitions
+    are needed for superclass constraint checking (R6 from spec 21). *)
 let extract_instances (sig_file : Sig.Sig_ast.signature) : Instance.registry =
   let open Sig.Sig_ast in
   let rec extract_from_decl registry decl =
     match decl with
     | DInstance d -> Instance.load_instance d registry
+    | DClass d -> Instance.load_class d registry
     | DTypeScope scope ->
         (* Recursively extract from scoped declarations *)
         List.fold_left extract_from_decl registry scope.scope_decls
     | DDefun _ | DDefvar _ | DType _ | DOpen _ | DInclude _ | DImportStruct _
-    | DData _ | DClass _ ->
+    | DData _ ->
         registry
   in
   List.fold_left extract_from_decl Instance.empty_registry sig_file.sig_decls

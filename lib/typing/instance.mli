@@ -5,6 +5,18 @@
     registry. When a constrained function is called, the resolver checks that
     appropriate instances exist for all required constraints. *)
 
+(** {1 Class Registry} *)
+
+type class_info = {
+  cls_name : string;  (** Class name (e.g., "Eq", "Ord") *)
+  cls_tvar : string;  (** The class type parameter name *)
+  cls_superclasses : string list;
+      (** Superclass names (e.g., ["Eq"] for Ord which requires Eq) *)
+}
+(** Information about a type class, including its superclass constraints.
+
+    Used during instance resolution to ensure superclass instances exist. *)
+
 (** {1 Instance Registry} *)
 
 type instance = {
@@ -18,7 +30,7 @@ type instance = {
 (** A loaded instance ready for resolution. *)
 
 type registry
-(** Instance registry: maps class names to their instances. *)
+(** Instance and class registry: stores both instances and class definitions. *)
 
 val empty_registry : registry
 (** Empty registry *)
@@ -26,15 +38,23 @@ val empty_registry : registry
 val add_instance : instance -> registry -> registry
 (** Add an instance to the registry *)
 
+val add_class : class_info -> registry -> registry
+(** Add a class to the registry *)
+
 val instances_for_class : string -> registry -> instance list
 (** Get all instances for a given class *)
 
 val all_instances : registry -> instance list
 (** Get all instances in the registry *)
 
+val all_classes : registry -> class_info list
+(** Get all classes in the registry *)
+
+val find_class : string -> registry -> class_info option
+(** Look up a class by name *)
+
 val merge : registry -> registry -> registry
-(** Merge two registries. Instances from the second override instances from the
-    first if they overlap. *)
+(** Merge two registries. Items from the second are added after the first. *)
 
 (** {1 Instance Resolution} *)
 
@@ -58,6 +78,9 @@ val resolve_all :
   (unit, string * Core.Types.typ) result
 (** Resolve all constraints, recursively resolving any sub-constraints.
 
+    Also checks superclass constraints (R6): when resolving (Ord int), we also
+    verify that (Eq int) exists because Eq is a superclass of Ord.
+
     Returns [Ok ()] if all constraints can be satisfied, or
     [Error (class, type)] with the first unsatisfied constraint. *)
 
@@ -65,6 +88,12 @@ val resolve_all :
 
 val load_instance : Sig.Sig_ast.instance_decl -> registry -> registry
 (** Load an instance declaration into the registry *)
+
+val load_class : Sig.Sig_ast.class_decl -> registry -> registry
+(** Load a class declaration into the registry.
+
+    Extracts class name, type parameter, and superclass names for use during
+    instance resolution. *)
 
 (** {1 Debugging} *)
 
