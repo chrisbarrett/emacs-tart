@@ -43,6 +43,7 @@ type text_document_sync_options = {
 type server_capabilities = {
   text_document_sync : text_document_sync_options option;
   hover_provider : bool;
+  definition_provider : bool;
 }
 (** Server capabilities *)
 
@@ -116,6 +117,9 @@ let server_capabilities_to_json (caps : server_capabilities) : Yojson.Safe.t =
     | None -> fields
   in
   let fields = ("hoverProvider", `Bool caps.hover_provider) :: fields in
+  let fields =
+    ("definitionProvider", `Bool caps.definition_provider) :: fields
+  in
   `Assoc fields
 
 (** Encode initialize result to JSON *)
@@ -291,3 +295,38 @@ let hover_to_json (hover : hover) : Yojson.Safe.t =
     | None -> fields
   in
   `Assoc fields
+
+(** {1 Go to Definition} *)
+
+type definition_params = {
+  def_text_document : string;
+  (* URI *)
+  def_position : position;
+}
+(** Definition request params (same structure as hover) *)
+
+let parse_definition_params (json : Yojson.Safe.t) : definition_params =
+  let open Yojson.Safe.Util in
+  let text_document =
+    json |> member "textDocument" |> member "uri" |> to_string
+  in
+  let pos_json = json |> member "position" in
+  let position =
+    {
+      line = pos_json |> member "line" |> to_int;
+      character = pos_json |> member "character" |> to_int;
+    }
+  in
+  { def_text_document = text_document; def_position = position }
+
+(** Definition result can be a single location, list of locations, or null *)
+type definition_result =
+  | DefLocation of location
+  | DefLocations of location list
+  | DefNull
+
+let definition_result_to_json (result : definition_result) : Yojson.Safe.t =
+  match result with
+  | DefLocation loc -> location_to_json loc
+  | DefLocations locs -> `List (List.map location_to_json locs)
+  | DefNull -> `Null

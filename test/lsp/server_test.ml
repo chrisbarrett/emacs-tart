@@ -1323,6 +1323,321 @@ let test_diagnostic_has_help_suggestions () =
       Alcotest.(check bool)
         "suggests number-to-string" true has_number_to_string
 
+(** {1 Go to Definition Tests} *)
+
+let test_definition_on_function_call () =
+  let init_msg =
+    make_message ~id:(`Int 1) ~method_:"initialize"
+      ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+      ()
+  in
+  (* Document with a defun and a call to it *)
+  let did_open_msg =
+    make_message ~method_:"textDocument/didOpen"
+      ~params:
+        (`Assoc
+           [
+             ( "textDocument",
+               `Assoc
+                 [
+                   ("uri", `String "file:///test.el");
+                   ("languageId", `String "elisp");
+                   ("version", `Int 1);
+                   ("text", `String "(defun foo () 42)\n(foo)");
+                 ] );
+           ])
+      ()
+  in
+  (* Definition request at position (1, 1) - on the 'foo' call *)
+  let definition_msg =
+    make_message ~id:(`Int 2) ~method_:"textDocument/definition"
+      ~params:
+        (`Assoc
+           [
+             ("textDocument", `Assoc [ ("uri", `String "file:///test.el") ]);
+             ("position", `Assoc [ ("line", `Int 1); ("character", `Int 1) ]);
+           ])
+      ()
+  in
+  let shutdown_msg = make_message ~id:(`Int 3) ~method_:"shutdown" () in
+  let exit_msg = make_message ~method_:"exit" () in
+  let input =
+    init_msg ^ did_open_msg ^ definition_msg ^ shutdown_msg ^ exit_msg
+  in
+  let in_file = Filename.temp_file "lsp_in" ".json" in
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
+  let ic = In_channel.open_bin in_file in
+  let out_file = Filename.temp_file "lsp_out" ".json" in
+  let oc = Out_channel.open_bin out_file in
+  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let exit_code = Server.run server in
+  In_channel.close ic;
+  Out_channel.close oc;
+  Alcotest.(check int) "exit code" 0 exit_code;
+  (* Parse output and find definition response *)
+  let output = In_channel.with_open_bin out_file In_channel.input_all in
+  let messages = parse_messages output in
+  match find_response messages 2 with
+  | None -> Alcotest.fail "No definition response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      Alcotest.(check bool) "result is not null" true (result <> `Null);
+      (* Check that we got a location with line 0 (the defun line) *)
+      let range = result |> member "range" in
+      let start = range |> member "start" in
+      let line = start |> member "line" |> to_int in
+      Alcotest.(check int) "definition on line 0" 0 line
+
+let test_definition_on_defvar_call () =
+  let init_msg =
+    make_message ~id:(`Int 1) ~method_:"initialize"
+      ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+      ()
+  in
+  (* Document with a defvar and a reference to it *)
+  let did_open_msg =
+    make_message ~method_:"textDocument/didOpen"
+      ~params:
+        (`Assoc
+           [
+             ( "textDocument",
+               `Assoc
+                 [
+                   ("uri", `String "file:///test.el");
+                   ("languageId", `String "elisp");
+                   ("version", `Int 1);
+                   ("text", `String "(defvar my-var 10)\nmy-var");
+                 ] );
+           ])
+      ()
+  in
+  (* Definition request at position (1, 0) - on 'my-var' reference *)
+  let definition_msg =
+    make_message ~id:(`Int 2) ~method_:"textDocument/definition"
+      ~params:
+        (`Assoc
+           [
+             ("textDocument", `Assoc [ ("uri", `String "file:///test.el") ]);
+             ("position", `Assoc [ ("line", `Int 1); ("character", `Int 0) ]);
+           ])
+      ()
+  in
+  let shutdown_msg = make_message ~id:(`Int 3) ~method_:"shutdown" () in
+  let exit_msg = make_message ~method_:"exit" () in
+  let input =
+    init_msg ^ did_open_msg ^ definition_msg ^ shutdown_msg ^ exit_msg
+  in
+  let in_file = Filename.temp_file "lsp_in" ".json" in
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
+  let ic = In_channel.open_bin in_file in
+  let out_file = Filename.temp_file "lsp_out" ".json" in
+  let oc = Out_channel.open_bin out_file in
+  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let exit_code = Server.run server in
+  In_channel.close ic;
+  Out_channel.close oc;
+  Alcotest.(check int) "exit code" 0 exit_code;
+  (* Parse output and find definition response *)
+  let output = In_channel.with_open_bin out_file In_channel.input_all in
+  let messages = parse_messages output in
+  match find_response messages 2 with
+  | None -> Alcotest.fail "No definition response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      Alcotest.(check bool) "result is not null" true (result <> `Null);
+      (* Check that we got a location with line 0 (the defvar line) *)
+      let range = result |> member "range" in
+      let start = range |> member "start" in
+      let line = start |> member "line" |> to_int in
+      Alcotest.(check int) "definition on line 0" 0 line
+
+let test_definition_not_found () =
+  let init_msg =
+    make_message ~id:(`Int 1) ~method_:"initialize"
+      ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+      ()
+  in
+  (* Document with a reference to an undefined function *)
+  let did_open_msg =
+    make_message ~method_:"textDocument/didOpen"
+      ~params:
+        (`Assoc
+           [
+             ( "textDocument",
+               `Assoc
+                 [
+                   ("uri", `String "file:///test.el");
+                   ("languageId", `String "elisp");
+                   ("version", `Int 1);
+                   ("text", `String "(undefined-fn)");
+                 ] );
+           ])
+      ()
+  in
+  (* Definition request at position (0, 1) - on 'undefined-fn' *)
+  let definition_msg =
+    make_message ~id:(`Int 2) ~method_:"textDocument/definition"
+      ~params:
+        (`Assoc
+           [
+             ("textDocument", `Assoc [ ("uri", `String "file:///test.el") ]);
+             ("position", `Assoc [ ("line", `Int 0); ("character", `Int 1) ]);
+           ])
+      ()
+  in
+  let shutdown_msg = make_message ~id:(`Int 3) ~method_:"shutdown" () in
+  let exit_msg = make_message ~method_:"exit" () in
+  let input =
+    init_msg ^ did_open_msg ^ definition_msg ^ shutdown_msg ^ exit_msg
+  in
+  let in_file = Filename.temp_file "lsp_in" ".json" in
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
+  let ic = In_channel.open_bin in_file in
+  let out_file = Filename.temp_file "lsp_out" ".json" in
+  let oc = Out_channel.open_bin out_file in
+  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let exit_code = Server.run server in
+  In_channel.close ic;
+  Out_channel.close oc;
+  Alcotest.(check int) "exit code" 0 exit_code;
+  (* Parse output and find definition response *)
+  let output = In_channel.with_open_bin out_file In_channel.input_all in
+  let messages = parse_messages output in
+  match find_response messages 2 with
+  | None -> Alcotest.fail "No definition response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      (* Should return null when definition not found *)
+      Alcotest.(check bool) "result is null" true (result = `Null)
+
+let test_definition_outside_code () =
+  let init_msg =
+    make_message ~id:(`Int 1) ~method_:"initialize"
+      ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+      ()
+  in
+  let did_open_msg =
+    make_message ~method_:"textDocument/didOpen"
+      ~params:
+        (`Assoc
+           [
+             ( "textDocument",
+               `Assoc
+                 [
+                   ("uri", `String "file:///test.el");
+                   ("languageId", `String "elisp");
+                   ("version", `Int 1);
+                   ("text", `String "(defun foo () 42)\n");
+                 ] );
+           ])
+      ()
+  in
+  (* Definition request at position (1, 0) - empty line *)
+  let definition_msg =
+    make_message ~id:(`Int 2) ~method_:"textDocument/definition"
+      ~params:
+        (`Assoc
+           [
+             ("textDocument", `Assoc [ ("uri", `String "file:///test.el") ]);
+             ("position", `Assoc [ ("line", `Int 1); ("character", `Int 0) ]);
+           ])
+      ()
+  in
+  let shutdown_msg = make_message ~id:(`Int 3) ~method_:"shutdown" () in
+  let exit_msg = make_message ~method_:"exit" () in
+  let input =
+    init_msg ^ did_open_msg ^ definition_msg ^ shutdown_msg ^ exit_msg
+  in
+  let in_file = Filename.temp_file "lsp_in" ".json" in
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
+  let ic = In_channel.open_bin in_file in
+  let out_file = Filename.temp_file "lsp_out" ".json" in
+  let oc = Out_channel.open_bin out_file in
+  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let exit_code = Server.run server in
+  In_channel.close ic;
+  Out_channel.close oc;
+  Alcotest.(check int) "exit code" 0 exit_code;
+  (* Parse output and find definition response *)
+  let output = In_channel.with_open_bin out_file In_channel.input_all in
+  let messages = parse_messages output in
+  match find_response messages 2 with
+  | None -> Alcotest.fail "No definition response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      (* Should return null when not on code *)
+      Alcotest.(check bool) "result is null" true (result = `Null)
+
+let test_definition_has_uri () =
+  let init_msg =
+    make_message ~id:(`Int 1) ~method_:"initialize"
+      ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+      ()
+  in
+  let did_open_msg =
+    make_message ~method_:"textDocument/didOpen"
+      ~params:
+        (`Assoc
+           [
+             ( "textDocument",
+               `Assoc
+                 [
+                   ("uri", `String "file:///test.el");
+                   ("languageId", `String "elisp");
+                   ("version", `Int 1);
+                   ("text", `String "(defun foo () 42)\n(foo)");
+                 ] );
+           ])
+      ()
+  in
+  let definition_msg =
+    make_message ~id:(`Int 2) ~method_:"textDocument/definition"
+      ~params:
+        (`Assoc
+           [
+             ("textDocument", `Assoc [ ("uri", `String "file:///test.el") ]);
+             ("position", `Assoc [ ("line", `Int 1); ("character", `Int 1) ]);
+           ])
+      ()
+  in
+  let shutdown_msg = make_message ~id:(`Int 3) ~method_:"shutdown" () in
+  let exit_msg = make_message ~method_:"exit" () in
+  let input =
+    init_msg ^ did_open_msg ^ definition_msg ^ shutdown_msg ^ exit_msg
+  in
+  let in_file = Filename.temp_file "lsp_in" ".json" in
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
+  let ic = In_channel.open_bin in_file in
+  let out_file = Filename.temp_file "lsp_out" ".json" in
+  let oc = Out_channel.open_bin out_file in
+  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let exit_code = Server.run server in
+  In_channel.close ic;
+  Out_channel.close oc;
+  Alcotest.(check int) "exit code" 0 exit_code;
+  let output = In_channel.with_open_bin out_file In_channel.input_all in
+  let messages = parse_messages output in
+  match find_response messages 2 with
+  | None -> Alcotest.fail "No definition response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      Alcotest.(check bool) "result is not null" true (result <> `Null);
+      (* Check that the location includes a URI *)
+      let uri = result |> member "uri" |> to_string in
+      Alcotest.(check bool)
+        "uri starts with file://" true
+        (String.length uri > 7 && String.sub uri 0 7 = "file://")
+
 let () =
   Alcotest.run "server"
     [
@@ -1373,5 +1688,14 @@ let () =
           Alcotest.test_case "with errors elsewhere" `Quick
             test_hover_with_errors_elsewhere;
           Alcotest.test_case "at error site" `Quick test_hover_at_error_site;
+        ] );
+      ( "definition",
+        [
+          Alcotest.test_case "on function call" `Quick
+            test_definition_on_function_call;
+          Alcotest.test_case "on defvar" `Quick test_definition_on_defvar_call;
+          Alcotest.test_case "not found" `Quick test_definition_not_found;
+          Alcotest.test_case "outside code" `Quick test_definition_outside_code;
+          Alcotest.test_case "has uri" `Quick test_definition_has_uri;
         ] );
     ]

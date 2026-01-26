@@ -242,6 +242,30 @@ Spec 08 (LSP) ─────────┬─> Spec 09 (CLI) ──> Spec 10 (
                        └─> Spec 13 (Error Reporting)
 ```
 
+## Phase 11: LSP Navigation Features (Spec 08 Phase 2)
+
+Navigation and code intelligence features for IDE productivity.
+
+### 11.1 Go to Definition
+
+- [x] [R12] Implement `textDocument/definition` for function calls
+- [x] [R13] Return definition location from defun spans
+- [ ] [R14] Handle cross-file definitions via signature lookup
+- [ ] Verify: Clicking on function name jumps to definition
+
+### 11.2 Find References
+
+- [ ] [R15] Implement `textDocument/references` for symbols
+- [ ] [R16] Collect all references to a symbol across the document
+- [ ] Verify: Shows all usages of a function/variable
+
+### 11.3 Code Actions
+
+- [ ] [R17] Implement `textDocument/codeAction` framework
+- [ ] [R18] Add "Extract function" refactoring
+- [ ] [R19] Add "Add type annotation" quickfix
+- [ ] Verify: Code actions appear on type errors
+
 ## Priority Order
 
 1. **Phase 1**: Signature system (complete)
@@ -251,4 +275,6 @@ Spec 08 (LSP) ─────────┬─> Spec 09 (CLI) ──> Spec 10 (
 5. **Phase 5**: Module boundaries - enables multi-file projects
 6. **Phase 6**: Error reporting - improves developer experience
 7. **Phase 7**: Emacs REPL - richer interactive workflow
-8. **Remaining phases**: Runtime features, ADTs, performance
+8. **Phase 8**: Runtime features, ADTs
+9. **Phase 9-10**: Performance and caching
+10. **Phase 11**: LSP navigation features (go to definition, find references, code actions)

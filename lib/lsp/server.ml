@@ -59,6 +59,7 @@ let capabilities () : Protocol.server_capabilities =
     text_document_sync =
       Some { open_close = true; change = Protocol.Incremental };
     hover_provider = true;
+    definition_provider = true;
   }
 
 (** Extract filename from a file:// URI. Returns the path portion, or the raw
@@ -519,6 +520,94 @@ let handle_hover (server : t) (params : Yojson.Safe.t option) :
                     in
                     Ok (Protocol.hover_to_json hover))))
 
+(** Extract definition locations (defun, defvar, defconst) from parsed sexps.
+
+    Returns a list of (name, span) pairs for all definitions in the document.
+    The span points to the beginning of the definition form. *)
+let extract_definitions (sexps : Syntax.Sexp.t list) :
+    (string * Syntax.Location.span) list =
+  let open Syntax.Sexp in
+  List.filter_map
+    (fun sexp ->
+      match sexp with
+      | List (Symbol ("defun", _) :: Symbol (name, _) :: _, span) ->
+          Some (name, span)
+      | List
+          ( (Symbol ("defvar", _) | Symbol ("defconst", _))
+            :: Symbol (name, _)
+            :: _,
+            span ) ->
+          Some (name, span)
+      | _ -> None)
+    sexps
+
+(** Extract the symbol name from an S-expression, if it is a symbol. *)
+let symbol_name_of_sexp (sexp : Syntax.Sexp.t) : string option =
+  match sexp with Syntax.Sexp.Symbol (name, _) -> Some name | _ -> None
+
+(** Handle textDocument/definition request *)
+let handle_definition (server : t) (params : Yojson.Safe.t option) :
+    (Yojson.Safe.t, Rpc.response_error) result =
+  match params with
+  | None ->
+      Error
+        {
+          Rpc.code = Rpc.invalid_params;
+          message = "Missing definition params";
+          data = None;
+        }
+  | Some json -> (
+      let def_params = Protocol.parse_definition_params json in
+      let uri = def_params.def_text_document in
+      let line = def_params.def_position.line in
+      let col = def_params.def_position.character in
+      debug server
+        (Printf.sprintf "Definition request at %s:%d:%d" uri line col);
+      match Document.get_doc server.documents uri with
+      | None ->
+          debug server (Printf.sprintf "Document not found: %s" uri);
+          Ok (Protocol.definition_result_to_json Protocol.DefNull)
+      | Some doc -> (
+          let filename = filename_of_uri uri in
+          let parse_result = Syntax.Read.parse_string ~filename doc.text in
+          if parse_result.sexps = [] then (
+            debug server "No S-expressions parsed";
+            Ok (Protocol.definition_result_to_json Protocol.DefNull))
+          else
+            match
+              Syntax.Sexp.find_with_context_in_forms ~line ~col
+                parse_result.sexps
+            with
+            | None ->
+                debug server "No S-expression at position";
+                Ok (Protocol.definition_result_to_json Protocol.DefNull)
+            | Some ctx -> (
+                (* Extract symbol name from the target sexp *)
+                match symbol_name_of_sexp ctx.target with
+                | None ->
+                    debug server "Target is not a symbol";
+                    Ok (Protocol.definition_result_to_json Protocol.DefNull)
+                | Some name -> (
+                    debug server
+                      (Printf.sprintf "Looking for definition of: %s" name);
+                    (* Look up definition in the current document *)
+                    let definitions = extract_definitions parse_result.sexps in
+                    match List.assoc_opt name definitions with
+                    | Some span ->
+                        debug server
+                          (Printf.sprintf "Found definition at %s:%d:%d"
+                             span.start_pos.file span.start_pos.line
+                             span.start_pos.col);
+                        let loc = location_of_span span in
+                        Ok
+                          (Protocol.definition_result_to_json
+                             (Protocol.DefLocation loc))
+                    | None ->
+                        debug server
+                          (Printf.sprintf "No definition found for: %s" name);
+                        Ok (Protocol.definition_result_to_json Protocol.DefNull)
+                    ))))
+
 (** Dispatch a request to its handler *)
 let dispatch_request (server : t) (msg : Rpc.message) :
     (Yojson.Safe.t, Rpc.response_error) result =
@@ -527,6 +616,7 @@ let dispatch_request (server : t) (msg : Rpc.message) :
   | "initialize" -> handle_initialize server msg.params
   | "shutdown" -> handle_shutdown server
   | "textDocument/hover" -> handle_hover server msg.params
+  | "textDocument/definition" -> handle_definition server msg.params
   | _ ->
       Error
         {

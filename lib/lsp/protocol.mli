@@ -37,6 +37,7 @@ type text_document_sync_options = {
 type server_capabilities = {
   text_document_sync : text_document_sync_options option;
   hover_provider : bool;
+  definition_provider : bool;
 }
 (** Server capabilities *)
 
@@ -122,3 +123,20 @@ val parse_hover_params : Yojson.Safe.t -> hover_params
 
 val hover_to_json : hover -> Yojson.Safe.t
 (** Encode hover result to JSON *)
+
+(** {1 Go to Definition} *)
+
+type definition_params = { def_text_document : string; def_position : position }
+(** Definition request params *)
+
+val parse_definition_params : Yojson.Safe.t -> definition_params
+(** Parse definition params from JSON *)
+
+(** Definition result *)
+type definition_result =
+  | DefLocation of location  (** Single definition location *)
+  | DefLocations of location list  (** Multiple definition locations *)
+  | DefNull  (** No definition found *)
+
+val definition_result_to_json : definition_result -> Yojson.Safe.t
+(** Encode definition result to JSON *)
