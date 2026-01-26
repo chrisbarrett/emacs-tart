@@ -103,6 +103,15 @@ and collect_params ~(bound : string list) ~(known_types : string list)
 
 (** {1 Inference for Declarations} *)
 
+(** Collect type variables from constraints (left-to-right order) *)
+let collect_constraints ~(bound : string list) ~(known_types : string list)
+    (constraints : (string * sig_type) list) : string list =
+  List.fold_left
+    (fun acc (_, ty) ->
+      let vars = collect_sig_type ~bound ~known_types ty in
+      List.fold_left (fun acc' v -> add_unique v acc') acc vars)
+    [] constraints
+
 (** Infer quantifiers for a defun declaration. If defun_tvar_binders is empty,
     collect all type variables from the signature and create binders for them.
     Returns the declaration with binders filled in. *)
@@ -111,12 +120,17 @@ let infer_defun ~(known_types : string list) (d : defun_decl) : defun_decl =
     (* Explicit quantifiers - no inference needed *)
     d
   else
-    (* Collect type variables from params and return type *)
+    (* Collect type variables from constraints, params, and return type *)
     let bound = [] in
+    let constraint_vars =
+      collect_constraints ~bound ~known_types d.defun_constraints
+    in
     let param_vars = collect_params ~bound ~known_types d.defun_params in
     let ret_vars = collect_sig_type ~bound ~known_types d.defun_return in
     let all_vars =
-      List.fold_left (fun acc v -> add_unique v acc) param_vars ret_vars
+      List.fold_left
+        (fun acc v -> add_unique v acc)
+        constraint_vars (param_vars @ ret_vars)
     in
     (* Create binders (no bounds or kind annotations) *)
     let binders =

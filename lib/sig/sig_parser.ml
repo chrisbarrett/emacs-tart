@@ -351,16 +351,34 @@ and parse_params_as_type (contents : Sexp.t list) (span : Loc.span) :
 
 (** {1 Declaration Parsing} *)
 
+(** Parse a constraint: (ClassName type-arg). Same format as superclass
+    constraints.
+
+    Examples:
+    - (Eq a)
+    - (Ord b)
+    - (Functor f) *)
+let parse_constraint (sexp : Sexp.t) : (string * sig_type, parse_error) Result.t
+    =
+  match sexp with
+  | Sexp.List ([ Sexp.Symbol (class_name, _); type_sexp ], _span) -> (
+      match parse_sig_type type_sexp with
+      | Ok ty -> Ok (class_name, ty)
+      | Error e -> Error e)
+  | Sexp.List (_, span) -> error "Expected constraint (ClassName type)" span
+  | _ -> error "Expected constraint (ClassName type)" (Sexp.span_of sexp)
+
 (** Parse a defun declaration.
 
     Syntax:
     - (defun name (params) -> return)
-    - (defun name [vars] (params) -> return) *)
+    - (defun name [vars] (params) -> return)
+    - (defun name [vars] constraint... => (params) -> return) *)
 let parse_defun (contents : Sexp.t list) (span : Loc.span) : decl result =
   match contents with
   | Sexp.Symbol ("defun", _) :: Sexp.Symbol (name, _) :: rest -> (
       (* Check for quantifiers *)
-      let binders, params_and_return =
+      let binders, after_binders =
         match rest with
         | (Sexp.Vector (_, _) as quant) :: rest' -> (
             match parse_tvar_binders quant with
@@ -368,31 +386,59 @@ let parse_defun (contents : Sexp.t list) (span : Loc.span) : decl result =
             | Error _ -> ([], rest) (* Fall through to parse error below *))
         | _ -> ([], rest)
       in
-      (* Find -> and parse params/return *)
-      let rec find_arrow before = function
-        | [] -> None
-        | Sexp.Symbol ("->", _) :: after -> Some (List.rev before, after)
-        | x :: rest' -> find_arrow (x :: before) rest'
+      (* Check for constraints and => *)
+      let rec find_fat_arrow constraints_rev = function
+        | [] -> (List.rev constraints_rev, [])
+        | Sexp.Symbol ("=>", _) :: after -> (List.rev constraints_rev, after)
+        | x :: rest' -> find_fat_arrow (x :: constraints_rev) rest'
       in
-      match find_arrow [] params_and_return with
-      | None -> error "Expected -> in defun signature" span
-      | Some (params_sexp, [ return_sexp ]) -> (
-          match parse_params_list params_sexp span with
-          | Error e -> Error e
-          | Ok params -> (
-              match parse_sig_type return_sexp with
+      let before_fat_arrow, after_fat_arrow = find_fat_arrow [] after_binders in
+      (* If we found =>, parse constraints; otherwise no constraints *)
+      let constraints, params_and_return =
+        if after_fat_arrow = [] then
+          (* No =>: no constraints, everything is params -> return *)
+          ([], before_fat_arrow)
+        else
+          (* Has =>: before is constraints, after is params -> return *)
+          (before_fat_arrow, after_fat_arrow)
+      in
+      (* Parse constraints *)
+      let rec parse_constraints acc = function
+        | [] -> Ok (List.rev acc)
+        | sexp :: rest' -> (
+            match parse_constraint sexp with
+            | Ok c -> parse_constraints (c :: acc) rest'
+            | Error e -> Error e)
+      in
+      match parse_constraints [] constraints with
+      | Error e -> Error e
+      | Ok defun_constraints -> (
+          (* Find -> and parse params/return *)
+          let rec find_arrow before = function
+            | [] -> None
+            | Sexp.Symbol ("->", _) :: after -> Some (List.rev before, after)
+            | x :: rest' -> find_arrow (x :: before) rest'
+          in
+          match find_arrow [] params_and_return with
+          | None -> error "Expected -> in defun signature" span
+          | Some (params_sexp, [ return_sexp ]) -> (
+              match parse_params_list params_sexp span with
               | Error e -> Error e
-              | Ok return_type ->
-                  Ok
-                    (DDefun
-                       {
-                         defun_name = name;
-                         defun_tvar_binders = binders;
-                         defun_params = params;
-                         defun_return = return_type;
-                         defun_loc = span;
-                       })))
-      | Some (_, _) -> error "Expected single return type after ->" span)
+              | Ok params -> (
+                  match parse_sig_type return_sexp with
+                  | Error e -> Error e
+                  | Ok return_type ->
+                      Ok
+                        (DDefun
+                           {
+                             defun_name = name;
+                             defun_tvar_binders = binders;
+                             defun_constraints;
+                             defun_params = params;
+                             defun_return = return_type;
+                             defun_loc = span;
+                           })))
+          | Some (_, _) -> error "Expected single return type after ->" span))
   | Sexp.Symbol ("defun", _) :: _ ->
       error "Expected function name after defun" span
   | _ -> error "Invalid defun syntax" span

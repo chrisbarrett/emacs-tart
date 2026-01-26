@@ -131,6 +131,14 @@ let validate_defun ctx (d : defun_decl) : unit result =
   let inner_ctx = with_tvars ctx var_names in
   (* Validate binder bounds in outer context *)
   let* () = validate_binder_bounds ctx d.defun_tvar_binders in
+  (* Validate constraints *)
+  let* () =
+    List.fold_left
+      (fun acc (_, ty) ->
+        let* () = acc in
+        validate_type inner_ctx ty)
+      (Ok ()) d.defun_constraints
+  in
   (* Validate params and return type *)
   let* () = validate_params inner_ctx d.defun_params in
   validate_type inner_ctx d.defun_return

@@ -94,6 +94,8 @@ and defun_decl = {
   defun_name : string;
   defun_tvar_binders : tvar_binder list;
       (** Type variables with optional bounds *)
+  defun_constraints : (string * sig_type) list;
+      (** Type class constraints: (ClassName, type-arg) pairs *)
   defun_params : sig_param list;  (** Parameter types *)
   defun_return : sig_type;  (** Return type *)
   defun_loc : span;
@@ -103,7 +105,8 @@ and defun_decl = {
     Examples:
     - [(defun add (int int) -> int)] - monomorphic
     - [(defun identity [a] (a) -> a)] - polymorphic
-    - [(defun map [a b] (((a -> b)) (list a)) -> (list b))] - higher-order *)
+    - [(defun map [a b] (((a -> b)) (list a)) -> (list b))] - higher-order
+    - [(defun elem [a] (Eq a) => (a (list a)) -> bool)] - with constraint *)
 
 and defvar_decl = {
   defvar_name : string;

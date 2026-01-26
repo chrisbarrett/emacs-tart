@@ -165,6 +165,7 @@ let test_defun_simple () =
          {
            defun_name = "add";
            defun_tvar_binders = [];
+           defun_constraints = [];
            defun_params =
              [
                Sig_ast.SPPositional (Sig_ast.STCon ("int", _));
@@ -185,12 +186,79 @@ let test_defun_polymorphic () =
          {
            defun_name = "identity";
            defun_tvar_binders = [ { name = "a"; bound = None; _ } ];
+           defun_constraints = [];
            defun_params = [ Sig_ast.SPPositional (Sig_ast.STVar ("a", _)) ];
            defun_return = Sig_ast.STVar ("a", _);
            _;
          }) ->
       ()
   | Ok _ -> Alcotest.fail "Expected polymorphic defun with correct structure"
+  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
+
+let test_defun_with_constraint () =
+  (* (defun elem [a] (Eq a) => (a (list a)) -> bool) *)
+  match parse_decl_str "(defun elem [a] (Eq a) => (a (list a)) -> bool)" with
+  | Ok
+      (Sig_ast.DDefun
+         {
+           defun_name = "elem";
+           defun_tvar_binders = [ { name = "a"; _ } ];
+           defun_constraints = [ ("Eq", Sig_ast.STVar ("a", _)) ];
+           defun_params =
+             [
+               Sig_ast.SPPositional (Sig_ast.STVar ("a", _));
+               Sig_ast.SPPositional (Sig_ast.STApp ("list", _, _));
+             ];
+           defun_return = Sig_ast.STCon ("bool", _);
+           _;
+         }) ->
+      ()
+  | Ok _ -> Alcotest.fail "Expected defun with constraint"
+  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
+
+let test_defun_with_multiple_constraints () =
+  (* (defun sort-unique [a] (Eq a) (Ord a) => ((list a)) -> (list a)) *)
+  match
+    parse_decl_str
+      "(defun sort-unique [a] (Eq a) (Ord a) => ((list a)) -> (list a))"
+  with
+  | Ok
+      (Sig_ast.DDefun
+         {
+           defun_name = "sort-unique";
+           defun_tvar_binders = [ { name = "a"; _ } ];
+           defun_constraints =
+             [ ("Eq", Sig_ast.STVar ("a", _)); ("Ord", Sig_ast.STVar ("a", _)) ];
+           defun_params =
+             [ Sig_ast.SPPositional (Sig_ast.STApp ("list", _, _)) ];
+           defun_return = Sig_ast.STApp ("list", _, _);
+           _;
+         }) ->
+      ()
+  | Ok _ -> Alcotest.fail "Expected defun with multiple constraints"
+  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
+
+let test_defun_constraint_no_quantifiers () =
+  (* (defun member-p (Eq a) => (a (list a)) -> bool) - no explicit [a] *)
+  match parse_decl_str "(defun member-p (Eq a) => (a (list a)) -> bool)" with
+  | Ok
+      (Sig_ast.DDefun
+         {
+           defun_name = "member-p";
+           defun_tvar_binders = [];
+           (* no explicit quantifiers *)
+           defun_constraints = [ ("Eq", Sig_ast.STVar ("a", _)) ];
+           defun_params =
+             [
+               Sig_ast.SPPositional (Sig_ast.STVar ("a", _));
+               Sig_ast.SPPositional (Sig_ast.STApp ("list", _, _));
+             ];
+           defun_return = Sig_ast.STCon ("bool", _);
+           _;
+         }) ->
+      ()
+  | Ok _ ->
+      Alcotest.fail "Expected defun with constraint but no explicit quantifiers"
   | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
 
 let test_defvar () =
@@ -604,6 +672,12 @@ let () =
         [
           Alcotest.test_case "defun simple" `Quick test_defun_simple;
           Alcotest.test_case "defun polymorphic" `Quick test_defun_polymorphic;
+          Alcotest.test_case "defun with constraint" `Quick
+            test_defun_with_constraint;
+          Alcotest.test_case "defun with multiple constraints" `Quick
+            test_defun_with_multiple_constraints;
+          Alcotest.test_case "defun constraint no quantifiers" `Quick
+            test_defun_constraint_no_quantifiers;
           Alcotest.test_case "defvar" `Quick test_defvar;
           Alcotest.test_case "type alias" `Quick test_type_alias;
           Alcotest.test_case "type opaque" `Quick test_type_opaque;
