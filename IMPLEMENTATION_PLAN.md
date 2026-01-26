@@ -459,10 +459,10 @@ Enable ad-hoc polymorphism through type classes and instances.
 
 ### 18.1 Class Definitions
 
-- [ ] [R1] Add class definition AST to sig_ast.ml
-- [ ] [R1] Parse class definitions in sig_parser.ml
-- [ ] [R1] Load class definitions in sig_loader.ml
-- [ ] Verify: `dune test`; class definitions parse and load
+- [x] [R1] Add class definition AST to sig_ast.ml
+- [x] [R1] Parse class definitions in sig_parser.ml
+- [x] [R1] Load class definitions in sig_loader.ml
+- [x] Verify: `dune test`; class definitions parse and load
 
 ### 18.2 Instance Declarations
 

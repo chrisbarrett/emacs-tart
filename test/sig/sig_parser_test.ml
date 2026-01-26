@@ -344,6 +344,127 @@ let test_data_recursive () =
   | Ok _ -> Alcotest.fail "Expected recursive data declaration"
   | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
 
+(** {1 Class Declaration Tests} *)
+
+let test_class_simple () =
+  (* (class (Eq a) (eq (a a) -> bool)) *)
+  match parse_decl_str "(class (Eq a) (eq (a a) -> bool))" with
+  | Ok
+      (Sig_ast.DClass
+         {
+           class_name = "Eq";
+           class_tvar_binder = { name = "a"; bound = None; kind = None; _ };
+           class_superclasses = [];
+           class_methods =
+             [
+               {
+                 method_name = "eq";
+                 method_tvar_binders = [];
+                 method_params =
+                   [
+                     Sig_ast.SPPositional (Sig_ast.STVar ("a", _));
+                     Sig_ast.SPPositional (Sig_ast.STVar ("a", _));
+                   ];
+                 method_return = Sig_ast.STCon ("bool", _);
+                 _;
+               };
+             ];
+           _;
+         }) ->
+      ()
+  | Ok _ -> Alcotest.fail "Expected simple class declaration"
+  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
+
+let test_class_multiple_methods () =
+  (* (class (Eq a) (eq (a a) -> bool) (neq (a a) -> bool)) *)
+  match
+    parse_decl_str "(class (Eq a) (eq (a a) -> bool) (neq (a a) -> bool))"
+  with
+  | Ok
+      (Sig_ast.DClass
+         {
+           class_name = "Eq";
+           class_methods =
+             [ { method_name = "eq"; _ }; { method_name = "neq"; _ } ];
+           _;
+         }) ->
+      ()
+  | Ok _ -> Alcotest.fail "Expected class with two methods"
+  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
+
+let test_class_with_superclass () =
+  (* (class (Ord a) (Eq a) (compare (a a) -> int)) *)
+  match parse_decl_str "(class (Ord a) (Eq a) (compare (a a) -> int))" with
+  | Ok
+      (Sig_ast.DClass
+         {
+           class_name = "Ord";
+           class_tvar_binder = { name = "a"; _ };
+           class_superclasses = [ ("Eq", Sig_ast.STVar ("a", _)) ];
+           class_methods = [ { method_name = "compare"; _ } ];
+           _;
+         }) ->
+      ()
+  | Ok _ -> Alcotest.fail "Expected class with superclass"
+  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
+
+let test_class_hkt () =
+  (* (class (Functor (f : (* -> *))) (fmap [a b] (((a) -> b) (f a)) -> (f b))) *)
+  match
+    parse_decl_str
+      "(class (Functor (f : (* -> *))) (fmap [a b] (((a) -> b) (f a)) -> (f \
+       b)))"
+  with
+  | Ok
+      (Sig_ast.DClass
+         {
+           class_name = "Functor";
+           class_tvar_binder =
+             {
+               name = "f";
+               kind = Some (Sig_ast.SKArrow (Sig_ast.SKStar, Sig_ast.SKStar));
+               _;
+             };
+           class_superclasses = [];
+           class_methods =
+             [
+               {
+                 method_name = "fmap";
+                 method_tvar_binders = [ { name = "a"; _ }; { name = "b"; _ } ];
+                 _;
+               };
+             ];
+           _;
+         }) ->
+      ()
+  | Ok _ -> Alcotest.fail "Expected HKT class declaration"
+  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
+
+let test_class_multiple_superclasses () =
+  (* (class (Num a) (Eq a) (Ord a) (add (a a) -> a)) *)
+  match parse_decl_str "(class (Num a) (Eq a) (Ord a) (add (a a) -> a))" with
+  | Ok
+      (Sig_ast.DClass
+         {
+           class_name = "Num";
+           class_superclasses =
+             [ ("Eq", Sig_ast.STVar ("a", _)); ("Ord", Sig_ast.STVar ("a", _)) ];
+           class_methods = [ { method_name = "add"; _ } ];
+           _;
+         }) ->
+      ()
+  | Ok _ -> Alcotest.fail "Expected class with multiple superclasses"
+  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
+
+let test_class_no_methods_error () =
+  (* (class (Eq a)) - should fail, no methods *)
+  match parse_decl_str "(class (Eq a))" with
+  | Ok _ -> Alcotest.fail "Expected error for class with no methods"
+  | Error e ->
+      Alcotest.(check bool)
+        "error mentions methods" true
+        (String.length e.message > 0)
+
 (** {1 Signature File Tests} *)
 
 let test_parse_signature () =
@@ -391,6 +512,19 @@ let () =
           Alcotest.test_case "data nullary" `Quick test_data_nullary;
           Alcotest.test_case "data multi-field" `Quick test_data_multi_field;
           Alcotest.test_case "data recursive" `Quick test_data_recursive;
+        ] );
+      ( "class-declarations",
+        [
+          Alcotest.test_case "class simple" `Quick test_class_simple;
+          Alcotest.test_case "class multiple methods" `Quick
+            test_class_multiple_methods;
+          Alcotest.test_case "class with superclass" `Quick
+            test_class_with_superclass;
+          Alcotest.test_case "class HKT" `Quick test_class_hkt;
+          Alcotest.test_case "class multiple superclasses" `Quick
+            test_class_multiple_superclasses;
+          Alcotest.test_case "class no methods error" `Quick
+            test_class_no_methods_error;
         ] );
       ( "signature-files",
         [ Alcotest.test_case "parse signature" `Quick test_parse_signature ] );

@@ -266,7 +266,7 @@ Note: `Eq` requires implementations of:
 
 ## Tasks
 
-- [ ] [R1] Add class definition AST and parsing
+- [x] [R1] Add class definition AST and parsing
 - [ ] [R2] Add instance declaration AST and parsing
 - [ ] [R3] Add constraint syntax to defun parsing
 - [ ] [R4] Implement basic instance resolution
