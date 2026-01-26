@@ -145,9 +145,9 @@ Suggested keymap (under `C-c` prefix):
 - [ ] [R1,R2,R9] Implement `inferior-tart-mode` with comint
 - [ ] [R3] Implement send-to-REPL commands
 - [ ] [R4] Implement type/expand inspection commands
-- [ ] [R5] Add eglot server configuration
+- [x] [R5] Add eglot server configuration
 - [ ] [R7] Implement `tart-mode` minor mode with keymap
-- [ ] [R8] Add customization options
+- [x] [R8] Add customization options
 - [ ] [R10] Add compilation-mode error parsing
 - [ ] [R11] Add setup instructions to README
 

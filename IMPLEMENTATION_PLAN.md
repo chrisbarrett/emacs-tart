@@ -71,8 +71,8 @@ Enable hover and diagnostics in Emacs via eglot.
 
 ### 3.2 Eglot Integration
 
-- [ ] [R5] Add eglot server configuration for tart
-- [ ] [R8] Add customization options (`tart-executable`, etc.)
+- [x] [R5] Add eglot server configuration for tart
+- [x] [R8] Add customization options (`tart-executable`, etc.)
 - [ ] Verify: `M-x eglot` connects and hover shows types
 
 ### 3.3 Basic Documentation
