@@ -1,0 +1,521 @@
+= Writing .tart Files
+:toc: left
+:toclevels: 3
+:source-highlighter: rouge
+
+This guide covers everything you need to write type declarations for Emacs Lisp
+libraries.
+
+== The .tart File Format
+
+A `.tart` file declares the public interface of an Elisp module. The filename
+determines the module name: `my-lib.tart` provides types for `my-lib.el`.
+
+[source,elisp]
+----
+;;; my-lib.tart --- Type declarations for my-lib.el
+
+;; Import types from other modules
+(open 'seq)
+
+;; Define types
+(type user-id int)
+(type user-name string)
+
+;; Declare functions
+(defun my-lib-get-user (user-id) -> (user-name | nil))
+(defun my-lib-create-user (user-name) -> user-id)
+
+;; Declare variables
+(defvar my-lib-default-timeout int)
+----
+
+== Declaring Functions
+
+Functions are declared with `defun`, specifying parameter types and return type:
+
+[source,elisp]
+----
+(defun function-name (param-types...) -> return-type)
+----
+
+=== Basic Functions
+
+[source,elisp]
+----
+;; No parameters
+(defun my-lib-version () -> string)
+
+;; One parameter
+(defun my-lib-greet (string) -> string)
+
+;; Multiple parameters
+(defun my-lib-add (int int) -> int)
+----
+
+=== Optional Parameters
+
+Use `&optional` for parameters the caller may omit:
+
+[source,elisp]
+----
+(defun substring (string int &optional int) -> string)
+(defun make-string (int &optional int) -> string)
+----
+
+Optional parameters have type `(T | nil)` from the caller's perspective.
+
+=== Rest Parameters
+
+Use `&rest` for variadic functions:
+
+[source,elisp]
+----
+(defun + (&rest num) -> num)
+(defun list [a] (&rest a) -> (list a))
+(defun concat (&rest string) -> string)
+----
+
+The `&rest` type is the element type, not a list type.
+
+=== Keyword Parameters
+
+Use `&key` for keyword arguments:
+
+[source,elisp]
+----
+(defun make-person (&key :name string :age int) -> person)
+(defun open-file (string &key :encoding symbol :read-only bool) -> buffer)
+----
+
+=== Function Values as Parameters
+
+When a parameter is a function value (to be called with `funcall`), wrap the
+arrow type in an extra set of parentheses:
+
+[source,elisp]
+----
+;; Takes a function from a to b
+(defun mapcar [a b] (((a) -> b) (list a)) -> (list b))
+
+;; Takes a predicate
+(defun cl-remove-if [a] (((a) -> bool) (list a)) -> (list a))
+----
+
+The outer parens delimit the parameter; the inner parens are the function type.
+
+== Declaring Variables
+
+Variables (`defvar`, `defconst`, etc.) are declared with `defvar`:
+
+[source,elisp]
+----
+(defvar my-lib-version string)
+(defvar my-lib-debug-mode bool)
+(defvar my-lib-handlers (list ((string) -> nil)))
+----
+
+== Type Aliases
+
+Create named types with `type`:
+
+[source,elisp]
+----
+;; Simple alias
+(type user-id int)
+(type callback ((string) -> nil))
+
+;; Union type
+(type status (:pending | :running | :done | :failed))
+(type opt-string (string | nil))
+----
+
+=== Parameterized Type Aliases
+
+Type aliases can have parameters:
+
+[source,elisp]
+----
+(type option [(a : truthy)] (a | nil))
+(type result [a e] ((ok a) | (err e)))
+(type predicate [a] ((a) -> bool))
+----
+
+Use brackets `[...]` for type parameters. Parameters can have bounds like
+`(a : truthy)` to constrain what types can be substituted.
+
+== Opaque Types
+
+Declare a type without exposing its representation:
+
+[source,elisp]
+----
+(type buffer)
+(type window)
+(type process)
+----
+
+Consumers can pass these values around but cannot inspect or construct them
+except through functions you declare.
+
+=== Opaque Types with Parameters
+
+Phantom type parameters add type safety without runtime cost:
+
+[source,elisp]
+----
+(type handle [resource-type])
+
+(defun file-handle () -> (handle file))
+(defun socket-handle () -> (handle socket))
+(defun close-handle [r] ((handle r)) -> nil)
+----
+
+== Generic Functions
+
+Use brackets after the function name for type parameters:
+
+[source,elisp]
+----
+(defun identity [a] (a) -> a)
+(defun swap [a b] ((pair a b)) -> (pair b a))
+(defun map [a b] (((a) -> b) (list a)) -> (list b))
+----
+
+=== Bounded Type Parameters
+
+Constrain what types can be substituted:
+
+[source,elisp]
+----
+;; a must be truthy (not nil)
+(defun unwrap-or [(a : truthy)] ((a | nil) a) -> a)
+
+;; Parameter bound to a type class
+(defun elem [a] (Eq a) => (a (list a)) -> bool)
+----
+
+== Union Types
+
+Use `|` to combine alternatives:
+
+[source,elisp]
+----
+(type any (truthy | nil))
+(type bool (t | nil))
+(type number-or-string (num | string))
+----
+
+Literal unions for discriminated types:
+
+[source,elisp]
+----
+(type http-method (:get | :post | :put | :delete))
+(type log-level (:debug | :info | :warn | :error))
+----
+
+== Module Organization
+
+=== Importing Types (open)
+
+Use `open` to import types from another module for use in your signatures:
+
+[source,elisp]
+----
+(open 'seq)
+(open 'cl-lib)
+
+;; Now seq and cl-lib types are available
+(defun my-flatten [a] ((seq (seq a))) -> (list a))
+----
+
+`open` makes types available but does *not* re-export them.
+
+=== Re-exporting (include)
+
+Use `include` to inline another module's declarations:
+
+[source,elisp]
+----
+;; my-extended-seq.tart
+(include 'seq)
+
+;; All seq declarations are now part of this module
+;; Plus your additions:
+(defun seq-partition [a] (int (seq a)) -> (list (list a)))
+----
+
+=== Struct Imports
+
+Import `cl-defstruct` types:
+
+[source,elisp]
+----
+;; Given (cl-defstruct person name age) in .el
+(import-struct person)
+
+;; Generates:
+;; - type person
+;; - make-person constructor
+;; - person-p predicate
+;; - person-name, person-age accessors
+----
+
+== Type Classes
+
+Type classes enable ad-hoc polymorphism--different implementations for different
+types.
+
+=== Defining Classes
+
+[source,elisp]
+----
+(class (Eq a)
+  (eq (a a) -> bool)
+  (neq (a a) -> bool))
+
+(class (Show a)
+  (show (a) -> string))
+----
+
+=== Declaring Instances
+
+[source,elisp]
+----
+;; Simple instance
+(instance (Eq int)
+  (eq . =)
+  (neq . /=))
+
+;; Instance with constraint
+(instance [a] (Eq a) => (Eq (list a))
+  (eq . equal)
+  (neq . (lambda (xs ys) (not (equal xs ys)))))
+----
+
+=== Superclasses
+
+Classes can require other classes:
+
+[source,elisp]
+----
+(class (Ord a) (Eq a)
+  (compare (a a) -> int)
+  (lt (a a) -> bool))
+----
+
+Here `Ord` requires `Eq`--any type with an `Ord` instance must also have `Eq`.
+
+=== Using Constraints
+
+Functions can require type class instances:
+
+[source,elisp]
+----
+(defun elem [a] (Eq a) => (a (list a)) -> bool)
+(defun sort [a] (Ord a) => ((list a)) -> (list a))
+----
+
+== Scoped Type Variables
+
+Share type variables across multiple declarations:
+
+[source,elisp]
+----
+(type-scope [a]
+  (defun my-container-new () -> (container a))
+  (defun my-container-add ((container a) a) -> (container a))
+  (defun my-container-get ((container a)) -> (a | nil)))
+----
+
+The `a` in all three functions refers to the same type variable.
+
+== Data Types (ADTs)
+
+Define algebraic data types with constructors:
+
+[source,elisp]
+----
+(data result [a e]
+  (Ok a)
+  (Err e))
+
+(data tree [a]
+  (Leaf a)
+  (Node (tree a) (tree a)))
+
+(data option [a]
+  (Some a)
+  (None))
+----
+
+This generates:
+
+* Type: `result`, `tree`, `option`
+* Constructors: `result-ok`, `result-err`, `tree-leaf`, `tree-node`, etc.
+* Predicates: `result-ok-p`, `result-err-p`, etc.
+* Accessors: `result-ok-value`, `result-err-value`, `tree-node-1`, `tree-node-2`, etc.
+
+== Primitive Types Reference
+
+[cols="1,2,1"]
+|===
+|Type |Description |Truthy?
+
+|`int`
+|Integers
+|Yes
+
+|`float`
+|Floating-point numbers
+|Yes
+
+|`num`
+|Any number (int or float)
+|Yes
+
+|`string`
+|Strings
+|Yes
+
+|`symbol`
+|Symbols
+|Yes
+
+|`keyword`
+|Keywords (`:foo`)
+|Yes
+
+|`nil`
+|The nil value only
+|No
+
+|`t`
+|The t value only
+|Yes
+
+|`truthy`
+|Anything except nil
+|Yes
+
+|`any`
+|Any value (truthy \| nil)
+|Maybe
+
+|`never`
+|Bottom type (errors, non-returning)
+|N/A
+|===
+
+== Built-in Type Constructors
+
+[cols="1,2"]
+|===
+|Constructor |Description
+
+|`(list a)`
+|Homogeneous list
+
+|`(vector a)`
+|Homogeneous vector
+
+|`(pair a b)`
+|Cons cell
+
+|`(tuple a b c)`
+|Fixed-length tuple
+
+|`(hash-table k v)`
+|Hash table
+
+|`(option a)`
+|Optional value (a \| nil), where a is truthy
+|===
+
+== Publishing Type Definitions
+
+=== Sibling Files
+
+The simplest approach: put `my-lib.tart` next to `my-lib.el`. Anyone using Tart
+who requires your library automatically gets type checking.
+
+=== Community Type Definitions
+
+For libraries you don't control, create type definitions in a shared location:
+
+[source]
+----
+~/.config/emacs/tart/
+├── magit.tart
+├── org.tart
+└── company.tart
+----
+
+Configure the search path:
+
+[source,elisp]
+----
+(setq tart-type-path '("~/.config/emacs/tart/"))
+----
+
+=== Contributing to Stdlib
+
+Tart ships with type definitions for common Emacs packages. Contributions are
+welcome for:
+
+* Core Emacs functions missing from `builtins.tart`
+* Popular packages (dash, s, f, magit, org, etc.)
+* Emacs built-in libraries (seq, map, subr-x, etc.)
+
+See the `stdlib/` directory for examples of the expected format.
+
+== Best Practices
+
+=== Be Precise with Return Types
+
+Prefer specific types over `any`:
+
+[source,elisp]
+----
+;; Less useful
+(defun my-lib-process (any) -> any)
+
+;; More useful
+(defun my-lib-process (string) -> (string | nil))
+----
+
+=== Use Union Types for Results
+
+Instead of returning arbitrary values:
+
+[source,elisp]
+----
+;; Explicit success/failure
+(type result [a e] ((ok a) | (err e)))
+(defun my-lib-parse (string) -> (result ast parse-error))
+----
+
+=== Document with Opaque Types
+
+Hide implementation details:
+
+[source,elisp]
+----
+;; Don't expose that it's a hash-table
+(type cache)
+
+(defun cache-create () -> cache)
+(defun cache-get (cache string) -> (any | nil))
+(defun cache-put (cache string any) -> nil)
+----
+
+=== Keep Signatures Stable
+
+Your `.tart` file is your library's contract. Changing it is a breaking change
+for consumers.
+
+== See Also
+
+* link:reference/tart-format.md[.tart Format Reference] - Complete grammar
+* link:getting-started.adoc[Getting Started] - Quick start tutorial
+* link:tooling-setup.adoc[Tooling Setup] - Editor integration
