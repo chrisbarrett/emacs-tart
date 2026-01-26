@@ -440,6 +440,76 @@ let test_parse_seq () =
       in
       Alcotest.(check bool) "has seq-map" true (has_defun "seq-map")
 
+(** Test that buffers.tart parses successfully *)
+let test_parse_buffers () =
+  let path = Filename.concat stdlib_dir "buffers.tart" in
+  if not (Sys.file_exists path) then
+    Alcotest.fail ("buffers.tart not found at: " ^ path);
+  match Search_path.parse_signature_file path with
+  | None -> Alcotest.fail "buffers.tart failed to parse"
+  | Some sig_file ->
+      Alcotest.(check string) "module name" "buffers" sig_file.sig_module;
+      Alcotest.(check bool)
+        "has declarations" true
+        (List.length sig_file.sig_decls > 30);
+      (* buffers.tart should have the buffer opaque type *)
+      let has_type name =
+        List.exists
+          (function Sig_ast.DType t -> t.type_name = name | _ -> false)
+          sig_file.sig_decls
+      in
+      Alcotest.(check bool) "has buffer type" true (has_type "buffer");
+      Alcotest.(check bool) "has marker type" true (has_type "marker");
+      (* Check key buffer functions *)
+      let has_defun name =
+        List.exists
+          (function Sig_ast.DDefun d -> d.defun_name = name | _ -> false)
+          sig_file.sig_decls
+      in
+      Alcotest.(check bool)
+        "has current-buffer" true
+        (has_defun "current-buffer");
+      Alcotest.(check bool) "has get-buffer" true (has_defun "get-buffer");
+      Alcotest.(check bool) "has point" true (has_defun "point");
+      Alcotest.(check bool) "has insert" true (has_defun "insert");
+      Alcotest.(check bool)
+        "has search-forward" true
+        (has_defun "search-forward")
+
+(** Test that buffers can be loaded into type environment *)
+let test_load_buffers () =
+  let sp = Search_path.empty |> Search_path.with_stdlib stdlib_dir in
+  match
+    Search_path.load_module ~search_path:sp ~env:Type_env.empty "buffers"
+  with
+  | None -> Alcotest.fail "failed to load buffers module"
+  | Some env ->
+      (* Check that current-buffer is loaded *)
+      (match Type_env.lookup "current-buffer" env with
+      | None -> Alcotest.fail "current-buffer not found in env"
+      | Some _ -> ());
+      (* Check that point is loaded *)
+      (match Type_env.lookup "point" env with
+      | None -> Alcotest.fail "point not found in env"
+      | Some _ -> ());
+      (* Check that insert is loaded *)
+      (match Type_env.lookup "insert" env with
+      | None -> Alcotest.fail "insert not found in env"
+      | Some _ -> ());
+      (* Verify type checking works with buffer functions *)
+      let _, errors = check_expr_str ~env "(point)" in
+      Alcotest.(check int) "point: no errors" 0 (List.length errors);
+      let ty, errors2 = check_expr_str ~env "(get-buffer \"test\")" in
+      Alcotest.(check int) "get-buffer: no errors" 0 (List.length errors2);
+      (* Result should be (Buffer | Nil) *)
+      let ty_str = Types.to_string ty in
+      Alcotest.(check bool)
+        "returns optional buffer" true
+        (try
+           let _ = Str.search_forward (Str.regexp_string "Nil") ty_str 0 in
+           true
+         with Not_found -> false)
+
 (** Test that builtins can be loaded into type environment (R17) Verify:
     Built-in calls type-check; coverage test for all listed functions *)
 let test_load_builtins () =
@@ -554,7 +624,9 @@ let () =
           Alcotest.test_case "parse builtins.tart" `Quick test_parse_builtins;
           Alcotest.test_case "parse cl-lib.tart" `Quick test_parse_cl_lib;
           Alcotest.test_case "parse seq.tart" `Quick test_parse_seq;
+          Alcotest.test_case "parse buffers.tart" `Quick test_parse_buffers;
           Alcotest.test_case "load builtins into env" `Quick test_load_builtins;
           Alcotest.test_case "load cl-lib into env" `Quick test_load_cl_lib;
+          Alcotest.test_case "load buffers into env" `Quick test_load_buffers;
         ] );
     ]

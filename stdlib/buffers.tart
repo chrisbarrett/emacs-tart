@@ -1,0 +1,127 @@
+;;; buffers.tart --- Type signatures for Emacs buffer functions
+
+;; Buffer type (opaque)
+(type buffer)
+
+;; Buffer creation and selection
+(defun current-buffer () -> buffer)
+(defun get-buffer (string) -> (buffer | nil))
+(defun get-buffer-create (string &optional bool) -> buffer)
+(defun generate-new-buffer (string &optional bool) -> buffer)
+(defun generate-new-buffer-name (string &optional string) -> string)
+(defun rename-buffer (string &optional bool) -> string)
+(defun set-buffer (buffer) -> buffer)
+(defun with-current-buffer [a] (buffer a) -> a)
+
+;; Buffer content
+(defun buffer-string () -> string)
+(defun buffer-substring (int int) -> string)
+(defun buffer-substring-no-properties (int int) -> string)
+(defun buffer-size (&optional buffer) -> int)
+(defun buffer-name (&optional buffer) -> (string | nil))
+(defun buffer-file-name (&optional buffer) -> (string | nil))
+(defun buffer-modified-p (&optional buffer) -> bool)
+(defun set-buffer-modified-p (bool) -> nil)
+(defun buffer-read-only (&optional buffer) -> bool)
+
+;; Buffer list
+(defun buffer-list (&optional any) -> (list buffer))
+(defun other-buffer (&optional buffer bool any) -> buffer)
+(defun bury-buffer (&optional (buffer | string)) -> nil)
+(defun unbury-buffer () -> buffer)
+
+;; Buffer killing
+(defun kill-buffer (&optional (buffer | string)) -> bool)
+(defun buffer-live-p (any) -> bool)
+
+;; Point and mark
+(defun point () -> int)
+(defun point-min () -> int)
+(defun point-max () -> int)
+(defun goto-char (int) -> int)
+(defun forward-char (&optional int) -> nil)
+(defun backward-char (&optional int) -> nil)
+(defun beginning-of-line (&optional int) -> nil)
+(defun end-of-line (&optional int) -> nil)
+(defun forward-line (&optional int) -> int)
+(defun line-beginning-position (&optional int) -> int)
+(defun line-end-position (&optional int) -> int)
+(defun bolp () -> bool)
+(defun eolp () -> bool)
+(defun bobp () -> bool)
+(defun eobp () -> bool)
+
+;; Mark
+(defun mark (&optional bool) -> (int | nil))
+(defun set-mark (int) -> nil)
+(defun mark-marker () -> marker)
+(defun push-mark (&optional int bool bool) -> nil)
+(defun pop-mark () -> nil)
+(defun region-beginning () -> int)
+(defun region-end () -> int)
+(defun use-region-p () -> bool)
+
+;; Insertion and deletion
+(defun insert (&rest (string | char)) -> nil)
+(defun insert-char (char &optional int bool) -> nil)
+(defun insert-buffer-substring (buffer &optional int int) -> nil)
+(defun delete-char (int &optional bool) -> nil)
+(defun delete-region (int int) -> nil)
+(defun erase-buffer () -> nil)
+
+;; Search and replace
+(defun search-forward (string &optional int bool int) -> (int | nil))
+(defun search-backward (string &optional int bool int) -> (int | nil))
+(defun re-search-forward (string &optional int bool int) -> (int | nil))
+(defun re-search-backward (string &optional int bool int) -> (int | nil))
+(defun looking-at (string) -> bool)
+(defun looking-back (string &optional int bool) -> bool)
+(defun match-beginning (int) -> (int | nil))
+(defun match-end (int) -> (int | nil))
+(defun match-string (int &optional string) -> (string | nil))
+(defun match-string-no-properties (int &optional string) -> (string | nil))
+(defun replace-match (string &optional bool bool string int) -> nil)
+
+;; Narrowing
+(defun narrow-to-region (int int) -> nil)
+(defun widen () -> nil)
+(defun buffer-narrowed-p () -> bool)
+
+;; Buffer positions
+(defun char-after (&optional int) -> (char | nil))
+(defun char-before (&optional int) -> (char | nil))
+(defun following-char () -> char)
+(defun preceding-char () -> char)
+
+;; Line information
+(defun line-number-at-pos (&optional int bool) -> int)
+(defun current-column () -> int)
+(defun move-to-column (int &optional bool) -> int)
+(defun count-lines (int int) -> int)
+
+;; Marker type (opaque)
+(type marker)
+
+;; Marker operations
+(defun make-marker () -> marker)
+(defun point-marker () -> marker)
+(defun copy-marker (&optional (marker | int) int) -> marker)
+(defun marker-position (marker) -> (int | nil))
+(defun marker-buffer (marker) -> (buffer | nil))
+(defun set-marker (marker (int | nil) &optional buffer) -> marker)
+(defun move-marker (marker int &optional buffer) -> marker)
+
+;; Save/restore context
+(defun save-excursion [a] (a) -> a)
+(defun save-restriction [a] (a) -> a)
+(defun save-current-buffer [a] (a) -> a)
+
+;; Buffer local variables
+(defun make-local-variable (symbol) -> symbol)
+(defun kill-local-variable (symbol) -> symbol)
+(defun buffer-local-value (symbol buffer) -> any)
+(defun local-variable-p (symbol &optional buffer) -> bool)
+(defun buffer-local-variables (&optional buffer) -> (list any))
+
+;; Char type alias
+(type char int)
