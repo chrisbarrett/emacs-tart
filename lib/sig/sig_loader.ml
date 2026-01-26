@@ -725,8 +725,8 @@ let load_import_struct (module_name : string) (d : import_struct_decl)
     - Single-field: (cons 'tag value)
     - Multi-field: [tag field1 field2 ...] *)
 
-(** Load a data declaration. Generates the ADT type and constructor functions.
-*)
+(** Load a data declaration. Generates the ADT type, constructor functions, and
+    predicate functions. *)
 let load_data (module_name : string) (d : data_decl) (state : load_state) :
     load_state =
   let data_name = d.data_name in
@@ -741,7 +741,7 @@ let load_data (module_name : string) (d : data_decl) (state : load_state) :
   in
   let state = add_opaque_to_state data_name opaque state in
 
-  (* 2. Add constructor functions *)
+  (* 2. Add constructor functions and predicates for each variant *)
   List.fold_left
     (fun state (ctor : ctor_decl) ->
       let ctor_name = ctor.ctor_name in
@@ -770,7 +770,18 @@ let load_data (module_name : string) (d : data_decl) (state : load_state) :
         if type_params = [] then Type_env.Mono ctor_typ
         else Type_env.Poly (type_params, ctor_typ)
       in
-      add_value_to_state ctor_name ctor_scheme state)
+      let state = add_value_to_state ctor_name ctor_scheme state in
+
+      (* Add predicate function: <adt-name>-<ctor-lowercase>-p
+         Predicate takes any value and returns bool *)
+      let pred_name =
+        data_name ^ "-" ^ String.lowercase_ascii ctor_name ^ "-p"
+      in
+      let pred_scheme =
+        Type_env.Mono
+          (Types.TArrow ([ Types.PPositional Types.Prim.any ], Types.Prim.bool))
+      in
+      add_value_to_state pred_name pred_scheme state)
     state d.data_ctors
 
 (** {1 Open and Include Processing}

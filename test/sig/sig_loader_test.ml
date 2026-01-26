@@ -1116,6 +1116,75 @@ let test_data_recursive_type () =
     "Node returns tree" true
     (string_starts_with "(test/tree" (Types.to_string ty2))
 
+(** {1 Data Predicate Tests - R2} *)
+
+(** Test that data generates predicate functions. *)
+let test_data_generates_predicates () =
+  let sig_src = {|
+    (data result [a e] (Ok a) (Err e))
+  |} in
+  let env = load_sig_str sig_src in
+  (* Check result-ok-p predicate *)
+  (match Type_env.lookup "result-ok-p" env with
+  | None -> Alcotest.fail "result-ok-p predicate not found"
+  | Some _ -> ());
+  (* Check result-err-p predicate *)
+  match Type_env.lookup "result-err-p" env with
+  | None -> Alcotest.fail "result-err-p predicate not found"
+  | Some _ -> ()
+
+(** Test that predicates have correct type: (any) -> bool *)
+let test_data_predicate_type () =
+  let sig_src = {|
+    (data result [a e] (Ok a) (Err e))
+  |} in
+  let env = load_sig_str sig_src in
+  (* Predicate should accept any value and return bool *)
+  let ty, errors = check_expr_str ~env {|(result-ok-p 42)|} in
+  Alcotest.(check int) "no type errors" 0 (List.length errors);
+  Alcotest.(check string) "predicate returns bool" "Bool" (Types.to_string ty)
+
+(** Test that predicates work with ADT values *)
+let test_data_predicate_with_adt () =
+  let sig_src = {|
+    (data result [a e] (Ok a) (Err e))
+  |} in
+  let env = load_sig_str sig_src in
+  (* Predicate should work on ADT values *)
+  let ty, errors = check_expr_str ~env {|(result-ok-p (Ok 42))|} in
+  Alcotest.(check int) "no type errors" 0 (List.length errors);
+  Alcotest.(check string) "predicate returns bool" "Bool" (Types.to_string ty)
+
+(** Test nullary data predicates *)
+let test_data_nullary_predicates () =
+  let sig_src = {|
+    (data bool (True) (False))
+  |} in
+  let env = load_sig_str sig_src in
+  (* Check bool-true-p predicate *)
+  (match Type_env.lookup "bool-true-p" env with
+  | None -> Alcotest.fail "bool-true-p predicate not found"
+  | Some _ -> ());
+  (* Check bool-false-p predicate *)
+  (match Type_env.lookup "bool-false-p" env with
+  | None -> Alcotest.fail "bool-false-p predicate not found"
+  | Some _ -> ());
+  (* Test predicate type *)
+  let ty, errors = check_expr_str ~env {|(bool-true-p (True))|} in
+  Alcotest.(check int) "no type errors" 0 (List.length errors);
+  Alcotest.(check string) "predicate returns bool" "Bool" (Types.to_string ty)
+
+(** Test predicate naming uses lowercase constructor *)
+let test_data_predicate_lowercase () =
+  let sig_src = {|
+    (data point (Point2D int int))
+  |} in
+  let env = load_sig_str sig_src in
+  (* Predicate name should be point-point2d-p (lowercase) *)
+  match Type_env.lookup "point-point2d-p" env with
+  | None -> Alcotest.fail "point-point2d-p predicate not found"
+  | Some _ -> ()
+
 let () =
   Alcotest.run "sig_loader"
     [
@@ -1249,5 +1318,14 @@ let () =
           Alcotest.test_case "multi-field constructor" `Quick
             test_data_multi_field_constructor;
           Alcotest.test_case "recursive type" `Quick test_data_recursive_type;
+          Alcotest.test_case "generates predicates" `Quick
+            test_data_generates_predicates;
+          Alcotest.test_case "predicate type" `Quick test_data_predicate_type;
+          Alcotest.test_case "predicate with adt" `Quick
+            test_data_predicate_with_adt;
+          Alcotest.test_case "nullary predicates" `Quick
+            test_data_nullary_predicates;
+          Alcotest.test_case "predicate lowercase" `Quick
+            test_data_predicate_lowercase;
         ] );
     ]

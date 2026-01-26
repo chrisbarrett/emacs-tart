@@ -209,7 +209,7 @@ Runtime representation and pattern matching.
 ### 9.1 Code Generation
 
 - [x] [R1] Generate constructor functions from ADT definitions
-- [ ] [R2] Generate predicate functions
+- [x] [R2] Generate predicate functions
 - [ ] [R3] Generate accessor functions
 - [x] [R6] Handle multi-field constructors (vectors)
 - [x] [R7] Test recursive type handling
