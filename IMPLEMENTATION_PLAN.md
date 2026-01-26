@@ -360,6 +360,38 @@ Enable polymorphism over type constructors via kind inference.
 - [x] [R8] Test nested/partial type constructors
 - [x] Verify: `fmap` instantiation preserves type safety
 
+## Phase 15: Explicit Type Instantiation (Spec 18)
+
+Enable explicit instantiation of polymorphic types at call sites.
+
+### 15.1 Runtime Macro
+
+- [ ] [R5] Add `@type` macro to tart.el (expands to function call)
+- [ ] Verify: ERT tests; `(@type [int] identity 42)` expands to `(identity 42)`
+
+### 15.2 Basic Instantiation
+
+- [ ] [R1] Recognize `@type` forms in infer.ml
+- [ ] [R1] Parse type arguments from vector using sig_parser
+- [ ] [R1] Apply explicit type arguments during inference
+- [ ] Verify: `(@type [int] identity 42)` type-checks
+
+### 15.3 Partial Instantiation
+
+- [ ] [R3] Handle `_` placeholder for partial instantiation
+- [ ] Verify: `(@type [_ string] pair 1 "hi")` infers first arg
+
+### 15.4 HK Instantiation
+
+- [ ] [R2] Test HK type constructor instantiation
+- [ ] Verify: `(@type [list int string] fmap ...)` works
+
+### 15.5 Error Handling
+
+- [ ] [R4] Validate type argument arity
+- [ ] [R6] Format error messages with annotation context
+- [ ] Verify: Wrong arity and type mismatch errors show context
+
 ---
 
 ## Future Work (Requires New Specs)
@@ -369,10 +401,7 @@ The following areas are mentioned as future work in the specs:
 1. **Scoped Type Variables** (mentioned in Spec 15)
    - Allow type variables to span multiple signatures in a scope
 
-2. **Explicit Type Instantiation** (mentioned in Spec 15)
-   - Allow explicit instantiation of polymorphic types at call sites
-
-3. **Additional Stdlib Coverage**
+2. **Additional Stdlib Coverage**
    - More Emacs packages (org-mode, magit, etc.)
    - More cl-lib functions
    - Third-party package signatures
@@ -392,4 +421,5 @@ The following areas are mentioned as future work in the specs:
 11. **Phase 11**: LSP navigation features ✓
 12. **Phase 12**: LSP completion and symbols ✓
 13. **Phase 13**: Expanded stdlib ✓
-14. **Phase 14**: Higher-Kinded Types (in progress)
+14. **Phase 14**: Higher-Kinded Types ✓
+15. **Phase 15**: Explicit Type Instantiation (current)

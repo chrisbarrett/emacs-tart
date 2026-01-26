@@ -203,8 +203,8 @@ Error: kind mismatch
 - [x] [R3] Add kind checking to type application
 - [x] [R4] Parse explicit kind annotations
 - [x] [R6] Implement kind error formatting
-- [ ] [R7] Update unification for HK instantiation
-- [ ] [R8] Test nested/partial type constructors
+- [x] [R7] Update unification for HK instantiation
+- [x] [R8] Test nested/partial type constructors
 
 Run review agent after R1-R3 complete to validate approach.
 

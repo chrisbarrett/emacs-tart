@@ -66,4 +66,26 @@
   (should (eq (tart-declare my-buffer buffer) nil))
   (should (eq (tart-declare handler ((string) -> nil)) nil)))
 
+;;; @type Macro Tests (R5)
+
+(ert-deftest at-type-macro-expands-to-call ()
+  "The `@type' macro should expand to a function call."
+  (should (equal (macroexpand '(@type [int] identity 42))
+                 '(identity 42)))
+  (should (equal (macroexpand '(@type [list int string] fmap f xs))
+                 '(fmap f xs)))
+  (should (equal (macroexpand '(@type [_ string] pair 1 "hi"))
+                 '(pair 1 "hi"))))
+
+(ert-deftest at-type-macro-evaluates-call ()
+  "The `@type' macro should evaluate the function call at runtime."
+  (should (equal (@type [int] identity 42) 42))
+  (should (equal (@type [string] identity "hello") "hello"))
+  (should (equal (@type [int] + 1 2 3) 6)))
+
+(ert-deftest at-type-macro-with-no-args ()
+  "The `@type' macro should work with nullary functions."
+  (should (equal (macroexpand '(@type [] point))
+                 '(point))))
+
 ;;; tart-tests.el ends here
