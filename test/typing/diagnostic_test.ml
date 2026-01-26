@@ -221,15 +221,16 @@ let test_type_mismatch_with_function_context () =
   let span = Loc.dummy_span in
   let fn_type = Types.arrow [ Types.Prim.string ] Types.Prim.string in
   let context =
-    Constraint.FunctionArg { fn_name = "upcase"; fn_type; arg_index = 0 }
+    Constraint.FunctionArg
+      { fn_name = "upcase"; fn_type; arg_index = 0; arg_expr_source = None }
   in
   let err =
     Unify.TypeMismatch (Types.Prim.string, Types.Prim.int, span, context)
   in
   let d = Diag.of_unify_error err in
   Alcotest.(check bool) "is error" true (Diag.is_error d);
-  Alcotest.(check bool) "has related info" true (List.length d.related > 0);
-  let related_msg = (List.hd d.related).message in
+  Alcotest.(check bool) "has related info" true (List.length d.Diag.related > 0);
+  let related_msg = (List.hd d.Diag.related).message in
   Alcotest.(check bool)
     "related mentions function name" true
     (contains_pattern (Str.regexp "upcase") related_msg);
@@ -256,7 +257,7 @@ let test_end_to_end_function_arg_error () =
     "has diagnostic with related info" true
     (List.length with_related > 0);
   let d = List.hd with_related in
-  let related_msg = (List.hd d.related).message in
+  let related_msg = (List.hd d.Diag.related).message in
   Alcotest.(check bool)
     "mentions upcase" true
     (contains_pattern (Str.regexp "upcase") related_msg)
@@ -290,9 +291,9 @@ let test_branch_mismatch_has_related_info () =
     Diag.branch_mismatch ~span:span1 ~this_type:Types.Prim.int
       ~other_branch_span:span2 ~other_type:Types.Prim.string ~is_then:true ()
   in
-  Alcotest.(check bool) "has related info" true (List.length d.related > 0);
+  Alcotest.(check bool) "has related info" true (List.length d.Diag.related > 0);
   let related_msgs =
-    List.map (fun (r : Diag.related_location) -> r.message) d.related
+    List.map (fun (r : Diag.related_location) -> r.message) d.Diag.related
   in
   let combined = String.concat " " related_msgs in
   Alcotest.(check bool)
@@ -372,6 +373,165 @@ let test_branch_mismatch_help_for_int_string () =
   Alcotest.(check bool)
     "suggests conversion" true
     (contains_pattern (Str.regexp_case_fold "number-to-string") help_combined)
+
+(* =============================================================================
+   Option/Nil Error Tests (R3)
+   ============================================================================= *)
+
+let test_option_nil_message () =
+  (* When actual is Option String but expected is String, message should be "possible nil value" *)
+  let span = Loc.dummy_span in
+  let fn_type = Types.arrow [ Types.Prim.string ] Types.Prim.string in
+  let context =
+    Constraint.FunctionArg
+      {
+        fn_name = "upcase";
+        fn_type;
+        arg_index = 0;
+        arg_expr_source = Some "get-name";
+      }
+  in
+  let expected = Types.Prim.string in
+  let actual = Types.option_of Types.Prim.string in
+  let err = Unify.TypeMismatch (expected, actual, span, context) in
+  let d = Diag.of_unify_error err in
+  Alcotest.(check bool)
+    "message is possible nil value" true
+    (contains_pattern (Str.regexp_case_fold "possible nil") d.message)
+
+let test_option_nil_may_return_note () =
+  (* Should have a note like "`get-name` may return nil" *)
+  let span = Loc.dummy_span in
+  let fn_type = Types.arrow [ Types.Prim.string ] Types.Prim.string in
+  let context =
+    Constraint.FunctionArg
+      {
+        fn_name = "upcase";
+        fn_type;
+        arg_index = 0;
+        arg_expr_source = Some "get-name";
+      }
+  in
+  let expected = Types.Prim.string in
+  let actual = Types.option_of Types.Prim.string in
+  let err = Unify.TypeMismatch (expected, actual, span, context) in
+  let d = Diag.of_unify_error err in
+  let related_msgs =
+    List.map (fun (r : Diag.related_location) -> r.message) d.Diag.related
+  in
+  let combined = String.concat " " related_msgs in
+  Alcotest.(check bool)
+    "has may return nil note" true
+    (contains_pattern
+       (Str.regexp_case_fold "get-name.*may return nil")
+       combined)
+
+let test_option_nil_help_suggestions () =
+  (* Should have help suggestions for nil handling *)
+  let span = Loc.dummy_span in
+  let fn_type = Types.arrow [ Types.Prim.string ] Types.Prim.string in
+  let context =
+    Constraint.FunctionArg
+      {
+        fn_name = "upcase";
+        fn_type;
+        arg_index = 0;
+        arg_expr_source = Some "get-name";
+      }
+  in
+  let expected = Types.Prim.string in
+  let actual = Types.option_of Types.Prim.string in
+  let err = Unify.TypeMismatch (expected, actual, span, context) in
+  let d = Diag.of_unify_error err in
+  Alcotest.(check bool) "has help" true (List.length d.help > 0);
+  let help_combined = String.concat " " d.help in
+  (* Should suggest when-let or or *)
+  Alcotest.(check bool)
+    "suggests when-let" true
+    (contains_pattern (Str.regexp_case_fold "when-let") help_combined);
+  Alcotest.(check bool)
+    "suggests or" true
+    (contains_pattern (Str.regexp_case_fold "\\bor\\b") help_combined)
+
+let test_option_nil_no_source_no_note () =
+  (* When arg_expr_source is None, should not have "may return nil" note *)
+  let span = Loc.dummy_span in
+  let fn_type = Types.arrow [ Types.Prim.string ] Types.Prim.string in
+  let context =
+    Constraint.FunctionArg
+      { fn_name = "upcase"; fn_type; arg_index = 0; arg_expr_source = None }
+  in
+  let expected = Types.Prim.string in
+  let actual = Types.option_of Types.Prim.string in
+  let err = Unify.TypeMismatch (expected, actual, span, context) in
+  let d = Diag.of_unify_error err in
+  let related_msgs =
+    List.map (fun (r : Diag.related_location) -> r.message) d.Diag.related
+  in
+  let combined = String.concat " " related_msgs in
+  (* Should NOT have "may return nil" note (only function arg note) *)
+  Alcotest.(check bool)
+    "no may return nil note" false
+    (contains_pattern (Str.regexp_case_fold "may return nil") combined)
+
+let test_end_to_end_option_nil_error () =
+  (* Type-check (upcase (get-name x)) where get-name returns Option String *)
+  let sexp = parse "(upcase (get-name x))" in
+  let env =
+    Tart.Type_env.extend_mono "upcase"
+      (Types.arrow [ Types.Prim.string ] Types.Prim.string)
+      (Tart.Type_env.extend_mono "get-name"
+         (Types.arrow [ Types.Prim.any ] (Types.option_of Types.Prim.string))
+         (Tart.Type_env.extend_mono "x" Types.Prim.any Tart.Type_env.empty))
+  in
+  let _, errors = Check.check_expr ~env sexp in
+  Alcotest.(check bool) "has error" true (List.length errors > 0);
+  let diagnostics = Diag.of_unify_errors errors in
+  (* Find E0308 error with "possible nil value" message *)
+  let nil_errors =
+    List.filter
+      (fun d ->
+        contains_pattern (Str.regexp_case_fold "possible nil") d.Diag.message)
+      diagnostics
+  in
+  Alcotest.(check bool) "has nil error" true (List.length nil_errors > 0);
+  let d = List.hd nil_errors in
+  let str = Diag.to_string d in
+  (* Should mention the source function *)
+  Alcotest.(check bool)
+    "mentions get-name" true
+    (contains_pattern (Str.regexp "get-name") str);
+  (* Should suggest nil handling *)
+  Alcotest.(check bool)
+    "suggests fix" true
+    (contains_pattern (Str.regexp_case_fold "when-let") str)
+
+let test_option_nil_variable_source () =
+  (* When the source is a variable (not a function call) *)
+  let sexp = parse "(upcase maybe-name)" in
+  let env =
+    Tart.Type_env.extend_mono "upcase"
+      (Types.arrow [ Types.Prim.string ] Types.Prim.string)
+      (Tart.Type_env.extend_mono "maybe-name"
+         (Types.option_of Types.Prim.string)
+         Tart.Type_env.empty)
+  in
+  let _, errors = Check.check_expr ~env sexp in
+  Alcotest.(check bool) "has error" true (List.length errors > 0);
+  let diagnostics = Diag.of_unify_errors errors in
+  let nil_errors =
+    List.filter
+      (fun d ->
+        contains_pattern (Str.regexp_case_fold "possible nil") d.Diag.message)
+      diagnostics
+  in
+  Alcotest.(check bool) "has nil error" true (List.length nil_errors > 0);
+  let d = List.hd nil_errors in
+  let str = Diag.to_string d in
+  (* Should mention the variable name *)
+  Alcotest.(check bool)
+    "mentions maybe-name" true
+    (contains_pattern (Str.regexp "maybe-name") str)
 
 (* =============================================================================
    Integration Tests with Real Type Checking
@@ -464,6 +624,21 @@ let () =
             test_if_branch_mismatch_shows_both_types;
           Alcotest.test_case "help for int/string" `Quick
             test_branch_mismatch_help_for_int_string;
+        ] );
+      ( "option_nil",
+        [
+          Alcotest.test_case "possible nil message" `Quick
+            test_option_nil_message;
+          Alcotest.test_case "may return nil note" `Quick
+            test_option_nil_may_return_note;
+          Alcotest.test_case "help suggestions" `Quick
+            test_option_nil_help_suggestions;
+          Alcotest.test_case "no source no note" `Quick
+            test_option_nil_no_source_no_note;
+          Alcotest.test_case "end-to-end function call" `Quick
+            test_end_to_end_option_nil_error;
+          Alcotest.test_case "variable source" `Quick
+            test_option_nil_variable_source;
         ] );
       ( "integration",
         [

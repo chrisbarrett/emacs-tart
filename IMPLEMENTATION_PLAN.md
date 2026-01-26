@@ -130,8 +130,8 @@ Improve error message quality.
 
 - [x] [R1] Format type mismatch errors with expected/found
 - [x] [R2] Format branch type mismatch errors
-- [ ] [R3] Format Option/nil errors with suggestions
-- [ ] Verify: Errors show context and suggestions
+- [x] [R3] Format Option/nil errors with suggestions
+- [x] Verify: Errors show context and suggestions
 
 ### 6.2 Name Errors
 

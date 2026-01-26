@@ -14,6 +14,8 @@ type context =
       fn_name : string;  (** Name of the function being called *)
       fn_type : Core.Types.typ;  (** Full function type *)
       arg_index : int;  (** Which argument (0-indexed) *)
+      arg_expr_source : string option;
+          (** Name of function/variable that produced the argument value *)
     }
   | IfBranch of {
       is_then : bool;  (** True for then branch, false for else branch *)

@@ -262,7 +262,7 @@ let type_mismatch_with_context ~span ~expected ~actual ~context () =
       (* For if branches, create a branch mismatch diagnostic instead *)
       branch_mismatch ~span ~this_type:actual ~other_branch_span
         ~other_type:other_branch_type ~is_then ()
-  | Constraint.FunctionArg { fn_name; fn_type; arg_index } ->
+  | Constraint.FunctionArg { fn_name; fn_type; arg_index; arg_expr_source } ->
       let base_help = suggest_type_fix ~expected ~actual in
       let is_nil_error =
         is_option_type actual && not (is_option_type expected)
@@ -270,7 +270,22 @@ let type_mismatch_with_context ~span ~expected ~actual ~context () =
       let message =
         if is_nil_error then "possible nil value" else "type mismatch"
       in
-      let related = function_arg_note fn_name fn_type arg_index expected in
+      let fn_related = function_arg_note fn_name fn_type arg_index expected in
+      (* Add "may return nil" note for Option types when we know the source *)
+      let nil_note =
+        if is_nil_error then
+          match arg_expr_source with
+          | Some source ->
+              [
+                {
+                  span = Loc.dummy_span;
+                  message = Printf.sprintf "`%s` may return nil" source;
+                };
+              ]
+          | None -> []
+        else []
+      in
+      let related = fn_related @ nil_note in
       {
         severity = Error;
         code = Some E0308;

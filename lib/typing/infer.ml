@@ -450,6 +450,18 @@ and get_fn_name (fn : Syntax.Sexp.t) : string option =
   let open Syntax.Sexp in
   match fn with Symbol (name, _) -> Some name | _ -> None
 
+(** Extract the source name from an expression for error context.
+
+    For variables, returns the variable name. For function calls, returns the
+    function name. Used to provide "may return nil" messages for Option types.
+*)
+and get_expr_source (expr : Syntax.Sexp.t) : string option =
+  let open Syntax.Sexp in
+  match expr with
+  | Symbol (name, _) -> Some name
+  | List (Symbol (name, _) :: _, _) -> Some name
+  | _ -> None
+
 (** Infer the type of a function application.
 
     Generates constraint: fn_type = (arg_types...) -> result_type *)
@@ -467,16 +479,23 @@ and infer_application env fn args span =
     List.mapi
       (fun i arg_result ->
         let expected_param_ty = fresh_tvar (Env.current_level env) in
+        let arg_expr = List.nth args i in
+        let arg_expr_source = get_expr_source arg_expr in
         let context =
           match fn_name with
           | Some name ->
               C.FunctionArg
-                { fn_name = name; fn_type = fn_result.ty; arg_index = i }
+                {
+                  fn_name = name;
+                  fn_type = fn_result.ty;
+                  arg_index = i;
+                  arg_expr_source;
+                }
           | None -> C.NoContext
         in
         ( expected_param_ty,
           C.equal ~context expected_param_ty arg_result.ty
-            (Syntax.Sexp.span_of (List.nth args i)) ))
+            (Syntax.Sexp.span_of arg_expr) ))
       arg_results
   in
 
