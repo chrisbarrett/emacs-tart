@@ -100,8 +100,32 @@ let lsp_diagnostic_of_parse_error (err : Syntax.Read.parse_error) :
     source = Some "tart";
   }
 
+(** Get the default module check configuration.
+
+    Uses the stdlib directory relative to the executable location. *)
+let default_module_config () : Typing.Module_check.config =
+  (* Try to find stdlib relative to the executable *)
+  let exe_dir = Filename.dirname Sys.executable_name in
+  let stdlib_candidates =
+    [
+      Filename.concat exe_dir "stdlib";
+      Filename.concat (Filename.dirname exe_dir) "stdlib";
+      Filename.concat exe_dir "../share/tart/stdlib";
+    ]
+  in
+  let stdlib_dir = List.find_opt Sys.file_exists stdlib_candidates in
+  let config = Typing.Module_check.default_config () in
+  match stdlib_dir with
+  | Some dir -> Typing.Module_check.with_stdlib dir config
+  | None -> config
+
 (** Type-check a document and return LSP diagnostics. Returns parse errors if
-    parsing fails, otherwise type errors. *)
+    parsing fails, otherwise type errors.
+
+    Uses module-aware type checking to:
+    - Load sibling `.tart` files for signature verification
+    - Load required modules from the search path
+    - Verify implementations match signatures *)
 let check_document (uri : string) (text : string) : Protocol.diagnostic list =
   let filename = filename_of_uri uri in
   let parse_result = Syntax.Read.parse_string ~filename text in
@@ -113,9 +137,12 @@ let check_document (uri : string) (text : string) : Protocol.diagnostic list =
   let type_diagnostics =
     if parse_result.sexps = [] then []
     else
-      let check_result = Typing.Check.check_program parse_result.sexps in
+      let config = default_module_config () in
+      let check_result =
+        Typing.Module_check.check_module ~config ~filename parse_result.sexps
+      in
       let typing_diagnostics =
-        Typing.Diagnostic.of_unify_errors check_result.errors
+        Typing.Module_check.diagnostics_of_result check_result
       in
       List.map lsp_diagnostic_of_diagnostic typing_diagnostics
   in

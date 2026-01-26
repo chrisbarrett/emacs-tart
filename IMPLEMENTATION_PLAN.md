@@ -104,10 +104,10 @@ Enables type-checked module interactions.
 
 ### 5.1 Basic Module Loading
 
-- [ ] [R1] Enable type checking for any `.el` file via LSP
-- [ ] [R2] Verify implementations match `.tart` signatures
-- [ ] [R3] Load signatures from search path for required modules
-- [ ] Verify: Mismatched implementations produce errors
+- [x] [R1] Enable type checking for any `.el` file via LSP
+- [x] [R2] Verify implementations match `.tart` signatures
+- [x] [R3] Load signatures from search path for required modules
+- [x] Verify: Mismatched implementations produce errors
 
 ### 5.2 Public/Private Distinction
 
@@ -117,10 +117,10 @@ Enables type-checked module interactions.
 
 ### 5.3 Module Dependencies
 
-- [ ] [R6] Load signatures when `(require 'module)` is encountered
+- [x] [R6] Load signatures when `(require 'module)` is encountered
 - [ ] [R7] Handle autoloaded function lookup via prefix-based search
 - [ ] [R9] Handle circular module dependencies with lazy loading
-- [ ] Verify: Required module signatures available for type checking
+- [x] Verify: Required module signatures available for type checking
 
 ## Phase 6: Error Reporting (Spec 13)
 

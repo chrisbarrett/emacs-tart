@@ -21,3 +21,7 @@
 (test
  (name diagnostic_test)
  (libraries tart alcotest str))
+
+(test
+ (name module_check_test)
+ (libraries tart alcotest unix))

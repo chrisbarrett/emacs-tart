@@ -30,7 +30,15 @@ module Infer = Typing.Infer
 module Unify = Typing.Unify
 module Generalize = Typing.Generalize
 module Check = Typing.Check
+module Module_check = Typing.Module_check
 module Diagnostic = Typing.Diagnostic
+
+module Sig_ast = Sig.Sig_ast
+(** Re-export signature modules *)
+
+module Sig_parser = Sig.Sig_parser
+module Sig_loader = Sig.Sig_loader
+module Search_path = Sig.Search_path
 
 module Rpc = Lsp.Rpc
 (** Re-export LSP modules *)
