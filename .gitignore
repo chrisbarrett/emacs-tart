@@ -8,5 +8,11 @@ _build/
 \#*\#
 .\#*
 
+# Emacs byte-compiled files
+*.elc
+
+# Ralph loop progress file
+progress.txt
+
 # opam local switch
 _opam/
