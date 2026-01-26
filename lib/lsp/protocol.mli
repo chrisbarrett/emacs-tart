@@ -43,6 +43,7 @@ type server_capabilities = {
   document_symbol_provider : bool;
   completion_provider : bool;
   signature_help_provider : bool;
+  rename_provider : bool;
 }
 (** Server capabilities *)
 
@@ -367,3 +368,21 @@ type signature_help_result = signature_help option
 
 val signature_help_result_to_json : signature_help_result -> Yojson.Safe.t
 (** Encode signature help result to JSON *)
+
+(** {1 Rename} *)
+
+type rename_params = {
+  rp_text_document : string;
+  rp_position : position;
+  rp_new_name : string;
+}
+(** Rename request params *)
+
+val parse_rename_params : Yojson.Safe.t -> rename_params
+(** Parse rename params from JSON *)
+
+type rename_result = workspace_edit option
+(** Rename result is a workspace edit or null *)
+
+val rename_result_to_json : rename_result -> Yojson.Safe.t
+(** Encode rename result to JSON *)

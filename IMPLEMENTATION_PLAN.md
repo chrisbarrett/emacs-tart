@@ -294,9 +294,9 @@ Auto-completion and document structure for improved IDE experience.
 
 ### 12.4 Symbol Rename
 
-- [ ] Implement `textDocument/rename` for local symbols
-- [ ] Rename variables and function definitions within file
-- [ ] Verify: Renaming updates all references consistently
+- [x] Implement `textDocument/rename` for local symbols
+- [x] Rename variables and function definitions within file
+- [x] Verify: Renaming updates all references consistently
 
 ## Phase 13: Expanded Stdlib (Future)
 

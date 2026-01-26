@@ -49,6 +49,7 @@ type server_capabilities = {
   document_symbol_provider : bool;
   completion_provider : bool;
   signature_help_provider : bool;
+  rename_provider : bool;
 }
 (** Server capabilities *)
 
@@ -146,6 +147,10 @@ let server_capabilities_to_json (caps : server_capabilities) : Yojson.Safe.t =
       ( "signatureHelpProvider",
         `Assoc [ ("triggerCharacters", `List [ `String "("; `String " " ]) ] )
       :: fields
+    else fields
+  in
+  let fields =
+    if caps.rename_provider then ("renameProvider", `Bool true) :: fields
     else fields
   in
   `Assoc fields
@@ -919,3 +924,37 @@ type signature_help_result = signature_help option
 let signature_help_result_to_json (result : signature_help_result) :
     Yojson.Safe.t =
   match result with Some sh -> signature_help_to_json sh | None -> `Null
+
+(** {1 Rename} *)
+
+type rename_params = {
+  rp_text_document : string;
+  rp_position : position;
+  rp_new_name : string;
+}
+(** Rename request params *)
+
+let parse_rename_params (json : Yojson.Safe.t) : rename_params =
+  let open Yojson.Safe.Util in
+  let text_document =
+    json |> member "textDocument" |> member "uri" |> to_string
+  in
+  let pos_json = json |> member "position" in
+  let position =
+    {
+      line = pos_json |> member "line" |> to_int;
+      character = pos_json |> member "character" |> to_int;
+    }
+  in
+  let new_name = json |> member "newName" |> to_string in
+  {
+    rp_text_document = text_document;
+    rp_position = position;
+    rp_new_name = new_name;
+  }
+
+type rename_result = workspace_edit option
+(** Rename result is a workspace edit or null *)
+
+let rename_result_to_json (result : rename_result) : Yojson.Safe.t =
+  match result with Some edit -> workspace_edit_to_json edit | None -> `Null

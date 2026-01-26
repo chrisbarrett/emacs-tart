@@ -65,6 +65,7 @@ let capabilities () : Protocol.server_capabilities =
     document_symbol_provider = true;
     completion_provider = true;
     signature_help_provider = true;
+    rename_provider = true;
   }
 
 (** Extract filename from a file:// URI. Returns the path portion, or the raw
@@ -1932,6 +1933,86 @@ let handle_signature_help (server : t) (params : Yojson.Safe.t option) :
                     in
                     Ok (Protocol.signature_help_result_to_json result))))
 
+(** {1 Rename} *)
+
+(** Handle textDocument/rename request.
+
+    Renames all occurrences of a symbol within the document. Uses
+    find_references to locate all occurrences and generates text edits to
+    replace each one with the new name. *)
+let handle_rename (server : t) (params : Yojson.Safe.t option) :
+    (Yojson.Safe.t, Rpc.response_error) result =
+  match params with
+  | None ->
+      Error
+        {
+          Rpc.code = Rpc.invalid_params;
+          message = "Missing rename params";
+          data = None;
+        }
+  | Some json -> (
+      let rename_params = Protocol.parse_rename_params json in
+      let uri = rename_params.rp_text_document in
+      let line = rename_params.rp_position.line in
+      let col = rename_params.rp_position.character in
+      let new_name = rename_params.rp_new_name in
+      debug server
+        (Printf.sprintf "Rename request at %s:%d:%d -> '%s'" uri line col
+           new_name);
+      match Document.get_doc server.documents uri with
+      | None ->
+          debug server (Printf.sprintf "Document not found: %s" uri);
+          Ok (Protocol.rename_result_to_json None)
+      | Some doc -> (
+          let filename = filename_of_uri uri in
+          let parse_result = Syntax.Read.parse_string ~filename doc.text in
+          if parse_result.sexps = [] then (
+            debug server "No S-expressions parsed";
+            Ok (Protocol.rename_result_to_json None))
+          else
+            match
+              Syntax.Sexp.find_with_context_in_forms ~line ~col
+                parse_result.sexps
+            with
+            | None ->
+                debug server "No S-expression at position";
+                Ok (Protocol.rename_result_to_json None)
+            | Some ctx -> (
+                (* Extract symbol name from the target sexp *)
+                match symbol_name_of_sexp ctx.target with
+                | None ->
+                    debug server "Target is not a symbol";
+                    Ok (Protocol.rename_result_to_json None)
+                | Some name ->
+                    debug server
+                      (Printf.sprintf "Renaming '%s' to '%s'" name new_name);
+                    (* Find all references in the document *)
+                    let ref_spans = find_references name parse_result.sexps in
+                    debug server
+                      (Printf.sprintf "Found %d occurrences to rename"
+                         (List.length ref_spans));
+                    if ref_spans = [] then
+                      Ok (Protocol.rename_result_to_json None)
+                    else
+                      (* Generate text edits for each occurrence *)
+                      let edits =
+                        List.map
+                          (fun span : Protocol.text_edit ->
+                            {
+                              te_range = range_of_span span;
+                              new_text = new_name;
+                            })
+                          ref_spans
+                      in
+                      let doc_edit : Protocol.text_document_edit =
+                        { tde_uri = uri; tde_version = None; edits }
+                      in
+                      let workspace_edit : Protocol.workspace_edit =
+                        { document_changes = [ doc_edit ] }
+                      in
+                      Ok (Protocol.rename_result_to_json (Some workspace_edit)))
+          ))
+
 (** Dispatch a request to its handler *)
 let dispatch_request (server : t) (msg : Rpc.message) :
     (Yojson.Safe.t, Rpc.response_error) result =
@@ -1946,6 +2027,7 @@ let dispatch_request (server : t) (msg : Rpc.message) :
   | "textDocument/documentSymbol" -> handle_document_symbol server msg.params
   | "textDocument/completion" -> handle_completion server msg.params
   | "textDocument/signatureHelp" -> handle_signature_help server msg.params
+  | "textDocument/rename" -> handle_rename server msg.params
   | _ ->
       Error
         {

@@ -3913,6 +3913,291 @@ let test_signature_help_has_parameters () =
       (* Should have 2 parameters for add(x, y) *)
       Alcotest.(check int) "has 2 parameters" 2 (List.length parameters)
 
+(** {1 Rename Tests} *)
+
+(** Test that rename returns workspace edit with all occurrences *)
+let test_rename_all_occurrences () =
+  let init_msg =
+    make_message ~id:(`Int 1) ~method_:"initialize"
+      ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+      ()
+  in
+  (* Document with a defun and multiple calls to foo *)
+  let did_open_msg =
+    make_message ~method_:"textDocument/didOpen"
+      ~params:
+        (`Assoc
+           [
+             ( "textDocument",
+               `Assoc
+                 [
+                   ("uri", `String "file:///test.el");
+                   ("languageId", `String "elisp");
+                   ("version", `Int 1);
+                   ("text", `String "(defun foo () 42)\n(foo)\n(foo)");
+                 ] );
+           ])
+      ()
+  in
+  (* Rename request at position (0, 7) - on 'foo' in defun, rename to 'bar' *)
+  let rename_msg =
+    make_message ~id:(`Int 2) ~method_:"textDocument/rename"
+      ~params:
+        (`Assoc
+           [
+             ("textDocument", `Assoc [ ("uri", `String "file:///test.el") ]);
+             ("position", `Assoc [ ("line", `Int 0); ("character", `Int 7) ]);
+             ("newName", `String "bar");
+           ])
+      ()
+  in
+  let shutdown_msg = make_message ~id:(`Int 3) ~method_:"shutdown" () in
+  let exit_msg = make_message ~method_:"exit" () in
+  let input = init_msg ^ did_open_msg ^ rename_msg ^ shutdown_msg ^ exit_msg in
+  let in_file = Filename.temp_file "lsp_in" ".json" in
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
+  let ic = In_channel.open_bin in_file in
+  let out_file = Filename.temp_file "lsp_out" ".json" in
+  let oc = Out_channel.open_bin out_file in
+  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let exit_code = Server.run server in
+  In_channel.close ic;
+  Out_channel.close oc;
+  Alcotest.(check int) "exit code" 0 exit_code;
+  let output = In_channel.with_open_bin out_file In_channel.input_all in
+  let messages = parse_messages output in
+  match find_response messages 2 with
+  | None -> Alcotest.fail "No rename response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      Alcotest.(check bool) "result is not null" true (result <> `Null);
+      (* Should have documentChanges with edits *)
+      let doc_changes = result |> member "documentChanges" |> to_list in
+      Alcotest.(check int) "has 1 document change" 1 (List.length doc_changes);
+      let first_doc = List.hd doc_changes in
+      let edits = first_doc |> member "edits" |> to_list in
+      (* Should have 3 edits (defun + 2 calls) *)
+      Alcotest.(check int) "has 3 edits" 3 (List.length edits)
+
+(** Test that rename edits have correct new text *)
+let test_rename_has_new_name () =
+  let init_msg =
+    make_message ~id:(`Int 1) ~method_:"initialize"
+      ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+      ()
+  in
+  let did_open_msg =
+    make_message ~method_:"textDocument/didOpen"
+      ~params:
+        (`Assoc
+           [
+             ( "textDocument",
+               `Assoc
+                 [
+                   ("uri", `String "file:///test.el");
+                   ("languageId", `String "elisp");
+                   ("version", `Int 1);
+                   ("text", `String "(defun foo () 42)");
+                 ] );
+           ])
+      ()
+  in
+  let rename_msg =
+    make_message ~id:(`Int 2) ~method_:"textDocument/rename"
+      ~params:
+        (`Assoc
+           [
+             ("textDocument", `Assoc [ ("uri", `String "file:///test.el") ]);
+             ("position", `Assoc [ ("line", `Int 0); ("character", `Int 7) ]);
+             ("newName", `String "my-new-name");
+           ])
+      ()
+  in
+  let shutdown_msg = make_message ~id:(`Int 3) ~method_:"shutdown" () in
+  let exit_msg = make_message ~method_:"exit" () in
+  let input = init_msg ^ did_open_msg ^ rename_msg ^ shutdown_msg ^ exit_msg in
+  let in_file = Filename.temp_file "lsp_in" ".json" in
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
+  let ic = In_channel.open_bin in_file in
+  let out_file = Filename.temp_file "lsp_out" ".json" in
+  let oc = Out_channel.open_bin out_file in
+  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let exit_code = Server.run server in
+  In_channel.close ic;
+  Out_channel.close oc;
+  Alcotest.(check int) "exit code" 0 exit_code;
+  let output = In_channel.with_open_bin out_file In_channel.input_all in
+  let messages = parse_messages output in
+  match find_response messages 2 with
+  | None -> Alcotest.fail "No rename response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      let doc_changes = result |> member "documentChanges" |> to_list in
+      let first_doc = List.hd doc_changes in
+      let edits = first_doc |> member "edits" |> to_list in
+      let first_edit = List.hd edits in
+      let new_text = first_edit |> member "newText" |> to_string in
+      Alcotest.(check string) "new text is my-new-name" "my-new-name" new_text
+
+(** Test that rename capability is advertised *)
+let test_rename_capability_advertised () =
+  let init_msg =
+    make_message ~id:(`Int 1) ~method_:"initialize"
+      ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+      ()
+  in
+  let shutdown_msg = make_message ~id:(`Int 2) ~method_:"shutdown" () in
+  let exit_msg = make_message ~method_:"exit" () in
+  let input = init_msg ^ shutdown_msg ^ exit_msg in
+  let in_file = Filename.temp_file "lsp_in" ".json" in
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
+  let ic = In_channel.open_bin in_file in
+  let out_file = Filename.temp_file "lsp_out" ".json" in
+  let oc = Out_channel.open_bin out_file in
+  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let exit_code = Server.run server in
+  In_channel.close ic;
+  Out_channel.close oc;
+  Alcotest.(check int) "exit code" 0 exit_code;
+  let output = In_channel.with_open_bin out_file In_channel.input_all in
+  let messages = parse_messages output in
+  match find_response messages 1 with
+  | None -> Alcotest.fail "No initialize response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      let caps = result |> member "capabilities" in
+      let rename_provider = caps |> member "renameProvider" in
+      Alcotest.(check bool)
+        "renameProvider is true" true
+        (rename_provider = `Bool true)
+
+(** Test that rename returns null when not on a symbol *)
+let test_rename_not_on_symbol () =
+  let init_msg =
+    make_message ~id:(`Int 1) ~method_:"initialize"
+      ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+      ()
+  in
+  let did_open_msg =
+    make_message ~method_:"textDocument/didOpen"
+      ~params:
+        (`Assoc
+           [
+             ( "textDocument",
+               `Assoc
+                 [
+                   ("uri", `String "file:///test.el");
+                   ("languageId", `String "elisp");
+                   ("version", `Int 1);
+                   ("text", `String "(+ 1 2)");
+                 ] );
+           ])
+      ()
+  in
+  (* Request at position (0, 3) - on the number 1 *)
+  let rename_msg =
+    make_message ~id:(`Int 2) ~method_:"textDocument/rename"
+      ~params:
+        (`Assoc
+           [
+             ("textDocument", `Assoc [ ("uri", `String "file:///test.el") ]);
+             ("position", `Assoc [ ("line", `Int 0); ("character", `Int 3) ]);
+             ("newName", `String "foo");
+           ])
+      ()
+  in
+  let shutdown_msg = make_message ~id:(`Int 3) ~method_:"shutdown" () in
+  let exit_msg = make_message ~method_:"exit" () in
+  let input = init_msg ^ did_open_msg ^ rename_msg ^ shutdown_msg ^ exit_msg in
+  let in_file = Filename.temp_file "lsp_in" ".json" in
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
+  let ic = In_channel.open_bin in_file in
+  let out_file = Filename.temp_file "lsp_out" ".json" in
+  let oc = Out_channel.open_bin out_file in
+  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let exit_code = Server.run server in
+  In_channel.close ic;
+  Out_channel.close oc;
+  Alcotest.(check int) "exit code" 0 exit_code;
+  let output = In_channel.with_open_bin out_file In_channel.input_all in
+  let messages = parse_messages output in
+  match find_response messages 2 with
+  | None -> Alcotest.fail "No rename response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      (* Should return null for non-symbol *)
+      Alcotest.(check bool) "result is null" true (result = `Null)
+
+(** Test that rename targets correct URI *)
+let test_rename_has_correct_uri () =
+  let init_msg =
+    make_message ~id:(`Int 1) ~method_:"initialize"
+      ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+      ()
+  in
+  let did_open_msg =
+    make_message ~method_:"textDocument/didOpen"
+      ~params:
+        (`Assoc
+           [
+             ( "textDocument",
+               `Assoc
+                 [
+                   ("uri", `String "file:///my-project/test.el");
+                   ("languageId", `String "elisp");
+                   ("version", `Int 1);
+                   ("text", `String "(defvar my-var 42)");
+                 ] );
+           ])
+      ()
+  in
+  let rename_msg =
+    make_message ~id:(`Int 2) ~method_:"textDocument/rename"
+      ~params:
+        (`Assoc
+           [
+             ( "textDocument",
+               `Assoc [ ("uri", `String "file:///my-project/test.el") ] );
+             ("position", `Assoc [ ("line", `Int 0); ("character", `Int 8) ]);
+             ("newName", `String "new-var");
+           ])
+      ()
+  in
+  let shutdown_msg = make_message ~id:(`Int 3) ~method_:"shutdown" () in
+  let exit_msg = make_message ~method_:"exit" () in
+  let input = init_msg ^ did_open_msg ^ rename_msg ^ shutdown_msg ^ exit_msg in
+  let in_file = Filename.temp_file "lsp_in" ".json" in
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
+  let ic = In_channel.open_bin in_file in
+  let out_file = Filename.temp_file "lsp_out" ".json" in
+  let oc = Out_channel.open_bin out_file in
+  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let exit_code = Server.run server in
+  In_channel.close ic;
+  Out_channel.close oc;
+  Alcotest.(check int) "exit code" 0 exit_code;
+  let output = In_channel.with_open_bin out_file In_channel.input_all in
+  let messages = parse_messages output in
+  match find_response messages 2 with
+  | None -> Alcotest.fail "No rename response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      let doc_changes = result |> member "documentChanges" |> to_list in
+      let first_doc = List.hd doc_changes in
+      let text_doc = first_doc |> member "textDocument" in
+      let uri = text_doc |> member "uri" |> to_string in
+      Alcotest.(check string) "uri matches" "file:///my-project/test.el" uri
+
 let () =
   Alcotest.run "server"
     [
@@ -4048,5 +4333,16 @@ let () =
             test_signature_help_not_in_call;
           Alcotest.test_case "has parameters" `Quick
             test_signature_help_has_parameters;
+        ] );
+      ( "rename",
+        [
+          Alcotest.test_case "all occurrences" `Quick
+            test_rename_all_occurrences;
+          Alcotest.test_case "has new name" `Quick test_rename_has_new_name;
+          Alcotest.test_case "capability advertised" `Quick
+            test_rename_capability_advertised;
+          Alcotest.test_case "not on symbol" `Quick test_rename_not_on_symbol;
+          Alcotest.test_case "has correct uri" `Quick
+            test_rename_has_correct_uri;
         ] );
     ]
