@@ -448,6 +448,47 @@ let test_defun_declare_tart_with_body () =
   | None -> Alcotest.fail "expected defun result"
 
 (* =============================================================================
+   Tart Annotation Tests: (tart TYPE FORM)
+   ============================================================================= *)
+
+let test_tart_annotation_result_type () =
+  (* (tart string "hello") should have type String *)
+  let ty = infer_type {|(tart string "hello")|} in
+  Alcotest.(check string) "tart annotation result" "String" ty
+
+let test_tart_annotation_generates_constraint () =
+  (* (tart int "wrong") generates a constraint: declared = inferred *)
+  let count = constraint_count {|(tart int "wrong")|} in
+  Alcotest.(check int) "tart annotation constraint" 1 count
+
+let test_tart_annotation_uses_declared_type () =
+  (* The result type should be the declared type, not the inferred type *)
+  let ty = infer_type "(tart string 42)" in
+  (* Result is String (declared), even though 42 is Int *)
+  Alcotest.(check string) "uses declared type" "String" ty
+
+let test_tart_annotation_nested () =
+  (* Annotations can be nested in expressions.
+     The (tart int 1) has type Int, so it can be used as argument to +.
+     We check that the tart form itself has type Int and generates
+     constraints that can be solved. *)
+  let ty = infer_type "(let ((x (tart int 42))) x)" in
+  Alcotest.(check string) "nested annotation" "Int" ty
+
+let test_tart_annotation_list_type () =
+  (* (tart (list int) '(1 2 3)) should have type (List Int) *)
+  let ty = infer_type {|(tart (list int) '(1 2 3))|} in
+  Alcotest.(check string) "list annotation" "(List Int)" ty
+
+let test_tart_annotation_polymorphic () =
+  (* Polymorphic annotations like (tart (a -> a) (lambda (x) x)) *)
+  let ty = infer_type {|(tart ((a) -> a) (lambda (x) x))|} in
+  (* Result should be an arrow type *)
+  Alcotest.(check bool)
+    "polymorphic annotation" true
+    (String.sub ty 0 4 = "(-> ")
+
+(* =============================================================================
    Constraint Content Tests
    ============================================================================= *)
 
@@ -578,6 +619,19 @@ let () =
             test_defun_no_declare_still_infers;
           Alcotest.test_case "with body" `Quick
             test_defun_declare_tart_with_body;
+        ] );
+      ( "tart-annotation",
+        [
+          Alcotest.test_case "result type" `Quick
+            test_tart_annotation_result_type;
+          Alcotest.test_case "generates constraint" `Quick
+            test_tart_annotation_generates_constraint;
+          Alcotest.test_case "uses declared type" `Quick
+            test_tart_annotation_uses_declared_type;
+          Alcotest.test_case "nested" `Quick test_tart_annotation_nested;
+          Alcotest.test_case "list type" `Quick test_tart_annotation_list_type;
+          Alcotest.test_case "polymorphic" `Quick
+            test_tart_annotation_polymorphic;
         ] );
       ( "constraints",
         [

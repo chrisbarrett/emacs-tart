@@ -22,6 +22,8 @@ type context =
       other_branch_span : Syntax.Location.span;  (** Span of the other branch *)
       other_branch_type : typ;  (** Type of the other branch *)
     }
+  | TartAnnotation of { declared_type : typ }
+      (** Type annotation via (tart TYPE FORM) *)
 
 type t = {
   lhs : typ;  (** Left-hand side type *)

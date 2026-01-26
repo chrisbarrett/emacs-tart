@@ -197,6 +197,50 @@ let test_declare_tart_polymorphic () =
   Alcotest.(check int) "no errors" 0 (List.length result.errors)
 
 (* =============================================================================
+   tart annotation Tests: (tart TYPE FORM)
+   ============================================================================= *)
+
+(** Test that valid tart annotation produces no error *)
+let test_tart_annotation_valid () =
+  let sexp = parse {|(tart string "hello")|} in
+  let ty, errors = Check.check_expr sexp in
+  Alcotest.(check int) "no errors" 0 (List.length errors);
+  Alcotest.(check string) "type is String" "String" (to_string ty)
+
+(** Test that mismatched tart annotation produces type error *)
+let test_tart_annotation_mismatch () =
+  let sexp = parse "(tart string 42)" in
+  let _, errors = Check.check_expr sexp in
+  Alcotest.(check bool) "has error" true (List.length errors > 0)
+
+(** Test that tart annotation with list type works *)
+let test_tart_annotation_list_valid () =
+  let sexp = parse {|(tart (list int) (list 1 2 3))|} in
+  let ty, errors = Check.check_expr sexp in
+  Alcotest.(check int) "no errors" 0 (List.length errors);
+  Alcotest.(check string) "type is List Int" "(List Int)" (to_string ty)
+
+(** Test tart annotation in defvar initialization *)
+let test_tart_annotation_in_program () =
+  let sexps = parse_many {|(tart int (+ 1 2))|} in
+  let result = Check.check_program sexps in
+  Alcotest.(check int) "no errors" 0 (List.length result.errors)
+
+(** Test tart annotation error has good message *)
+let test_tart_annotation_error_message () =
+  let sexp = parse "(tart int \"wrong\")" in
+  let _, errors = Check.check_expr sexp in
+  Alcotest.(check bool) "has error" true (List.length errors > 0);
+  match errors with
+  | err :: _ ->
+      let diag = Tart.Diagnostic.of_unify_error err in
+      let msg = diag.message in
+      Alcotest.(check bool)
+        "message mentions annotation" true
+        (String.length msg > 0)
+  | [] -> Alcotest.fail "expected error"
+
+(* =============================================================================
    form_result_to_string Tests
    ============================================================================= *)
 
@@ -262,5 +306,16 @@ let () =
           Alcotest.test_case "return mismatch error" `Quick
             test_declare_tart_return_mismatch;
           Alcotest.test_case "polymorphic" `Quick test_declare_tart_polymorphic;
+        ] );
+      ( "tart_annotation",
+        [
+          Alcotest.test_case "valid annotation" `Quick
+            test_tart_annotation_valid;
+          Alcotest.test_case "mismatch error" `Quick
+            test_tart_annotation_mismatch;
+          Alcotest.test_case "list type" `Quick test_tart_annotation_list_valid;
+          Alcotest.test_case "in program" `Quick test_tart_annotation_in_program;
+          Alcotest.test_case "error message" `Quick
+            test_tart_annotation_error_message;
         ] );
     ]

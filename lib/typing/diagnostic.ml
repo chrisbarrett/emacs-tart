@@ -323,7 +323,8 @@ let arity_mismatch_with_context ~span ~expected ~actual ~context () =
         related = fn_related;
         help = [];
       }
-  | Constraint.NoContext | Constraint.IfBranch _ ->
+  | Constraint.NoContext | Constraint.IfBranch _ | Constraint.TartAnnotation _
+    ->
       arity_mismatch ~span ~expected ~actual ()
 
 (** Generate a note about the other branch in an if expression *)
@@ -418,6 +419,32 @@ let type_mismatch_with_context ~span ~expected ~actual ~context () =
         else []
       in
       let related = fn_related @ nil_note in
+      {
+        severity = Error;
+        code = Some E0308;
+        span;
+        message;
+        expected = Some expected;
+        actual = Some actual;
+        related;
+        help = base_help;
+      }
+  | Constraint.TartAnnotation { declared_type } ->
+      let base_help = suggest_type_fix ~expected ~actual in
+      let message =
+        Printf.sprintf "type annotation mismatch: expression has type %s"
+          (Types.to_string actual)
+      in
+      let related =
+        [
+          {
+            span = Loc.dummy_span;
+            message =
+              Printf.sprintf "annotation declares type %s"
+                (Types.to_string declared_type);
+          };
+        ]
+      in
       {
         severity = Error;
         code = Some E0308;

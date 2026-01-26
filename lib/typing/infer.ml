@@ -119,6 +119,9 @@ let rec infer (env : Env.t) (sexp : Syntax.Sexp.t) : result =
   | List (Symbol ("or", _) :: args, span) -> infer_or env args span
   (* === Not === *)
   | List ([ Symbol ("not", _); arg ], span) -> infer_not env arg span
+  (* === Tart type annotation: (tart TYPE FORM) === *)
+  | List ([ Symbol ("tart", _); type_sexp; form ], span) ->
+      infer_tart_annotation env type_sexp form span
   (* === Function application (catch-all for lists) === *)
   | List (fn :: args, span) -> infer_application env fn args span
   | List ([], _span) ->
@@ -497,6 +500,55 @@ and infer_not env arg _span =
     constraints = arg_result.constraints;
     undefineds = arg_result.undefineds;
   }
+
+(** Infer the type of a tart annotation expression.
+
+    (tart TYPE FORM) checks that FORM's inferred type is compatible with TYPE.
+    The result type is TYPE, allowing the annotation to refine the type. *)
+and infer_tart_annotation env type_sexp form _span =
+  let open Syntax.Sexp in
+  (* Infer the type of the form *)
+  let form_result = infer env form in
+
+  (* Parse the type annotation *)
+  match parse_tart_type type_sexp with
+  | Some sig_type ->
+      (* Apply forall inference to get implicit quantifiers *)
+      let sig_type = Forall_infer.infer_sig_type ~known_types:[] sig_type in
+
+      (* Extract type variable names from forall, if present *)
+      let tvar_names, inner_type =
+        match sig_type with
+        | Sig_ast.STForall (binders, inner, _) ->
+            (List.map (fun b -> b.Sig_ast.name) binders, inner)
+        | _ -> ([], sig_type)
+      in
+
+      (* Create fresh type variables for polymorphic type parameters *)
+      let tvar_subst =
+        List.map
+          (fun name -> (name, fresh_tvar (Env.current_level env)))
+          tvar_names
+      in
+
+      (* Convert sig_type to typ and substitute fresh TVars *)
+      let base_ty = Sig_loader.sig_type_to_typ tvar_names inner_type in
+      let declared_ty = substitute_tvar_names tvar_subst base_ty in
+
+      (* Create constraint: form's type = declared type *)
+      let context = C.TartAnnotation { declared_type = declared_ty } in
+      let annotation_constraint =
+        C.equal ~context declared_ty form_result.ty (span_of form)
+      in
+
+      {
+        ty = declared_ty;
+        constraints = C.add annotation_constraint form_result.constraints;
+        undefineds = form_result.undefineds;
+      }
+  | None ->
+      (* Parse failed - return form's type unchanged with a fresh tvar *)
+      { form_result with ty = fresh_tvar (Env.current_level env) }
 
 (** Extract function name from a function expression for error context *)
 and get_fn_name (fn : Syntax.Sexp.t) : string option =

@@ -185,7 +185,7 @@ Phase 7).
 ### 8.2 Type Checker Recognition
 
 - [x] [R1] Recognize `(declare (tart ...))` in function definitions
-- [ ] [R2] Add expression annotation checking (`(tart TYPE FORM)`)
+- [x] [R2] Add expression annotation checking (`(tart TYPE FORM)`)
 - [ ] [R3,R4] Track variable types from annotations
 - [ ] [R3] Check `setq`/`setf` against declared variable types
 - [ ] Verify: Type errors on annotation mismatches
