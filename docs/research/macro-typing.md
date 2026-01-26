@@ -424,7 +424,7 @@ Based on analysis of Elisp macro patterns:
    from conventions (e.g., `foo-mode-hook` from `define-minor-mode foo-mode`).
 
 4. **Declaration file fallback.** When built-in knowledge is insufficient,
-   require `.eli` declarations for macro-generated bindings.
+   require `.tart` declarations for macro-generated bindings.
 
 5. **Expansion caching.** Cache expansions for performance, invalidating when
    macro definitions change.

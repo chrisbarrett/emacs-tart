@@ -97,7 +97,7 @@ Dynamic scope complicates flow-sensitive typing. Options:
 2. Infer most general type from all assignments (whole-program analysis)
 3. Treat as `t` and require casts at use sites
 
-Recommended: require type annotation in `.eli` signature file.
+Recommended: require type annotation in `.tart` signature file.
 
 ---
 

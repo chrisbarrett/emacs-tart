@@ -465,14 +465,14 @@ Given the constraints in the [project specifications][specs], I recommend a
 
 **Type checking should be sound within typed code:**
 
-- Full Hindley-Milner inference within `.eli`-annotated modules
+- Full Hindley-Milner inference within `.tart`-annotated modules
 - No implicit `any` - all types must be declared at boundaries
 - Type errors are always reported, never silently ignored
 
 **Boundaries with untyped code use explicit signatures:**
 
 ```elisp
-;; In foo.eli (signature file)
+;; In foo.tart (signature file)
 (declare process-data (-> String Integer))
 ```
 
@@ -487,7 +487,7 @@ error occurs at runtime but is attributed to the boundary.
 
 **Blame at the specification level:**
 
-- If runtime errors occur, the `.eli` file location identifies the boundary
+- If runtime errors occur, the `.tart` file location identifies the boundary
 - Users know where typed/untyped worlds meet
 - Encourages accurate signature writing
 

@@ -142,11 +142,11 @@ From the gradual typing research:
 
 **Within typed code**: Full soundness via HM inference.
 
-**At boundaries**: Explicit signatures in `.eli` files, no runtime contracts
+**At boundaries**: Explicit signatures in `.tart` files, no runtime contracts
 (initially).
 
 ```elisp
-;; foo.eli (signature file)
+;; foo.tart (signature file)
 (sig string-utils
   (declare trim-whitespace (-> String String))
   (declare split-string (-> String String (List String))))
@@ -161,7 +161,7 @@ From the gradual typing research:
 
 **Migration path**:
 
-1. Write `.eli` signatures for key APIs
+1. Write `.tart` signatures for key APIs
 2. Type checker verifies typed modules
 3. Untyped callers assumed correct
 4. Add contracts later if needed
@@ -350,7 +350,7 @@ The second argument to 'add' must be an Integer.
    - Recommendation: Defer to v2; use explicit struct types for v1
 
 3. **Dynamic scope**: How to type `defvar` special variables?
-   - Recommendation: Require type annotations in `.eli` files
+   - Recommendation: Require type annotations in `.tart` files
 
 4. **Advice system**: How do types interact with `advice-add`?
    - Recommendation: Type-check advice definitions with known signatures (same
@@ -370,7 +370,7 @@ The second argument to 'add' must be an Integer.
 2. **Performance**: Type checking must be fast for interactive use
    - Mitigation: Incremental analysis, caching, lazy checking
 
-3. **Adoption**: Users must write `.eli` files for untyped code
+3. **Adoption**: Users must write `.tart` files for untyped code
    - Mitigation: Auto-generate from `cl-defstruct`, `defcustom`
 
 4. **Error message quality**: Post-expansion errors may be confusing
@@ -409,7 +409,7 @@ The second argument to 'add' must be an Integer.
 | Occurrence typing (basic) | ✓  |    |              |
 | Common macro rules        | ✓  |    |              |
 | `cl-defstruct` types      | ✓  |    |              |
-| `.eli` signature files    | ✓  |    |              |
+| `.tart` signature files    | ✓  |    |              |
 | Advice definitions        | ✓  |    |              |
 | `(tart-ignore ...)`       | ✓  |    |              |
 | Higher-rank types         |    | ✓  |              |
@@ -425,7 +425,7 @@ The second argument to 'add' must be an Integer.
 
 1. **Design type syntax grammar** (Spec 03 R1)
 2. **Select and document inference algorithm** (Spec 03 R2)
-3. **Specify `.eli` file format** (Spec 03 R3)
+3. **Specify `.tart` file format** (Spec 03 R3)
 4. **Design ADT system** (Spec 03 R4)
 5. **Prototype basic inference on small Elisp files**
 

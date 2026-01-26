@@ -214,7 +214,7 @@ point-p : (-> Any Bool)
 
 **Integration points:**
 
-1. **Automatic signature generation**: Derive `.eli` signatures from struct
+1. **Automatic signature generation**: Derive `.tart` signatures from struct
    definitions
 2. **Pattern matching**: `pcase` patterns on structs should type-check
 3. **Constructor inference**: Infer types from constructor calls
@@ -685,8 +685,8 @@ function        -> (-> Any ... Any)  ; unknown arity
    - This is properly a runtime concern
    - tart could generate assertions if desired
 
-4. **Source of truth**: When both defcustom :type and tart .eli declare types,
+4. **Source of truth**: When both defcustom :type and tart .tart declare types,
    which wins?
-   - Recommendation: .eli is authoritative; warn on conflicts with defcustom
+   - Recommendation: .tart is authoritative; warn on conflicts with defcustom
 
 [gfm-spec]: https://github.github.com/gfm/

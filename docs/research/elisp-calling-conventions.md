@@ -362,7 +362,7 @@ potentially changing a function's type in ways the type checker cannot see.
 3. **Advice declarations**: Allow declaring that advice exists and its type
    effect:
    ```
-   ;; In .eli file
+   ;; In .tart file
    (declare-advice some-function :filter-return (-> Int String))
    ```
 
@@ -436,7 +436,7 @@ ensuring consistency across a codebase.
 
 **Potential approaches:**
 
-1. **Hook type declarations**: In `.eli` files, declare hook types:
+1. **Hook type declarations**: In `.tart` files, declare hook types:
    ```
    (defhook my-mode-hook (-> Unit))
    (defhook my-process-hook (-> ProcessData Unit))
@@ -640,15 +640,15 @@ exists, just in a different file.
 
 **Potential approaches:**
 
-1. **Signature files (.eli)**: The `.eli` file provides types for autoloaded
+1. **Signature files (.tart)**: The `.tart` file provides types for autoloaded
    functions without requiring the implementation file to be loaded:
    ```
-   ;; some-file.eli
+   ;; some-file.tart
    (declare some-function (-> String Int Bool))
    ```
 
 2. **Two-pass analysis**:
-   - Pass 1: Collect all function signatures (from definitions and .eli files)
+   - Pass 1: Collect all function signatures (from definitions and .tart files)
    - Pass 2: Type-check function bodies and call sites
 
 3. **Autoload type declarations**: Allow type annotations in autoload forms:
@@ -666,7 +666,7 @@ exists, just in a different file.
 
 ```
 Time 0: Autoload registered
-        Type available: Only from .eli or autoload annotation
+        Type available: Only from .tart or autoload annotation
 
 Time 1: File loaded (on first use)
         Type available: Full definition accessible
@@ -694,7 +694,7 @@ Type checker must handle both states:
 | Advice (:around/:filter-*) | HARD | Declare or ignore |
 | Hooks | TRACTABLE | Declared hooks |
 | Interactive specs | TRACTABLE | Parse and verify |
-| Autoloading | TRACTABLE | .eli files |
+| Autoloading | TRACTABLE | .tart files |
 
 ### v1 Scope Recommendations
 
@@ -707,7 +707,7 @@ Type checker must handle both states:
 5. Type-preserving advice (`:before`, `:after`)
 6. Declared hook types
 7. Interactive spec parsing and verification
-8. Autoload support via `.eli` files
+8. Autoload support via `.tart` files
 
 **Defer to v2:**
 
@@ -730,7 +730,7 @@ Type checker must handle both states:
 
 2. **Polymorphic type system**: System F or HM to type higher-order functions
 
-3. **Signature files**: `.eli` format for declaring types of external/autoloaded
+3. **Signature files**: `.tart` format for declaring types of external/autoloaded
    functions
 
 4. **Interactive spec parser**: Mini-parser for interactive specs to extract

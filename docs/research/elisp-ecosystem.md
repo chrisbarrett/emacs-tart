@@ -141,7 +141,7 @@ The only formal module mechanism:
 **Integration opportunity:**
 - Parse `require` forms to build dependency order
 - Type check packages in topological order
-- Load `.eli` signature files in same order as `require`
+- Load `.tart` signature files in same order as `require`
 - Handle optional requires as conditional type availability
 
 ### Feature Loading
@@ -200,9 +200,9 @@ Generated into `-autoloads.el` files:
 - Challenge: Type info not in autoload; need separate mechanism
 
 **Integration opportunity:**
-- `.eli` files serve as type-level autoloads
-- Type checker reads `.eli` without loading `.el`
-- Autoloaded functions must have signatures in `.eli`
+- `.tart` files serve as type-level autoloads
+- Type checker reads `.tart` without loading `.el`
+- Autoloaded functions must have signatures in `.tart`
 - Consider generating type-aware autoloads
 
 ### Package.el Conventions
@@ -246,7 +246,7 @@ Package header conventions:
 - Parse `Package-Requires` for dependency graph
 - Conditional types based on Emacs version
 - Require `lexical-binding: t` for type checking
-- `.eli` file sits alongside `.el` in package structure
+- `.tart` file sits alongside `.el` in package structure
 
 ## 3. Common Libraries
 
@@ -468,7 +468,7 @@ The standard testing framework:
 - Detect test files by `-test.el` or `test-*.el` pattern
 - Apply relaxed type checking to test files
 - Don't require signatures for test helper functions
-- Consider separate `.eli` for test utilities if needed
+- Consider separate `.tart` for test utilities if needed
 
 ## 5. Documentation Conventions
 

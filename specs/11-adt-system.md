@@ -1,6 +1,6 @@
 # Spec 11: Algebraic Data Type System
 
-Runtime representation and pattern matching for ADTs declared in `.eli` files.
+Runtime representation and pattern matching for ADTs declared in `.tart` files.
 
 **Dependencies:** Spec 07 (signature files parse ADT declarations)
 
