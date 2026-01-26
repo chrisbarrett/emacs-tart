@@ -77,8 +77,8 @@ Enable hover and diagnostics in Emacs via eglot.
 
 ### 3.3 Basic Documentation
 
-- [ ] [R11] Add setup instructions to README
-- [ ] Verify: README contains installation and usage examples
+- [x] [R11] Add setup instructions to README
+- [x] Verify: README contains installation and usage examples
 
 ## Phase 4: Forall Inference (Spec 15)
 

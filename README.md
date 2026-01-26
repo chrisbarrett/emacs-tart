@@ -24,6 +24,59 @@ typechecking their code too.
 > [!NOTE]
 > Heavy use of AI assistance in this codebase. You have been warned.
 
+## Installation
+
+### Building
+
+Tart is built with OCaml and Dune. Nix users can get a development shell:
+
+```bash
+git clone https://github.com/chrisbarrett/emacs-tart.git
+cd emacs-tart
+nix develop
+dune build
+```
+
+The `tart` executable will be at `_build/default/bin/tart.exe`.
+
+### Emacs Package
+
+Add `lisp/` to your `load-path` and require `tart`:
+
+```elisp
+(add-to-list 'load-path "/path/to/emacs-tart/lisp")
+(require 'tart)
+```
+
+## Editor Integration
+
+Tart provides an LSP server for editor integration. In Emacs, use the built-in
+eglot package.
+
+### Eglot Setup
+
+The `tart.el` package automatically registers Tart as an LSP server for
+`emacs-lisp-mode`. To enable LSP automatically when editing files with a sibling
+`.tart` signature file:
+
+```elisp
+(require 'tart)
+(add-hook 'emacs-lisp-mode-hook #'tart-eglot-ensure)
+```
+
+Or start eglot manually in any elisp buffer:
+
+```
+M-x eglot
+```
+
+### Customization
+
+| Variable          | Default   | Description                       |
+|-------------------|-----------|-----------------------------------|
+| `tart-executable` | `"tart"`  | Path to the tart binary           |
+| `tart-lsp-args`   | `nil`     | Additional arguments for LSP mode |
+
 ## Quick Tour
 
 The public interface for your libraries are written in `.tart` files with the

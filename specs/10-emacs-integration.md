@@ -149,6 +149,6 @@ Suggested keymap (under `C-c` prefix):
 - [ ] [R7] Implement `tart-mode` minor mode with keymap
 - [x] [R8] Add customization options
 - [ ] [R10] Add compilation-mode error parsing
-- [ ] [R11] Add setup instructions to README
+- [x] [R11] Add setup instructions to README
 
 Run review agent after REPL interaction works before implementing eglot integration.
