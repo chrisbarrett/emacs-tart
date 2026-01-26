@@ -641,6 +641,48 @@ let test_invariance_poly_function_ok () =
   Alcotest.(check int) "no errors" 0 (List.length result.errors)
 
 (* =============================================================================
+   Pcase Tests
+   ============================================================================= *)
+
+let test_pcase_returns_branch_type () =
+  (* pcase with literal body returns that literal's type *)
+  let sexp = parse {|(pcase x (_ 42))|} in
+  let ty, errors = Check.check_expr sexp in
+  Alcotest.(check int) "no errors" 0 (List.length errors);
+  Alcotest.(check string) "pcase returns Int" "Int" (to_string ty)
+
+let test_pcase_unifies_branches () =
+  (* All branches must have compatible types *)
+  let sexp = parse {|(pcase x (1 "one") (2 "two") (_ "default"))|} in
+  let ty, errors = Check.check_expr sexp in
+  Alcotest.(check int) "no errors" 0 (List.length errors);
+  Alcotest.(check string) "pcase returns String" "String" (to_string ty)
+
+let test_pcase_branch_type_mismatch () =
+  (* Incompatible branch types cause error *)
+  let sexp = parse {|(pcase x (1 "string") (2 42))|} in
+  let _, errors = Check.check_expr sexp in
+  Alcotest.(check bool) "has type error" true (List.length errors > 0)
+
+let test_pcase_binds_pattern_var () =
+  (* Pattern variables are available in body *)
+  let env =
+    Env.extend_mono "+" (arrow [ Prim.int; Prim.int ] Prim.int) Env.empty
+  in
+  let sexp = parse {|(pcase 42 ((, x) (+ x 1)))|} in
+  let ty, errors = Check.check_expr ~env sexp in
+  Alcotest.(check int) "no errors" 0 (List.length errors);
+  Alcotest.(check string) "pcase with binding returns Int" "Int" (to_string ty)
+
+let test_pcase_exhaustive_same_as_pcase () =
+  (* pcase-exhaustive works identically to pcase for type checking *)
+  let sexp = parse {|(pcase-exhaustive x (_ "result"))|} in
+  let ty, errors = Check.check_expr sexp in
+  Alcotest.(check int) "no errors" 0 (List.length errors);
+  Alcotest.(check string)
+    "pcase-exhaustive returns String" "String" (to_string ty)
+
+(* =============================================================================
    Test Suite
    ============================================================================= *)
 
@@ -762,5 +804,18 @@ let () =
             test_invariance_hash_table_key;
           Alcotest.test_case "polymorphic function ok" `Quick
             test_invariance_poly_function_ok;
+        ] );
+      ( "pcase",
+        [
+          Alcotest.test_case "returns branch type" `Quick
+            test_pcase_returns_branch_type;
+          Alcotest.test_case "unifies branches" `Quick
+            test_pcase_unifies_branches;
+          Alcotest.test_case "branch type mismatch" `Quick
+            test_pcase_branch_type_mismatch;
+          Alcotest.test_case "binds pattern var" `Quick
+            test_pcase_binds_pattern_var;
+          Alcotest.test_case "exhaustive same as pcase" `Quick
+            test_pcase_exhaustive_same_as_pcase;
         ] );
     ]

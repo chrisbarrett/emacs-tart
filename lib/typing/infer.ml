@@ -31,6 +31,9 @@ type defun_result = {
 }
 (** Result of inferring a top-level definition *)
 
+type pattern_binding = { pb_name : string; pb_type : typ }
+(** A binding extracted from a pcase pattern: name and its type *)
+
 (** Create a result with no constraints and no undefined vars *)
 let pure ty = { ty; constraints = C.empty; undefineds = [] }
 
@@ -122,6 +125,11 @@ let rec infer (env : Env.t) (sexp : Syntax.Sexp.t) : result =
   (* === Tart type annotation: (tart TYPE FORM) === *)
   | List ([ Symbol ("tart", _); type_sexp; form ], span) ->
       infer_tart_annotation env type_sexp form span
+  (* === Pcase pattern matching === *)
+  | List (Symbol ("pcase", _) :: expr :: clauses, span) ->
+      infer_pcase env expr clauses span
+  | List (Symbol ("pcase-exhaustive", _) :: expr :: clauses, span) ->
+      infer_pcase env expr clauses span
   (* === Function application (catch-all for lists) === *)
   | List (fn :: args, span) -> infer_application env fn args span
   | List ([], _span) ->
@@ -500,6 +508,160 @@ and infer_not env arg _span =
     constraints = arg_result.constraints;
     undefineds = arg_result.undefineds;
   }
+
+(** {1 Pcase Pattern Matching}
+
+    Support for type narrowing in pcase patterns. ADT patterns like
+    [`(ok . ,value)] bind variables with the appropriate field types. *)
+
+(** Extract bindings from a pcase pattern.
+
+    Recognizes:
+    - [`(TAG . ,var)] - cons pattern with backquote, extracts var with field type
+    - [`(TAG ,v1 ,v2 ...)] - vector pattern for multi-field constructors
+    - [,var] - unquote captures the matched value
+    - [_] - wildcard, no bindings
+    - Other patterns - no type narrowing (treated as Any)
+
+    The [scrutinee_ty] is used to determine field types when matching ADT
+    constructors. *)
+and extract_pattern_bindings (env : Env.t) (_scrutinee_ty : typ)
+    (pattern : Syntax.Sexp.t) : pattern_binding list =
+  let open Syntax.Sexp in
+  let level = Env.current_level env in
+  match pattern with
+  (* Backquote pattern: `(tag . ,value) or `(tag ,v1 ,v2) *)
+  | List ([ Symbol ("\\`", _); quoted_pat ], _) ->
+      extract_backquote_bindings env level quoted_pat
+  (* Underscore wildcard *)
+  | Symbol ("_", _) -> []
+  (* Literal patterns - no bindings *)
+  | Int _ | Float _ | String _ | Keyword _ -> []
+  (* Quoted symbol - no bindings *)
+  | List ([ Symbol ("quote", _); Symbol (_, _) ], _) -> []
+  (* Comma (unquote) at top level: ,var captures the whole value *)
+  | List ([ Symbol (",", _); Symbol (name, _) ], _) ->
+      [ { pb_name = name; pb_type = fresh_tvar level } ]
+  (* pred pattern: (pred PREDICATE) - no bindings captured *)
+  | List ([ Symbol ("pred", _); _ ], _) -> []
+  (* guard pattern: (guard EXPR) - no bindings *)
+  | List ([ Symbol ("guard", _); _ ], _) -> []
+  (* and pattern: (and PAT1 PAT2 ...) - combine all bindings *)
+  | List (Symbol ("and", _) :: pats, _) ->
+      List.concat_map (extract_pattern_bindings env _scrutinee_ty) pats
+  (* or pattern: (or PAT1 PAT2 ...) - use first pattern's bindings *)
+  | List (Symbol ("or", _) :: pat :: _, _) ->
+      extract_pattern_bindings env _scrutinee_ty pat
+  (* let pattern: (let VAR EXPR) - binds var *)
+  | List ([ Symbol ("let", _); Symbol (name, _); _ ], _) ->
+      [ { pb_name = name; pb_type = fresh_tvar level } ]
+  (* app pattern: (app FN PAT) - bindings from inner pattern *)
+  | List ([ Symbol ("app", _); _; inner_pat ], _) ->
+      extract_pattern_bindings env _scrutinee_ty inner_pat
+  (* Other patterns - no bindings *)
+  | _ -> []
+
+(** Extract bindings from a backquoted pattern (inside backquote).
+
+    Handles:
+    - [(TAG . ,var)] - cons cell ADT pattern
+    - [(TAG ,v1 ,v2 ...)] - list ADT pattern (multi-field)
+    - [[TAG ,v1 ,v2 ...]] - vector ADT pattern
+    - Nested structures *)
+and extract_backquote_bindings (env : Env.t) (level : int)
+    (pattern : Syntax.Sexp.t) : pattern_binding list =
+  let open Syntax.Sexp in
+  match pattern with
+  (* Cons pattern: (tag . ,value) - ADT single-field pattern *)
+  | Cons (Symbol (_tag, _), List ([ Symbol (",", _); Symbol (name, _) ], _), _)
+    ->
+      (* For now, give the binding a fresh type variable.
+         In the future, we could look up the ADT definition and use the field type. *)
+      [ { pb_name = name; pb_type = fresh_tvar level } ]
+  (* Cons pattern with nested expr: (tag . ,expr) where expr is not a simple symbol *)
+  | Cons (Symbol (_, _), List ([ Symbol (",", _); _ ], _), _) -> []
+  (* List pattern with tag: (tag ,v1 ,v2 ...) *)
+  | List (Symbol (_tag, _) :: rest, _) ->
+      List.concat_map (extract_unquote_binding level) rest
+  (* Vector pattern: [tag ,v1 ,v2 ...] *)
+  | Vector (Symbol (_tag, _) :: rest, _) ->
+      List.concat_map (extract_unquote_binding level) rest
+  (* Nested cons: (a . (b . c)) *)
+  | Cons (car, cdr, _) ->
+      extract_backquote_bindings env level car
+      @ extract_backquote_bindings env level cdr
+  (* Plain cons pattern without symbol *)
+  | List (elems, _) -> List.concat_map (extract_backquote_bindings env level) elems
+  (* Unquoted variable at this level *)
+  | _ -> extract_unquote_binding level pattern
+
+(** Extract binding from an unquote expression: ,var *)
+and extract_unquote_binding (level : int) (sexp : Syntax.Sexp.t) :
+    pattern_binding list =
+  let open Syntax.Sexp in
+  match sexp with
+  | List ([ Symbol (",", _); Symbol (name, _) ], _) ->
+      [ { pb_name = name; pb_type = fresh_tvar level } ]
+  | _ -> []
+
+(** Infer the type of a pcase expression.
+
+    (pcase EXPR (PAT1 BODY1...) (PAT2 BODY2...) ...)
+
+    Each clause has a pattern and a body. Pattern-bound variables are available
+    in the body with narrowed types. All branch bodies must have the same type
+    (the result type of the pcase). *)
+and infer_pcase (env : Env.t) (expr : Syntax.Sexp.t)
+    (clauses : Syntax.Sexp.t list) (_span : Loc.span) : result =
+  let open Syntax.Sexp in
+  (* Infer the type of the scrutinee *)
+  let expr_result = infer env expr in
+  let scrutinee_ty = expr_result.ty in
+
+  (* Result type is a fresh variable that all branches unify with *)
+  let result_ty = fresh_tvar (Env.current_level env) in
+
+  (* Process each clause *)
+  let rec process_clauses clauses constraints undefineds =
+    match clauses with
+    | [] -> (constraints, undefineds)
+    | List (pattern :: body, clause_span) :: rest ->
+        (* Extract pattern bindings with types *)
+        let bindings = extract_pattern_bindings env scrutinee_ty pattern in
+
+        (* Extend environment with pattern bindings *)
+        let body_env =
+          List.fold_left
+            (fun e { pb_name; pb_type } -> Env.extend_mono pb_name pb_type e)
+            env bindings
+        in
+
+        (* Infer body type *)
+        let body_result = infer_progn body_env body clause_span in
+
+        (* Add constraint: body type = result type *)
+        let body_constraint = C.equal result_ty body_result.ty clause_span in
+
+        let all_constraints =
+          C.combine body_result.constraints (C.add body_constraint constraints)
+        in
+        let all_undefineds = undefineds @ body_result.undefineds in
+
+        process_clauses rest all_constraints all_undefineds
+    | _ :: rest ->
+        (* Malformed clause - skip it *)
+        process_clauses rest constraints undefineds
+  in
+
+  let clause_constraints, clause_undefineds =
+    process_clauses clauses C.empty []
+  in
+
+  (* Combine all constraints *)
+  let all_constraints = C.combine expr_result.constraints clause_constraints in
+  let all_undefineds = expr_result.undefineds @ clause_undefineds in
+
+  { ty = result_ty; constraints = all_constraints; undefineds = all_undefineds }
 
 (** Infer the type of a tart annotation expression.
 

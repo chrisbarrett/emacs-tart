@@ -283,6 +283,48 @@ let test_cond_multiple_clauses () =
   Alcotest.(check int) "multi cond constraints" 2 count
 
 (* =============================================================================
+   Pcase Tests
+   ============================================================================= *)
+
+let test_pcase_simple () =
+  (* pcase returns a fresh type variable that branches unify with *)
+  let ty = infer_type "(pcase 42 (1 \"one\") (2 \"two\"))" in
+  (* Result is a type variable before constraint solving *)
+  Alcotest.(check bool)
+    "pcase result is tvar" true
+    (String.length ty > 0 && ty.[0] = '\'')
+
+let test_pcase_underscore () =
+  (* Wildcard pattern _ matches anything, result is tvar *)
+  let ty = infer_type "(pcase x (_ 42))" in
+  Alcotest.(check bool)
+    "pcase wildcard is tvar" true
+    (String.length ty > 0 && ty.[0] = '\'')
+
+let test_pcase_constraint_count () =
+  (* One constraint per clause: body type = result type *)
+  let count = constraint_count "(pcase x (1 42) (_ 0))" in
+  Alcotest.(check int) "pcase constraint count" 2 count
+
+let test_pcase_branches_unify () =
+  (* All branches must have compatible types *)
+  let count = constraint_count {|(pcase x (1 "one") (2 "two") (_ "other"))|} in
+  (* Three constraints: one for each branch body = result *)
+  Alcotest.(check int) "pcase branch constraints" 3 count
+
+let test_pcase_exhaustive () =
+  (* pcase-exhaustive works the same way *)
+  let count = constraint_count "(pcase-exhaustive x (_ 42))" in
+  Alcotest.(check int) "pcase-exhaustive constraint" 1 count
+
+let test_pcase_with_env () =
+  (* Bound variables are available in pcase body *)
+  let env = Env.extend_mono "x" Prim.int Env.empty in
+  let count = constraint_count ~env "(pcase x (1 x) (_ 0))" in
+  (* Two constraints: one per branch *)
+  Alcotest.(check int) "pcase with env" 2 count
+
+(* =============================================================================
    Defun Tests
    ============================================================================= *)
 
@@ -597,6 +639,16 @@ let () =
           Alcotest.test_case "single clause" `Quick test_cond_single_clause;
           Alcotest.test_case "multiple clauses" `Quick
             test_cond_multiple_clauses;
+        ] );
+      ( "pcase",
+        [
+          Alcotest.test_case "simple" `Quick test_pcase_simple;
+          Alcotest.test_case "underscore" `Quick test_pcase_underscore;
+          Alcotest.test_case "constraint count" `Quick
+            test_pcase_constraint_count;
+          Alcotest.test_case "branches unify" `Quick test_pcase_branches_unify;
+          Alcotest.test_case "exhaustive" `Quick test_pcase_exhaustive;
+          Alcotest.test_case "with env" `Quick test_pcase_with_env;
         ] );
       ( "defun",
         [
