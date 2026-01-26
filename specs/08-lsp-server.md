@@ -173,7 +173,7 @@ responses with proper headers
 - [x] [R6] Implement textDocument/hover
 - [x] [R7] Show instantiated types on hover
 - [x] [R8] Handle hover gracefully on errors
-- [ ] [R9] Add query-based caching for incrementality
+- [x] [R9] Add query-based caching for incrementality
 - [x] [R10] Handle parse failures gracefully
 - [x] [R11] Add logging with configurable levels
 

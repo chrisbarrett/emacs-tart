@@ -14,13 +14,21 @@ type t = {
   mutable state : state;
   mutable log_level : log_level;
   documents : Document.t;
+  form_cache : Form_cache.t;
 }
 
 and log_level = Quiet | Normal | Debug
 
 (** Create a new server on the given channels *)
 let create ?(log_level = Normal) ~ic ~oc () : t =
-  { ic; oc; state = Uninitialized; log_level; documents = Document.create () }
+  {
+    ic;
+    oc;
+    state = Uninitialized;
+    log_level;
+    documents = Document.create ();
+    form_cache = Form_cache.create ();
+  }
 
 (** Get the server's current state *)
 let state (server : t) : state = server.state
@@ -168,14 +176,36 @@ let default_module_config () : Typing.Module_check.config =
   | Some dir -> Typing.Module_check.with_stdlib dir config
   | None -> config
 
+(** Try to read the content of a sibling .tart file for cache invalidation.
+    Returns None if the file doesn't exist. *)
+let read_sibling_sig_content (filename : string) : string option =
+  let dir = Filename.dirname filename in
+  let basename = Filename.basename filename in
+  let module_name =
+    if Filename.check_suffix basename ".el" then
+      Filename.chop_suffix basename ".el"
+    else basename
+  in
+  let tart_path = Filename.concat dir (module_name ^ ".tart") in
+  if Sys.file_exists tart_path then
+    try
+      let ic = In_channel.open_text tart_path in
+      let content = In_channel.input_all ic in
+      In_channel.close ic;
+      Some content
+    with _ -> None
+  else None
+
 (** Type-check a document and return LSP diagnostics. Returns parse errors if
     parsing fails, otherwise type errors.
 
-    Uses module-aware type checking to:
+    Uses module-aware type checking with form-level caching to:
     - Load sibling `.tart` files for signature verification
     - Load required modules from the search path
-    - Verify implementations match signatures *)
-let check_document (uri : string) (text : string) : Protocol.diagnostic list =
+    - Verify implementations match signatures
+    - Cache unchanged forms for incremental updates *)
+let check_document ~(cache : Form_cache.t) (uri : string) (text : string) :
+    Protocol.diagnostic list * Form_cache.check_stats option =
   let filename = filename_of_uri uri in
   let parse_result = Syntax.Read.parse_string ~filename text in
   (* Collect parse errors *)
@@ -183,19 +213,21 @@ let check_document (uri : string) (text : string) : Protocol.diagnostic list =
     List.map lsp_diagnostic_of_parse_error parse_result.errors
   in
   (* If we have sexps, type-check them *)
-  let type_diagnostics =
-    if parse_result.sexps = [] then []
+  let type_diagnostics, stats =
+    if parse_result.sexps = [] then ([], None)
     else
       let config = default_module_config () in
-      let check_result =
-        Typing.Module_check.check_module ~config ~filename parse_result.sexps
+      let sibling_sig_content = read_sibling_sig_content filename in
+      let check_result, stats =
+        Form_cache.check_with_cache ~cache ~config ~filename ~uri
+          ~sibling_sig_content parse_result.sexps
       in
       let typing_diagnostics =
         Typing.Module_check.diagnostics_of_result check_result
       in
-      List.map lsp_diagnostic_of_diagnostic typing_diagnostics
+      (List.map lsp_diagnostic_of_diagnostic typing_diagnostics, Some stats)
   in
-  parse_diagnostics @ type_diagnostics
+  (parse_diagnostics @ type_diagnostics, stats)
 
 (** Publish diagnostics for a document *)
 let publish_diagnostics (server : t) (uri : string) (version : int option) :
@@ -203,10 +235,20 @@ let publish_diagnostics (server : t) (uri : string) (version : int option) :
   match Document.get_doc server.documents uri with
   | None -> ()
   | Some doc ->
-      let diagnostics = check_document uri doc.text in
+      let diagnostics, stats =
+        check_document ~cache:server.form_cache uri doc.text
+      in
       let params : Protocol.publish_diagnostics_params =
         { uri; version; diagnostics }
       in
+      (* Log cache statistics at debug level *)
+      (match stats with
+      | Some s ->
+          debug server
+            (Printf.sprintf
+               "Type check: %d forms total, %d cached, %d re-checked"
+               s.total_forms s.cached_forms s.checked_forms)
+      | None -> ());
       debug server
         (Printf.sprintf "Publishing %d diagnostics for %s"
            (List.length diagnostics) uri);
@@ -326,6 +368,8 @@ let handle_did_close (server : t) (params : Yojson.Safe.t option) : unit =
       let text_document = json |> member "textDocument" in
       let uri = Document.text_document_identifier_of_json text_document in
       Document.close_doc server.documents ~uri;
+      (* Also clear the form cache for this document *)
+      Form_cache.remove_document server.form_cache uri;
       debug server (Printf.sprintf "Closed document: %s" uri);
       (* Clear diagnostics for the closed document *)
       let params : Protocol.publish_diagnostics_params =

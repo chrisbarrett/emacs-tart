@@ -9,3 +9,7 @@
 (test
  (name document_test)
  (libraries tart alcotest))
+
+(test
+ (name form_cache_test)
+ (libraries tart alcotest))

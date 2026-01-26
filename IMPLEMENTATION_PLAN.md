@@ -217,8 +217,8 @@ Runtime representation and pattern matching.
 
 ### 9.2 Type Checking
 
-- [ ] [R4] Implement pcase type narrowing in branches
-- [ ] [R5] Implement exhaustiveness checking with warnings
+- [x] [R4] Implement pcase type narrowing in branches
+- [x] [R5] Implement exhaustiveness checking with warnings
 - [ ] Verify: Non-exhaustive matches produce warnings
 
 ## Phase 10: LSP Incremental (Spec 08)
@@ -227,8 +227,8 @@ Performance optimization for large codebases.
 
 ### 10.1 Query-Based Caching
 
-- [ ] [R9] Implement query-based caching for incremental type checking
-- [ ] Verify: Edit one function; others not recomputed (log check)
+- [x] [R9] Implement query-based caching for incremental type checking
+- [x] Verify: Edit one function; others not recomputed (log check)
 
 ## Dependencies
 
