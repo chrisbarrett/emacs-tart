@@ -23,6 +23,9 @@ val with_stdlib : string -> config -> config
 val with_search_dirs : string list -> config -> config
 (** Set search directories for finding `.tart` files *)
 
+val search_path : config -> Sig.Search_path.t
+(** Get the search path from a config *)
+
 (** {1 Errors} *)
 
 type mismatch_error = {

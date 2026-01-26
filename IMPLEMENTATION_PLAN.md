@@ -250,7 +250,7 @@ Navigation and code intelligence features for IDE productivity.
 
 - [x] [R12] Implement `textDocument/definition` for function calls
 - [x] [R13] Return definition location from defun spans
-- [ ] [R14] Handle cross-file definitions via signature lookup
+- [x] [R14] Handle cross-file definitions via signature lookup
 - [ ] Verify: Clicking on function name jumps to definition
 
 ### 11.2 Find References

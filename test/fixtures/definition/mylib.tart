@@ -1,0 +1,3 @@
+;; Signature file for mylib.el
+(defun mylib-greet (string) -> string)
+(defvar mylib-version string)

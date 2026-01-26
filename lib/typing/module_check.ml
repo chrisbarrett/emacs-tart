@@ -37,6 +37,8 @@ let with_search_dirs dirs config =
   in
   { config with search_path }
 
+let search_path config = config.search_path
+
 (** {1 Signature Mismatch Errors} *)
 
 type mismatch_error = {

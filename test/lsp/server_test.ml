@@ -1638,6 +1638,167 @@ let test_definition_has_uri () =
         "uri starts with file://" true
         (String.length uri > 7 && String.sub uri 0 7 = "file://")
 
+(** Test that definition lookup finds declarations in sibling .tart files (R14)
+*)
+let test_definition_cross_file () =
+  (* Get the path to our test fixture *)
+  let fixture_dir =
+    Filename.concat (Sys.getcwd ()) "test/fixtures/definition"
+  in
+  let el_file = Filename.concat fixture_dir "main.el" in
+  let tart_file = Filename.concat fixture_dir "mylib.tart" in
+  (* Skip if fixtures don't exist (e.g., running from different directory) *)
+  if not (Sys.file_exists tart_file) then ()
+  else
+    let el_content = In_channel.with_open_text el_file In_channel.input_all in
+    let uri = "file://" ^ el_file in
+    let init_msg =
+      make_message ~id:(`Int 1) ~method_:"initialize"
+        ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+        ()
+    in
+    let did_open_msg =
+      make_message ~method_:"textDocument/didOpen"
+        ~params:
+          (`Assoc
+             [
+               ( "textDocument",
+                 `Assoc
+                   [
+                     ("uri", `String uri);
+                     ("languageId", `String "elisp");
+                     ("version", `Int 1);
+                     ("text", `String el_content);
+                   ] );
+             ])
+        ()
+    in
+    (* Definition request at position (2, 1) - on 'mylib-greet' call *)
+    let definition_msg =
+      make_message ~id:(`Int 2) ~method_:"textDocument/definition"
+        ~params:
+          (`Assoc
+             [
+               ("textDocument", `Assoc [ ("uri", `String uri) ]);
+               ("position", `Assoc [ ("line", `Int 2); ("character", `Int 1) ]);
+             ])
+        ()
+    in
+    let shutdown_msg = make_message ~id:(`Int 3) ~method_:"shutdown" () in
+    let exit_msg = make_message ~method_:"exit" () in
+    let input =
+      init_msg ^ did_open_msg ^ definition_msg ^ shutdown_msg ^ exit_msg
+    in
+    let in_file = Filename.temp_file "lsp_in" ".json" in
+    Out_channel.with_open_bin in_file (fun oc ->
+        Out_channel.output_string oc input);
+    let ic = In_channel.open_bin in_file in
+    let out_file = Filename.temp_file "lsp_out" ".json" in
+    let oc = Out_channel.open_bin out_file in
+    let server = Server.create ~log_level:Quiet ~ic ~oc () in
+    let exit_code = Server.run server in
+    In_channel.close ic;
+    Out_channel.close oc;
+    Alcotest.(check int) "exit code" 0 exit_code;
+    let output = In_channel.with_open_bin out_file In_channel.input_all in
+    let messages = parse_messages output in
+    match find_response messages 2 with
+    | None -> Alcotest.fail "No definition response found"
+    | Some json ->
+        let open Yojson.Safe.Util in
+        let result = json |> member "result" in
+        Alcotest.(check bool)
+          "result is not null (found cross-file definition)" true
+          (result <> `Null);
+        (* Check that the URI points to the .tart file *)
+        let result_uri = result |> member "uri" |> to_string in
+        Alcotest.(check bool)
+          "uri points to .tart file" true
+          (try
+             let _ =
+               Str.search_forward (Str.regexp_string ".tart") result_uri 0
+             in
+             true
+           with Not_found -> false)
+
+(** Test that definition lookup works for defvar in sibling .tart (R14) *)
+let test_definition_cross_file_defvar () =
+  let fixture_dir =
+    Filename.concat (Sys.getcwd ()) "test/fixtures/definition"
+  in
+  let el_file = Filename.concat fixture_dir "main.el" in
+  let tart_file = Filename.concat fixture_dir "mylib.tart" in
+  if not (Sys.file_exists tart_file) then ()
+  else
+    let el_content = In_channel.with_open_text el_file In_channel.input_all in
+    let uri = "file://" ^ el_file in
+    let init_msg =
+      make_message ~id:(`Int 1) ~method_:"initialize"
+        ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+        ()
+    in
+    let did_open_msg =
+      make_message ~method_:"textDocument/didOpen"
+        ~params:
+          (`Assoc
+             [
+               ( "textDocument",
+                 `Assoc
+                   [
+                     ("uri", `String uri);
+                     ("languageId", `String "elisp");
+                     ("version", `Int 1);
+                     ("text", `String el_content);
+                   ] );
+             ])
+        ()
+    in
+    (* Definition request at position (3, 0) - on 'mylib-version' reference *)
+    let definition_msg =
+      make_message ~id:(`Int 2) ~method_:"textDocument/definition"
+        ~params:
+          (`Assoc
+             [
+               ("textDocument", `Assoc [ ("uri", `String uri) ]);
+               ("position", `Assoc [ ("line", `Int 3); ("character", `Int 0) ]);
+             ])
+        ()
+    in
+    let shutdown_msg = make_message ~id:(`Int 3) ~method_:"shutdown" () in
+    let exit_msg = make_message ~method_:"exit" () in
+    let input =
+      init_msg ^ did_open_msg ^ definition_msg ^ shutdown_msg ^ exit_msg
+    in
+    let in_file = Filename.temp_file "lsp_in" ".json" in
+    Out_channel.with_open_bin in_file (fun oc ->
+        Out_channel.output_string oc input);
+    let ic = In_channel.open_bin in_file in
+    let out_file = Filename.temp_file "lsp_out" ".json" in
+    let oc = Out_channel.open_bin out_file in
+    let server = Server.create ~log_level:Quiet ~ic ~oc () in
+    let exit_code = Server.run server in
+    In_channel.close ic;
+    Out_channel.close oc;
+    Alcotest.(check int) "exit code" 0 exit_code;
+    let output = In_channel.with_open_bin out_file In_channel.input_all in
+    let messages = parse_messages output in
+    match find_response messages 2 with
+    | None -> Alcotest.fail "No definition response found"
+    | Some json ->
+        let open Yojson.Safe.Util in
+        let result = json |> member "result" in
+        Alcotest.(check bool)
+          "result is not null (found defvar in .tart)" true (result <> `Null);
+        let result_uri = result |> member "uri" |> to_string in
+        Alcotest.(check bool)
+          "uri points to .tart file" true
+          (try
+             let _ =
+               Str.search_forward (Str.regexp_string ".tart") result_uri 0
+             in
+             true
+           with Not_found -> false)
+
 let () =
   Alcotest.run "server"
     [
@@ -1697,5 +1858,9 @@ let () =
           Alcotest.test_case "not found" `Quick test_definition_not_found;
           Alcotest.test_case "outside code" `Quick test_definition_outside_code;
           Alcotest.test_case "has uri" `Quick test_definition_has_uri;
+          Alcotest.test_case "cross-file defun" `Quick
+            test_definition_cross_file;
+          Alcotest.test_case "cross-file defvar" `Quick
+            test_definition_cross_file_defvar;
         ] );
     ]

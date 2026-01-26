@@ -541,6 +541,83 @@ let extract_definitions (sexps : Syntax.Sexp.t list) :
       | _ -> None)
     sexps
 
+(** Find definition in signature file declarations.
+
+    Returns the location span if the name is declared in the signature. *)
+let find_definition_in_signature (name : string)
+    (sig_ast : Sig.Sig_ast.signature) : Syntax.Location.span option =
+  List.find_map
+    (fun decl ->
+      match decl with
+      | Sig.Sig_ast.DDefun d when d.defun_name = name -> Some d.defun_loc
+      | Sig.Sig_ast.DDefvar d when d.defvar_name = name -> Some d.defvar_loc
+      | _ -> None)
+    sig_ast.sig_decls
+
+(** Look up a symbol definition in loaded signatures.
+
+    Searches the sibling .tart file and any signatures from the search path.
+    Returns the location if found. *)
+let find_definition_in_signatures ~(filename : string) (name : string) :
+    Syntax.Location.span option =
+  let config = default_module_config () in
+  let dir = Filename.dirname filename in
+  let basename = Filename.basename filename in
+  let module_name =
+    if Filename.check_suffix basename ".el" then
+      Filename.chop_suffix basename ".el"
+    else basename
+  in
+  (* First try the sibling .tart file *)
+  let tart_path = Filename.concat dir (module_name ^ ".tart") in
+  match Sig.Search_path.parse_signature_file tart_path with
+  | Some sig_ast -> (
+      match find_definition_in_signature name sig_ast with
+      | Some span -> Some span
+      | None ->
+          (* Not in sibling, try signatures from requires and autoloads.
+             For now, we try prefix-based lookup similar to autoloads. *)
+          let prefixes = Typing.Module_check.extract_module_prefixes name in
+          let rec try_prefixes = function
+            | [] -> None
+            | prefix :: rest -> (
+                match
+                  Sig.Search_path.find_signature
+                    (Typing.Module_check.search_path config)
+                    prefix
+                with
+                | Some sig_path -> (
+                    match Sig.Search_path.parse_signature_file sig_path with
+                    | Some sig_ast -> (
+                        match find_definition_in_signature name sig_ast with
+                        | Some span -> Some span
+                        | None -> try_prefixes rest)
+                    | None -> try_prefixes rest)
+                | None -> try_prefixes rest)
+          in
+          try_prefixes prefixes)
+  | None ->
+      (* No sibling .tart, try prefix-based lookup *)
+      let prefixes = Typing.Module_check.extract_module_prefixes name in
+      let rec try_prefixes = function
+        | [] -> None
+        | prefix :: rest -> (
+            match
+              Sig.Search_path.find_signature
+                (Typing.Module_check.search_path config)
+                prefix
+            with
+            | Some sig_path -> (
+                match Sig.Search_path.parse_signature_file sig_path with
+                | Some sig_ast -> (
+                    match find_definition_in_signature name sig_ast with
+                    | Some span -> Some span
+                    | None -> try_prefixes rest)
+                | None -> try_prefixes rest)
+            | None -> try_prefixes rest)
+      in
+      try_prefixes prefixes
+
 (** Extract the symbol name from an S-expression, if it is a symbol. *)
 let symbol_name_of_sexp (sexp : Syntax.Sexp.t) : string option =
   match sexp with Syntax.Sexp.Symbol (name, _) -> Some name | _ -> None
@@ -590,23 +667,42 @@ let handle_definition (server : t) (params : Yojson.Safe.t option) :
                 | Some name -> (
                     debug server
                       (Printf.sprintf "Looking for definition of: %s" name);
-                    (* Look up definition in the current document *)
+                    (* Look up definition in the current document first *)
                     let definitions = extract_definitions parse_result.sexps in
                     match List.assoc_opt name definitions with
                     | Some span ->
                         debug server
-                          (Printf.sprintf "Found definition at %s:%d:%d"
+                          (Printf.sprintf "Found local definition at %s:%d:%d"
                              span.start_pos.file span.start_pos.line
                              span.start_pos.col);
                         let loc = location_of_span span in
                         Ok
                           (Protocol.definition_result_to_json
                              (Protocol.DefLocation loc))
-                    | None ->
+                    | None -> (
+                        (* Not found locally - try signature lookup (R14) *)
                         debug server
-                          (Printf.sprintf "No definition found for: %s" name);
-                        Ok (Protocol.definition_result_to_json Protocol.DefNull)
-                    ))))
+                          (Printf.sprintf
+                             "Not found locally, trying signature lookup for: \
+                              %s"
+                             name);
+                        match find_definition_in_signatures ~filename name with
+                        | Some span ->
+                            debug server
+                              (Printf.sprintf
+                                 "Found definition in signature at %s:%d:%d"
+                                 span.start_pos.file span.start_pos.line
+                                 span.start_pos.col);
+                            let loc = location_of_span span in
+                            Ok
+                              (Protocol.definition_result_to_json
+                                 (Protocol.DefLocation loc))
+                        | None ->
+                            debug server
+                              (Printf.sprintf "No definition found for: %s" name);
+                            Ok
+                              (Protocol.definition_result_to_json
+                                 Protocol.DefNull))))))
 
 (** Dispatch a request to its handler *)
 let dispatch_request (server : t) (msg : Rpc.message) :
