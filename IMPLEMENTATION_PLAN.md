@@ -425,14 +425,41 @@ Enable type variables to be shared across multiple signatures within a scope.
 
 ---
 
+## Phase 17: Expanded Stdlib Phase 2 (Spec 20)
+
+Additional commonly-used Emacs libraries for broader type checking coverage.
+
+### 17.1 Hash Tables and Maps
+
+- [ ] [R1] Create stdlib/ht.tart with ht.el hash table library signatures
+- [ ] [R2] Create stdlib/map.tart with map.el generic map operations
+- [ ] Verify: ht.tart and map.tart parse and load
+
+### 17.2 String and Utility Functions
+
+- [ ] [R3] Create stdlib/subr-x.tart with subr-x.el signatures
+- [ ] [R5] Create stdlib/rx.tart with rx-to-string signature
+- [ ] Verify: subr-x.tart and rx.tart parse and load
+
+### 17.3 Process Management
+
+- [ ] [R4] Create stdlib/process.tart with process function signatures
+- [ ] Verify: process.tart parses and loads
+
+### 17.4 Expanded cl-lib
+
+- [ ] [R6] Expand stdlib/cl-lib.tart with additional functions
+- [ ] Verify: Expanded cl-lib.tart loads
+
+---
+
 ## Future Work (Requires New Specs)
 
 The following areas are mentioned as future work in the specs:
 
 1. **Additional Stdlib Coverage**
    - More Emacs packages (org-mode, magit, etc.)
-   - More cl-lib functions
-   - Third-party package signatures
+   - Additional third-party package signatures
 
 2. **Type Classes / Traits** (mentioned in Spec 17 Non-Requirements)
    - Typeclass/trait syntax
@@ -457,3 +484,4 @@ The following areas are mentioned as future work in the specs:
 14. **Phase 14**: Higher-Kinded Types ✓
 15. **Phase 15**: Explicit Type Instantiation ✓
 16. **Phase 16**: Scoped Type Variables ✓
+17. **Phase 17**: Expanded Stdlib Phase 2
