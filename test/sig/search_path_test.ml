@@ -1385,6 +1385,70 @@ let test_load_map () =
       | None -> Alcotest.fail "map-apply not found in env"
       | Some _ -> ())
 
+(** Test that subr-x.tart parses successfully *)
+let test_parse_subr_x () =
+  let path = Filename.concat stdlib_dir "subr-x.tart" in
+  if not (Sys.file_exists path) then
+    Alcotest.fail ("subr-x.tart not found at: " ^ path);
+  match Search_path.parse_signature_file path with
+  | None -> Alcotest.fail "subr-x.tart failed to parse"
+  | Some sig_file ->
+      Alcotest.(check string) "module name" "subr-x" sig_file.sig_module;
+      Alcotest.(check bool)
+        "has declarations" true
+        (List.length sig_file.sig_decls > 20);
+      (* Check key subr-x functions *)
+      let has_defun name =
+        List.exists
+          (function Sig_ast.DDefun d -> d.defun_name = name | _ -> false)
+          sig_file.sig_decls
+      in
+      Alcotest.(check bool) "has string-trim" true (has_defun "string-trim");
+      Alcotest.(check bool)
+        "has string-blank-p" true
+        (has_defun "string-blank-p");
+      Alcotest.(check bool) "has string-join" true (has_defun "string-join");
+      Alcotest.(check bool)
+        "has string-remove-prefix" true
+        (has_defun "string-remove-prefix");
+      Alcotest.(check bool)
+        "has hash-table-keys" true
+        (has_defun "hash-table-keys");
+      Alcotest.(check bool)
+        "has hash-table-values" true
+        (has_defun "hash-table-values")
+
+(** Test that subr-x can be loaded into type environment *)
+let test_load_subr_x () =
+  let sp = Search_path.empty |> Search_path.with_stdlib stdlib_dir in
+  (* First load builtins for base types *)
+  let base_env =
+    match
+      Search_path.load_module ~search_path:sp ~env:Type_env.empty "builtins"
+    with
+    | None -> Alcotest.fail "failed to load builtins module"
+    | Some env -> env
+  in
+  match Search_path.load_module ~search_path:sp ~env:base_env "subr-x" with
+  | None -> Alcotest.fail "failed to load subr-x module"
+  | Some env -> (
+      (* Check that string-trim is loaded *)
+      (match Type_env.lookup "string-trim" env with
+      | None -> Alcotest.fail "string-trim not found in env"
+      | Some _ -> ());
+      (* Check that string-join is loaded *)
+      (match Type_env.lookup "string-join" env with
+      | None -> Alcotest.fail "string-join not found in env"
+      | Some _ -> ());
+      (* Check that hash-table-keys is loaded *)
+      (match Type_env.lookup "hash-table-keys" env with
+      | None -> Alcotest.fail "hash-table-keys not found in env"
+      | Some _ -> ());
+      (* Check that string-remove-prefix is loaded *)
+      match Type_env.lookup "string-remove-prefix" env with
+      | None -> Alcotest.fail "string-remove-prefix not found in env"
+      | Some _ -> ())
+
 let () =
   Alcotest.run "search_path"
     [
@@ -1458,5 +1522,7 @@ let () =
           Alcotest.test_case "load ht into env" `Quick test_load_ht;
           Alcotest.test_case "parse map.tart" `Quick test_parse_map;
           Alcotest.test_case "load map into env" `Quick test_load_map;
+          Alcotest.test_case "parse subr-x.tart" `Quick test_parse_subr_x;
+          Alcotest.test_case "load subr-x into env" `Quick test_load_subr_x;
         ] );
     ]

@@ -437,7 +437,7 @@ Additional commonly-used Emacs libraries for broader type checking coverage.
 
 ### 17.2 String and Utility Functions
 
-- [ ] [R3] Create stdlib/subr-x.tart with subr-x.el signatures
+- [x] [R3] Create stdlib/subr-x.tart with subr-x.el signatures
 - [ ] [R5] Create stdlib/rx.tart with rx-to-string signature
 - [ ] Verify: subr-x.tart and rx.tart parse and load
 

@@ -1,0 +1,88 @@
+;;; subr-x.tart --- Type signatures for subr-x.el (extra subroutines)
+
+;; String trimming
+(defun string-trim (string &optional string string) -> string)
+(defun string-trim-left (string &optional string) -> string)
+(defun string-trim-right (string &optional string) -> string)
+
+;; String predicates
+(defun string-blank-p (string) -> bool)
+(defun string-empty-p (string) -> bool)
+
+;; String joining
+(defun string-join ((list string) &optional string) -> string)
+
+;; String cleaning
+(defun string-clean-whitespace (string) -> string)
+(defun string-fill (string int) -> string)
+(defun string-limit (string int &optional bool string) -> string)
+(defun string-lines (string &optional bool) -> (list string))
+(defun string-pad (string int &optional any bool) -> string)
+(defun string-chop-newline (string) -> string)
+
+;; String prefix/suffix operations
+(defun string-remove-prefix (string string) -> string)
+(defun string-remove-suffix (string string) -> string)
+(defun string-prefix-p (string string &optional bool) -> bool)
+(defun string-suffix-p (string string &optional bool) -> bool)
+
+;; String search/replace
+(defun string-search (string string &optional int) -> (int | nil))
+(defun string-replace (string string string) -> string)
+(defun string-truncate-left (string int) -> string)
+
+;; String character utilities
+(defun string-pixel-width (string) -> int)
+(defun string-glyph-split (string) -> (list string))
+(defun string-glyph-compose (string &optional int int) -> string)
+(defun string-glyph-decompose (string) -> (list string))
+
+;; Hash table utilities
+(defun hash-table-keys [k v] ((hash-table k v)) -> (list k))
+(defun hash-table-values [k v] ((hash-table k v)) -> (list v))
+(defun hash-table-empty-p [k v] ((hash-table k v)) -> bool)
+
+;; Alist utilities
+(defun alist-get [k v] (k (list (pair k v)) &optional v bool any) -> (v | nil))
+(defun map-put! [k v] ((list (pair k v)) k v &optional any) -> any)
+
+;; Named-let (like scheme's named let)
+;; Note: named-let is a macro, but we provide a signature for documentation
+;; The actual form is (named-let NAME BINDINGS &rest BODY)
+
+;; Thread macros - these are macros that expand at compile time
+;; Thread-first passes result as first arg to next form
+;; Thread-last passes result as last arg to next form
+;; Cannot provide meaningful types as they transform code
+
+;; Conditional let bindings
+;; Note: when-let, when-let*, if-let, if-let*, and-let* are macros
+;; that bind variables and test them in one operation
+;; Cannot provide meaningful function signatures for macros
+
+;; List utilities
+(defun ensure-list (any) -> (list any))
+
+;; Key/value utilities
+(defun add-display-text-property (int int any string) -> nil)
+(defun read-process-name (string) -> (string | nil))
+
+;; Buffer position utilities
+(defun pos-bol (&optional int) -> int)
+(defun pos-eol (&optional int) -> int)
+
+;; Emacs 29+ additions
+(defun string-equal-ignore-case (string string) -> bool)
+(defun length< (any int) -> bool)
+(defun length> (any int) -> bool)
+(defun length= (any int) -> bool)
+
+;; URL utilities
+(defun url-domain (string) -> (string | nil))
+
+;; Internal helpers (commonly used)
+(defun internal--thread-argument (any any bool) -> any)
+(defun replace-region-contents (int int ((string) -> string) &optional int int) -> nil)
+
+;; Formatting utilities
+(defun format-prompt (string any &optional any) -> string)
