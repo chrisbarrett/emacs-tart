@@ -66,6 +66,13 @@ type kind_check_error = {
 
 (** {1 Module Check Result} *)
 
+type instance_error = {
+  class_name : string;
+  missing_type : Types.typ;
+  span : Syntax.Location.span;
+}
+(** Error when a type class constraint cannot be satisfied *)
+
 type check_result = {
   type_errors : Unify.error list;  (** Type errors from inference *)
   mismatch_errors : mismatch_error list;  (** Signature mismatch errors *)
@@ -76,6 +83,8 @@ type check_result = {
       (** Warnings for non-exhaustive pcase matches *)
   kind_errors : kind_check_error list;
       (** Kind mismatch errors in signatures *)
+  instance_errors : instance_error list;
+      (** Missing type class instance errors *)
   signature_env : Env.t option;
       (** Environment from loaded signature, if any *)
   final_env : Env.t;  (** Final type environment after checking *)
@@ -208,11 +217,6 @@ let load_autoload_signatures ~(config : config) ~(el_path : string option)
     env call_symbols
 
 (** {1 Signature Loading} *)
-
-(** Load signature for a module, returning the extended environment *)
-let load_module_signature ~(config : config) ~(el_path : string option)
-    ~(env : Env.t) (module_name : string) : Env.t option =
-  Search.load_module ~search_path:config.search_path ?el_path ~env module_name
 
 (** Try to find and load a sibling `.tart` file for an `.el` file *)
 let load_sibling_signature ~(config : config) (el_path : string) :
@@ -352,6 +356,26 @@ let check_signature_kinds (sig_file : Sig.Sig_ast.signature) :
     kind_check_error list =
   List.concat_map check_decl_kinds sig_file.sig_decls
 
+(** {1 Instance Extraction} *)
+
+(** Extract all type class instances from a signature into a registry.
+
+    Walks the signature AST recursively (including type-scope blocks) and loads
+    each DInstance declaration using Instance.load_instance. *)
+let extract_instances (sig_file : Sig.Sig_ast.signature) : Instance.registry =
+  let open Sig.Sig_ast in
+  let rec extract_from_decl registry decl =
+    match decl with
+    | DInstance d -> Instance.load_instance d registry
+    | DTypeScope scope ->
+        (* Recursively extract from scoped declarations *)
+        List.fold_left extract_from_decl registry scope.scope_decls
+    | DDefun _ | DDefvar _ | DType _ | DOpen _ | DInclude _ | DImportStruct _
+    | DData _ | DClass _ ->
+        registry
+  in
+  List.fold_left extract_from_decl Instance.empty_registry sig_file.sig_decls
+
 (** {1 Main Check Function} *)
 
 (** Type-check an elisp file with module awareness.
@@ -379,18 +403,18 @@ let check_module ~(config : config) ~(filename : string)
     | None -> (Builtin_types.initial_env (), None)
   in
 
-  (* Step 3: Load signatures for required modules *)
+  (* Step 3: Load signatures for required modules, collecting signature ASTs *)
   let required_modules = extract_requires sexps in
-  let env_with_requires =
+  let env_with_requires, required_sig_asts =
     List.fold_left
-      (fun env module_name ->
+      (fun (env, sigs) module_name ->
         match
-          load_module_signature ~config ~el_path:(Some filename) ~env
-            module_name
+          Search.load_module_with_sig ~search_path:config.search_path
+            ~el_path:filename ~env module_name
         with
-        | Some env' -> env'
-        | None -> env)
-      base_env required_modules
+        | Some (env', sig_ast) -> (env', sig_ast :: sigs)
+        | None -> (env, sigs))
+      (base_env, []) required_modules
   in
 
   (* Step 4: Load signatures for autoloaded functions (R7) *)
@@ -505,6 +529,34 @@ let check_module ~(config : config) ~(filename : string)
     | None -> []
   in
 
+  (* Step 10: Build instance registry and resolve class constraints (R4 from spec 21) *)
+  let instance_registry =
+    (* Collect instances from sibling signature *)
+    let sibling_instances =
+      match sig_ast_opt with
+      | Some sig_ast -> extract_instances sig_ast
+      | None -> Instance.empty_registry
+    in
+    (* Collect instances from all required modules *)
+    List.fold_left
+      (fun acc sig_ast -> Instance.merge acc (extract_instances sig_ast))
+      sibling_instances required_sig_asts
+  in
+  let instance_errors =
+    List.filter_map
+      (fun (cc : Infer.class_constraint_with_span) ->
+        (* Resolve type variables before instance checking *)
+        let class_name, ty = cc.constraint_ in
+        let resolved_ty = Types.repr ty in
+        match
+          Instance.resolve_all instance_registry [ (class_name, resolved_ty) ]
+        with
+        | Ok () -> None
+        | Error (cls, missing_type) ->
+            Some { class_name = cls; missing_type; span = cc.span })
+      check_result.Check.class_constraints
+  in
+
   {
     type_errors = check_result.Check.errors;
     mismatch_errors;
@@ -512,6 +564,7 @@ let check_module ~(config : config) ~(filename : string)
     undefined_errors = check_result.Check.undefineds;
     exhaustiveness_warnings;
     kind_errors;
+    instance_errors;
     signature_env =
       (match sibling_result with Some (env, _) -> Some env | None -> None);
     final_env = check_result.Check.env;
@@ -543,6 +596,11 @@ let exhaustiveness_to_diagnostic (warn : Exhaustiveness.warning) : Diagnostic.t
 let kind_error_to_diagnostic (err : kind_check_error) : Diagnostic.t =
   Diagnostic.of_kind_error err.span err.kind_error
 
+(** Convert an instance error to a diagnostic *)
+let instance_error_to_diagnostic (err : instance_error) : Diagnostic.t =
+  Diagnostic.missing_instance ~span:err.span ~class_name:err.class_name
+    ~typ:err.missing_type ()
+
 (** Get all diagnostics from a check result *)
 let diagnostics_of_result (result : check_result) : Diagnostic.t list =
   let type_diagnostics = Diagnostic.of_unify_errors result.type_errors in
@@ -560,5 +618,9 @@ let diagnostics_of_result (result : check_result) : Diagnostic.t list =
     List.map exhaustiveness_to_diagnostic result.exhaustiveness_warnings
   in
   let kind_diagnostics = List.map kind_error_to_diagnostic result.kind_errors in
+  let instance_diagnostics =
+    List.map instance_error_to_diagnostic result.instance_errors
+  in
   type_diagnostics @ mismatch_diagnostics @ missing_sig_diagnostics
   @ undefined_diagnostics @ exhaustiveness_diagnostics @ kind_diagnostics
+  @ instance_diagnostics

@@ -24,6 +24,8 @@ type check_result = {
   undefineds : Infer.undefined_var list;  (** Undefined variable references *)
   aliases : Sig.Sig_loader.alias_context;
       (** File-local type aliases from tart-type forms *)
+  class_constraints : Infer.class_constraint_with_span list;
+      (** Type class constraints that need instance resolution *)
 }
 (** Result of type-checking a program. *)
 

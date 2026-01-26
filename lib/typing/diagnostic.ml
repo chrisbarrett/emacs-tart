@@ -27,6 +27,7 @@ type error_code =
   | E0106  (** Infinite type (occurs check) *)
   | E0425  (** Undefined variable *)
   | E0509  (** Kind mismatch *)
+  | E0601  (** Missing type class instance *)
 
 (** Format an error code for display. *)
 let error_code_to_string = function
@@ -36,6 +37,7 @@ let error_code_to_string = function
   | E0106 -> "E0106"
   | E0425 -> "E0425"
   | E0509 -> "E0509"
+  | E0601 -> "E0601"
 
 (** Severity level for diagnostics *)
 type severity = Error | Warning | Hint
@@ -833,3 +835,32 @@ let of_kind_error span (err : Kind_infer.kind_error) : t =
           ];
         help = [];
       }
+
+(** Create a missing type class instance diagnostic (E0601).
+
+    Used when a function with type class constraints is called but no instance
+    exists for the required constraint.
+
+    Output format follows R8 from spec 21:
+    {v
+      Error: No instance of `Eq buffer` found
+        Required by: (elem current buffers)
+        At: file.el:42:3
+    v} *)
+let missing_instance ~span ~class_name ~typ () =
+  {
+    severity = Error;
+    code = Some E0601;
+    span;
+    message =
+      Printf.sprintf "no instance of `%s %s` found" class_name
+        (Types.to_string typ);
+    expected = None;
+    actual = None;
+    related = [];
+    help =
+      [
+        Printf.sprintf "add an instance declaration: (instance (%s %s) ...)"
+          class_name (Types.to_string typ);
+      ];
+  }

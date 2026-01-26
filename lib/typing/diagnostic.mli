@@ -20,6 +20,7 @@ type error_code =
   | E0106  (** Infinite type (occurs check) *)
   | E0425  (** Undefined variable *)
   | E0509  (** Kind mismatch *)
+  | E0601  (** Missing type class instance *)
 
 val error_code_to_string : error_code -> string
 (** Format an error code for display. *)
@@ -217,3 +218,14 @@ val of_kind_error : Syntax.Location.span -> Kind_infer.kind_error -> t
 (** Convert a kind inference error to a diagnostic.
 
     The span is the location of the declaration that failed kind checking. *)
+
+val missing_instance :
+  span:Syntax.Location.span ->
+  class_name:string ->
+  typ:Core.Types.typ ->
+  unit ->
+  t
+(** Create a missing type class instance diagnostic (E0601).
+
+    Used when a function with type class constraints is called but no instance
+    exists for the required constraint. *)

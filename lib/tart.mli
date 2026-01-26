@@ -66,6 +66,7 @@ module Levenshtein = Typing.Levenshtein
 module Exhaustiveness = Typing.Exhaustiveness
 module Kind = Typing.Kind
 module Kind_infer = Typing.Kind_infer
+module Instance = Typing.Instance
 
 (** {1 Signatures} *)
 

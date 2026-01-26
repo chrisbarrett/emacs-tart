@@ -32,6 +32,10 @@ val instances_for_class : string -> registry -> instance list
 val all_instances : registry -> instance list
 (** Get all instances in the registry *)
 
+val merge : registry -> registry -> registry
+(** Merge two registries. Instances from the second override instances from the
+    first if they overlap. *)
+
 (** {1 Instance Resolution} *)
 
 (** Resolution result *)

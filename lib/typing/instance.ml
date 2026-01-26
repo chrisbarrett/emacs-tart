@@ -54,6 +54,10 @@ let instances_for_class class_name registry =
 (** Get all instances in the registry *)
 let all_instances registry = registry.instances
 
+(** Merge two registries. Instances from the second are added after the first.
+*)
+let merge r1 r2 = { instances = r1.instances @ r2.instances }
+
 (** {1 Instance Resolution} *)
 
 (** Resolution result *)

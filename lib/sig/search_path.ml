@@ -165,3 +165,28 @@ let load_module ~(search_path : t) ?(el_path : string option)
         in
         Some new_env
       else None
+
+(** Load signatures for a module and also return the signature AST.
+
+    Like [load_module] but also returns the parsed signature AST for further
+    processing (e.g., instance extraction). *)
+let load_module_with_sig ~(search_path : t) ?(el_path : string option)
+    ~(env : Core.Type_env.t) (module_name : string) :
+    (Core.Type_env.t * Sig_ast.signature) option =
+  let resolver = make_resolver ?el_path search_path in
+  match resolver module_name with
+  | None -> None
+  | Some sig_file ->
+      let valid =
+        if has_external_deps sig_file then true
+        else
+          match Sig_loader.validate_signature sig_file with
+          | Ok () -> true
+          | Error _ -> false
+      in
+      if valid then
+        let new_env =
+          Sig_loader.load_signature_with_resolver ~resolver env sig_file
+        in
+        Some (new_env, sig_file)
+      else None

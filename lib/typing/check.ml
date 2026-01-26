@@ -35,6 +35,8 @@ type check_result = {
   undefineds : Infer.undefined_var list;  (** Undefined variable references *)
   aliases : Sig_loader.alias_context;
       (** File-local type aliases from tart-type forms *)
+  class_constraints : Infer.class_constraint_with_span list;
+      (** Type class constraints that need instance resolution *)
 }
 (** Result of type-checking a program *)
 
@@ -43,6 +45,7 @@ type check_state = {
   st_aliases : Sig_loader.alias_context;
   st_errors : Unify.error list;
   st_undefineds : Infer.undefined_var list;
+  st_class_constraints : Infer.class_constraint_with_span list;
   st_forms : form_result list;
 }
 (** Internal state for type checking a program. Tracks environment, aliases, and
@@ -360,6 +363,7 @@ let check_form_with_state (state : check_state) (sexp : Syntax.Sexp.t) :
             st_aliases = aliases;
             st_errors = List.rev_append errors state.st_errors;
             st_undefineds = List.rev_append undefs state.st_undefineds;
+            st_class_constraints = state.st_class_constraints;
             st_forms = result :: state.st_forms;
           }
       | None -> (
@@ -374,6 +378,7 @@ let check_form_with_state (state : check_state) (sexp : Syntax.Sexp.t) :
                 st_aliases = aliases;
                 st_errors = List.rev_append errors state.st_errors;
                 st_undefineds = List.rev_append undefs state.st_undefineds;
+                st_class_constraints = state.st_class_constraints;
                 st_forms = result :: state.st_forms;
               }
           | None -> (
@@ -404,6 +409,9 @@ let check_form_with_state (state : check_state) (sexp : Syntax.Sexp.t) :
                     st_undefineds =
                       List.rev_append defun_result.Infer.defun_undefineds
                         state.st_undefineds;
+                    st_class_constraints =
+                      List.rev_append defun_result.Infer.defun_class_constraints
+                        state.st_class_constraints;
                     st_forms = result :: state.st_forms;
                   }
               | None ->
@@ -417,6 +425,9 @@ let check_form_with_state (state : check_state) (sexp : Syntax.Sexp.t) :
                     st_undefineds =
                       List.rev_append result.Infer.undefineds
                         state.st_undefineds;
+                    st_class_constraints =
+                      List.rev_append result.Infer.class_constraints
+                        state.st_class_constraints;
                     st_forms =
                       ExprForm { ty = result.Infer.ty } :: state.st_forms;
                   })))
@@ -434,6 +445,7 @@ let check_form (env : Env.t) (sexp : Syntax.Sexp.t) :
       st_aliases = Sig_loader.empty_aliases;
       st_errors = [];
       st_undefineds = [];
+      st_class_constraints = [];
       st_forms = [];
     }
   in
@@ -457,6 +469,7 @@ let check_program ?(env = default_env ()) (forms : Syntax.Sexp.t list) :
       st_aliases = Sig_loader.empty_aliases;
       st_errors = [];
       st_undefineds = [];
+      st_class_constraints = [];
       st_forms = [];
     }
   in
@@ -467,6 +480,7 @@ let check_program ?(env = default_env ()) (forms : Syntax.Sexp.t list) :
     errors = List.rev final_state.st_errors;
     undefineds = List.rev final_state.st_undefineds;
     aliases = final_state.st_aliases;
+    class_constraints = List.rev final_state.st_class_constraints;
   }
 
 (** Check a single expression and return its type.

@@ -80,3 +80,20 @@ val load_module :
     @param env Base type environment to extend
     @param module_name The module name to load
     @return Extended type environment, or None if module not found *)
+
+val load_module_with_sig :
+  search_path:t ->
+  ?el_path:string ->
+  env:Core.Type_env.t ->
+  string ->
+  (Core.Type_env.t * Sig_ast.signature) option
+(** Load signatures for a module and also return the signature AST.
+
+    Like [load_module] but also returns the parsed signature AST for further
+    processing (e.g., instance extraction).
+
+    @param search_path The search path configuration
+    @param el_path Optional path to the `.el` file being type-checked
+    @param env Base type environment to extend
+    @param module_name The module name to load
+    @return Extended type environment and signature AST, or None if not found *)
