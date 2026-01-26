@@ -553,7 +553,7 @@ Create comprehensive documentation using AsciiDoc, plus refresh the README.
 
 ### 19.1 Documentation Structure
 
-- [ ] Create `docs/getting-started.adoc` - Quick start guide
+- [x] Create `docs/getting-started.adoc` - Quick start guide
 - [ ] Create `docs/library-authors.adoc` - Guide for library authors writing `.tart` files
 - [ ] Create `docs/tooling-setup.adoc` - LSP setup guide for Emacs users
 - [ ] Create `docs/cli-reference.adoc` - CLI reference (manpage source)
