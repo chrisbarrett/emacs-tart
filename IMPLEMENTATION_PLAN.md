@@ -443,8 +443,8 @@ Additional commonly-used Emacs libraries for broader type checking coverage.
 
 ### 17.3 Process Management
 
-- [ ] [R4] Create stdlib/process.tart with process function signatures
-- [ ] Verify: process.tart parses and loads
+- [x] [R4] Create stdlib/process.tart with process function signatures
+- [x] Verify: process.tart parses and loads
 
 ### 17.4 Expanded cl-lib
 

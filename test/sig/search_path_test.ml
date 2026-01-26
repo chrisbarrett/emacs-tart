@@ -1498,6 +1498,107 @@ let test_load_rx () =
            true
          with Not_found -> false)
 
+(** Test that process.tart parses successfully *)
+let test_parse_process () =
+  let path = Filename.concat stdlib_dir "process.tart" in
+  if not (Sys.file_exists path) then
+    Alcotest.fail ("process.tart not found at: " ^ path);
+  match Search_path.parse_signature_file path with
+  | None -> Alcotest.fail "process.tart failed to parse"
+  | Some sig_file ->
+      Alcotest.(check string) "module name" "process" sig_file.sig_module;
+      Alcotest.(check bool)
+        "has declarations" true
+        (List.length sig_file.sig_decls > 30);
+      (* Check key process functions *)
+      let has_defun name =
+        List.exists
+          (function Sig_ast.DDefun d -> d.defun_name = name | _ -> false)
+          sig_file.sig_decls
+      in
+      Alcotest.(check bool) "has start-process" true (has_defun "start-process");
+      Alcotest.(check bool) "has call-process" true (has_defun "call-process");
+      Alcotest.(check bool) "has make-process" true (has_defun "make-process");
+      Alcotest.(check bool)
+        "has process-send-string" true
+        (has_defun "process-send-string");
+      Alcotest.(check bool)
+        "has process-status" true
+        (has_defun "process-status");
+      Alcotest.(check bool)
+        "has process-buffer" true
+        (has_defun "process-buffer");
+      Alcotest.(check bool)
+        "has delete-process" true
+        (has_defun "delete-process");
+      Alcotest.(check bool)
+        "has set-process-filter" true
+        (has_defun "set-process-filter");
+      Alcotest.(check bool) "has process-list" true (has_defun "process-list");
+      Alcotest.(check bool)
+        "has get-buffer-process" true
+        (has_defun "get-buffer-process")
+
+(** Test that process can be loaded into type environment *)
+let test_load_process () =
+  let sp = Search_path.empty |> Search_path.with_stdlib stdlib_dir in
+  (* First load builtins and buffers for dependency types *)
+  let base_env =
+    match
+      Search_path.load_module ~search_path:sp ~env:Type_env.empty "builtins"
+    with
+    | None -> Alcotest.fail "failed to load builtins module"
+    | Some env -> env
+  in
+  let base_env =
+    match Search_path.load_module ~search_path:sp ~env:base_env "buffers" with
+    | None -> Alcotest.fail "failed to load buffers module"
+    | Some env -> env
+  in
+  match Search_path.load_module ~search_path:sp ~env:base_env "process" with
+  | None -> Alcotest.fail "failed to load process module"
+  | Some env ->
+      (* Check that start-process is loaded *)
+      (match Type_env.lookup "start-process" env with
+      | None -> Alcotest.fail "start-process not found in env"
+      | Some _ -> ());
+      (* Check that process-status is loaded *)
+      (match Type_env.lookup "process-status" env with
+      | None -> Alcotest.fail "process-status not found in env"
+      | Some _ -> ());
+      (* Check that process-list is loaded *)
+      (match Type_env.lookup "process-list" env with
+      | None -> Alcotest.fail "process-list not found in env"
+      | Some _ -> ());
+      (* Check that get-buffer-process is loaded *)
+      (match Type_env.lookup "get-buffer-process" env with
+      | None -> Alcotest.fail "get-buffer-process not found in env"
+      | Some _ -> ());
+      (* Verify type checking works with process functions *)
+      let ty, errors = check_expr_str ~env "(process-list)" in
+      Alcotest.(check int) "process-list: no errors" 0 (List.length errors);
+      (* Result should be List *)
+      let ty_str = Types.to_string ty in
+      Alcotest.(check bool)
+        "process-list returns list type" true
+        (try
+           let _ = Str.search_forward (Str.regexp_string "List") ty_str 0 in
+           true
+         with Not_found -> false);
+      (* Check shell-command-to-string returns string *)
+      let ty2, errors2 =
+        check_expr_str ~env "(shell-command-to-string \"echo hello\")"
+      in
+      Alcotest.(check int)
+        "shell-command-to-string: no errors" 0 (List.length errors2);
+      let ty2_str = Types.to_string ty2 in
+      Alcotest.(check bool)
+        "shell-command-to-string returns string" true
+        (try
+           let _ = Str.search_forward (Str.regexp_string "String") ty2_str 0 in
+           true
+         with Not_found -> false)
+
 let () =
   Alcotest.run "search_path"
     [
@@ -1575,5 +1676,7 @@ let () =
           Alcotest.test_case "load subr-x into env" `Quick test_load_subr_x;
           Alcotest.test_case "parse rx.tart" `Quick test_parse_rx;
           Alcotest.test_case "load rx into env" `Quick test_load_rx;
+          Alcotest.test_case "parse process.tart" `Quick test_parse_process;
+          Alcotest.test_case "load process into env" `Quick test_load_process;
         ] );
     ]
