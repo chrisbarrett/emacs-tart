@@ -709,6 +709,89 @@ let test_at_type_in_program () =
   let result = Check.check_program sexps in
   Alcotest.(check int) "no errors" 0 (List.length result.errors)
 
+(** Test HK type constructor instantiation: (@type [list int string] fmap ...)
+*)
+let test_at_type_hk_instantiation () =
+  (* fmap : [f a b] (((a -> b)) (f a)) -> (f b)
+     where f is a type constructor of kind * -> * *)
+  let fmap_ty =
+    TArrow
+      ( [
+          (* First param: (a -> b) *)
+          PPositional (TArrow ([ PPositional (TCon "a") ], TCon "b"));
+          (* Second param: (f a) - type application with f as type var *)
+          PPositional (TApp (TCon "f", [ TCon "a" ]));
+        ],
+        (* Return: (f b) *)
+        TApp (TCon "f", [ TCon "b" ]) )
+  in
+  let env = Env.extend_poly "fmap" [ "f"; "a"; "b" ] fmap_ty Env.empty in
+  (* Also add a number-to-string function and a (list int) value *)
+  let env =
+    Env.extend_mono "number-to-string"
+      (TArrow ([ PPositional Prim.int ], Prim.string))
+      env
+  in
+  let env = Env.extend_mono "my-list" (TApp (TCon "List", [ Prim.int ])) env in
+  let sexp =
+    parse {|(@type [list int string] fmap number-to-string my-list)|}
+  in
+  let ty, errors = Check.check_expr ~env sexp in
+  Alcotest.(check int) "no errors" 0 (List.length errors);
+  Alcotest.(check string) "returns (List String)" "(List String)" (to_string ty)
+
+(** Test HK instantiation with partial placeholder *)
+let test_at_type_hk_partial () =
+  (* Same fmap signature *)
+  let fmap_ty =
+    TArrow
+      ( [
+          PPositional (TArrow ([ PPositional (TCon "a") ], TCon "b"));
+          PPositional (TApp (TCon "f", [ TCon "a" ]));
+        ],
+        TApp (TCon "f", [ TCon "b" ]) )
+  in
+  let env = Env.extend_poly "fmap" [ "f"; "a"; "b" ] fmap_ty Env.empty in
+  let env =
+    Env.extend_mono "upcase"
+      (TArrow ([ PPositional Prim.string ], Prim.string))
+      env
+  in
+  let env =
+    Env.extend_mono "my-list" (TApp (TCon "List", [ Prim.string ])) env
+  in
+  (* Use placeholder for a, let it be inferred from my-list and upcase *)
+  let sexp = parse {|(@type [list _ _] fmap upcase my-list)|} in
+  let ty, errors = Check.check_expr ~env sexp in
+  Alcotest.(check int) "no errors" 0 (List.length errors);
+  Alcotest.(check string) "returns (List String)" "(List String)" (to_string ty)
+
+(** Test HK instantiation with type mismatch *)
+let test_at_type_hk_mismatch () =
+  (* fmap with list specified but value is option *)
+  let fmap_ty =
+    TArrow
+      ( [
+          PPositional (TArrow ([ PPositional (TCon "a") ], TCon "b"));
+          PPositional (TApp (TCon "f", [ TCon "a" ]));
+        ],
+        TApp (TCon "f", [ TCon "b" ]) )
+  in
+  let env = Env.extend_poly "fmap" [ "f"; "a"; "b" ] fmap_ty Env.empty in
+  let env =
+    Env.extend_mono "upcase"
+      (TArrow ([ PPositional Prim.string ], Prim.string))
+      env
+  in
+  (* my-list is Option String, but we say list *)
+  let env =
+    Env.extend_mono "my-list" (TApp (TCon "Option", [ Prim.string ])) env
+  in
+  let sexp = parse {|(@type [list string string] fmap upcase my-list)|} in
+  let _, errors = Check.check_expr ~env sexp in
+  (* Should have error: list vs option *)
+  Alcotest.(check bool) "has type error" true (List.length errors > 0)
+
 (* =============================================================================
    Pcase Tests
    ============================================================================= *)
@@ -882,6 +965,10 @@ let () =
           Alcotest.test_case "multi-param" `Quick test_at_type_multi_param;
           Alcotest.test_case "partial instantiation" `Quick test_at_type_partial;
           Alcotest.test_case "in program" `Quick test_at_type_in_program;
+          Alcotest.test_case "HK instantiation" `Quick
+            test_at_type_hk_instantiation;
+          Alcotest.test_case "HK partial" `Quick test_at_type_hk_partial;
+          Alcotest.test_case "HK mismatch" `Quick test_at_type_hk_mismatch;
         ] );
       ( "pcase",
         [

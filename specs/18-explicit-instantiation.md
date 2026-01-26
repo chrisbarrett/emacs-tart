@@ -175,11 +175,11 @@ Error: type mismatch
 
 ## Tasks
 
-- [ ] [R5] Add `@type` macro to tart.el
-- [ ] [R1] Parse `@type` forms in infer.ml
-- [ ] [R1] Apply explicit type arguments during inference
-- [ ] [R3] Handle `_` placeholder for partial instantiation
-- [ ] [R2] Test HK type constructor instantiation
+- [x] [R5] Add `@type` macro to tart.el
+- [x] [R1] Parse `@type` forms in infer.ml
+- [x] [R1] Apply explicit type arguments during inference
+- [x] [R3] Handle `_` placeholder for partial instantiation
+- [x] [R2] Test HK type constructor instantiation
 - [ ] [R4] Validate type argument arity
 - [ ] [R6] Format error messages with annotation context
 

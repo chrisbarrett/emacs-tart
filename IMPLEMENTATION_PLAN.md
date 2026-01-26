@@ -383,8 +383,8 @@ Enable explicit instantiation of polymorphic types at call sites.
 
 ### 15.4 HK Instantiation
 
-- [ ] [R2] Test HK type constructor instantiation
-- [ ] Verify: `(@type [list int string] fmap ...)` works
+- [x] [R2] Test HK type constructor instantiation
+- [x] Verify: `(@type [list int string] fmap ...)` works
 
 ### 15.5 Error Handling
 

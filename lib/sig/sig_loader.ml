@@ -452,8 +452,10 @@ let rec sig_type_to_typ_with_ctx (ctx : type_context) (tvar_names : string list)
                 (* Non-parameterized opaque - use the unique constructor *)
                 Types.TCon opaque.opaque_con
             | _ ->
-                (* Not an alias/opaque or has parameters - treat as type variable/constructor *)
-                Types.TCon name))
+                (* Not an alias/opaque or has parameters - treat as type constant.
+                   Use sig_name_to_prim to handle primitive names and canonicalization
+                   (e.g., "list" -> "List" for HK type arguments). *)
+                sig_name_to_prim name))
   | STCon (name, _) -> (
       (* Type constant - check for alias first, then opaque, then map primitives *)
       match lookup_alias name ctx.tc_aliases with

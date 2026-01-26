@@ -726,7 +726,10 @@ and infer_tart_annotation env type_sexp form _span =
 and infer_explicit_instantiation (env : Env.t) (type_arg_sexps : Syntax.Sexp.t list)
     (fn : Syntax.Sexp.t) (args : Syntax.Sexp.t list) (span : Loc.span) : result =
   let open Syntax.Sexp in
-  (* Parse the type arguments *)
+  (* Parse the type arguments.
+     Note: We do NOT apply forall inference here because type arguments in @type
+     are meant to be concrete instantiations, not polymorphic types. A simple
+     name like "list" should become TCon "List", not a forall-wrapped type var. *)
   let parsed_type_args =
     List.map
       (fun sexp ->
@@ -735,8 +738,7 @@ and infer_explicit_instantiation (env : Env.t) (type_arg_sexps : Syntax.Sexp.t l
         | _ -> (
             match Sig_parser.parse_sig_type sexp with
             | Ok sig_type ->
-                (* Apply forall inference for implicit quantifiers *)
-                let sig_type = Forall_infer.infer_sig_type ~known_types:[] sig_type in
+                (* Convert directly without forall inference *)
                 Some (Sig_loader.sig_type_to_typ [] sig_type)
             | Error _ -> None))
       type_arg_sexps
