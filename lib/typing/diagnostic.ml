@@ -509,18 +509,19 @@ let type_mismatch_with_context ~span ~expected ~actual ~context () =
         related;
         help = base_help;
       }
-  | Constraint.ExplicitInstantiation { type_args; arg_index } ->
+  | Constraint.ExplicitInstantiation { type_args; arg_index = _ } ->
       let base_help = suggest_type_fix ~expected ~actual in
       let type_args_str =
         String.concat ", " (List.map Types.to_string type_args)
       in
+      (* Per R6: message should reference @type annotation and show expected from it *)
       let related =
         [
           {
             span = Loc.dummy_span;
             message =
-              Printf.sprintf "from @type annotation [%s], argument %d"
-                type_args_str (arg_index + 1);
+              Printf.sprintf "expected %s (from @type annotation [%s])"
+                (Types.to_string expected) type_args_str;
           };
         ]
       in
@@ -528,7 +529,7 @@ let type_mismatch_with_context ~span ~expected ~actual ~context () =
         severity = Error;
         code = Some E0308;
         span;
-        message = "type mismatch in explicit instantiation";
+        message = "type mismatch: @type annotation specifies incompatible type";
         expected = Some expected;
         actual = Some actual;
         related;

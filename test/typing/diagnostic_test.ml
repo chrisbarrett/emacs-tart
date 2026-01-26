@@ -1030,6 +1030,95 @@ let test_kind_arity_mismatch_formatting () =
     (contains_pattern (Str.regexp "found 2") str)
 
 (* =============================================================================
+   Explicit Instantiation Tests (R6 from spec 18)
+   ============================================================================= *)
+
+let test_explicit_instantiation_error_message () =
+  (* When (@type [string] identity 42) mismatches, error should reference @type *)
+  let span = Loc.dummy_span in
+  let context =
+    Constraint.ExplicitInstantiation
+      { type_args = [ Types.Prim.string ]; arg_index = 0 }
+  in
+  let err =
+    Unify.TypeMismatch (Types.Prim.string, Types.Prim.int, span, context)
+  in
+  let d = Diag.of_unify_error err in
+  Alcotest.(check bool) "is error" true (Diag.is_error d);
+  Alcotest.(check bool)
+    "message mentions @type annotation" true
+    (contains_pattern (Str.regexp "@type") d.message)
+
+let test_explicit_instantiation_shows_expected_from_annotation () =
+  (* Error should indicate expected type comes from @type annotation *)
+  let span = Loc.dummy_span in
+  let context =
+    Constraint.ExplicitInstantiation
+      { type_args = [ Types.Prim.string ]; arg_index = 0 }
+  in
+  let err =
+    Unify.TypeMismatch (Types.Prim.string, Types.Prim.int, span, context)
+  in
+  let d = Diag.of_unify_error err in
+  let str = Diag.to_string d in
+  (* Should show that expected type is from @type annotation *)
+  Alcotest.(check bool)
+    "shows expected type" true
+    (contains_pattern (Str.regexp "expected.*String") str);
+  Alcotest.(check bool)
+    "shows from annotation" true
+    (contains_pattern (Str.regexp "@type.*annotation") str)
+
+let test_explicit_instantiation_shows_found_type () =
+  let span = Loc.dummy_span in
+  let context =
+    Constraint.ExplicitInstantiation
+      { type_args = [ Types.Prim.string ]; arg_index = 0 }
+  in
+  let err =
+    Unify.TypeMismatch (Types.Prim.string, Types.Prim.int, span, context)
+  in
+  let d = Diag.of_unify_error err in
+  let str = Diag.to_string d in
+  Alcotest.(check bool)
+    "shows found Int" true
+    (contains_pattern (Str.regexp "found.*Int") str)
+
+let test_explicit_instantiation_has_error_code () =
+  let span = Loc.dummy_span in
+  let context =
+    Constraint.ExplicitInstantiation
+      { type_args = [ Types.Prim.string ]; arg_index = 0 }
+  in
+  let err =
+    Unify.TypeMismatch (Types.Prim.string, Types.Prim.int, span, context)
+  in
+  let d = Diag.of_unify_error err in
+  Alcotest.(
+    check
+      (option
+         (of_pp (fun fmt c ->
+              Format.fprintf fmt "%s" (Diag.error_code_to_string c)))))
+    "code is E0308" (Some Diag.E0308) d.code
+
+let test_explicit_instantiation_multiple_type_args () =
+  (* For (@type [int string] pair 1 "hi") style errors *)
+  let span = Loc.dummy_span in
+  let context =
+    Constraint.ExplicitInstantiation
+      { type_args = [ Types.Prim.int; Types.Prim.string ]; arg_index = 1 }
+  in
+  let err =
+    Unify.TypeMismatch (Types.Prim.string, Types.Prim.int, span, context)
+  in
+  let d = Diag.of_unify_error err in
+  let str = Diag.to_string d in
+  (* Should show both type args in context *)
+  Alcotest.(check bool)
+    "shows type args" true
+    (contains_pattern (Str.regexp "Int.*String\\|String.*Int") str)
+
+(* =============================================================================
    Test Suite
    ============================================================================= *)
 
@@ -1169,5 +1258,18 @@ let () =
           Alcotest.test_case "of_kind_error" `Quick test_of_kind_error;
           Alcotest.test_case "arity mismatch formatting" `Quick
             test_kind_arity_mismatch_formatting;
+        ] );
+      ( "explicit_instantiation",
+        [
+          Alcotest.test_case "error message mentions @type" `Quick
+            test_explicit_instantiation_error_message;
+          Alcotest.test_case "shows expected from annotation" `Quick
+            test_explicit_instantiation_shows_expected_from_annotation;
+          Alcotest.test_case "shows found type" `Quick
+            test_explicit_instantiation_shows_found_type;
+          Alcotest.test_case "has error code E0308" `Quick
+            test_explicit_instantiation_has_error_code;
+          Alcotest.test_case "multiple type args" `Quick
+            test_explicit_instantiation_multiple_type_args;
         ] );
     ]

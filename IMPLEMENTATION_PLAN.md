@@ -389,8 +389,8 @@ Enable explicit instantiation of polymorphic types at call sites.
 ### 15.5 Error Handling
 
 - [x] [R4] Validate type argument arity
-- [ ] [R6] Format error messages with annotation context
-- [ ] Verify: Wrong arity and type mismatch errors show context
+- [x] [R6] Format error messages with annotation context
+- [x] Verify: Wrong arity and type mismatch errors show context
 
 ---
 
@@ -422,4 +422,4 @@ The following areas are mentioned as future work in the specs:
 12. **Phase 12**: LSP completion and symbols ✓
 13. **Phase 13**: Expanded stdlib ✓
 14. **Phase 14**: Higher-Kinded Types ✓
-15. **Phase 15**: Explicit Type Instantiation (current)
+15. **Phase 15**: Explicit Type Instantiation ✓
