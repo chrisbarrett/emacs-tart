@@ -33,3 +33,7 @@
 (test
  (name kind_test)
  (libraries tart alcotest))
+
+(test
+ (name kind_infer_test)
+ (libraries tart alcotest))

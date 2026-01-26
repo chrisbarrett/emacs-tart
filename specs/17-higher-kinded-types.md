@@ -199,7 +199,7 @@ Error: kind mismatch
 
 - [x] [R1] Add `kind` type to lib/typing
 - [x] [R5] Default existing type variables to kind `*`
-- [ ] [R2] Implement kind inference algorithm
+- [x] [R2] Implement kind inference algorithm
 - [ ] [R3] Add kind checking to type application
 - [ ] [R4] Parse explicit kind annotations
 - [ ] [R6] Implement kind error formatting

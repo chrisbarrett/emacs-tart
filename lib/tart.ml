@@ -35,6 +35,7 @@ module Diagnostic = Typing.Diagnostic
 module Levenshtein = Typing.Levenshtein
 module Exhaustiveness = Typing.Exhaustiveness
 module Kind = Typing.Kind
+module Kind_infer = Typing.Kind_infer
 
 module Sig_ast = Sig.Sig_ast
 (** Re-export signature modules *)

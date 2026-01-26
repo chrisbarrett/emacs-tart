@@ -344,9 +344,9 @@ Enable polymorphism over type constructors via kind inference.
 
 ### 14.3 Kind Inference
 
-- [ ] [R2] Implement kind inference algorithm in kind_infer.ml
+- [x] [R2] Implement kind inference algorithm in kind_infer.ml
 - [ ] [R3] Add kind checking to type applications
-- [ ] Verify: HK type variable `f` inferred as `* -> *`
+- [x] Verify: HK type variable `f` inferred as `* -> *`
 
 ### 14.4 Explicit Annotations and Errors
 
