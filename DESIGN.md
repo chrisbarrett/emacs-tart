@@ -31,7 +31,7 @@ lib/
     | F τ₁ ... τₙ              Type application    (TApp)
     | (π₁ ... πₙ) → τ          Function type       (TArrow)
     | [α₁...αₙ] τ              Universal type      (TForall)
-    | τ₁ ∪ τ₂ ∪ ...            Union type          (TUnion)
+    | τ₁ | τ₂ | ...            Union type          (TUnion)
     | τ₁ × τ₂ × ...            Tuple type          (TTuple)
 
 π ::= τ                        Positional          (PPositional)
@@ -43,18 +43,26 @@ lib/
 **Quantifier syntax:** `[α₁...αₙ]` binds type variables. Scope extends to end of
 enclosing s-expression.
 
-**Quantifier inference:** Lowercase identifiers in type position are inferred as
-universally quantified, ordered by left-to-right first occurrence:
+**Explicit quantification required:** Type variables must be explicitly bound.
+A symbol is a type variable if and only if it appears in a quantifier.
 
 ```elisp
-;; Implicit: inferred as [a b]
-(defun seq-map ((a -> b) (Seq a)) -> (List b))
+;; Explicit quantification required
+(defun seq-map [a b] (((a -> b)) (seq a)) -> (list b))
 
-;; Explicit: only listed vars bound; unlisted = error
-(defun foo [a] (a -> b) -> a)  ; Error: unbound type variable 'b'
+;; Error: unbound type variable 'a'
+(defun bad (a) -> a)
 ```
 
-Explicit quantification required for phantom types (var in quantifier but not body).
+**Bounded quantifiers:** Type variables can have upper bounds:
+
+```elisp
+(type option [(a : truthy)] (a | nil))
+(defun unwrap [(a : truthy)] ((a | nil) a) -> a)
+```
+
+**Param groups:** Params are always wrapped in parentheses. Type applications
+inside need their own parens to avoid ambiguity: `((list int))` for one param.
 
 ### Primitive Types
 
@@ -62,18 +70,26 @@ Explicit quantification required for phantom types (var in quantifier but not bo
 
 | Type      | Description                    | Truthy? |
 | --------- | ------------------------------ | ------- |
-| `Int`     | Integer values                 | ✓       |
-| `Float`   | Floating-point numbers         | ✓       |
-| `Num`     | Numeric (no subtyping yet)     | ✓       |
-| `String`  | String values                  | ✓       |
-| `Symbol`  | Elisp symbols                  | ✓       |
-| `Keyword` | Elisp keywords (`:foo`)        | ✓       |
-| `Nil`     | The only falsy value           | ✗       |
-| `T`       | The `t` constant               | ✓       |
-| `Truthy`  | Anything except `nil`          | ✓       |
-| `Bool`    | `T \| Nil`                     | ✗       |
-| `Any`     | `Truthy \| Nil` (top type)     | ✗       |
-| `Never`   | Uninhabited (bottom type)      | ✓       |
+| `int`     | Integer values                 | ✓       |
+| `float`   | Floating-point numbers         | ✓       |
+| `num`     | Numeric                        | ✓       |
+| `string`  | String values                  | ✓       |
+| `symbol`  | Elisp symbols                  | ✓       |
+| `keyword` | Elisp keywords (`:foo`)        | ✓       |
+| `nil`     | The only falsy value           | ✗       |
+| `t`       | The `t` constant               | ✓       |
+| `truthy`  | Anything except `nil`          | ✓       |
+| `never`   | Uninhabited (bottom type)      | ✓       |
+
+### Standard Library Types
+
+Defined in the stdlib, not primitives:
+
+```elisp
+(type bool (nil | t))
+(type any (truthy | nil))
+(type option [(a : truthy)] (a | nil))
+```
 
 ### Literal Types
 
@@ -81,13 +97,13 @@ Singleton types representing specific values:
 
 | Syntax      | Description                    | Supertype |
 | ----------- | ------------------------------ | --------- |
-| `42`        | Integer literal                | `Int`     |
-| `"hello"`   | String literal                 | `String`  |
-| `'foo`      | Symbol literal                 | `Symbol`  |
-| `:bar`      | Keyword literal                | `Keyword` |
+| `42`        | Integer literal                | `int`     |
+| `"hello"`   | String literal                 | `string`  |
+| `'foo`      | Symbol literal                 | `symbol`  |
+| `:bar`      | Keyword literal                | `keyword` |
 
 Literal types are useful for:
-- Discriminated unions: `(Or :success :failure)`
+- Discriminated unions: `(:success | :failure)`
 - Exact return values: `(defun version -> "1.0")`
 - Keyword arguments with specific values
 
@@ -97,71 +113,79 @@ Literal types are useful for:
 
 | Constructor    | Syntax               | Truthy? | Notes                          |
 | -------------- | -------------------- | ------- | ------------------------------ |
-| `List`         | `(List a)`           | ✓       | Homogeneous list               |
-| `Vector`       | `(Vector a)`         | ✓       | Homogeneous vector             |
-| `Option`       | `(Option a)`         | ✗       | Requires `a : Truthy`          |
-| `Pair`         | `(Pair a b)`         | ✓       | Heterogeneous cons cell        |
-| `HashTable`    | `(HashTable k v)`    | ✓       | Mutable hash table             |
-| `Or` (Union)   | `(Or a b ...)`       | *       | Truthy iff all members truthy  |
-| `Tuple`        | `(Tuple a b ...)`    | ✓       | Fixed-length heterogeneous     |
+| `list`         | `(list a)`           | ✓       | Homogeneous list               |
+| `vector`       | `(vector a)`         | ✓       | Homogeneous vector             |
+| `pair`         | `(pair a b)`         | ✓       | Heterogeneous cons cell        |
+| `hash-table`   | `(hash-table k v)`   | ✓       | Mutable hash table             |
+| `tuple`        | `(tuple a b ...)`    | ✓       | Fixed-length heterogeneous     |
 | Arrow          | `(params) -> ret`    | ✓       | Function type (value)          |
 | Arrow+Forall   | `[a] (params) -> ret`| ✓       | Polymorphic function (value)   |
+
+### Union Types
+
+Union types use `|` and must be parenthesized:
+
+```elisp
+(string | nil)                        ; string or nil
+(int | string | nil)                  ; multiple alternatives
+(:ok | :error | :pending)             ; literal union
+```
 
 ### Truthiness
 
 A type is **truthy** if it cannot be `nil`. This is fundamental to Elisp semantics.
 
 ```
-         ⊤ (Any)
+         ⊤ (any)
         /   \
-    Truthy  Nil
+    truthy  nil
       |
-      T
+      t
 ```
 
 **Truthiness predicate:** (see: [`Types.is_truthy`](lib/core/types.ml#L229))
 
 ```
-truthy(C)           = C ∉ {Nil, Bool, Any}
-truthy(F τ̄)         = F ≠ Option
+truthy(C)           = C ∉ {nil, bool, any}
+truthy(F τ̄)         = F ≠ option
 truthy((π̄) → τ)     = true
 truthy(τ₁ × ... × τₙ) = true
 truthy(∀ᾱ. τ)       = truthy(τ)
-truthy(τ₁ ∪ ... ∪ τₙ) = ∀i. truthy(τᵢ)
+truthy(τ₁ | ... | τₙ) = ∀i. truthy(τᵢ)
 truthy(α)           = false  (conservative for unresolved)
 ```
 
 **Option well-formedness:** (see: [`Types.option_of_checked`](lib/core/types.ml#L283))
 
-Option τ requires truthy(τ) to ensure some/none distinguishable:
+`(option a)` requires `a : truthy` to ensure some/none distinguishable:
 
 ```elisp
-(Option String)          ; Valid
-(Option (List Int))      ; Valid
-(Option Nil)             ; INVALID - can't distinguish Some nil from None
-(Option Bool)            ; INVALID - Bool includes Nil
-(Option (Option a))      ; INVALID - nested Option
+(option string)          ; valid
+(option (list int))      ; valid
+(option nil)             ; INVALID - can't distinguish Some nil from None
+(option bool)            ; INVALID - bool includes nil
+(option (option a))      ; INVALID - nested option
 ```
 
 ### Function Types
 
 Parameters are grouped (not curried), matching Elisp semantics. The `->` is infix,
-separating parameters from return type:
+separating parameters from return type. Params are always in parentheses:
 
 ```elisp
-Int -> Int                             ; Single param, no parens needed
-(Int Int) -> Int                       ; Multiple params need parens
-(String &optional Int) -> String       ; With optional
-(&rest Int) -> Int                     ; Variadic
-(&key :name String :age Int) -> Nil    ; Keyword args
-Int -> (Int -> Int)                    ; Returns function value
+(int) -> int                           ; one param
+(int int) -> int                       ; two params
+(string &optional int) -> string       ; with optional
+(&rest int) -> int                     ; variadic
+(&key :name string :age int) -> nil    ; keyword args
+(int) -> ((int) -> int)                ; returns function value
 ```
 
-Nested function types are readable:
+Type applications in params need their own parens:
 
 ```elisp
-(a -> b)                               ; Function taking a, returning b
-((a -> b) (List a)) -> (List b)        ; First param is a function
+((a) -> b)                             ; function taking a, returning b
+(((a -> b)) (list a)) -> (list b)      ; first param is a function type
 ```
 
 Parameter unification rules:
@@ -183,34 +207,34 @@ The type system tracks this distinction via declaration forms:
 
 | Declaration | Calling convention | Example |
 |-------------|-------------------|---------|
-| `defun`     | Direct: `(f args...)` | `(defun add (Int Int) -> Int)` |
-| `defvar` with `->` | Indirect: `(funcall f args...)` | `(defvar handler (String -> Nil))` |
+| `defun`     | Direct: `(f args...)` | `(defun add (int int) -> int)` |
+| `defvar` with `->` | Indirect: `(funcall f args...)` | `(defvar handler ((string) -> nil))` |
 
 In `defun`, quantifiers go right after the name:
 
 ```elisp
-(defun identity [a] a -> a)          ; callable as (identity x)
-(defun add (Int Int) -> Int)         ; monomorphic, no quantifiers needed
+(defun identity [a] (a) -> a)        ; callable as (identity x)
+(defun add (int int) -> int)         ; monomorphic, no quantifiers needed
 ```
 
 For explicit arrow types (in `defvar` or as parameters), quantifiers go at the start:
 
 ```elisp
-(defvar id-fn ([a] a -> a))          ; polymorphic function value
-(defvar handler (String -> Nil))     ; monomorphic function value
+(defvar id-fn ([a] (a) -> a))        ; polymorphic function value
+(defvar handler ((string) -> nil))   ; monomorphic function value
 ```
 
 Higher-order functions receive **values**, so their parameters are arrow types:
 
 ```elisp
-(defun map [a b] ((a -> b) (List a)) -> (List b))
+(defun map [a b] (((a -> b)) (list a)) -> (list b))
 ;; The first parameter is a function value; inside map, use (funcall f elem)
 ```
 
 When a function returns a function, the result is a value:
 
 ```elisp
-(defun make-adder Int -> (Int -> Int))
+(defun make-adder (int) -> ((int) -> int))
 ;; (make-adder 1) returns a value; caller must (funcall (make-adder 1) 2)
 ```
 
@@ -220,15 +244,15 @@ The `.tart` signature file syntax maps to the type theory notation:
 
 | Surface                  | Type Theory    | Example                           |
 | ------------------------ | -------------- | --------------------------------- |
-| `Int`, `String`, ...     | C              | Primitive constants               |
-| `a`, `b`, ...            | α              | Type variables                    |
-| `τ -> τ`                 | τ → τ          | `Int -> Int`                      |
-| `(τ...) -> τ`            | (π̄) → τ        | `(Int Int) -> Int`                |
+| `int`, `string`, ...     | C              | Primitive constants               |
+| `a`, `b`, ... (in `[]`)  | α              | Type variables                    |
+| `τ -> τ`                 | τ → τ          | `int -> int`                      |
+| `(τ...) -> τ`            | (π̄) → τ        | `(int int) -> int`                |
 | `[α...] τ -> τ`          | [ᾱ] τ → τ      | `[a] a -> a`                      |
-| `(List τ)`               | List τ         | `(List Int)`                      |
-| `(Option τ)`             | Option τ       | `(Option String)`                 |
-| `(Or τ₁ τ₂ ...)`         | τ₁ ∪ τ₂ ∪ ...  | `(Or Int String)`                 |
-| `(Tuple τ₁ τ₂ ...)`      | τ₁ × τ₂ × ...  | `(Tuple Int String Bool)`         |
+| `(list τ)`               | list τ         | `(list int)`                      |
+| `(option τ)`             | option τ       | `(option string)`                 |
+| `(τ₁ \| τ₂ \| ...)`      | τ₁ ∪ τ₂ ∪ ...  | `(int \| string)`                 |
+| `(tuple τ₁ τ₂ ...)`      | τ₁ × τ₂ × ...  | `(tuple int string bool)`         |
 | `&optional τ`            | τ?             | Optional parameter                |
 | `&rest τ`                | τ*             | Rest parameter (element type)     |
 | `&key :k τ`              | :k τ           | Keyword parameter                 |
@@ -256,7 +280,7 @@ unify : τ × τ → Result ()
 | Constraint              | Rule                                           |
 | ----------------------- | ---------------------------------------------- |
 | α = τ                   | Occurs check, then α ↦ τ                       |
-| ⊤ = τ                   | Always succeeds (Any is top)                   |
+| ⊤ = τ                   | Always succeeds (any is top)                   |
 | C₁ = C₂                 | Succeeds iff C₁ ≡ C₂                           |
 | F τ̄₁ = F τ̄₂            | Unify arguments pairwise                       |
 | (π̄₁) → τ₁ = (π̄₂) → τ₂  | Unify param lists, then return types           |
@@ -288,7 +312,7 @@ Only **syntactic values** can be generalized:
   (id 1) (id "s"))          ; OK: id : [a] a -> a
 
 (let ((xs (reverse '())))
-  xs)                       ; xs : (List '_a) — monomorphic
+  xs)                       ; xs : (list '_a) — monomorphic
 ```
 
 **Level-based generalization:**
@@ -326,7 +350,7 @@ gen(Γ, τ, e) = ∀ᾱ.τ  where ᾱ = {α ∈ FV(τ) | level(α) > level(Γ)} 
 
 Γ ⊢ c : τ₁    Γ ⊢ t : τ₂
 ──────────────────────────────────────────────────  [If-No-Else]
-        Γ ⊢ (if c t) : τ₂  (simplified; should be τ₂ ∪ Nil)
+        Γ ⊢ (if c t) : τ₂  (simplified; should be τ₂ | nil)
 
 Γ, x:τ₁ ⊢ e : τ₂
 ───────────────────────────────────────────────── [Lambda]
@@ -343,14 +367,14 @@ gen(Γ, τ, e) = ∀ᾱ.τ  where ᾱ = {α ∈ FV(τ) | level(α) > level(Γ)} 
 
 | Form                  | Type                                              |
 | --------------------- | ------------------------------------------------- |
-| `(and)` / `(or)`      | T / Nil                                           |
+| `(and)` / `(or)`      | t / nil                                           |
 | `(and e₁ ... eₙ)`     | τₙ (simplified; should be ⋃τᵢ)                    |
 | `(or e₁ ... eₙ)`      | τₙ (simplified; should be ⋃τᵢ)                    |
-| `(not e)`             | Bool                                              |
+| `(not e)`             | bool                                              |
 | `(setq x e)`          | τ where Γ(x) = τ (if bound)                       |
-| `[e₁ ... eₙ]`         | Vector α where ∀i. eᵢ : α                         |
-| `'sym`                | Symbol                                            |
-| `'(...)`              | List ⊤                                            |
+| `[e₁ ... eₙ]`         | vector α where ∀i. eᵢ : α                         |
+| `'sym`                | symbol                                            |
+| `'(...)`              | list ⊤                                            |
 
 ## Built-in Function Types
 
@@ -362,77 +386,77 @@ Shown in `defun` format (directly callable via `(name args...)`).
 ### List Operations
 
 ```elisp
-(defun car     [a] (List a) -> (Option a))
-(defun cdr     [a] (List a) -> (List a))
-(defun cons    [a] (a (List a)) -> (List a))
-(defun list    [a] (&rest a) -> (List a))
-(defun length  [a] (List a) -> Int)
-(defun nth     [a] (Int (List a)) -> (Option a))
-(defun nthcdr  [a] (Int (List a)) -> (List a))
-(defun append  [a] (&rest (List a)) -> (List a))
-(defun reverse [a] (List a) -> (List a))
-(defun member  [a] (a (List a)) -> (List a))
+(defun car     [a] ((list a)) -> (option a))
+(defun cdr     [a] ((list a)) -> (list a))
+(defun cons    [a] (a (list a)) -> (list a))
+(defun list    [a] (&rest a) -> (list a))
+(defun length  [a] ((list a)) -> int)
+(defun nth     [a] (int (list a)) -> (option a))
+(defun nthcdr  [a] (int (list a)) -> (list a))
+(defun append  [a] (&rest (list a)) -> (list a))
+(defun reverse [a] ((list a)) -> (list a))
+(defun member  [a] (a (list a)) -> (list a))
 ```
 
 ### Arithmetic
 
 ```elisp
-(defun +   (&rest Int) -> Int)
-(defun -   (Int &rest Int) -> Int)
-(defun *   (&rest Int) -> Int)
-(defun /   (Int &rest Int) -> Int)
-(defun mod (Int Int) -> Int)
-(defun abs Int -> Int)
-(defun 1+  Int -> Int)
-(defun 1-  Int -> Int)
+(defun +   (&rest int) -> int)
+(defun -   (int &rest int) -> int)
+(defun *   (&rest int) -> int)
+(defun /   (int &rest int) -> int)
+(defun mod (int int) -> int)
+(defun abs (int) -> int)
+(defun 1+  (int) -> int)
+(defun 1-  (int) -> int)
 ```
 
 ### Comparisons
 
 ```elisp
-(defun <  (Int &rest Int) -> Bool)
-(defun >  (Int &rest Int) -> Bool)
-(defun <= (Int &rest Int) -> Bool)
-(defun >= (Int &rest Int) -> Bool)
-(defun =  (Int &rest Int) -> Bool)
+(defun <  (int &rest int) -> bool)
+(defun >  (int &rest int) -> bool)
+(defun <= (int &rest int) -> bool)
+(defun >= (int &rest int) -> bool)
+(defun =  (int &rest int) -> bool)
 ```
 
 ### Predicates
 
 ```elisp
-(defun null      Any -> Bool)
-(defun atom      Any -> Bool)
-(defun listp     Any -> Bool)
-(defun consp     Any -> Bool)
-(defun symbolp   Any -> Bool)
-(defun stringp   Any -> Bool)
-(defun numberp   Any -> Bool)
-(defun integerp  Any -> Bool)
-(defun floatp    Any -> Bool)
-(defun vectorp   Any -> Bool)
-(defun functionp Any -> Bool)
-(defun eq        (Any Any) -> Bool)
-(defun equal     (Any Any) -> Bool)
-(defun not       Any -> Bool)
+(defun null      (any) -> bool)
+(defun atom      (any) -> bool)
+(defun listp     (any) -> bool)
+(defun consp     (any) -> bool)
+(defun symbolp   (any) -> bool)
+(defun stringp   (any) -> bool)
+(defun numberp   (any) -> bool)
+(defun integerp  (any) -> bool)
+(defun floatp    (any) -> bool)
+(defun vectorp   (any) -> bool)
+(defun functionp (any) -> bool)
+(defun eq        (any any) -> bool)
+(defun equal     (any any) -> bool)
+(defun not       (any) -> bool)
 ```
 
 ### Strings
 
 ```elisp
-(defun concat        (&rest String) -> String)
-(defun substring     (String Int &optional Int) -> String)
-(defun string-length String -> Int)
-(defun upcase        String -> String)
-(defun downcase      String -> String)
-(defun format        (String &rest Any) -> String)
+(defun concat        (&rest string) -> string)
+(defun substring     (string int &optional int) -> string)
+(defun string-length (string) -> int)
+(defun upcase        (string) -> string)
+(defun downcase      (string) -> string)
+(defun format        (string &rest any) -> string)
 ```
 
 ### Vectors
 
 ```elisp
-(defun vector [a] (&rest a) -> (Vector a))
-(defun aref   [a] ((Vector a) Int) -> a)
-(defun aset   [a] ((Vector a) Int a) -> a)
+(defun vector [a] (&rest a) -> (vector a))
+(defun aref   [a] ((vector a) int) -> a)
+(defun aset   [a] ((vector a) int a) -> a)
 ```
 
 ## Interpreter
@@ -456,26 +480,26 @@ signature verification.
 
 ```elisp
 ;; my-utils.tart
-(open 'seq)  ; Import types for use in signatures (not re-exported)
+(open 'seq)  ; import types for use in signatures (not re-exported)
 
 ;; Function signatures (directly callable)
-(defun my-add (Int Int) -> Int)
-(defun my-identity [a] a -> a)
-(defun my-process [a] (Seq a) -> (List a))  ; Uses Seq from seq
+(defun my-add (int int) -> int)
+(defun my-identity [a] (a) -> a)
+(defun my-process [a] ((seq a)) -> (list a))  ; uses seq from seq
 
 ;; Variable with function type (requires funcall)
-(defvar my-handler (String -> Nil))
-(defvar my-poly-handler ([a] a -> a))
+(defvar my-handler ((string) -> nil))
+(defvar my-poly-handler ([a] (a) -> a))
 
 ;; Variable with non-function type
-(defvar my-default String)
+(defvar my-default string)
 
 ;; Type alias
-(type IntList (List Int))
-(type Result (Or Success Failure))
+(type int-list (list int))
+(type result [a e] ((ok a) | (err e)))
 
 ;; Opaque type (no definition = abstract)
-(type Handle)
+(type handle)
 ```
 
 ### Public vs Internal Types
@@ -493,12 +517,12 @@ exposing a simpler or opaque public interface.
 
 ```elisp
 ;; my-cache.tart (public interface)
-(type Cache)                      ; Opaque - hide implementation
-(defun cache-create Int -> Cache)
-(defun cache-get [a] (Cache String) -> (Option a))
+(type cache)                          ; opaque - hide implementation
+(defun cache-create (int) -> cache)
+(defun cache-get [(a : truthy)] (cache string) -> (option a))
 
 ;; my-cache.el (implementation - future extension)
-;; Internal: Cache is actually (HashTable String (Pair Int Any))
+;; Internal: cache is actually (hash-table string (pair int any))
 ;; But consumers only see the opaque type
 ```
 
@@ -522,10 +546,10 @@ When a module is required, tart searches for `.tart` files in order:
 This allows providing types for any module, including third-party packages:
 
 ```
-~/.config/emacs/tart/          ; User's custom type definitions
-├── seq.tart              ; Types for seq.el
-├── dash.tart             ; Types for dash.el
-└── magit-section.tart    ; Types for magit-section.el
+~/.config/emacs/tart/          ; user's custom type definitions
+├── seq.tart              ; types for seq.el
+├── dash.tart             ; types for dash.el
+└── magit-section.tart    ; types for magit-section.el
 ```
 
 Each `.tart` in the search path is a standalone file with a `(module name)` declaration.
@@ -544,10 +568,13 @@ The first match wins, allowing user overrides of bundled types.
 | Sibling `.tart` for interface | Verify implementation matches declared API |
 | Grouped params               | Matches Elisp semantics          |
 | Levels-based generalization  | Near-linear performance          |
-| `Option` requires `Truthy`   | Preserves nil-punning            |
+| `option` requires `truthy`   | Preserves nil-punning            |
 | `defun` vs `defvar`          | Tracks Lisp-2 calling convention |
 | `[vars]` after `->` or name  | Quantifiers scoped to their arrow |
-| Forall inference             | Reduce boilerplate; explicit for phantoms/HKT |
+| Explicit quantification      | No ambiguity; required for v1    |
+| Bounded quantifiers          | Enable `option` as library type  |
+| `\|` for unions              | Clearer than s-expr syntax       |
+| Lowercase types              | More lispy; explicit quantifiers disambiguate |
 
 ## Limitations and Simplifications
 
@@ -555,10 +582,10 @@ Current implementation simplifications documented for future work:
 
 | Simplification                 | Current Behavior                              | Full Behavior                    |
 | ------------------------------ | --------------------------------------------- | -------------------------------- |
-| `if` without else              | Returns then-type                             | Should return `(Or then Nil)`    |
+| `if` without else              | Returns then-type                             | Should return `(then \| nil)`    |
 | `and`/`or` types               | Type of last argument                         | Should be union of all branches  |
 | Union unification              | Requires structural equality                  | Needs subtyping                  |
-| `Num` type                     | No relation to `Int`/`Float`                  | Should be supertype              |
+| `num` type                     | No relation to `int`/`float`                  | Should be supertype              |
 | Forall unification             | Same arity, unify bodies directly             | Needs alpha-renaming             |
 | Option truthy check            | `is_truthy` returns false for tvars           | Could defer to constraint        |
 
@@ -597,7 +624,7 @@ Current implementation simplifications documented for future work:
 1. AST nodes carry source locations (see: [`Location`](lib/syntax/location.ml))
 2. Type variables use union-find with path compression (see: [`Types.repr`](lib/core/types.ml#L84))
 3. Generalization only at let-bindings, only for syntactic values (see: [`Generalize`](lib/typing/generalize.ml))
-4. `Option` argument must be truthy (see: [`Types.is_truthy`](lib/core/types.ml#L229))
+4. `option` argument must be truthy (see: [`Types.is_truthy`](lib/core/types.ml#L229))
 5. Macro expansion preserves source location mapping
 6. Opaque boundaries halt and require annotation
 7. Levels are strictly increasing in nested scopes (see: [`Type_env.enter_level`](lib/core/type_env.ml#L37))

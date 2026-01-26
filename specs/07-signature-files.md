@@ -14,7 +14,7 @@ enabling type checking at module boundaries.
 
 - **Sibling files**: `foo.tart` provides signatures for `foo.el`
 - **Declarative**: No executable code; pure type declarations
-- **Extensible**: Support ADTs, type aliases, struct imports
+- **Extensible**: Support type aliases, struct imports, bounded quantifiers
 
 ## Output
 
@@ -44,7 +44,7 @@ tart/
 **Then** it produces a signature AST containing:
 - Open directives (import types for use in signatures)
 - Include directives (inline and re-export declarations)
-- Function signatures
+- Function signatures with explicit quantifiers
 - Variable declarations
 - Type declarations (aliases with definition, opaque without)
 - Struct imports
@@ -58,57 +58,99 @@ The module name is derived from the filename: `foo.tart` provides types for `foo
 **Given** type expressions in signatures
 **When** parsed
 **Then** they produce the type representation from Spec 06:
-- Base types: `Int`, `String`, `Nil`, `T`, `Truthy`, `Bool`, `Any`, `Never`
-- Type variables: lowercase identifiers
+- Primitive types: `int`, `string`, `nil`, `t`, `truthy`, `never`
+- Type variables: symbols bound by explicit quantifiers
 - Function types: `params -> return` (infix arrow)
-- Applications: `(List Int)`, `(Option String)`
-- Unions: `(Or Int String)`
+- Applications: `(list int)`, `(option string)`
+- Unions: `(int | string)` with parentheses required
 
 Single params need no parens; multiple params require grouping. Quantifiers `[vars]`
-go at the start of arrow types, or after the name in `defun`.
+go at the start of arrow types for values, or after the name in `defun`.
 
 **Verify:** Type parsing tests cover all grammar productions
 
-### R3: Function signature declarations
+### R3: Explicit quantification
 
-**Given** `(defun foo (Int String) -> Bool)`
+**Given** type variables in signatures
+**When** parsed
+**Then** a symbol is treated as a type variable if and only if it appears in a `[...]` quantifier
+
+```elisp
+(defun identity [a] (a) -> a)            ; 'a' is a type variable
+(defun bad (a) -> a)                     ; Error: unbound 'a'
+```
+
+**Verify:** Unbound type variables produce parse/load errors
+
+### R4: Bounded quantifiers
+
+**Given** a quantifier with bounds `[(a : bound)]`
+**When** parsed and loaded
+**Then** the type variable `a` is constrained to subtypes of `bound`
+
+```elisp
+(type option [(a : truthy)] (a | nil))
+(defun unwrap [(a : truthy)] ((a | nil) a) -> a)
+```
+
+**Verify:** Bounded quantifiers parsed correctly; bounds checked at instantiation
+
+### R5: Function signature declarations
+
+**Given** `(defun foo (int string) -> bool)`
 **When** loaded
 **Then** `foo` is bound as a directly callable function in the module's type environment
 
 **Verify:** Signature loaded; type checker uses it for calls to `foo`
 
-### R4: Variable declarations
+### R6: Variable declarations
 
-**Given** `(defvar my-var String)`
+**Given** `(defvar my-var string)`
 **When** loaded
-**Then** `my-var` is bound as a String in the type environment
+**Then** `my-var` is bound as a string in the type environment
 
-**Verify:** References to `my-var` have type String
+**Verify:** References to `my-var` have type string
 
-### R5: Type alias definitions
+### R7: Type alias definitions
 
-**Given** `(type IntList (List Int))`
+**Given** `(type int-list (list int))`
 **When** loaded
-**Then** `IntList` can be used in signatures and expands to `(List Int)`
+**Then** `int-list` can be used in signatures and expands to `(list int)`
 
-**Verify:** `(defun foo IntList -> Int)` equivalent to `(defun foo (List Int) -> Int)`
+**Verify:** `(defun foo int-list -> int)` equivalent to `(defun foo (list int) -> int)`
 
-### R6: Opaque type definitions
+### R8: Parameterized type aliases
+
+**Given** `(type result [a e] ((ok a) | (err e)))`
+**When** loaded
+**Then** `result` is a parameterized type alias that can be instantiated
+
+**Verify:** `(result int string)` expands correctly
+
+### R9: Opaque type definitions
 
 **Given** a type declaration with no definition:
 ```elisp
-(type Buffer)
-(type Handle)
+(type buffer)
+(type handle)
 ```
 **When** loaded
 **Then**:
-- `Buffer` is a distinct opaque type with no exposed structure
-- `Handle` is a separate distinct opaque type
+- `buffer` is a distinct opaque type with no exposed structure
+- `handle` is a separate distinct opaque type
 - Values can only be created/consumed via functions declared in the same module
 
 **Verify:** Opaque types are not unifiable with each other or other types
 
-### R7: Struct imports
+### R10: Opaque types with phantom parameters
+
+**Given** `(type tagged [a])`
+**When** loaded
+**Then** `tagged` is an opaque type with a phantom type parameter
+
+**Verify:** `(tagged int)` and `(tagged string)` are distinct types
+
+### R11: Struct imports
 
 **Given** `(import-struct person)` where `person` is defined via `cl-defstruct`
 **When** loaded
@@ -120,28 +162,28 @@ go at the start of arrow types, or after the name in `defun`.
 
 **Verify:** Struct accessor calls type-check based on slot types
 
-### R8: Open directive (renumbered)
+### R12: Open directive
 
 **Given** `my-collection.tart`:
 ```elisp
 (open 'seq)
 
-(defun my-flatten [a] (Seq (Seq a)) -> (List a))
+(defun my-flatten [a] ((seq (seq a))) -> (list a))
 ```
-**And** `seq.tart` defines `(type Seq ...)`
+**And** `seq.tart` defines `(type seq ...)`
 **When** loaded
-**Then** `Seq` is available for use in type expressions
-**And** `Seq` is NOT re-exported from `my-collection`
+**Then** `seq` is available for use in type expressions
+**And** `seq` is NOT re-exported from `my-collection`
 
 **Verify:** Type expressions can reference opened types; opened types not in exports
 
-### R9: Include directive
+### R13: Include directive
 
 **Given** `my-extended-seq.tart`:
 ```elisp
 (include 'seq)
 
-(defun seq-partition [a] (Int (Seq a)) -> (List (List a)))
+(defun seq-partition [a] (int (seq a)) -> (list (list a)))
 ```
 **And** `seq.tart` defines functions and types
 **When** loaded
@@ -150,7 +192,16 @@ go at the start of arrow types, or after the name in `defun`.
 
 **Verify:** Included declarations appear in module's exports
 
-### R10: Signature search path
+### R14: Union type parsing
+
+**Given** union type syntax `(int | string | nil)`
+**When** parsed
+**Then** produces a union type with the specified alternatives
+**And** parentheses are required around unions
+
+**Verify:** `(a | b)` parses; bare `a | b` is a syntax error
+
+### R15: Signature search path
 
 **Given** a configuration with search path:
 ```elisp
@@ -158,14 +209,14 @@ go at the start of arrow types, or after the name in `defun`.
 ```
 **And** `~/.config/emacs/tart/seq.tart` contains:
 ```elisp
-(defun seq-map [a b] ((a -> b) (Seq a)) -> (List b))
+(defun seq-map [a b] (((a -> b)) (seq a)) -> (list b))
 ```
 **When** a typed module calls `(require 'seq)` and uses `seq-map`
 **Then** `seq-map` is available with the declared type from the search path
 
 **Verify:** Call to `seq-map` with wrong types produces error
 
-### R11: Module discovery order
+### R16: Module discovery order
 
 **Given** a `.el` file being type-checked
 **When** it requires another module via `(require 'module)`
@@ -178,7 +229,7 @@ The first match wins, allowing project-local overrides.
 
 **Verify:** `(require 'cl-lib)` loads `cl-lib.tart` signatures from stdlib
 
-### R12: Bundled stdlib signatures
+### R17: Bundled stdlib signatures
 
 **Given** tart is installed
 **When** builtins are referenced
@@ -189,7 +240,7 @@ Minimum coverage:
 - Lists: `car`, `cdr`, `cons`, `list`, `nth`, `length`, `mapcar`
 - Strings: `concat`, `substring`, `upcase`, `downcase`
 - Predicates: `stringp`, `integerp`, `listp`, `null`
-- Error: `error`, `signal` (return `Never`)
+- Error: `error`, `signal` (return `never`)
 
 **Verify:** Built-in calls type-check; coverage test for all listed functions
 
@@ -197,16 +248,21 @@ Minimum coverage:
 
 - [ ] [R1] Define signature file AST
 - [ ] [R2] Implement type syntax parser
-- [ ] [R3] Handle function signatures
-- [ ] [R4] Handle variable declarations
-- [ ] [R5] Handle type aliases (with definition)
-- [ ] [R6] Handle opaque types (no definition)
-- [ ] [R7] Handle struct imports
-- [ ] [R8] Handle open directive (import types)
-- [ ] [R9] Handle include directive (re-export declarations)
-- [ ] [R10] Implement signature search path
-- [ ] [R11] Implement module discovery with search order
-- [ ] [R12] Write bundled stdlib signatures
+- [ ] [R3] Enforce explicit quantification
+- [ ] [R4] Implement bounded quantifiers
+- [ ] [R5] Handle function signatures
+- [ ] [R6] Handle variable declarations
+- [ ] [R7] Handle type aliases (with definition)
+- [ ] [R8] Handle parameterized type aliases
+- [ ] [R9] Handle opaque types (no definition)
+- [ ] [R10] Handle opaque types with phantom parameters
+- [ ] [R11] Handle struct imports
+- [ ] [R12] Handle open directive (import types)
+- [ ] [R13] Handle include directive (re-export declarations)
+- [ ] [R14] Parse union types with `|` syntax
+- [ ] [R15] Implement signature search path
+- [ ] [R16] Implement module discovery with search order
+- [ ] [R17] Write bundled stdlib signatures
 
 Run review agent after `builtins.tart` covers basic list/string functions before
 proceeding to Spec 08.

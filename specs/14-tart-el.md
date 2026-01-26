@@ -39,16 +39,16 @@ lisp/
 
 ```elisp
 (defun my-add (x y)
-  (declare (tart (Int Int) -> Int))
+  (declare (tart (int int) -> int))
   (+ x y))
 
 (defun my-identity (x)
-  (declare (tart [a] a -> a))
+  (declare (tart [a] (a) -> a))
   x)
 
 ;; Works with cl-defun, defmacro, etc.
 (cl-defun my-lookup (key table &key default)
-  (declare (tart [k v] (k (HashTable k v) &key :default v) -> v))
+  (declare (tart [k v] (k (hash-table k v) &key :default v) -> v))
   (gethash key table default))
 ```
 
@@ -68,12 +68,12 @@ lisp/
 
 ```elisp
 ;; Valid assertions
-(tart String "hello")
-(tart Int 42)
-(tart (List Int) (list 1 2 3))
+(tart string "hello")
+(tart int 42)
+(tart (list int) (list 1 2 3))
 
-;; Error: Int is not compatible with String
-(tart String (+ 1 2))
+;; Error: int is not compatible with string
+(tart string (+ 1 2))
 ```
 
 **Verify:** `dune test`; type error on mismatch; no error on valid annotations
@@ -87,9 +87,9 @@ lisp/
 **And** subsequent `setq`/`setf` to NAME are checked against TYPE
 
 ```elisp
-(defvar my-cache (tart (HashTable String Int) (make-hash-table)))
-(defconst my-version (tart String "1.0.0"))
-(defvar my-handler (tart (String -> Nil) #'ignore))
+(defvar my-cache (tart (hash-table string int) (make-hash-table)))
+(defconst my-version (tart string "1.0.0"))
+(defvar my-handler (tart ((string) -> nil) #'ignore))
 
 ;; Later assignments are checked
 (setq my-cache (make-hash-table))     ; OK
@@ -106,12 +106,12 @@ lisp/
 **And** subsequent `setq`/`setf` and reads of NAME use TYPE
 
 ```elisp
-(tart-declare my-buffer Buffer)
+(tart-declare my-buffer buffer)
 (defvar my-buffer)
 
-;; Reads and writes checked against Buffer
-(setq my-buffer (get-buffer "*scratch*"))  ; OK if returns Buffer
-(buffer-name my-buffer)                     ; OK if expects Buffer
+;; Reads and writes checked against buffer
+(setq my-buffer (get-buffer "*scratch*"))  ; OK if returns buffer
+(buffer-name my-buffer)                     ; OK if expects buffer
 ```
 
 **Verify:** `dune test`; uninitialized variable has declared type
@@ -125,11 +125,11 @@ lisp/
 **And** at runtime, the form expands to `nil`.
 
 ```elisp
-(tart-type IntPair (Tuple Int Int))
-(tart-type Result (Or String Error))
+(tart-type int-pair (tuple int int))
+(tart-type result (string | error))
 
 ;; Use in annotations
-(defvar my-pair (tart IntPair (cons 1 2)))
+(defvar my-pair (tart int-pair (cons 1 2)))
 ```
 
 **Verify:** `dune test`; alias usable in same file; not visible from other modules
@@ -141,37 +141,37 @@ lisp/
 **Then** NAME is a parameterized type alias
 
 ```elisp
-(tart-type Predicate [a] (a -> Bool))
-(tart-type Mapping [k v] (HashTable k v))
+(tart-type predicate [a] ((a) -> bool))
+(tart-type mapping [k v] (hash-table k v))
 
 ;; Usage
-(defvar my-pred (tart (Predicate Int) (lambda (x) (> x 0))))
+(defvar my-pred (tart (predicate int) (lambda (x) (> x 0))))
 ```
 
 **Verify:** `dune test`; parameterized aliases instantiate correctly
 
 ### R7: Invariant type constructors
 
-**Given** parameterized types like `(List a)`, `(Vector a)`, `(HashTable k v)`
+**Given** parameterized types like `(list a)`, `(vector a)`, `(hash-table k v)`
 **When** checking type compatibility
 **Then** type parameters must match exactly (invariance)
 
 ```elisp
-(defvar my-ints (tart (List Int) '(1 2 3)))
+(defvar my-ints (tart (list int) '(1 2 3)))
 
-;; Error: (List Int) is not compatible with (List Any)
+;; Error: (list int) is not compatible with (list any)
 (defun takes-any-list (xs)
-  (declare (tart (List Any) -> Nil))
+  (declare (tart ((list any)) -> nil))
   nil)
 (takes-any-list my-ints)  ; Type error
 
 ;; This is sound: prevents mutation bugs
 (defun mutates-list (xs)
-  (declare (tart (List Any) -> Nil))
+  (declare (tart ((list any)) -> nil))
   (push "oops" xs))  ; Would corrupt my-ints if allowed
 ```
 
-**Verify:** `dune test`; `(List Int)` not subtype of `(List Any)`
+**Verify:** `dune test`; `(list int)` not subtype of `(list any)`
 
 ### R8: Macro expansion (runtime behavior)
 
@@ -184,9 +184,9 @@ lisp/
 - `(declare (tart ...))` is ignored (standard declare behavior)
 
 ```elisp
-(macroexpand '(tart String x))          ; => x
-(macroexpand '(tart-type Foo Int))      ; => nil
-(macroexpand '(tart-declare x Int))     ; => nil
+(macroexpand '(tart string x))          ; => x
+(macroexpand '(tart-type foo int))      ; => nil
+(macroexpand '(tart-declare x int))     ; => nil
 ```
 
 **Verify:** `(ert-deftest ...)` in tart-tests.el confirms expansion
@@ -202,12 +202,12 @@ lisp/
 
 ```
 my-file.el:42:5: error: type mismatch in annotation
-  expected: String
-  actual:   Int
+  expected: string
+  actual:   int
 
 my-file.el:10:1: error: function body doesn't match declared return type
-  declared: Int
-  inferred: String
+  declared: int
+  inferred: string
 ```
 
 **Verify:** Error messages contain expected/actual types and location
@@ -222,16 +222,16 @@ my-file.el:10:1: error: function body doesn't match declared return type
 - Inline annotations cannot contradict `.tart` declarations
 
 ```elisp
-;; my-utils.tart declares: (defun my-add (Int Int) -> Int)
+;; my-utils.tart declares: (defun my-add (int int) -> int)
 
 ;; my-utils.el
 (defun my-add (x y)
-  (declare (tart (Int Int) -> Int))  ; Must match .tart
+  (declare (tart (int int) -> int))  ; Must match .tart
   (+ x y))
 
 ;; Internal helper not in .tart
 (defun internal-helper (s)
-  (declare (tart String -> Int))
+  (declare (tart (string) -> int))
   (length s))
 ```
 

@@ -15,14 +15,14 @@ The big ideas are:
 
 The `.tart` file doesn't change anything from the consumer's perspective...
 unless they also use Tart, in which case your public types are used when
-typechecking their code too. 👌
+typechecking their code too.
 
 > [!WARNING]
 > Tart is under active development and is not yet usable. See
 > [DEVELOPMENT.md](DEVELOPMENT.md) for build instructions and project status.
 
 > [!NOTE]
-> Heavy use of AI assistance in this codebase. You have been warned. ☠️
+> Heavy use of AI assistance in this codebase. You have been warned.
 
 ## Quick Tour
 
@@ -38,13 +38,13 @@ Tart defines the types you'd expect for Emacs' primitive data structures. You
 can declare your own types to make type signatures more meaningful.
 
 ```elisp
-(type Id Int)
+(type id int)
 ```
 
 Union types are defined like so:
 
 ```elisp
-(type OptString (String | Nil))
+(type opt-string (string | nil))
 ```
 
 The normal type checks you'd do in an `if`, `cond`, `when`, etc will narrow down
@@ -55,7 +55,7 @@ which type you actually have in a given branch.
 Variables (`defvar`, `defconst` and friends) are all declared via `defvar`.
 
 ```elisp
-(defvar my-variable String) ; my-variable is a value of type 'String'
+(defvar my-variable string) ; my-variable is a value of type 'string'
 ```
 
 Tart will type-check the definition and how it gets used.
@@ -79,18 +79,22 @@ In Emacs Lisp, `nil` is always logically false, and anything else is considered
 features and idioms depend on it, which mean it's very normal to have 'optional'
 values in your program. Tart knows about it and helps you work with it.
 
-The `Any` type comes with Tart, for when you just need to check if something is
-truthy and don't need to know exactly what it is:
+The `any` type is defined in the standard library, for when you just need to
+check if something is truthy and don't need to know exactly what it is:
 
 ```elisp
-(type Any (Truthy | Nil))
+(type any (truthy | nil))
 ```
 
-There's also an `Option` type, for when you _do_ know:
+There's also an `option` type, for when you _do_ know:
 
 ```elisp
-(type Option (a | Nil))
+(type option [(a : truthy)] (a | nil))
 ```
+
+The `(a : truthy)` part is a _bound_--it says the type parameter `a` must be
+truthy (i.e., can't itself be `nil`). This ensures you can always distinguish
+"no value" from "has a value".
 
 Checking a value's truthiness will narrow a type as you'd hope. Let's use the
 `tart` macro to do a type assertion and see how this plays out:
@@ -98,7 +102,7 @@ Checking a value's truthiness will narrow a type as you'd hope. Let's use the
 ```elisp
 ; regular elisp code
 
-(defvar mystery (tart (Option String) nil))
+(defvar mystery (tart (option string) nil))
 
 (setq mystery "hello!")
 (setq mystery nil)
@@ -106,19 +110,19 @@ Checking a value's truthiness will narrow a type as you'd hope. Let's use the
 
 (if mystery
 
-  (tart Truthy mystery) ; ok - mystery is non-nil in this branch
+  (tart truthy mystery) ; ok - mystery is non-nil in this branch
 
- (tart Truthy mystery) ; => type error - mystery is nil in this branch
+ (tart truthy mystery) ; => type error - mystery is nil in this branch
  )
 ```
 
 ### Functions
 
-Functions are declared in `.tart` files with `defun`. The return type is after
-the arrow.
+Functions are declared in `.tart` files with `defun`. Params are in parentheses,
+and the return type is after the arrow.
 
 ```elisp
-(defun my-add (Number Number) -> Number)
+(defun my-add (num num) -> num)
 ```
 
 Callers will then get red squiggly type errors in their own code.
@@ -139,34 +143,34 @@ spec.
 ;; regular elisp code
 
 (defun my-package--internal-add (n m)
-  (declare (tart (Number Number) -> Number))
+  (declare (tart (num num) -> num))
   (+ n m))
 ```
 
 Tart supports `&rest`, `&optional`, `&key` and `&allow-other-keys`.
 
 ```elisp
-(defun my-greet (String &optional String) -> String)
-(defun my-sum (&rest Int) -> Int)
-(defun my-make-person (&key :name String :age Int) -> Person)
+(defun my-greet (string &optional string) -> string)
+(defun my-sum (&rest int) -> int)
+(defun my-make-person (&key :name string :age int) -> person)
 ```
 
-Optional parameters and keys are inferred as `Option a`. `&rest` becomes
-`List a`.
+Optional parameters and keys are inferred as `(t | nil)`. `&rest` becomes
+`(list t)`.
 
 ### Generic Functions
 
-Lowercase type names introduce type parameters.
+Type parameters must be explicitly declared in square brackets after the
+function name.
 
 ```elisp
-(defun seq-map ((a -> b) (List a)) -> (List b))
+(defun seq-map [a b] (((a -> b)) (list a)) -> (list b))
 ```
 
-There's syntax for explicitly declaring type parameters, but you probably won't
-need it.
+Type parameters can have bounds:
 
 ```elisp
-(defun seq-map [a b] ((a -> b) (List a)) -> (List b))
+(defun unwrap-or [(a : truthy)] ((a | nil) a) -> a)
 ```
 
 ### Named vs Anonymous Functions
