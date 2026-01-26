@@ -431,7 +431,7 @@ Additional commonly-used Emacs libraries for broader type checking coverage.
 
 ### 17.1 Hash Tables and Maps
 
-- [ ] [R1] Create stdlib/ht.tart with ht.el hash table library signatures
+- [x] [R1] Create stdlib/ht.tart with ht.el hash table library signatures
 - [ ] [R2] Create stdlib/map.tart with map.el generic map operations
 - [ ] Verify: ht.tart and map.tart parse and load
 

@@ -1271,6 +1271,63 @@ let test_load_f () =
            true
          with Not_found -> false)
 
+(** Test that ht.tart parses successfully *)
+let test_parse_ht () =
+  let path = Filename.concat stdlib_dir "ht.tart" in
+  if not (Sys.file_exists path) then
+    Alcotest.fail ("ht.tart not found at: " ^ path);
+  match Search_path.parse_signature_file path with
+  | None -> Alcotest.fail "ht.tart failed to parse"
+  | Some sig_file ->
+      Alcotest.(check string) "module name" "ht" sig_file.sig_module;
+      Alcotest.(check bool)
+        "has declarations" true
+        (List.length sig_file.sig_decls > 20);
+      (* Check key ht.el functions *)
+      let has_defun name =
+        List.exists
+          (function Sig_ast.DDefun d -> d.defun_name = name | _ -> false)
+          sig_file.sig_decls
+      in
+      Alcotest.(check bool) "has ht-create" true (has_defun "ht-create");
+      Alcotest.(check bool) "has ht-get" true (has_defun "ht-get");
+      Alcotest.(check bool) "has ht-set!" true (has_defun "ht-set!");
+      Alcotest.(check bool) "has ht-keys" true (has_defun "ht-keys");
+      Alcotest.(check bool) "has ht-map" true (has_defun "ht-map");
+      Alcotest.(check bool) "has ht-from-alist" true (has_defun "ht-from-alist");
+      Alcotest.(check bool) "has ht-merge" true (has_defun "ht-merge")
+
+(** Test that ht can be loaded into type environment *)
+let test_load_ht () =
+  let sp = Search_path.empty |> Search_path.with_stdlib stdlib_dir in
+  (* First load builtins for base types *)
+  let base_env =
+    match
+      Search_path.load_module ~search_path:sp ~env:Type_env.empty "builtins"
+    with
+    | None -> Alcotest.fail "failed to load builtins module"
+    | Some env -> env
+  in
+  match Search_path.load_module ~search_path:sp ~env:base_env "ht" with
+  | None -> Alcotest.fail "failed to load ht module"
+  | Some env -> (
+      (* Check that ht-create is loaded *)
+      (match Type_env.lookup "ht-create" env with
+      | None -> Alcotest.fail "ht-create not found in env"
+      | Some _ -> ());
+      (* Check that ht-get is loaded *)
+      (match Type_env.lookup "ht-get" env with
+      | None -> Alcotest.fail "ht-get not found in env"
+      | Some _ -> ());
+      (* Check that ht-map is loaded *)
+      (match Type_env.lookup "ht-map" env with
+      | None -> Alcotest.fail "ht-map not found in env"
+      | Some _ -> ());
+      (* Check that ht-from-alist is loaded *)
+      match Type_env.lookup "ht-from-alist" env with
+      | None -> Alcotest.fail "ht-from-alist not found in env"
+      | Some _ -> ())
+
 let () =
   Alcotest.run "search_path"
     [
@@ -1340,5 +1397,7 @@ let () =
           Alcotest.test_case "load s into env" `Quick test_load_s;
           Alcotest.test_case "parse f.tart" `Quick test_parse_f;
           Alcotest.test_case "load f into env" `Quick test_load_f;
+          Alcotest.test_case "parse ht.tart" `Quick test_parse_ht;
+          Alcotest.test_case "load ht into env" `Quick test_load_ht;
         ] );
     ]
