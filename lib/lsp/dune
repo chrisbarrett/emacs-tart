@@ -1,0 +1,4 @@
+(library
+ (name lsp)
+ (public_name tart.lsp)
+ (libraries yojson tart.syntax tart.core tart.typing))

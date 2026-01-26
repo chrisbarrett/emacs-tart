@@ -61,3 +61,7 @@ module Unify = Typing.Unify
 module Generalize = Typing.Generalize
 module Check = Typing.Check
 module Diagnostic = Typing.Diagnostic
+
+(** {1 LSP} *)
+
+module Rpc = Lsp.Rpc

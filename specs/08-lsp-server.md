@@ -165,7 +165,7 @@ responses with proper headers
 
 ## Tasks
 
-- [ ] [R1] Implement JSON-RPC reader/writer
+- [x] [R1] Implement JSON-RPC reader/writer
 - [ ] [R2] Handle initialize/initialized/shutdown
 - [ ] [R3] Implement document manager with incremental sync
 - [ ] [R4] Implement publishDiagnostics on document change

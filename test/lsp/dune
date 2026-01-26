@@ -1,0 +1,3 @@
+(test
+ (name rpc_test)
+ (libraries tart str alcotest))
