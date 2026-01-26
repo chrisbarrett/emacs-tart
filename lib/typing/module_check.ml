@@ -43,7 +43,9 @@ type mismatch_error = {
   name : string;
   expected : Types.typ;
   actual : Types.typ;
-  span : Syntax.Location.span;
+  impl_span : Syntax.Location.span;
+      (** Location of implementation in .el file *)
+  sig_span : Syntax.Location.span;  (** Location of signature in .tart file *)
 }
 (** Error when implementation doesn't match signature *)
 
@@ -260,8 +262,8 @@ let extract_defun_spans (sexps : Syntax.Sexp.t list) :
     This performs a simple structural check. The declared type should be an
     instance of the inferred type (the inferred type can be more general). *)
 let verify_defun_type ~(name : string) ~(declared : Types.typ)
-    ~(inferred : Types.typ) ~(span : Syntax.Location.span) :
-    mismatch_error option =
+    ~(inferred : Types.typ) ~(impl_span : Syntax.Location.span)
+    ~(sig_span : Syntax.Location.span) : mismatch_error option =
   (* Reset type variable counter for fresh comparison *)
   Types.reset_tvar_counter ();
 
@@ -272,12 +274,12 @@ let verify_defun_type ~(name : string) ~(declared : Types.typ)
   (* Try to unify the declared type with the inferred type.
      The declared type should be compatible with (possibly more specific than)
      the inferred type. *)
-  let c = Constraint.equal declared' inferred' span in
+  let c = Constraint.equal declared' inferred' impl_span in
   match Unify.solve (Constraint.add c Constraint.empty) with
   | Ok () -> None (* Types are compatible *)
   | Error _ ->
       (* Types don't match - report mismatch *)
-      Some { name; expected = declared; actual = inferred; span }
+      Some { name; expected = declared; actual = inferred; impl_span; sig_span }
 
 (** {1 Main Check Function} *)
 
@@ -329,6 +331,9 @@ let check_module ~(config : config) ~(filename : string)
   (* Step 5: Type-check the implementation *)
   let check_result = Check.check_program ~env:env_with_autoloads sexps in
 
+  (* Build a lookup table for defun spans from the parsed sexps *)
+  let defun_spans = extract_defun_spans sexps in
+
   (* Step 6: If we have a signature, verify implementations match *)
   let mismatch_errors =
     match sig_ast_opt with
@@ -351,14 +356,19 @@ let check_module ~(config : config) ~(filename : string)
                       | Env.Mono ty -> ty
                       | Env.Poly (vars, ty) -> Types.TForall (vars, ty)
                     in
-                    (* Find span for error reporting - use first sexp as fallback *)
-                    let span =
-                      match sexps with
-                      | first :: _ -> Syntax.Sexp.span_of first
-                      | [] -> Syntax.Location.dummy_span
+                    (* Find implementation span - look up by name, fallback to first sexp *)
+                    let impl_span =
+                      match List.assoc_opt name defun_spans with
+                      | Some span -> span
+                      | None -> (
+                          match sexps with
+                          | first :: _ -> Syntax.Sexp.span_of first
+                          | [] -> Syntax.Location.dummy_span)
                     in
+                    (* Get signature span from the defun declaration *)
+                    let sig_span = d.defun_loc in
                     verify_defun_type ~name ~declared:declared_ty ~inferred
-                      ~span
+                      ~impl_span ~sig_span
                 | None ->
                     (* Function declared but not defined - skip for now
                        (could be a warning in future) *)
@@ -412,8 +422,8 @@ let check_module ~(config : config) ~(filename : string)
 
 (** Convert mismatch errors to diagnostics *)
 let mismatch_to_diagnostic (err : mismatch_error) : Diagnostic.t =
-  Diagnostic.type_mismatch ~span:err.span ~expected:err.expected
-    ~actual:err.actual ()
+  Diagnostic.signature_mismatch ~name:err.name ~impl_span:err.impl_span
+    ~impl_type:err.actual ~sig_span:err.sig_span ~sig_type:err.expected ()
 
 (** Convert missing signature warnings to diagnostics *)
 let missing_signature_to_diagnostic (warn : missing_signature_warning) :

@@ -230,12 +230,12 @@ error[E0308]: implementation does not match signature
 
 ## Tasks
 
-- [ ] [R1] Implement type mismatch formatting
-- [ ] [R2] Implement branch mismatch formatting
-- [ ] [R3] Implement Option/nil error formatting
-- [ ] [R4] Implement typo suggestions (Levenshtein)
-- [ ] [R5] Implement arity error formatting
-- [ ] [R6] Implement signature mismatch formatting
+- [x] [R1] Implement type mismatch formatting
+- [x] [R2] Implement branch mismatch formatting
+- [x] [R3] Implement Option/nil error formatting
+- [x] [R4] Implement typo suggestions (Levenshtein)
+- [x] [R5] Implement arity error formatting
+- [x] [R6] Implement signature mismatch formatting
 - [ ] [R7] Map to LSP diagnostic format
 
 Run review agent after R1-R3 work (basic error formatting) before implementing R4-R6.

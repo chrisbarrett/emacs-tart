@@ -322,6 +322,38 @@ let test_missing_signature_diagnostic () =
       let diag = List.hd diagnostics in
       Alcotest.(check bool) "is warning" true (diag.severity = Warning))
 
+(** Signature mismatch diagnostic shows both .el and .tart locations (R6) *)
+let test_signature_mismatch_has_both_locations () =
+  let files =
+    [
+      ("bar.el", "(defun bar-fn (x) (+ x 1))");
+      (* signature says string, impl returns int *)
+      ("bar.tart", "(defun bar-fn (int) -> string)");
+    ]
+  in
+  with_temp_dir files (fun dir ->
+      let config = Module_check.default_config () in
+      let el_path = Filename.concat dir "bar.el" in
+      let sexps = parse "(defun bar-fn (x) (+ x 1))" in
+      let result = Module_check.check_module ~config ~filename:el_path sexps in
+      (* Should have a mismatch error *)
+      Alcotest.(check bool)
+        "has mismatch error" true
+        (List.length result.mismatch_errors > 0);
+      let err = List.hd result.mismatch_errors in
+      (* Verify mismatch_error has both spans *)
+      Alcotest.(check bool)
+        "impl_span has .el file" true
+        (String.length err.impl_span.start_pos.file > 0);
+      Alcotest.(check bool)
+        "sig_span has .tart file" true
+        (String.length err.sig_span.start_pos.file > 0);
+      (* Convert to diagnostic and verify related info *)
+      let diag = Module_check.mismatch_to_diagnostic err in
+      Alcotest.(check bool)
+        "diagnostic has related info" true
+        (List.length diag.related > 0))
+
 (* =============================================================================
    Autoload Detection Tests (R7)
    ============================================================================= *)
@@ -614,6 +646,8 @@ let () =
             test_mixed_internal_public;
           Alcotest.test_case "diagnostic created" `Quick
             test_missing_signature_diagnostic;
+          Alcotest.test_case "signature mismatch both locations" `Quick
+            test_signature_mismatch_has_both_locations;
         ] );
       ( "extract_module_prefixes",
         [

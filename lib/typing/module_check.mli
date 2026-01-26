@@ -29,7 +29,9 @@ type mismatch_error = {
   name : string;
   expected : Core.Types.typ;
   actual : Core.Types.typ;
-  span : Syntax.Location.span;
+  impl_span : Syntax.Location.span;
+      (** Location of implementation in .el file *)
+  sig_span : Syntax.Location.span;  (** Location of signature in .tart file *)
 }
 (** Error when implementation doesn't match signature *)
 

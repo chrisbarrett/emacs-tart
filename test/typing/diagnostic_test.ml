@@ -796,6 +796,117 @@ let test_all_spans () =
   Alcotest.(check int) "two spans" 2 (List.length spans)
 
 (* =============================================================================
+   Signature Mismatch Tests (R6)
+   ============================================================================= *)
+
+let test_signature_mismatch_diagnostic () =
+  let impl_pos = Loc.make_pos ~file:"lib.el" ~line:10 ~col:0 ~offset:100 in
+  let impl_span = Loc.make_span ~start_pos:impl_pos ~end_pos:impl_pos in
+  let sig_pos = Loc.make_pos ~file:"lib.tart" ~line:5 ~col:0 ~offset:50 in
+  let sig_span = Loc.make_span ~start_pos:sig_pos ~end_pos:sig_pos in
+  let sig_type = Types.arrow [ Types.Prim.int ] Types.Prim.string in
+  let impl_type = Types.arrow [ Types.Prim.int ] Types.Prim.int in
+  let d =
+    Diag.signature_mismatch ~name:"foo" ~impl_span ~impl_type ~sig_span
+      ~sig_type ()
+  in
+  Alcotest.(check bool) "is error" true (Diag.is_error d);
+  Alcotest.(
+    check
+      (option
+         (of_pp (fun fmt c ->
+              Format.fprintf fmt "%s" (Diag.error_code_to_string c)))))
+    "code is E0308" (Some Diag.E0308) d.code
+
+let test_signature_mismatch_message () =
+  let impl_span = Loc.dummy_span in
+  let sig_span = Loc.dummy_span in
+  let sig_type = Types.arrow [ Types.Prim.int ] Types.Prim.string in
+  let impl_type = Types.arrow [ Types.Prim.int ] Types.Prim.int in
+  let d =
+    Diag.signature_mismatch ~name:"foo" ~impl_span ~impl_type ~sig_span
+      ~sig_type ()
+  in
+  Alcotest.(check bool)
+    "message mentions implementation" true
+    (contains_pattern (Str.regexp_case_fold "implementation") d.message);
+  Alcotest.(check bool)
+    "message mentions function name" true
+    (contains_pattern (Str.regexp "foo") d.message)
+
+let test_signature_mismatch_has_related () =
+  let impl_span = Loc.dummy_span in
+  let sig_pos = Loc.make_pos ~file:"lib.tart" ~line:5 ~col:0 ~offset:50 in
+  let sig_span = Loc.make_span ~start_pos:sig_pos ~end_pos:sig_pos in
+  let sig_type = Types.arrow [ Types.Prim.int ] Types.Prim.string in
+  let impl_type = Types.arrow [ Types.Prim.int ] Types.Prim.int in
+  let d =
+    Diag.signature_mismatch ~name:"foo" ~impl_span ~impl_type ~sig_span
+      ~sig_type ()
+  in
+  Alcotest.(check bool) "has related info" true (List.length d.Diag.related > 0);
+  let rel = List.hd d.Diag.related in
+  Alcotest.(check bool)
+    "related mentions signature declared" true
+    (contains_pattern (Str.regexp_case_fold "signature declared") rel.message)
+
+let test_signature_mismatch_shows_both_locations () =
+  let impl_pos = Loc.make_pos ~file:"lib.el" ~line:10 ~col:0 ~offset:100 in
+  let impl_span = Loc.make_span ~start_pos:impl_pos ~end_pos:impl_pos in
+  let sig_pos = Loc.make_pos ~file:"lib.tart" ~line:5 ~col:0 ~offset:50 in
+  let sig_span = Loc.make_span ~start_pos:sig_pos ~end_pos:sig_pos in
+  let sig_type = Types.arrow [ Types.Prim.int ] Types.Prim.string in
+  let impl_type = Types.arrow [ Types.Prim.int ] Types.Prim.int in
+  let d =
+    Diag.signature_mismatch ~name:"foo" ~impl_span ~impl_type ~sig_span
+      ~sig_type ()
+  in
+  let str = Diag.to_string d in
+  (* Primary location should be in lib.el *)
+  Alcotest.(check bool)
+    "shows lib.el" true
+    (contains_pattern (Str.regexp "lib\\.el") str);
+  (* Related location should be in lib.tart *)
+  Alcotest.(check bool)
+    "shows lib.tart" true
+    (contains_pattern (Str.regexp "lib\\.tart") str)
+
+let test_signature_mismatch_shows_types () =
+  let impl_span = Loc.dummy_span in
+  let sig_span = Loc.dummy_span in
+  let sig_type = Types.arrow [ Types.Prim.int ] Types.Prim.string in
+  let impl_type = Types.arrow [ Types.Prim.int ] Types.Prim.int in
+  let d =
+    Diag.signature_mismatch ~name:"foo" ~impl_span ~impl_type ~sig_span
+      ~sig_type ()
+  in
+  let str = Diag.to_string d in
+  Alcotest.(check bool)
+    "shows expected String" true
+    (contains_pattern (Str.regexp "String") str);
+  Alcotest.(check bool)
+    "shows expected and found" true
+    (contains_pattern (Str.regexp "expected") str
+    && contains_pattern (Str.regexp "found") str)
+
+let test_signature_mismatch_spans () =
+  let impl_pos = Loc.make_pos ~file:"lib.el" ~line:10 ~col:0 ~offset:100 in
+  let impl_span = Loc.make_span ~start_pos:impl_pos ~end_pos:impl_pos in
+  let sig_pos = Loc.make_pos ~file:"lib.tart" ~line:5 ~col:0 ~offset:50 in
+  let sig_span = Loc.make_span ~start_pos:sig_pos ~end_pos:sig_pos in
+  let sig_type = Types.arrow [ Types.Prim.int ] Types.Prim.string in
+  let impl_type = Types.arrow [ Types.Prim.int ] Types.Prim.int in
+  let d =
+    Diag.signature_mismatch ~name:"foo" ~impl_span ~impl_type ~sig_span
+      ~sig_type ()
+  in
+  (* Primary span should be implementation *)
+  Alcotest.(check string) "primary span is impl" "lib.el" d.span.start_pos.file;
+  (* all_spans should include both *)
+  let spans = Diag.all_spans d in
+  Alcotest.(check int) "two spans" 2 (List.length spans)
+
+(* =============================================================================
    Test Suite
    ============================================================================= *)
 
@@ -894,6 +1005,21 @@ let () =
             test_arity_mismatch_optional_range;
           Alcotest.test_case "rest args" `Quick test_arity_mismatch_rest_args;
           Alcotest.test_case "no context" `Quick test_arity_mismatch_no_context;
+        ] );
+      ( "signature_mismatch",
+        [
+          Alcotest.test_case "diagnostic creation" `Quick
+            test_signature_mismatch_diagnostic;
+          Alcotest.test_case "message content" `Quick
+            test_signature_mismatch_message;
+          Alcotest.test_case "has related info" `Quick
+            test_signature_mismatch_has_related;
+          Alcotest.test_case "shows both locations" `Quick
+            test_signature_mismatch_shows_both_locations;
+          Alcotest.test_case "shows types" `Quick
+            test_signature_mismatch_shows_types;
+          Alcotest.test_case "spans include both files" `Quick
+            test_signature_mismatch_spans;
         ] );
       ( "integration",
         [

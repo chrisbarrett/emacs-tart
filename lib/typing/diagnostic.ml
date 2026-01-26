@@ -166,6 +166,34 @@ let missing_signature ~span ~name () =
     help = [];
   }
 
+(** Create a signature mismatch diagnostic (E0308) showing both locations.
+
+    Used when a function's implementation type doesn't match its declared
+    signature. Shows the implementation location as primary, and the signature
+    location as related information. *)
+let signature_mismatch ~name ~impl_span ~impl_type ~sig_span ~sig_type () =
+  let related =
+    [
+      {
+        span = sig_span;
+        message =
+          Printf.sprintf "signature declared here: %s"
+            (Types.to_string sig_type);
+      };
+    ]
+  in
+  {
+    severity = Error;
+    code = Some E0308;
+    span = impl_span;
+    message =
+      Printf.sprintf "implementation of `%s` does not match signature" name;
+    expected = Some sig_type;
+    actual = Some impl_type;
+    related;
+    help = [];
+  }
+
 (** Create an undefined variable diagnostic (E0425) with typo suggestions.
 
     Takes the undefined name and a list of candidate names from the environment

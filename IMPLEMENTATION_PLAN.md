@@ -137,7 +137,7 @@ Improve error message quality.
 
 - [x] [R4] Implement Levenshtein-based typo suggestions
 - [x] [R5] Format arity mismatch errors with signature
-- [ ] [R6] Format signature mismatch errors with both locations
+- [x] [R6] Format signature mismatch errors with both locations
 - [x] Verify: Typos suggest similar names
 
 ### 6.3 LSP Integration

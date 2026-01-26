@@ -89,6 +89,20 @@ val occurs_check :
 val missing_signature : span:Syntax.Location.span -> name:string -> unit -> t
 (** Create a warning for a public function not in signature file. *)
 
+val signature_mismatch :
+  name:string ->
+  impl_span:Syntax.Location.span ->
+  impl_type:Core.Types.typ ->
+  sig_span:Syntax.Location.span ->
+  sig_type:Core.Types.typ ->
+  unit ->
+  t
+(** Create a signature mismatch diagnostic (E0308) showing both locations.
+
+    Used when a function's implementation type doesn't match its declared
+    signature. [impl_span] is the location in the [.el] file, [sig_span] is the
+    location in the [.tart] file. *)
+
 val undefined_variable :
   span:Syntax.Location.span ->
   name:string ->
