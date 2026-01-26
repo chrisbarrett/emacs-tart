@@ -51,6 +51,9 @@ val occurs_check :
   t
 (** Create an occurs check (infinite type) diagnostic. *)
 
+val missing_signature : span:Syntax.Location.span -> name:string -> unit -> t
+(** Create a warning for a public function not in signature file. *)
+
 (** {1 Conversion from unification errors} *)
 
 val of_unify_error : Unify.error -> t

@@ -141,10 +141,10 @@ No new files; extends `lib/typing/check.ml` and `lib/sig/sig_loader.ml`.
 - [x] [R2] Verify implementations match signatures when .tart exists
 - [x] [R3] Load signatures from search path for required modules
 - [ ] [R4] Document untyped→typed boundary (no action needed)
-- [ ] [R5] Distinguish public vs internal functions
+- [x] [R5] Distinguish public vs internal functions
 - [x] [R6] Load signatures for required modules
 - [ ] [R7] Handle autoloaded function lookup via search path
-- [ ] [R8] Warn on undefined exports
+- [x] [R8] Warn on undefined exports
 - [ ] [R9] Handle circular module dependencies
 
 Run review agent after R1-R3 work (basic module loading) before implementing R7-R9.

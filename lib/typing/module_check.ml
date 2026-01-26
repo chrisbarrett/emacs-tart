@@ -47,11 +47,18 @@ type mismatch_error = {
 }
 (** Error when implementation doesn't match signature *)
 
+(** {1 Missing Signature Warnings} *)
+
+type missing_signature_warning = { name : string; span : Syntax.Location.span }
+(** Warning when a public function is not in the signature file *)
+
 (** {1 Module Check Result} *)
 
 type check_result = {
   type_errors : Unify.error list;  (** Type errors from inference *)
   mismatch_errors : mismatch_error list;  (** Signature mismatch errors *)
+  missing_signature_warnings : missing_signature_warning list;
+      (** Warnings for public functions not in signature *)
   signature_env : Env.t option;  (** Environment from loaded signature, if any *)
 }
 (** Result of module-aware type checking *)
@@ -105,6 +112,38 @@ let load_sibling_signature ~(config : config) (el_path : string) :
       in
       Some (env, sig_ast)
   | None -> None
+
+(** {1 Internal Function Detection} *)
+
+(** Helper to check if string contains substring *)
+let string_contains s ~substring =
+  let len = String.length substring in
+  let slen = String.length s in
+  if len > slen then false
+  else
+    let rec check i =
+      if i > slen - len then false
+      else if String.sub s i len = substring then true
+      else check (i + 1)
+    in
+    check 0
+
+(** Check if a function name is internal (contains "--") *)
+let is_internal_name (name : string) : bool =
+  (* Emacs convention: internal functions have "--" in their name *)
+  string_contains name ~substring:"--"
+
+(** Extract defun names and their spans from parsed sexps *)
+let extract_defun_spans (sexps : Syntax.Sexp.t list) :
+    (string * Syntax.Location.span) list =
+  let open Syntax.Sexp in
+  List.filter_map
+    (fun sexp ->
+      match sexp with
+      | List (Symbol ("defun", _) :: Symbol (name, _) :: _, span) ->
+          Some (name, span)
+      | _ -> None)
+    sexps
 
 (** {1 Implementation Verification} *)
 
@@ -214,9 +253,41 @@ let check_module ~(config : config) ~(filename : string)
           sig_ast.sig_decls
   in
 
+  (* Step 6: Warn on public functions not in signature file (R5, R8) *)
+  let missing_signature_warnings =
+    match sig_ast_opt with
+    | None -> [] (* No signature file - no warnings *)
+    | Some sig_ast ->
+        (* Build set of declared function names *)
+        let declared_names =
+          List.filter_map
+            (fun decl ->
+              match decl with
+              | Sig.Sig_ast.DDefun d -> Some d.defun_name
+              | _ -> None)
+            sig_ast.sig_decls
+        in
+        (* Get all defined functions with their spans *)
+        let defined_fns = extract_defun_spans sexps in
+        (* Warn on public functions not in signature *)
+        List.filter_map
+          (fun (name, span) ->
+            if is_internal_name name then
+              (* R5: Internal functions are inferred, not exported - no warning *)
+              None
+            else if List.mem name declared_names then
+              (* Function is in signature - no warning *)
+              None
+            else
+              (* R8: Public function not in signature - warning *)
+              Some { name; span })
+          defined_fns
+  in
+
   {
     type_errors = check_result.errors;
     mismatch_errors;
+    missing_signature_warnings;
     signature_env =
       (match sibling_result with Some (env, _) -> Some env | None -> None);
   }
@@ -228,10 +299,18 @@ let mismatch_to_diagnostic (err : mismatch_error) : Diagnostic.t =
   Diagnostic.type_mismatch ~span:err.span ~expected:err.expected
     ~actual:err.actual ()
 
+(** Convert missing signature warnings to diagnostics *)
+let missing_signature_to_diagnostic (warn : missing_signature_warning) :
+    Diagnostic.t =
+  Diagnostic.missing_signature ~span:warn.span ~name:warn.name ()
+
 (** Get all diagnostics from a check result *)
 let diagnostics_of_result (result : check_result) : Diagnostic.t list =
   let type_diagnostics = Diagnostic.of_unify_errors result.type_errors in
   let mismatch_diagnostics =
     List.map mismatch_to_diagnostic result.mismatch_errors
   in
-  type_diagnostics @ mismatch_diagnostics
+  let missing_sig_diagnostics =
+    List.map missing_signature_to_diagnostic result.missing_signature_warnings
+  in
+  type_diagnostics @ mismatch_diagnostics @ missing_sig_diagnostics

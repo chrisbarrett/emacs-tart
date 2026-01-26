@@ -185,11 +185,140 @@ let test_diagnostics_empty () =
     {
       Module_check.type_errors = [];
       mismatch_errors = [];
+      missing_signature_warnings = [];
       signature_env = None;
     }
   in
   let diagnostics = Module_check.diagnostics_of_result result in
   Alcotest.(check int) "no diagnostics" 0 (List.length diagnostics)
+
+(* =============================================================================
+   Missing Signature Warning Tests (R5, R8)
+   ============================================================================= *)
+
+(** R8: Public function not in signature file should generate warning *)
+let test_missing_signature_warning () =
+  let files =
+    [
+      ("foo.el", "(defun foo-public (x) (+ x 1))\n(defun foo-other (x) (* x 2))");
+      ("foo.tart", "(defun foo-public (int) -> int)");
+      (* foo-other is NOT in the signature *)
+    ]
+  in
+  with_temp_dir files (fun dir ->
+      let config = Module_check.default_config () in
+      let el_path = Filename.concat dir "foo.el" in
+      let sexps =
+        parse "(defun foo-public (x) (+ x 1))\n(defun foo-other (x) (* x 2))"
+      in
+      let result = Module_check.check_module ~config ~filename:el_path sexps in
+      Alcotest.(check int)
+        "one missing signature warning" 1
+        (List.length result.missing_signature_warnings);
+      let warning = List.hd result.missing_signature_warnings in
+      Alcotest.(check string) "warning for foo-other" "foo-other" warning.name)
+
+(** R5: Internal functions (with --) should NOT generate warning *)
+let test_internal_function_no_warning () =
+  let files =
+    [
+      ( "foo.el",
+        "(defun foo-public (x) (+ x 1))\n(defun foo--internal (x) (* x 2))" );
+      ("foo.tart", "(defun foo-public (int) -> int)");
+      (* foo--internal is internal, so no warning expected *)
+    ]
+  in
+  with_temp_dir files (fun dir ->
+      let config = Module_check.default_config () in
+      let el_path = Filename.concat dir "foo.el" in
+      let sexps =
+        parse
+          "(defun foo-public (x) (+ x 1))\n(defun foo--internal (x) (* x 2))"
+      in
+      let result = Module_check.check_module ~config ~filename:el_path sexps in
+      Alcotest.(check int)
+        "no missing signature warnings" 0
+        (List.length result.missing_signature_warnings))
+
+(** No warnings when all functions are in signature *)
+let test_all_functions_in_signature () =
+  let files =
+    [
+      ("foo.el", "(defun foo-a (x) (+ x 1))\n(defun foo-b (x) (* x 2))");
+      ("foo.tart", "(defun foo-a (int) -> int)\n(defun foo-b (int) -> int)");
+    ]
+  in
+  with_temp_dir files (fun dir ->
+      let config = Module_check.default_config () in
+      let el_path = Filename.concat dir "foo.el" in
+      let sexps =
+        parse "(defun foo-a (x) (+ x 1))\n(defun foo-b (x) (* x 2))"
+      in
+      let result = Module_check.check_module ~config ~filename:el_path sexps in
+      Alcotest.(check int)
+        "no missing signature warnings" 0
+        (List.length result.missing_signature_warnings))
+
+(** No warnings when no signature file exists *)
+let test_no_signature_no_warning () =
+  let config = Module_check.default_config () in
+  let sexps = parse "(defun foo-missing (x) (+ x 1))" in
+  let result =
+    Module_check.check_module ~config ~filename:"/tmp/test.el" sexps
+  in
+  Alcotest.(check int)
+    "no warnings without signature file" 0
+    (List.length result.missing_signature_warnings)
+
+(** Mixed internal and public missing functions *)
+let test_mixed_internal_public () =
+  let files =
+    [
+      ( "foo.el",
+        "(defun foo-public (x) x)\n\
+         (defun foo--helper (x) x)\n\
+         (defun foo-another (x) x)\n\
+         (defun foo--util (x) x)" );
+      ("foo.tart", "(defun foo-public (int) -> int)");
+    ]
+  in
+  with_temp_dir files (fun dir ->
+      let config = Module_check.default_config () in
+      let el_path = Filename.concat dir "foo.el" in
+      let sexps =
+        parse
+          "(defun foo-public (x) x)\n\
+           (defun foo--helper (x) x)\n\
+           (defun foo-another (x) x)\n\
+           (defun foo--util (x) x)"
+      in
+      let result = Module_check.check_module ~config ~filename:el_path sexps in
+      (* Only foo-another should have warning, not foo--helper or foo--util *)
+      Alcotest.(check int)
+        "one missing signature warning" 1
+        (List.length result.missing_signature_warnings);
+      let warning = List.hd result.missing_signature_warnings in
+      Alcotest.(check string)
+        "warning for foo-another" "foo-another" warning.name)
+
+(** Missing signature diagnostics are created correctly *)
+let test_missing_signature_diagnostic () =
+  let files =
+    [
+      ("foo.el", "(defun foo-missing (x) x)");
+      ("foo.tart", "(defun foo-other (int) -> int)");
+    ]
+  in
+  with_temp_dir files (fun dir ->
+      let config = Module_check.default_config () in
+      let el_path = Filename.concat dir "foo.el" in
+      let sexps = parse "(defun foo-missing (x) x)" in
+      let result = Module_check.check_module ~config ~filename:el_path sexps in
+      let diagnostics = Module_check.diagnostics_of_result result in
+      (* Should have a warning diagnostic *)
+      Alcotest.(check int) "one diagnostic" 1 (List.length diagnostics);
+      let diag = List.hd diagnostics in
+      Alcotest.(check bool) "is warning" true (diag.severity = Warning))
 
 (* =============================================================================
    Test Suite
@@ -229,4 +358,19 @@ let () =
         ] );
       ( "diagnostics",
         [ Alcotest.test_case "empty" `Quick test_diagnostics_empty ] );
+      ( "missing_signature",
+        [
+          Alcotest.test_case "public not in signature" `Quick
+            test_missing_signature_warning;
+          Alcotest.test_case "internal no warning" `Quick
+            test_internal_function_no_warning;
+          Alcotest.test_case "all in signature" `Quick
+            test_all_functions_in_signature;
+          Alcotest.test_case "no signature file" `Quick
+            test_no_signature_no_warning;
+          Alcotest.test_case "mixed internal public" `Quick
+            test_mixed_internal_public;
+          Alcotest.test_case "diagnostic created" `Quick
+            test_missing_signature_diagnostic;
+        ] );
     ]

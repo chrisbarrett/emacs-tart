@@ -33,11 +33,18 @@ type mismatch_error = {
 }
 (** Error when implementation doesn't match signature *)
 
+(** {1 Warnings} *)
+
+type missing_signature_warning = { name : string; span : Syntax.Location.span }
+(** Warning when a public function is not in the signature file *)
+
 (** {1 Check Result} *)
 
 type check_result = {
   type_errors : Unify.error list;  (** Type errors from inference *)
   mismatch_errors : mismatch_error list;  (** Signature mismatch errors *)
+  missing_signature_warnings : missing_signature_warning list;
+      (** Warnings for public functions not in signature *)
   signature_env : Core.Type_env.t option;
       (** Environment from loaded signature, if any *)
 }
@@ -68,6 +75,9 @@ val extract_requires : Syntax.Sexp.t list -> string list
 
 val mismatch_to_diagnostic : mismatch_error -> Diagnostic.t
 (** Convert a mismatch error to a diagnostic *)
+
+val missing_signature_to_diagnostic : missing_signature_warning -> Diagnostic.t
+(** Convert a missing signature warning to a diagnostic *)
 
 val diagnostics_of_result : check_result -> Diagnostic.t list
 (** Get all diagnostics from a check result *)

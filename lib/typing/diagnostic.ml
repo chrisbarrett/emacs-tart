@@ -67,6 +67,21 @@ let occurs_check ~span ~tvar_id ~typ ?(related = []) () =
     related;
   }
 
+(** Create a missing signature warning for a public function not in .tart file
+*)
+let missing_signature ~span ~name () =
+  let message =
+    Printf.sprintf "Function `%s` defined but not in signature file" name
+  in
+  {
+    severity = Warning;
+    span;
+    message;
+    expected = None;
+    actual = None;
+    related = [];
+  }
+
 (** Convert a unification error to a diagnostic *)
 let of_unify_error (err : Unify.error) : t =
   match err with

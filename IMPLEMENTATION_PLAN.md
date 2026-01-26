@@ -111,9 +111,9 @@ Enables type-checked module interactions.
 
 ### 5.2 Public/Private Distinction
 
-- [ ] [R5] Distinguish public (in `.tart`) vs internal (not listed) functions
-- [ ] [R8] Warn on functions defined but not in signature file
-- [ ] Verify: Internal functions inferred but not exported
+- [x] [R5] Distinguish public (in `.tart`) vs internal (not listed) functions
+- [x] [R8] Warn on functions defined but not in signature file
+- [x] Verify: Internal functions inferred but not exported
 
 ### 5.3 Module Dependencies
 
