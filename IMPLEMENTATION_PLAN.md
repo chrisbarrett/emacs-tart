@@ -453,112 +453,125 @@ Additional commonly-used Emacs libraries for broader type checking coverage.
 
 ---
 
-## Phase 18: Type Classes (Spec 21)
+## Phase 18: Remove Type Classes
 
-Enable ad-hoc polymorphism through type classes and instances.
+Type classes were implemented per Spec 21, but after evaluation the feature was
+deemed unnecessary for Elisp's idioms. Elisp's polymorphism is either fully
+parametric (works on any type) or uses explicit higher-order functions (passing
+comparators). This phase removes the feature.
 
-### 18.1 Class Definitions
+### 18.1 Delete Spec and Stdlib
 
-- [x] [R1] Add class definition AST to sig_ast.ml
-- [x] [R1] Parse class definitions in sig_parser.ml
-- [x] [R1] Load class definitions in sig_loader.ml
-- [x] Verify: `dune test`; class definitions parse and load
+- [x] Delete `specs/21-type-classes.md`
+- [x] Delete `stdlib/classes/` directory (eq.tart, ord.tart, show.tart, functor.tart)
+- [x] Verify: No `.tart` files reference class/instance syntax
 
-### 18.2 Instance Declarations
+### 18.2 Remove Core Implementation
 
-- [x] [R2] Add instance declaration AST to sig_ast.ml
-- [x] [R2] Parse instance declarations in sig_parser.ml
-- [x] [R2] Load instances and validate method mappings
-- [x] Verify: `dune test`; instance declarations parse and load
+- [x] Delete `lib/typing/instance.ml` and `lib/typing/instance.mli`
+- [x] Delete `test/typing/instance_test.ml`
+- [x] Update `lib/tart.ml` to remove `Instance` module export
+- [x] Verify: `dune build` succeeds after removal
 
-### 18.3 Constraint Syntax
+### 18.3 Remove AST and Parsing
 
-- [x] [R3] Add constraint syntax to defun signatures
-- [x] [R3] Parse `(Constraint var) =>` in function types
-- [x] [R3] Store constraints in type schemes
-- [x] Verify: `dune test`; constrained functions parse correctly
+Note: Parsing retained for backwards compatibility. Declarations ignored at
+runtime.
 
-### 18.4 Basic Instance Resolution
+- [ ] ~~Remove `DClass` and `DInstance` variants from `lib/sig/sig_ast.ml`~~ (retained for compat)
+- [ ] ~~Remove `class_decl` and `instance_decl` type definitions from sig_ast.ml/mli~~ (retained for compat)
+- [ ] ~~Remove class/instance parsing from `lib/sig/sig_parser.ml`~~ (retained for compat)
+- [ ] ~~Remove constraint syntax (`=>`) parsing from defun signatures~~ (retained for compat)
+- [x] Verify: `dune test` passes; existing .tart files still parse
 
-- [x] [R4] Create instance.ml with resolution algorithm
-- [x] [R4] Track class constraints through inference (result types)
-- [x] [R4] Resolve monomorphic constraints at call sites (check/module_check integration)
-- [x] Verify: `dune test`; basic instance resolution works
+### 18.4 Remove Signature Loading
 
-### 18.5 Advanced Resolution
+Note: Loading handlers remain but ignore class/instance declarations.
 
-- [x] [R5] Implement recursive constraint resolution
-- [x] [R6] Implement superclass constraint checking
-- [x] [R7] Add HKT class support (Functor-like)
-- [x] Verify: `dune test`; nested and HKT constraints resolve
+- [ ] ~~Remove `DClass`/`DInstance` handling from `lib/sig/sig_loader.ml`~~ (handlers ignore)
+- [ ] ~~Remove constraint inference from `lib/sig/forall_infer.ml`~~ (retained for compat)
+- [x] Verify: Signature loading works without class/instance support
 
-### 18.6 Error Handling
+### 18.5 Remove Type System Integration
 
-- [x] [R8] Implement missing instance error formatting
-- [x] [R9] Add overlapping instance detection
-- [ ] [R10] Implement default method support (deferred - requires syntax changes)
-- [x] Verify: Error messages are clear and actionable
+Note: Constraint types remain but are unused. Removing would require touching
+many files with minimal benefit.
 
-### 18.7 Standard Classes
+- [ ] ~~Remove `type_constraint` from `lib/core/types.ml`~~ (deferred)
+- [ ] ~~Remove constraint field from `scheme` type in `lib/core/type_env.ml`~~ (deferred)
+- [ ] ~~Remove `class_constraint_with_span` from `lib/typing/infer.ml`~~ (deferred)
+- [ ] ~~Remove constraint tracking from inference result types~~ (deferred)
+- [x] Verify: Type inference works without constraints (instance resolution removed)
 
-- [x] Create stdlib/classes/eq.tart with Eq class
-- [x] Create stdlib/classes/ord.tart with Ord class
-- [x] Create stdlib/classes/show.tart with Show class
-- [x] Create stdlib/classes/functor.tart with Functor class
-- [x] Verify: Standard classes parse and load
+### 18.6 Remove Module Check Integration
 
----
+- [x] Remove `instance_error` type from `lib/typing/module_check.ml`
+- [x] Remove instance registry building (Step 10)
+- [x] Remove `instance_errors` from check result type
+- [x] Remove instance resolution calls
+- [x] Verify: Module checking works without instance resolution
 
-## Future Work (Requires New Specs)
+### 18.7 Remove Diagnostics
 
-The following areas are mentioned as future work in the specs:
+Note: Diagnostics retained but never generated (instance resolution removed).
 
-1. **Additional Stdlib Coverage**
-   - More Emacs packages (org-mode, magit, etc.)
-   - Additional third-party package signatures
+- [ ] ~~Remove `E0601` error code from `lib/typing/diagnostic.ml`~~ (deferred)
+- [ ] ~~Remove `missing_instance` diagnostic function~~ (deferred)
+- [x] Verify: All remaining diagnostics work correctly
 
-2. **Advanced Type Class Features**
-   - Multi-parameter type classes
-   - Functional dependencies
-   - Associated types
-   - Type families
+### 18.8 Update Documentation
 
-## Priority Order
-
-1. **Phase 1**: Signature system ✓
-2. **Phase 2**: Prek migration ✓
-3. **Phase 3**: Emacs LSP integration ✓
-4. **Phase 4**: Forall inference ✓
-5. **Phase 5**: Module boundaries ✓
-6. **Phase 6**: Error reporting ✓
-7. **Phase 7**: Emacs REPL ✓
-8. **Phase 8**: tart.el Runtime ✓
-9. **Phase 9**: ADT system ✓
-10. **Phase 10**: LSP incremental ✓
-11. **Phase 11**: LSP navigation features ✓
-12. **Phase 12**: LSP completion and symbols ✓
-13. **Phase 13**: Expanded stdlib ✓
-14. **Phase 14**: Higher-Kinded Types ✓
-15. **Phase 15**: Explicit Type Instantiation ✓
-16. **Phase 16**: Scoped Type Variables ✓
-17. **Phase 17**: Expanded Stdlib Phase 2 ✓
-18. **Phase 18**: Type Classes ✓
-19. **Phase 19**: Documentation ✓
+- [ ] Review `docs/research/*.md` for type class references (research docs - low priority)
+- [x] Update README.md to remove type class example
+- [x] Update docs/library-authors.adoc to remove type class section
+- [ ] Update DESIGN.md if needed
+- [x] Verify: Documentation accurate after removal
 
 ---
 
-## Phase 19: Documentation
+## Phase 19: Dogfood tart.el
+
+Type-check tart's own Emacs Lisp code by writing signature files for the runtime
+and development tooling packages.
+
+### 19.1 tart.el Signatures
+
+- [ ] Create `elisp/tart.tart` with signatures for runtime macros
+  - `tart` macro
+  - `tart-type` macro
+  - `tart-declare` macro
+  - `@type` macro
+- [ ] Verify: `tart check elisp/tart.el` passes
+
+### 19.2 tart-mode.el Signatures
+
+- [ ] Create `elisp/tart-mode.tart` with signatures for dev tooling
+  - `tart-mode` minor mode
+  - `inferior-tart-mode` major mode
+  - REPL interaction functions
+  - Eglot configuration
+- [ ] Verify: `tart check elisp/tart-mode.el` passes
+
+### 19.3 Fix Any Issues Found
+
+- [ ] Address type errors discovered during dogfooding
+- [ ] Document any patterns that are hard to type
+- [ ] Verify: Both files type-check cleanly
+
+---
+
+## Phase 20: Documentation
 
 Create comprehensive documentation using AsciiDoc, plus refresh the README.
 
-### 19.1 Documentation Structure
+### 20.1 Documentation Structure
 
 - [x] Create `docs/getting-started.adoc` - Quick start guide
 - [x] Create `docs/library-authors.adoc` - Guide for library authors writing `.tart` files
 - [x] Create `docs/tooling-setup.adoc` - LSP setup guide for Emacs users
 - [x] Create `docs/cli-reference.adoc` - CLI reference (manpage source)
 
-### 19.2 README Refresh
+### 20.2 README Refresh
 
 - [x] Rewrite `README.md` with elevator pitch and friendly introduction
   - Lead with "what problem does this solve"
@@ -612,3 +625,36 @@ Create comprehensive documentation using AsciiDoc, plus refresh the README.
 7. Files (search paths, stdlib location)
 8. Examples
 9. See also
+
+---
+
+## Future Work (Requires New Specs)
+
+The following areas are mentioned as future work in the specs:
+
+1. **Additional Stdlib Coverage**
+   - More Emacs packages (org-mode, magit, etc.)
+   - Additional third-party package signatures
+
+## Priority Order
+
+1. **Phase 1**: Signature system ✓
+2. **Phase 2**: Prek migration ✓
+3. **Phase 3**: Emacs LSP integration ✓
+4. **Phase 4**: Forall inference ✓
+5. **Phase 5**: Module boundaries ✓
+6. **Phase 6**: Error reporting ✓
+7. **Phase 7**: Emacs REPL ✓
+8. **Phase 8**: tart.el Runtime ✓
+9. **Phase 9**: ADT system ✓
+10. **Phase 10**: LSP incremental ✓
+11. **Phase 11**: LSP navigation features ✓
+12. **Phase 12**: LSP completion and symbols ✓
+13. **Phase 13**: Expanded stdlib ✓
+14. **Phase 14**: Higher-Kinded Types ✓
+15. **Phase 15**: Explicit Type Instantiation ✓
+16. **Phase 16**: Scoped Type Variables ✓
+17. **Phase 17**: Expanded Stdlib Phase 2 ✓
+18. **Phase 18**: Remove Type Classes ← CURRENT
+19. **Phase 19**: Dogfood tart.el
+20. **Phase 20**: Documentation ✓

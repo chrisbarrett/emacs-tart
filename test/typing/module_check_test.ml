@@ -189,7 +189,6 @@ let test_diagnostics_empty () =
       undefined_errors = [];
       exhaustiveness_warnings = [];
       kind_errors = [];
-      instance_errors = [];
       signature_env = None;
       final_env = Core.Type_env.empty;
     }
@@ -775,71 +774,6 @@ let test_hk_type_scope_cross_module () =
       Alcotest.(check int) "no type errors" 0 (List.length result.type_errors))
 
 (* =============================================================================
-   Instance Resolution Tests (Spec 21 R4)
-   ============================================================================= *)
-
-(** R4: Instance resolution infrastructure is in place.
-
-    Note: Full end-to-end instance resolution requires that type variables in
-    constraints are properly unified during type checking. This test verifies
-    that the infrastructure for collecting and resolving constraints is working,
-    even though the constraint type may not be fully resolved due to the order
-    of operations (constraints collected before full unification).
-
-    TODO: This test is temporarily simplified until constraint resolution is
-    fully integrated with the unification pass. *)
-let test_instance_resolution_success () =
-  (* Test that instance extraction from signatures works *)
-  let sig_str =
-    {|
-    (class (Eq a)
-      (eq (a a) -> bool))
-    (instance (Eq int)
-      (eq . =))
-    (defun eq-lib-elem [a] (Eq a) => (a (list a)) -> bool)
-    |}
-  in
-  let sexps = parse sig_str in
-  match Sig.Sig_parser.parse_signature ~module_name:"test" sexps with
-  | Error _ -> Alcotest.fail "Failed to parse signature"
-  | Ok sig_ast ->
-      let registry = Module_check.extract_instances sig_ast in
-      (* Verify the instance was loaded *)
-      let instances = Tart.Instance.all_instances registry in
-      Alcotest.(check int) "one instance loaded" 1 (List.length instances);
-      let inst = List.hd instances in
-      Alcotest.(check string) "instance class is Eq" "Eq" inst.inst_class
-
-(** R4: Instance resolution correctly rejects missing instances *)
-let test_instance_resolution_missing () =
-  (* Test instance resolution with a concrete type that has no instance *)
-  let registry = Tart.Instance.empty_registry in
-  (* No instances in registry - should fail for any constraint *)
-  let constraint_ = ("Eq", Tart.Types.TCon "Int") in
-  let result = Tart.Instance.resolve_all registry [ constraint_ ] in
-  Alcotest.(check bool)
-    "missing instance detected" true
-    (match result with Error _ -> true | Ok () -> false)
-
-(** R4: Instance errors convert to diagnostics correctly *)
-let test_instance_error_diagnostic () =
-  let open Syntax.Location in
-  let span =
-    {
-      start_pos = { file = "test.el"; line = 1; col = 1; offset = 0 };
-      end_pos = { file = "test.el"; line = 1; col = 10; offset = 9 };
-    }
-  in
-  let err : Module_check.instance_error =
-    { class_name = "Eq"; missing_type = Tart.Types.TCon "Int"; span }
-  in
-  let diag = Module_check.instance_error_to_diagnostic err in
-  Alcotest.(check bool) "is error" true (diag.severity = Error);
-  Alcotest.(check bool)
-    "has E0601 code" true
-    (diag.code = Some Tart.Diagnostic.E0601)
-
-(* =============================================================================
    Test Suite
    ============================================================================= *)
 
@@ -954,14 +888,5 @@ let () =
             test_type_scope_cross_module_type_error;
           Alcotest.test_case "HK cross-module" `Quick
             test_hk_type_scope_cross_module;
-        ] );
-      ( "instance_resolution",
-        [
-          Alcotest.test_case "resolved instance succeeds" `Quick
-            test_instance_resolution_success;
-          Alcotest.test_case "missing instance error" `Quick
-            test_instance_resolution_missing;
-          Alcotest.test_case "instance error diagnostic" `Quick
-            test_instance_error_diagnostic;
         ] );
     ]

@@ -51,15 +51,6 @@ type kind_check_error = {
 }
 (** A kind error with its source location *)
 
-(** {1 Instance Errors} *)
-
-type instance_error = {
-  class_name : string;
-  missing_type : Core.Types.typ;
-  span : Syntax.Location.span;
-}
-(** Error when a type class constraint cannot be satisfied *)
-
 (** {1 Check Result} *)
 
 type check_result = {
@@ -72,8 +63,6 @@ type check_result = {
       (** Warnings for non-exhaustive pcase matches *)
   kind_errors : kind_check_error list;
       (** Kind mismatch errors in signatures *)
-  instance_errors : instance_error list;
-      (** Missing type class instance errors *)
   signature_env : Core.Type_env.t option;
       (** Environment from loaded signature, if any *)
   final_env : Core.Type_env.t;  (** Final type environment after checking *)
@@ -117,13 +106,6 @@ val collect_all_call_symbols : Syntax.Sexp.t list -> string list
     Only symbols at the head of a list (function calls) are collected. Returns a
     deduplicated, sorted list. *)
 
-val extract_instances : Sig.Sig_ast.signature -> Instance.registry
-(** Extract all type class instances from a signature into a registry.
-
-    Walks the signature AST recursively (including type-scope blocks) and loads
-    each DInstance declaration. Used to build the instance registry for
-    constraint resolution. *)
-
 (** {1 Diagnostics} *)
 
 val mismatch_to_diagnostic : mismatch_error -> Diagnostic.t
@@ -131,9 +113,6 @@ val mismatch_to_diagnostic : mismatch_error -> Diagnostic.t
 
 val missing_signature_to_diagnostic : missing_signature_warning -> Diagnostic.t
 (** Convert a missing signature warning to a diagnostic *)
-
-val instance_error_to_diagnostic : instance_error -> Diagnostic.t
-(** Convert an instance error to a diagnostic *)
 
 val diagnostics_of_result : check_result -> Diagnostic.t list
 (** Get all diagnostics from a check result *)

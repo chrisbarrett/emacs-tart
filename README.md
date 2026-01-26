@@ -95,13 +95,6 @@ tart my-lib.el
 (defun my-find (string) -> (string | nil))
 ```
 
-### Type classes
-
-```elisp
-;; Constrained polymorphism
-(defun my-sort [a] (Ord a) => ((list a)) -> (list a))
-```
-
 ### Inline annotations
 
 ```elisp

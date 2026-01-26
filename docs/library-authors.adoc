@@ -190,9 +190,6 @@ Constrain what types can be substituted:
 ----
 ;; a must be truthy (not nil)
 (defun unwrap-or [(a : truthy)] ((a | nil) a) -> a)
-
-;; Parameter bound to a type class
-(defun elem [a] (Eq a) => (a (list a)) -> bool)
 ----
 
 == Union Types
@@ -259,61 +256,6 @@ Import `cl-defstruct` types:
 ;; - make-person constructor
 ;; - person-p predicate
 ;; - person-name, person-age accessors
-----
-
-== Type Classes
-
-Type classes enable ad-hoc polymorphism--different implementations for different
-types.
-
-=== Defining Classes
-
-[source,elisp]
-----
-(class (Eq a)
-  (eq (a a) -> bool)
-  (neq (a a) -> bool))
-
-(class (Show a)
-  (show (a) -> string))
-----
-
-=== Declaring Instances
-
-[source,elisp]
-----
-;; Simple instance
-(instance (Eq int)
-  (eq . =)
-  (neq . /=))
-
-;; Instance with constraint
-(instance [a] (Eq a) => (Eq (list a))
-  (eq . equal)
-  (neq . (lambda (xs ys) (not (equal xs ys)))))
-----
-
-=== Superclasses
-
-Classes can require other classes:
-
-[source,elisp]
-----
-(class (Ord a) (Eq a)
-  (compare (a a) -> int)
-  (lt (a a) -> bool))
-----
-
-Here `Ord` requires `Eq`--any type with an `Ord` instance must also have `Eq`.
-
-=== Using Constraints
-
-Functions can require type class instances:
-
-[source,elisp]
-----
-(defun elem [a] (Eq a) => (a (list a)) -> bool)
-(defun sort [a] (Ord a) => ((list a)) -> (list a))
 ----
 
 == Scoped Type Variables
