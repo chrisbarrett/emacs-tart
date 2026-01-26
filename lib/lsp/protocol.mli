@@ -38,6 +38,7 @@ type server_capabilities = {
   text_document_sync : text_document_sync_options option;
   hover_provider : bool;
   definition_provider : bool;
+  references_provider : bool;
 }
 (** Server capabilities *)
 
@@ -140,3 +141,21 @@ type definition_result =
 
 val definition_result_to_json : definition_result -> Yojson.Safe.t
 (** Encode definition result to JSON *)
+
+(** {1 Find References} *)
+
+type references_params = {
+  ref_text_document : string;
+  ref_position : position;
+  include_declaration : bool;
+}
+(** References request params *)
+
+val parse_references_params : Yojson.Safe.t -> references_params
+(** Parse references params from JSON *)
+
+type references_result = location list option
+(** References result *)
+
+val references_result_to_json : references_result -> Yojson.Safe.t
+(** Encode references result to JSON *)

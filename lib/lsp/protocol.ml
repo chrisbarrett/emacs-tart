@@ -44,6 +44,7 @@ type server_capabilities = {
   text_document_sync : text_document_sync_options option;
   hover_provider : bool;
   definition_provider : bool;
+  references_provider : bool;
 }
 (** Server capabilities *)
 
@@ -119,6 +120,9 @@ let server_capabilities_to_json (caps : server_capabilities) : Yojson.Safe.t =
   let fields = ("hoverProvider", `Bool caps.hover_provider) :: fields in
   let fields =
     ("definitionProvider", `Bool caps.definition_provider) :: fields
+  in
+  let fields =
+    ("referencesProvider", `Bool caps.references_provider) :: fields
   in
   `Assoc fields
 
@@ -330,3 +334,45 @@ let definition_result_to_json (result : definition_result) : Yojson.Safe.t =
   | DefLocation loc -> location_to_json loc
   | DefLocations locs -> `List (List.map location_to_json locs)
   | DefNull -> `Null
+
+(** {1 Find References} *)
+
+type references_params = {
+  ref_text_document : string;
+  (* URI *)
+  ref_position : position;
+  include_declaration : bool;
+}
+(** References request params *)
+
+let parse_references_params (json : Yojson.Safe.t) : references_params =
+  let open Yojson.Safe.Util in
+  let text_document =
+    json |> member "textDocument" |> member "uri" |> to_string
+  in
+  let pos_json = json |> member "position" in
+  let position =
+    {
+      line = pos_json |> member "line" |> to_int;
+      character = pos_json |> member "character" |> to_int;
+    }
+  in
+  let include_declaration =
+    match json |> member "context" with
+    | `Null -> true
+    | ctx -> (
+        match ctx |> member "includeDeclaration" with `Bool b -> b | _ -> true)
+  in
+  {
+    ref_text_document = text_document;
+    ref_position = position;
+    include_declaration;
+  }
+
+type references_result = location list option
+(** References result is a list of locations or null *)
+
+let references_result_to_json (result : references_result) : Yojson.Safe.t =
+  match result with
+  | Some locs -> `List (List.map location_to_json locs)
+  | None -> `Null

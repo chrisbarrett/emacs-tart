@@ -255,8 +255,8 @@ Navigation and code intelligence features for IDE productivity.
 
 ### 11.2 Find References
 
-- [ ] [R15] Implement `textDocument/references` for symbols
-- [ ] [R16] Collect all references to a symbol across the document
+- [x] [R15] Implement `textDocument/references` for symbols
+- [x] [R16] Collect all references to a symbol across the document
 - [ ] Verify: Shows all usages of a function/variable
 
 ### 11.3 Code Actions

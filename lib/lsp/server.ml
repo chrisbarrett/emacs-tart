@@ -60,6 +60,7 @@ let capabilities () : Protocol.server_capabilities =
       Some { open_close = true; change = Protocol.Incremental };
     hover_provider = true;
     definition_provider = true;
+    references_provider = true;
   }
 
 (** Extract filename from a file:// URI. Returns the path portion, or the raw
@@ -622,6 +623,24 @@ let find_definition_in_signatures ~(filename : string) (name : string) :
 let symbol_name_of_sexp (sexp : Syntax.Sexp.t) : string option =
   match sexp with Syntax.Sexp.Symbol (name, _) -> Some name | _ -> None
 
+(** Find all references to a symbol in the parsed sexps.
+
+    Walks the entire S-expression tree and collects all occurrences of the given
+    symbol name. Returns a list of spans where the symbol appears. *)
+let find_references (name : string) (sexps : Syntax.Sexp.t list) :
+    Syntax.Location.span list =
+  let open Syntax.Sexp in
+  let rec collect_sexp acc sexp =
+    match sexp with
+    | Symbol (n, span) when n = name -> span :: acc
+    | Symbol _ -> acc
+    | Int _ | Float _ | String _ | Char _ | Keyword _ | Error _ -> acc
+    | List (elems, _) -> List.fold_left collect_sexp acc elems
+    | Vector (elems, _) -> List.fold_left collect_sexp acc elems
+    | Cons (car, cdr, _) -> collect_sexp (collect_sexp acc car) cdr
+  in
+  List.fold_left collect_sexp [] sexps |> List.rev
+
 (** Handle textDocument/definition request *)
 let handle_definition (server : t) (params : Yojson.Safe.t option) :
     (Yojson.Safe.t, Rpc.response_error) result =
@@ -704,6 +723,60 @@ let handle_definition (server : t) (params : Yojson.Safe.t option) :
                               (Protocol.definition_result_to_json
                                  Protocol.DefNull))))))
 
+(** Handle textDocument/references request *)
+let handle_references (server : t) (params : Yojson.Safe.t option) :
+    (Yojson.Safe.t, Rpc.response_error) result =
+  match params with
+  | None ->
+      Error
+        {
+          Rpc.code = Rpc.invalid_params;
+          message = "Missing references params";
+          data = None;
+        }
+  | Some json -> (
+      let ref_params = Protocol.parse_references_params json in
+      let uri = ref_params.ref_text_document in
+      let line = ref_params.ref_position.line in
+      let col = ref_params.ref_position.character in
+      debug server
+        (Printf.sprintf "References request at %s:%d:%d" uri line col);
+      match Document.get_doc server.documents uri with
+      | None ->
+          debug server (Printf.sprintf "Document not found: %s" uri);
+          Ok (Protocol.references_result_to_json None)
+      | Some doc -> (
+          let filename = filename_of_uri uri in
+          let parse_result = Syntax.Read.parse_string ~filename doc.text in
+          if parse_result.sexps = [] then (
+            debug server "No S-expressions parsed";
+            Ok (Protocol.references_result_to_json None))
+          else
+            match
+              Syntax.Sexp.find_with_context_in_forms ~line ~col
+                parse_result.sexps
+            with
+            | None ->
+                debug server "No S-expression at position";
+                Ok (Protocol.references_result_to_json None)
+            | Some ctx -> (
+                (* Extract symbol name from the target sexp *)
+                match symbol_name_of_sexp ctx.target with
+                | None ->
+                    debug server "Target is not a symbol";
+                    Ok (Protocol.references_result_to_json None)
+                | Some name ->
+                    debug server
+                      (Printf.sprintf "Finding references to: %s" name);
+                    (* Find all references in the document *)
+                    let ref_spans = find_references name parse_result.sexps in
+                    debug server
+                      (Printf.sprintf "Found %d references"
+                         (List.length ref_spans));
+                    (* Convert spans to locations *)
+                    let locations = List.map location_of_span ref_spans in
+                    Ok (Protocol.references_result_to_json (Some locations)))))
+
 (** Dispatch a request to its handler *)
 let dispatch_request (server : t) (msg : Rpc.message) :
     (Yojson.Safe.t, Rpc.response_error) result =
@@ -713,6 +786,7 @@ let dispatch_request (server : t) (msg : Rpc.message) :
   | "shutdown" -> handle_shutdown server
   | "textDocument/hover" -> handle_hover server msg.params
   | "textDocument/definition" -> handle_definition server msg.params
+  | "textDocument/references" -> handle_references server msg.params
   | _ ->
       Error
         {
