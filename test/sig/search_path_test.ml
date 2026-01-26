@@ -1328,6 +1328,63 @@ let test_load_ht () =
       | None -> Alcotest.fail "ht-from-alist not found in env"
       | Some _ -> ())
 
+(** Test that map.tart parses successfully *)
+let test_parse_map () =
+  let path = Filename.concat stdlib_dir "map.tart" in
+  if not (Sys.file_exists path) then
+    Alcotest.fail ("map.tart not found at: " ^ path);
+  match Search_path.parse_signature_file path with
+  | None -> Alcotest.fail "map.tart failed to parse"
+  | Some sig_file ->
+      Alcotest.(check string) "module name" "map" sig_file.sig_module;
+      Alcotest.(check bool)
+        "has declarations" true
+        (List.length sig_file.sig_decls > 10);
+      (* Check key map.el functions *)
+      let has_defun name =
+        List.exists
+          (function Sig_ast.DDefun d -> d.defun_name = name | _ -> false)
+          sig_file.sig_decls
+      in
+      Alcotest.(check bool) "has map-elt" true (has_defun "map-elt");
+      Alcotest.(check bool) "has map-put!" true (has_defun "map-put!");
+      Alcotest.(check bool) "has map-keys" true (has_defun "map-keys");
+      Alcotest.(check bool) "has map-values" true (has_defun "map-values");
+      Alcotest.(check bool) "has map-filter" true (has_defun "map-filter");
+      Alcotest.(check bool) "has map-apply" true (has_defun "map-apply");
+      Alcotest.(check bool) "has map-merge" true (has_defun "map-merge")
+
+(** Test that map can be loaded into type environment *)
+let test_load_map () =
+  let sp = Search_path.empty |> Search_path.with_stdlib stdlib_dir in
+  (* First load builtins for base types *)
+  let base_env =
+    match
+      Search_path.load_module ~search_path:sp ~env:Type_env.empty "builtins"
+    with
+    | None -> Alcotest.fail "failed to load builtins module"
+    | Some env -> env
+  in
+  match Search_path.load_module ~search_path:sp ~env:base_env "map" with
+  | None -> Alcotest.fail "failed to load map module"
+  | Some env -> (
+      (* Check that map-elt is loaded *)
+      (match Type_env.lookup "map-elt" env with
+      | None -> Alcotest.fail "map-elt not found in env"
+      | Some _ -> ());
+      (* Check that map-keys is loaded *)
+      (match Type_env.lookup "map-keys" env with
+      | None -> Alcotest.fail "map-keys not found in env"
+      | Some _ -> ());
+      (* Check that map-filter is loaded *)
+      (match Type_env.lookup "map-filter" env with
+      | None -> Alcotest.fail "map-filter not found in env"
+      | Some _ -> ());
+      (* Check that map-apply is loaded *)
+      match Type_env.lookup "map-apply" env with
+      | None -> Alcotest.fail "map-apply not found in env"
+      | Some _ -> ())
+
 let () =
   Alcotest.run "search_path"
     [
@@ -1399,5 +1456,7 @@ let () =
           Alcotest.test_case "load f into env" `Quick test_load_f;
           Alcotest.test_case "parse ht.tart" `Quick test_parse_ht;
           Alcotest.test_case "load ht into env" `Quick test_load_ht;
+          Alcotest.test_case "parse map.tart" `Quick test_parse_map;
+          Alcotest.test_case "load map into env" `Quick test_load_map;
         ] );
     ]
