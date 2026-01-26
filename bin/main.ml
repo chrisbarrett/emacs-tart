@@ -58,10 +58,59 @@ let cmd_check files =
     (* Exit code: 0 if no errors, 1 if errors *)
     if total_errors > 0 then exit 1
 
-(** Eval subcommand: evaluate expression and print result with type *)
-let cmd_eval _expr =
-  prerr_endline "tart eval: not yet implemented";
-  exit 2
+(** Eval subcommand: evaluate expression and print result with type.
+
+    Parses the expression, evaluates it in the interpreter,
+    infers its type, and prints "<value> :: <type>".
+
+    Exits with code 1 on parse errors, eval errors, or type errors. *)
+let cmd_eval expr =
+  (* Parse the expression *)
+  let parse_result = Tart.Read.parse_string expr in
+
+  (* Check for parse errors *)
+  if parse_result.errors <> [] then (
+    List.iter
+      (fun err -> prerr_endline (format_parse_error err))
+      parse_result.errors;
+    exit 1);
+
+  (* Check we got exactly one expression *)
+  match parse_result.sexps with
+  | [] ->
+      prerr_endline "tart eval: empty expression";
+      exit 1
+  | [ sexp ] -> (
+      (* Create interpreter state *)
+      let global = Tart.Eval.make_interpreter () in
+
+      (* Evaluate the expression *)
+      match Tart.Eval.eval_toplevel global sexp with
+      | Error eval_err ->
+          let pos = eval_err.span.start_pos in
+          prerr_endline
+            (Printf.sprintf "%s:%d:%d: error: %s" pos.file pos.line
+               (pos.col + 1) eval_err.message);
+          exit 1
+      | Ok value ->
+          (* Infer the type of the expression and solve constraints *)
+          let ty, errors = Tart.Check.check_expr sexp in
+
+          (* Check for type errors *)
+          if errors <> [] then (
+            let diagnostics = Tart.Diagnostic.of_unify_errors errors in
+            List.iter
+              (fun d -> prerr_endline (Tart.Diagnostic.to_string_compact d))
+              diagnostics;
+            exit 1);
+
+          (* Print result: value :: type *)
+          let value_str = Tart.Value.to_string value in
+          let type_str = Tart.Types.to_string ty in
+          Printf.printf "%s :: %s\n" value_str type_str)
+  | _ ->
+      prerr_endline "tart eval: expected single expression";
+      exit 1
 
 (** Expand subcommand: print macro-expanded source *)
 let cmd_expand _file =

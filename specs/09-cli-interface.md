@@ -184,7 +184,7 @@ macros.el
 - [x] [R11] Refactor main.ml to use subcommand dispatch (cmdliner or manual)
 - [x] [R1] Implement default type-check command
 - [x] [R2] Implement multi-file processing with definition accumulation
-- [ ] [R3,R4] Implement `eval` subcommand
+- [x] [R3,R4] Implement `eval` subcommand
 - [ ] [R5,R6] Implement `expand` subcommand
 - [ ] [R7,R8] Implement `repl` subcommand with commands
 - [ ] [R9,R10] Implement `lsp` subcommand (stub; full impl in Spec 08)
