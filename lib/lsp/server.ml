@@ -61,6 +61,7 @@ let capabilities () : Protocol.server_capabilities =
     hover_provider = true;
     definition_provider = true;
     references_provider = true;
+    code_action_provider = true;
   }
 
 (** Extract filename from a file:// URI. Returns the path portion, or the raw
@@ -777,6 +778,37 @@ let handle_references (server : t) (params : Yojson.Safe.t option) :
                     let locations = List.map location_of_span ref_spans in
                     Ok (Protocol.references_result_to_json (Some locations)))))
 
+(** Handle textDocument/codeAction request.
+
+    Returns code actions available for the given range and context. The code
+    action framework provides hooks for quickfixes and refactorings. For now,
+    this returns an empty list as the base framework - specific actions like
+    "Add type annotation" will be added in subsequent tasks. *)
+let handle_code_action (server : t) (params : Yojson.Safe.t option) :
+    (Yojson.Safe.t, Rpc.response_error) result =
+  match params with
+  | None ->
+      Error
+        {
+          Rpc.code = Rpc.invalid_params;
+          message = "Missing code action params";
+          data = None;
+        }
+  | Some json ->
+      let ca_params = Protocol.parse_code_action_params json in
+      let uri = ca_params.ca_text_document in
+      let range = ca_params.ca_range in
+      let context = ca_params.ca_context in
+      debug server
+        (Printf.sprintf "Code action request at %s:%d:%d-%d:%d" uri
+           range.start.line range.start.character range.end_.line
+           range.end_.character);
+      debug server
+        (Printf.sprintf "Context has %d diagnostics"
+           (List.length context.cac_diagnostics));
+      (* Return empty list for now - framework is in place for adding actions *)
+      Ok (Protocol.code_action_result_to_json (Some []))
+
 (** Dispatch a request to its handler *)
 let dispatch_request (server : t) (msg : Rpc.message) :
     (Yojson.Safe.t, Rpc.response_error) result =
@@ -787,6 +819,7 @@ let dispatch_request (server : t) (msg : Rpc.message) :
   | "textDocument/hover" -> handle_hover server msg.params
   | "textDocument/definition" -> handle_definition server msg.params
   | "textDocument/references" -> handle_references server msg.params
+  | "textDocument/codeAction" -> handle_code_action server msg.params
   | _ ->
       Error
         {

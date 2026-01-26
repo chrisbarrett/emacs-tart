@@ -39,6 +39,7 @@ type server_capabilities = {
   hover_provider : bool;
   definition_provider : bool;
   references_provider : bool;
+  code_action_provider : bool;
 }
 (** Server capabilities *)
 
@@ -159,3 +160,65 @@ type references_result = location list option
 
 val references_result_to_json : references_result -> Yojson.Safe.t
 (** Encode references result to JSON *)
+
+(** {1 Code Actions} *)
+
+(** Code action kind - categorizes the type of action *)
+type code_action_kind =
+  | QuickFix
+  | Refactor
+  | RefactorExtract
+  | RefactorInline
+  | RefactorRewrite
+  | Source
+  | SourceOrganizeImports
+
+val code_action_kind_to_string : code_action_kind -> string
+(** Convert code action kind to LSP string *)
+
+type text_edit = { te_range : range; new_text : string }
+(** Text edit for a document change *)
+
+type text_document_edit = {
+  tde_uri : string;
+  tde_version : int option;
+  edits : text_edit list;
+}
+(** Document changes within a workspace edit *)
+
+type workspace_edit = { document_changes : text_document_edit list }
+(** Workspace edit - changes across multiple documents *)
+
+type code_action = {
+  ca_title : string;
+  ca_kind : code_action_kind option;
+  ca_diagnostics : diagnostic list;
+  ca_is_preferred : bool;
+  ca_edit : workspace_edit option;
+}
+(** A code action represents a change that can be performed in code *)
+
+type code_action_context = {
+  cac_diagnostics : diagnostic list;
+  cac_only : code_action_kind list option;
+}
+(** Code action context sent with the request *)
+
+type code_action_params = {
+  ca_text_document : string;
+  ca_range : range;
+  ca_context : code_action_context;
+}
+(** Code action request params *)
+
+val parse_code_action_params : Yojson.Safe.t -> code_action_params
+(** Parse code action params from JSON *)
+
+val code_action_to_json : code_action -> Yojson.Safe.t
+(** Encode a code action to JSON *)
+
+type code_action_result = code_action list option
+(** Code action result is a list of actions or null *)
+
+val code_action_result_to_json : code_action_result -> Yojson.Safe.t
+(** Encode code action result to JSON *)

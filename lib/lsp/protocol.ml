@@ -45,6 +45,7 @@ type server_capabilities = {
   hover_provider : bool;
   definition_provider : bool;
   references_provider : bool;
+  code_action_provider : bool;
 }
 (** Server capabilities *)
 
@@ -123,6 +124,9 @@ let server_capabilities_to_json (caps : server_capabilities) : Yojson.Safe.t =
   in
   let fields =
     ("referencesProvider", `Bool caps.references_provider) :: fields
+  in
+  let fields =
+    ("codeActionProvider", `Bool caps.code_action_provider) :: fields
   in
   `Assoc fields
 
@@ -375,4 +379,188 @@ type references_result = location list option
 let references_result_to_json (result : references_result) : Yojson.Safe.t =
   match result with
   | Some locs -> `List (List.map location_to_json locs)
+  | None -> `Null
+
+(** {1 Code Actions} *)
+
+(** Code action kind - categorizes the type of action *)
+type code_action_kind =
+  | QuickFix
+  | Refactor
+  | RefactorExtract
+  | RefactorInline
+  | RefactorRewrite
+  | Source
+  | SourceOrganizeImports
+
+let code_action_kind_to_string = function
+  | QuickFix -> "quickfix"
+  | Refactor -> "refactor"
+  | RefactorExtract -> "refactor.extract"
+  | RefactorInline -> "refactor.inline"
+  | RefactorRewrite -> "refactor.rewrite"
+  | Source -> "source"
+  | SourceOrganizeImports -> "source.organizeImports"
+
+type text_edit = { te_range : range; new_text : string }
+(** Text edit for a document change *)
+
+type text_document_edit = {
+  tde_uri : string;
+  tde_version : int option;
+  edits : text_edit list;
+}
+(** Document changes within a workspace edit *)
+
+type workspace_edit = { document_changes : text_document_edit list }
+(** Workspace edit - changes across multiple documents *)
+
+type code_action = {
+  ca_title : string;
+  ca_kind : code_action_kind option;
+  ca_diagnostics : diagnostic list;
+  ca_is_preferred : bool;
+  ca_edit : workspace_edit option;
+}
+(** A code action represents a change that can be performed in code *)
+
+type code_action_context = {
+  cac_diagnostics : diagnostic list;
+  cac_only : code_action_kind list option;
+}
+(** Code action context sent with the request *)
+
+type code_action_params = {
+  ca_text_document : string;
+  ca_range : range;
+  ca_context : code_action_context;
+}
+(** Code action request params *)
+
+let parse_position (json : Yojson.Safe.t) : position =
+  let open Yojson.Safe.Util in
+  {
+    line = json |> member "line" |> to_int;
+    character = json |> member "character" |> to_int;
+  }
+
+let parse_range (json : Yojson.Safe.t) : range =
+  let open Yojson.Safe.Util in
+  {
+    start = json |> member "start" |> parse_position;
+    end_ = json |> member "end" |> parse_position;
+  }
+
+let parse_diagnostic_severity (json : Yojson.Safe.t) :
+    diagnostic_severity option =
+  match json with
+  | `Int 1 -> Some Error
+  | `Int 2 -> Some Warning
+  | `Int 3 -> Some Information
+  | `Int 4 -> Some Hint
+  | _ -> None
+
+let parse_diagnostic (json : Yojson.Safe.t) : diagnostic =
+  let open Yojson.Safe.Util in
+  {
+    range = json |> member "range" |> parse_range;
+    severity = json |> member "severity" |> parse_diagnostic_severity;
+    code = (match json |> member "code" with `String s -> Some s | _ -> None);
+    message =
+      json |> member "message" |> to_string_option |> Option.value ~default:"";
+    source =
+      (match json |> member "source" with `String s -> Some s | _ -> None);
+    related_information = [];
+    (* We don't parse related info from client *)
+  }
+
+let parse_code_action_kind (s : string) : code_action_kind option =
+  match s with
+  | "quickfix" -> Some QuickFix
+  | "refactor" -> Some Refactor
+  | "refactor.extract" -> Some RefactorExtract
+  | "refactor.inline" -> Some RefactorInline
+  | "refactor.rewrite" -> Some RefactorRewrite
+  | "source" -> Some Source
+  | "source.organizeImports" -> Some SourceOrganizeImports
+  | _ -> None
+
+let parse_code_action_context (json : Yojson.Safe.t) : code_action_context =
+  let open Yojson.Safe.Util in
+  let diagnostics =
+    json |> member "diagnostics" |> to_list |> List.map parse_diagnostic
+  in
+  let only =
+    match json |> member "only" with
+    | `List kinds ->
+        Some
+          (List.filter_map
+             (fun k -> k |> to_string |> parse_code_action_kind)
+             kinds)
+    | _ -> None
+  in
+  { cac_diagnostics = diagnostics; cac_only = only }
+
+let parse_code_action_params (json : Yojson.Safe.t) : code_action_params =
+  let open Yojson.Safe.Util in
+  {
+    ca_text_document =
+      json |> member "textDocument" |> member "uri" |> to_string;
+    ca_range = json |> member "range" |> parse_range;
+    ca_context = json |> member "context" |> parse_code_action_context;
+  }
+
+let text_edit_to_json (edit : text_edit) : Yojson.Safe.t =
+  `Assoc
+    [
+      ("range", range_to_json edit.te_range); ("newText", `String edit.new_text);
+    ]
+
+let text_document_edit_to_json (tde : text_document_edit) : Yojson.Safe.t =
+  let version_json =
+    match tde.tde_version with Some v -> `Int v | None -> `Null
+  in
+  `Assoc
+    [
+      ( "textDocument",
+        `Assoc [ ("uri", `String tde.tde_uri); ("version", version_json) ] );
+      ("edits", `List (List.map text_edit_to_json tde.edits));
+    ]
+
+let workspace_edit_to_json (edit : workspace_edit) : Yojson.Safe.t =
+  `Assoc
+    [
+      ( "documentChanges",
+        `List (List.map text_document_edit_to_json edit.document_changes) );
+    ]
+
+let code_action_to_json (action : code_action) : Yojson.Safe.t =
+  let fields = [ ("title", `String action.ca_title) ] in
+  let fields =
+    match action.ca_kind with
+    | Some k -> ("kind", `String (code_action_kind_to_string k)) :: fields
+    | None -> fields
+  in
+  let fields =
+    match action.ca_diagnostics with
+    | [] -> fields
+    | ds -> ("diagnostics", `List (List.map diagnostic_to_json ds)) :: fields
+  in
+  let fields =
+    if action.ca_is_preferred then ("isPreferred", `Bool true) :: fields
+    else fields
+  in
+  let fields =
+    match action.ca_edit with
+    | Some e -> ("edit", workspace_edit_to_json e) :: fields
+    | None -> fields
+  in
+  `Assoc fields
+
+type code_action_result = code_action list option
+(** Code action result is a list of actions or null *)
+
+let code_action_result_to_json (result : code_action_result) : Yojson.Safe.t =
+  match result with
+  | Some actions -> `List (List.map code_action_to_json actions)
   | None -> `Null

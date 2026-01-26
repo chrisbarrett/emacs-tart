@@ -2122,6 +2122,209 @@ let test_references_defvar () =
       let locations = result |> to_list in
       Alcotest.(check int) "found 3 references" 3 (List.length locations)
 
+(** {1 Code Action Tests} *)
+
+(** Test that code action request returns an empty list (framework ready) *)
+let test_code_action_returns_empty_list () =
+  let init_msg =
+    make_message ~id:(`Int 1) ~method_:"initialize"
+      ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+      ()
+  in
+  let did_open_msg =
+    make_message ~method_:"textDocument/didOpen"
+      ~params:
+        (`Assoc
+           [
+             ( "textDocument",
+               `Assoc
+                 [
+                   ("uri", `String "file:///test.el");
+                   ("languageId", `String "elisp");
+                   ("version", `Int 1);
+                   ("text", `String "(+ 1 2)");
+                 ] );
+           ])
+      ()
+  in
+  (* Code action request at position (0, 1) *)
+  let code_action_msg =
+    make_message ~id:(`Int 2) ~method_:"textDocument/codeAction"
+      ~params:
+        (`Assoc
+           [
+             ("textDocument", `Assoc [ ("uri", `String "file:///test.el") ]);
+             ( "range",
+               `Assoc
+                 [
+                   ("start", `Assoc [ ("line", `Int 0); ("character", `Int 0) ]);
+                   ("end", `Assoc [ ("line", `Int 0); ("character", `Int 7) ]);
+                 ] );
+             ("context", `Assoc [ ("diagnostics", `List []) ]);
+           ])
+      ()
+  in
+  let shutdown_msg = make_message ~id:(`Int 3) ~method_:"shutdown" () in
+  let exit_msg = make_message ~method_:"exit" () in
+  let input =
+    init_msg ^ did_open_msg ^ code_action_msg ^ shutdown_msg ^ exit_msg
+  in
+  let in_file = Filename.temp_file "lsp_in" ".json" in
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
+  let ic = In_channel.open_bin in_file in
+  let out_file = Filename.temp_file "lsp_out" ".json" in
+  let oc = Out_channel.open_bin out_file in
+  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let exit_code = Server.run server in
+  In_channel.close ic;
+  Out_channel.close oc;
+  Alcotest.(check int) "exit code" 0 exit_code;
+  (* Parse output and find code action response *)
+  let output = In_channel.with_open_bin out_file In_channel.input_all in
+  let messages = parse_messages output in
+  match find_response messages 2 with
+  | None -> Alcotest.fail "No code action response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      (* Should return an empty list (not null) *)
+      Alcotest.(check bool) "result is not null" true (result <> `Null);
+      let actions = result |> to_list in
+      Alcotest.(check int) "returns empty list" 0 (List.length actions)
+
+(** Test that code action request parses diagnostics context *)
+let test_code_action_parses_context () =
+  let init_msg =
+    make_message ~id:(`Int 1) ~method_:"initialize"
+      ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+      ()
+  in
+  let did_open_msg =
+    make_message ~method_:"textDocument/didOpen"
+      ~params:
+        (`Assoc
+           [
+             ( "textDocument",
+               `Assoc
+                 [
+                   ("uri", `String "file:///test.el");
+                   ("languageId", `String "elisp");
+                   ("version", `Int 1);
+                   ("text", `String "(+ 1 \"hello\")");
+                 ] );
+           ])
+      ()
+  in
+  (* Code action request with a diagnostic in context *)
+  let code_action_msg =
+    make_message ~id:(`Int 2) ~method_:"textDocument/codeAction"
+      ~params:
+        (`Assoc
+           [
+             ("textDocument", `Assoc [ ("uri", `String "file:///test.el") ]);
+             ( "range",
+               `Assoc
+                 [
+                   ("start", `Assoc [ ("line", `Int 0); ("character", `Int 5) ]);
+                   ("end", `Assoc [ ("line", `Int 0); ("character", `Int 12) ]);
+                 ] );
+             ( "context",
+               `Assoc
+                 [
+                   ( "diagnostics",
+                     `List
+                       [
+                         `Assoc
+                           [
+                             ( "range",
+                               `Assoc
+                                 [
+                                   ( "start",
+                                     `Assoc
+                                       [
+                                         ("line", `Int 0); ("character", `Int 5);
+                                       ] );
+                                   ( "end",
+                                     `Assoc
+                                       [
+                                         ("line", `Int 0); ("character", `Int 12);
+                                       ] );
+                                 ] );
+                             ("severity", `Int 1);
+                             ("code", `String "E0308");
+                             ("message", `String "type mismatch");
+                             ("source", `String "tart");
+                           ];
+                       ] );
+                 ] );
+           ])
+      ()
+  in
+  let shutdown_msg = make_message ~id:(`Int 3) ~method_:"shutdown" () in
+  let exit_msg = make_message ~method_:"exit" () in
+  let input =
+    init_msg ^ did_open_msg ^ code_action_msg ^ shutdown_msg ^ exit_msg
+  in
+  let in_file = Filename.temp_file "lsp_in" ".json" in
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
+  let ic = In_channel.open_bin in_file in
+  let out_file = Filename.temp_file "lsp_out" ".json" in
+  let oc = Out_channel.open_bin out_file in
+  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let exit_code = Server.run server in
+  In_channel.close ic;
+  Out_channel.close oc;
+  Alcotest.(check int) "exit code" 0 exit_code;
+  (* Parse output and find code action response *)
+  let output = In_channel.with_open_bin out_file In_channel.input_all in
+  let messages = parse_messages output in
+  match find_response messages 2 with
+  | None -> Alcotest.fail "No code action response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      (* Should not have an error - context parsed successfully *)
+      Alcotest.(check bool) "no error" true (json |> member "error" = `Null);
+      let result = json |> member "result" in
+      Alcotest.(check bool) "result is not null" true (result <> `Null)
+
+(** Test that codeActionProvider capability is advertised *)
+let test_code_action_capability_advertised () =
+  let init_msg =
+    make_message ~id:(`Int 1) ~method_:"initialize"
+      ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+      ()
+  in
+  let shutdown_msg = make_message ~id:(`Int 2) ~method_:"shutdown" () in
+  let exit_msg = make_message ~method_:"exit" () in
+  let input = init_msg ^ shutdown_msg ^ exit_msg in
+  let in_file = Filename.temp_file "lsp_in" ".json" in
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
+  let ic = In_channel.open_bin in_file in
+  let out_file = Filename.temp_file "lsp_out" ".json" in
+  let oc = Out_channel.open_bin out_file in
+  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let exit_code = Server.run server in
+  In_channel.close ic;
+  Out_channel.close oc;
+  Alcotest.(check int) "exit code" 0 exit_code;
+  (* Parse output and find initialize response *)
+  let output = In_channel.with_open_bin out_file In_channel.input_all in
+  let messages = parse_messages output in
+  match find_response messages 1 with
+  | None -> Alcotest.fail "No initialize response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      let caps = result |> member "capabilities" in
+      (* Check codeActionProvider is true *)
+      let code_action_provider = caps |> member "codeActionProvider" in
+      Alcotest.(check bool)
+        "codeActionProvider is true" true
+        (code_action_provider = `Bool true)
+
 let () =
   Alcotest.run "server"
     [
@@ -2196,5 +2399,14 @@ let () =
             test_references_not_on_symbol;
           Alcotest.test_case "have uris" `Quick test_references_have_uris;
           Alcotest.test_case "defvar" `Quick test_references_defvar;
+        ] );
+      ( "code-action",
+        [
+          Alcotest.test_case "returns empty list" `Quick
+            test_code_action_returns_empty_list;
+          Alcotest.test_case "parses context" `Quick
+            test_code_action_parses_context;
+          Alcotest.test_case "capability advertised" `Quick
+            test_code_action_capability_advertised;
         ] );
     ]
