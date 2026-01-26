@@ -12,6 +12,8 @@
 (** Result of type-checking a single top-level form. *)
 type form_result =
   | DefunForm of { name : string; fn_type : Core.Types.typ }
+  | DefvarForm of { name : string; var_type : Core.Types.typ }
+  | TartDeclareForm of { name : string; var_type : Core.Types.typ }
   | ExprForm of { ty : Core.Types.typ }
 
 type check_result = {

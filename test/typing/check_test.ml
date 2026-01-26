@@ -52,7 +52,7 @@ let test_check_form_defun () =
   match result with
   | Check.DefunForm { name; _ } ->
       Alcotest.(check string) "defun name" "foo" name
-  | Check.ExprForm _ -> Alcotest.fail "expected DefunForm"
+  | _ -> Alcotest.fail "expected DefunForm"
 
 let test_check_form_expr () =
   let sexp = parse "42" in
@@ -63,7 +63,7 @@ let test_check_form_expr () =
   match result with
   | Check.ExprForm { ty } ->
       Alcotest.(check string) "expr type" "Int" (to_string ty)
-  | Check.DefunForm _ -> Alcotest.fail "expected ExprForm"
+  | _ -> Alcotest.fail "expected ExprForm"
 
 (* =============================================================================
    check_program Tests
@@ -241,6 +241,154 @@ let test_tart_annotation_error_message () =
   | [] -> Alcotest.fail "expected error"
 
 (* =============================================================================
+   Defvar with tart annotation Tests (R3)
+   ============================================================================= *)
+
+(** Test that (defvar NAME (tart TYPE VALUE)) binds NAME with TYPE *)
+let test_defvar_tart_annotation_binds_type () =
+  let sexps =
+    parse_many
+      {|(defvar my-cache (tart (hash-table string int) (make-hash-table)))|}
+  in
+  let result = Check.check_program sexps in
+  Alcotest.(check bool)
+    "my-cache bound" true
+    (Option.is_some (Env.lookup "my-cache" result.env));
+  match result.forms with
+  | [ Check.DefvarForm { name; var_type } ] ->
+      Alcotest.(check string) "name" "my-cache" name;
+      Alcotest.(check string)
+        "type" "(HashTable String Int)" (to_string var_type)
+  | _ -> Alcotest.fail "expected DefvarForm"
+
+(** Test that defvar with tart annotation checks value against declared type *)
+let test_defvar_tart_annotation_checks_value () =
+  let sexps = parse_many {|(defvar my-var (tart int "not an int"))|} in
+  let result = Check.check_program sexps in
+  (* Should have a type error because "not an int" is String, not Int *)
+  Alcotest.(check bool) "has error" true (List.length result.errors > 0)
+
+(** Test that defconst works the same as defvar *)
+let test_defconst_tart_annotation () =
+  let sexps = parse_many {|(defconst my-version (tart string "1.0.0"))|} in
+  let result = Check.check_program sexps in
+  Alcotest.(check int) "no errors" 0 (List.length result.errors);
+  match result.forms with
+  | [ Check.DefvarForm { name; var_type } ] ->
+      Alcotest.(check string) "name" "my-version" name;
+      Alcotest.(check string) "type" "String" (to_string var_type)
+  | _ -> Alcotest.fail "expected DefvarForm"
+
+(** Test defvar without tart annotation infers type *)
+let test_defvar_no_annotation_infers () =
+  let sexps = parse_many {|(defvar my-num 42)|} in
+  let result = Check.check_program sexps in
+  Alcotest.(check int) "no errors" 0 (List.length result.errors);
+  match result.forms with
+  | [ Check.DefvarForm { name; var_type } ] ->
+      Alcotest.(check string) "name" "my-num" name;
+      Alcotest.(check string) "type" "Int" (to_string var_type)
+  | _ -> Alcotest.fail "expected DefvarForm"
+
+(** Test defvar without init uses Any *)
+let test_defvar_no_init () =
+  let sexps = parse_many "(defvar my-buffer)" in
+  let result = Check.check_program sexps in
+  Alcotest.(check int) "no errors" 0 (List.length result.errors);
+  match result.forms with
+  | [ Check.DefvarForm { name; var_type } ] ->
+      Alcotest.(check string) "name" "my-buffer" name;
+      Alcotest.(check string) "type" "Any" (to_string var_type)
+  | _ -> Alcotest.fail "expected DefvarForm"
+
+(* =============================================================================
+   tart-declare Tests (R4)
+   ============================================================================= *)
+
+(** Test that (tart-declare NAME TYPE) binds NAME with TYPE *)
+let test_tart_declare_binds_type () =
+  let sexps = parse_many "(tart-declare my-count int)" in
+  let result = Check.check_program sexps in
+  Alcotest.(check int) "no errors" 0 (List.length result.errors);
+  match result.forms with
+  | [ Check.TartDeclareForm { name; var_type } ] ->
+      Alcotest.(check string) "name" "my-count" name;
+      Alcotest.(check string) "type" "Int" (to_string var_type)
+  | _ -> Alcotest.fail "expected TartDeclareForm"
+
+(** Test tart-declare followed by defvar *)
+let test_tart_declare_then_defvar () =
+  let sexps =
+    parse_many
+      {|(tart-declare my-count int)
+                           (defvar my-count)|}
+  in
+  let result = Check.check_program sexps in
+  Alcotest.(check int) "no errors" 0 (List.length result.errors);
+  (* my-count should have type Int from the tart-declare *)
+  Alcotest.(check bool)
+    "my-count bound" true
+    (Option.is_some (Env.lookup "my-count" result.env))
+
+(** Test tart-declare with arrow type *)
+let test_tart_declare_arrow_type () =
+  let sexps = parse_many "(tart-declare my-handler ((string) -> nil))" in
+  let result = Check.check_program sexps in
+  Alcotest.(check int) "no errors" 0 (List.length result.errors);
+  match result.forms with
+  | [ Check.TartDeclareForm { var_type; _ } ] ->
+      Alcotest.(check string)
+        "arrow type" "(-> (String) Nil)" (to_string var_type)
+  | _ -> Alcotest.fail "expected TartDeclareForm"
+
+(* =============================================================================
+   setq type checking Tests (R3)
+   ============================================================================= *)
+
+(** Test that setq to declared variable checks against declared type *)
+let test_setq_checks_declared_type () =
+  let sexps =
+    parse_many
+      {|(defvar my-cache (tart (hash-table string int) (make-hash-table)))
+        (setq my-cache "not a hash table")|}
+  in
+  let result = Check.check_program sexps in
+  (* Should have a type error: String is not (Hash-table String Int) *)
+  Alcotest.(check bool) "has error" true (List.length result.errors > 0)
+
+(** Test that setq to declared variable with correct type succeeds *)
+let test_setq_declared_type_ok () =
+  let sexps =
+    parse_many {|(defvar my-num (tart int 0))
+        (setq my-num 42)|}
+  in
+  let result = Check.check_program sexps in
+  Alcotest.(check int) "no errors" 0 (List.length result.errors)
+
+(** Test setq with tart-declare variable *)
+let test_setq_tart_declare_checks () =
+  let sexps =
+    parse_many
+      {|(tart-declare my-count int)
+        (defvar my-count)
+        (setq my-count "not an int")|}
+  in
+  let result = Check.check_program sexps in
+  (* Should error: String is not Int *)
+  Alcotest.(check bool) "has error" true (List.length result.errors > 0)
+
+(** Test reading declared variable has correct type *)
+let test_read_declared_variable () =
+  let sexps =
+    parse_many
+      {|(defvar my-name (tart string "test"))
+        (upcase my-name)|}
+  in
+  let result = Check.check_program sexps in
+  (* my-name has type String, upcase expects String - should work *)
+  Alcotest.(check int) "no errors" 0 (List.length result.errors)
+
+(* =============================================================================
    form_result_to_string Tests
    ============================================================================= *)
 
@@ -317,5 +465,33 @@ let () =
           Alcotest.test_case "in program" `Quick test_tart_annotation_in_program;
           Alcotest.test_case "error message" `Quick
             test_tart_annotation_error_message;
+        ] );
+      ( "defvar_tart",
+        [
+          Alcotest.test_case "binds type" `Quick
+            test_defvar_tart_annotation_binds_type;
+          Alcotest.test_case "checks value" `Quick
+            test_defvar_tart_annotation_checks_value;
+          Alcotest.test_case "defconst" `Quick test_defconst_tart_annotation;
+          Alcotest.test_case "no annotation infers" `Quick
+            test_defvar_no_annotation_infers;
+          Alcotest.test_case "no init uses Any" `Quick test_defvar_no_init;
+        ] );
+      ( "tart_declare",
+        [
+          Alcotest.test_case "binds type" `Quick test_tart_declare_binds_type;
+          Alcotest.test_case "then defvar" `Quick test_tart_declare_then_defvar;
+          Alcotest.test_case "arrow type" `Quick test_tart_declare_arrow_type;
+        ] );
+      ( "setq_checking",
+        [
+          Alcotest.test_case "checks declared type" `Quick
+            test_setq_checks_declared_type;
+          Alcotest.test_case "declared type ok" `Quick
+            test_setq_declared_type_ok;
+          Alcotest.test_case "tart-declare checks" `Quick
+            test_setq_tart_declare_checks;
+          Alcotest.test_case "read declared variable" `Quick
+            test_read_declared_variable;
         ] );
     ]

@@ -186,9 +186,9 @@ Phase 7).
 
 - [x] [R1] Recognize `(declare (tart ...))` in function definitions
 - [x] [R2] Add expression annotation checking (`(tart TYPE FORM)`)
-- [ ] [R3,R4] Track variable types from annotations
-- [ ] [R3] Check `setq`/`setf` against declared variable types
-- [ ] Verify: Type errors on annotation mismatches
+- [x] [R3,R4] Track variable types from annotations
+- [x] [R3] Check `setq`/`setf` against declared variable types
+- [x] Verify: Type errors on annotation mismatches
 
 ### 8.3 Type Aliases
 
