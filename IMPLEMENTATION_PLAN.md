@@ -306,8 +306,8 @@ Broader coverage of common Emacs packages.
 
 - [x] Add `stdlib/buffers.tart` for buffer manipulation functions
 - [x] Add `stdlib/windows.tart` for window management
-- [ ] Add `stdlib/frames.tart` for frame operations
-- [ ] Verify: Buffer/window code type-checks correctly
+- [x] Add `stdlib/frames.tart` for frame operations
+- [ ] Verify: Buffer/window/frame code type-checks correctly
 
 ### 13.2 File Operations
 

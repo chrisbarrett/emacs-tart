@@ -1,0 +1,134 @@
+;;; frames.tart --- Type signatures for Emacs frame functions
+
+(open 'windows)
+
+;; Frame creation
+(defun make-frame (&optional (list any)) -> frame)
+(defun make-frame-on-display (string &optional (list any)) -> frame)
+(defun make-frame-command () -> frame)
+
+;; Frame selection
+(defun selected-frame () -> frame)
+(defun select-frame (frame &optional bool) -> frame)
+(defun with-selected-frame [a] (frame a) -> a)
+
+;; Frame predicates
+(defun framep (any) -> bool)
+(defun frame-live-p (any) -> bool)
+(defun frame-visible-p (frame) -> bool)
+(defun frame-terminal (frame) -> any)
+
+;; Frame listing
+(defun frame-list () -> (list frame))
+(defun visible-frame-list () -> (list frame))
+(defun next-frame (&optional frame any) -> frame)
+(defun previous-frame (&optional frame any) -> frame)
+(defun last-nonminibuffer-frame () -> frame)
+(defun other-frame (int) -> nil)
+
+;; Frame deletion
+(defun delete-frame (&optional frame bool) -> nil)
+(defun delete-other-frames (&optional frame) -> nil)
+
+;; Frame visibility
+(defun make-frame-visible (&optional frame) -> frame)
+(defun make-frame-invisible (&optional frame bool) -> nil)
+(defun iconify-frame (&optional frame) -> nil)
+(defun raise-frame (&optional frame) -> nil)
+(defun lower-frame (&optional frame) -> nil)
+
+;; Frame size - pixels
+(defun frame-pixel-height (&optional frame) -> int)
+(defun frame-pixel-width (&optional frame) -> int)
+(defun frame-inner-height (&optional frame) -> int)
+(defun frame-inner-width (&optional frame) -> int)
+(defun frame-outer-height (&optional frame) -> int)
+(defun frame-outer-width (&optional frame) -> int)
+(defun frame-text-height (&optional frame) -> int)
+(defun frame-text-width (&optional frame) -> int)
+
+;; Frame size - characters
+(defun frame-height (&optional frame) -> int)
+(defun frame-width (&optional frame) -> int)
+(defun frame-char-height (&optional frame) -> int)
+(defun frame-char-width (&optional frame) -> int)
+
+;; Frame resizing
+(defun set-frame-height (frame int &optional bool bool) -> nil)
+(defun set-frame-width (frame int &optional bool bool) -> nil)
+(defun set-frame-size (frame int int &optional bool) -> nil)
+(defun set-frame-pixel-height (frame int) -> nil)
+(defun set-frame-pixel-width (frame int) -> nil)
+
+;; Frame position
+(defun frame-position (&optional frame) -> (pair int int))
+(defun set-frame-position (frame int int) -> nil)
+(defun frame-native-position (&optional frame) -> (pair int int))
+(defun frame-edges (&optional frame any) -> (list int))
+
+;; Frame focus
+(defun frame-focus (&optional frame) -> (frame | nil))
+(defun redirect-frame-focus (frame &optional (frame | nil)) -> nil)
+(defun focus-frame (frame) -> nil)
+
+;; Frame parameters
+(defun frame-parameters (&optional frame) -> (list any))
+(defun frame-parameter (frame symbol) -> any)
+(defun set-frame-parameter (frame symbol any) -> nil)
+(defun modify-frame-parameters (frame (list any)) -> nil)
+(defun frame-inherited-parameters (frame) -> (list any))
+
+;; Frame local variables
+(defun default-value (symbol) -> any)
+(defun set-default (symbol any) -> any)
+(defun default-boundp (symbol) -> bool)
+(defun frame-local-value (symbol frame) -> any)
+
+;; Frame name
+(defun frame-name (&optional frame) -> string)
+
+;; Frame parent/children
+(defun frame-parent (&optional frame) -> (frame | nil))
+(defun frame-ancestor-p (frame frame) -> bool)
+
+;; Display info
+(defun display-pixel-height (&optional any) -> int)
+(defun display-pixel-width (&optional any) -> int)
+(defun display-mm-height (&optional any) -> int)
+(defun display-mm-width (&optional any) -> int)
+(defun display-backing-store (&optional any) -> symbol)
+(defun display-visual-class (&optional any) -> symbol)
+(defun display-color-cells (&optional any) -> int)
+(defun display-planes (&optional any) -> int)
+(defun display-screens (&optional any) -> int)
+(defun display-monitor-attributes-list (&optional any) -> (list any))
+
+;; Frame and display connection
+(defun display-graphic-p (&optional any) -> bool)
+(defun display-mouse-p (&optional any) -> bool)
+(defun display-popup-menus-p (&optional any) -> bool)
+(defun display-grayscale-p (&optional any) -> bool)
+(defun display-supports-face-attributes-p ((list any) &optional any) -> bool)
+(defun display-color-p (&optional any) -> bool)
+(defun display-multi-frame-p (&optional any) -> bool)
+(defun display-selections-p (&optional any) -> bool)
+(defun display-images-p (&optional any) -> bool)
+(defun window-system (&optional frame) -> (symbol | nil))
+
+;; Screen and DPI
+(defun frame-scale-factor (&optional frame) -> num)
+
+;; Frame configuration
+(defun current-frame-configuration () -> any)
+(defun set-frame-configuration (any &optional bool) -> nil)
+
+;; Minibuffer access
+(defun frame-root-window (&optional frame) -> window)
+(defun active-minibuffer-window () -> (window | nil))
+(defun minibuffer-window (&optional frame) -> window)
+(defun set-minibuffer-window (window) -> window)
+
+;; Input focus
+(defun x-focus-frame (frame &optional bool) -> nil)
+(defun handle-focus-in (frame) -> nil)
+(defun handle-focus-out (frame) -> nil)

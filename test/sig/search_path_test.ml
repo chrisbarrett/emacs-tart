@@ -658,6 +658,85 @@ let test_load_cl_lib () =
            true
          with Not_found -> false)
 
+(** Test that frames.tart parses successfully *)
+let test_parse_frames () =
+  let path = Filename.concat stdlib_dir "frames.tart" in
+  if not (Sys.file_exists path) then
+    Alcotest.fail ("frames.tart not found at: " ^ path);
+  match Search_path.parse_signature_file path with
+  | None -> Alcotest.fail "frames.tart failed to parse"
+  | Some sig_file ->
+      Alcotest.(check string) "module name" "frames" sig_file.sig_module;
+      Alcotest.(check bool)
+        "has declarations" true
+        (List.length sig_file.sig_decls > 30);
+      (* Check key frame functions *)
+      let has_defun name =
+        List.exists
+          (function Sig_ast.DDefun d -> d.defun_name = name | _ -> false)
+          sig_file.sig_decls
+      in
+      Alcotest.(check bool) "has make-frame" true (has_defun "make-frame");
+      Alcotest.(check bool)
+        "has selected-frame" true
+        (has_defun "selected-frame");
+      Alcotest.(check bool) "has frame-list" true (has_defun "frame-list");
+      Alcotest.(check bool) "has delete-frame" true (has_defun "delete-frame");
+      Alcotest.(check bool)
+        "has frame-parameters" true
+        (has_defun "frame-parameters")
+
+(** Test that frames can be loaded into type environment *)
+let test_load_frames () =
+  let sp = Search_path.empty |> Search_path.with_stdlib stdlib_dir in
+  (* First load builtins and buffers for dependency types *)
+  let base_env =
+    match
+      Search_path.load_module ~search_path:sp ~env:Type_env.empty "builtins"
+    with
+    | None -> Alcotest.fail "failed to load builtins module"
+    | Some env -> env
+  in
+  let base_env =
+    match Search_path.load_module ~search_path:sp ~env:base_env "buffers" with
+    | None -> Alcotest.fail "failed to load buffers module"
+    | Some env -> env
+  in
+  let base_env =
+    match Search_path.load_module ~search_path:sp ~env:base_env "windows" with
+    | None -> Alcotest.fail "failed to load windows module"
+    | Some env -> env
+  in
+  match Search_path.load_module ~search_path:sp ~env:base_env "frames" with
+  | None -> Alcotest.fail "failed to load frames module"
+  | Some env ->
+      (* Check that selected-frame is loaded *)
+      (match Type_env.lookup "selected-frame" env with
+      | None -> Alcotest.fail "selected-frame not found in env"
+      | Some _ -> ());
+      (* Check that make-frame is loaded *)
+      (match Type_env.lookup "make-frame" env with
+      | None -> Alcotest.fail "make-frame not found in env"
+      | Some _ -> ());
+      (* Check that frame-list is loaded *)
+      (match Type_env.lookup "frame-list" env with
+      | None -> Alcotest.fail "frame-list not found in env"
+      | Some _ -> ());
+      (* Verify type checking works with frame functions *)
+      let _, errors = check_expr_str ~env "(selected-frame)" in
+      Alcotest.(check int) "selected-frame: no errors" 0 (List.length errors);
+      (* Check frame-list returns list of frames *)
+      let ty, errors2 = check_expr_str ~env "(frame-list)" in
+      Alcotest.(check int) "frame-list: no errors" 0 (List.length errors2);
+      (* Result should be (List Frame) *)
+      let ty_str = Types.to_string ty in
+      Alcotest.(check bool)
+        "returns list type" true
+        (try
+           let _ = Str.search_forward (Str.regexp_string "List") ty_str 0 in
+           true
+         with Not_found -> false)
+
 let () =
   Alcotest.run "search_path"
     [
@@ -707,9 +786,11 @@ let () =
           Alcotest.test_case "parse seq.tart" `Quick test_parse_seq;
           Alcotest.test_case "parse buffers.tart" `Quick test_parse_buffers;
           Alcotest.test_case "parse windows.tart" `Quick test_parse_windows;
+          Alcotest.test_case "parse frames.tart" `Quick test_parse_frames;
           Alcotest.test_case "load builtins into env" `Quick test_load_builtins;
           Alcotest.test_case "load cl-lib into env" `Quick test_load_cl_lib;
           Alcotest.test_case "load buffers into env" `Quick test_load_buffers;
           Alcotest.test_case "load windows into env" `Quick test_load_windows;
+          Alcotest.test_case "load frames into env" `Quick test_load_frames;
         ] );
     ]
