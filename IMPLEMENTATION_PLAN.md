@@ -262,7 +262,7 @@ Navigation and code intelligence features for IDE productivity.
 ### 11.3 Code Actions
 
 - [x] [R17] Implement `textDocument/codeAction` framework
-- [ ] [R18] Add "Extract function" refactoring
+- [x] [R18] Add "Extract function" refactoring
 - [x] [R19] Add "Add type annotation" quickfix
 - [ ] Verify: Code actions appear on type errors
 

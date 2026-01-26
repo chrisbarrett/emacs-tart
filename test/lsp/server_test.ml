@@ -2147,7 +2147,7 @@ let test_code_action_returns_empty_list () =
            ])
       ()
   in
-  (* Code action request at position (0, 1) *)
+  (* Code action request with cursor position (no selection) - should return empty *)
   let code_action_msg =
     make_message ~id:(`Int 2) ~method_:"textDocument/codeAction"
       ~params:
@@ -2158,7 +2158,7 @@ let test_code_action_returns_empty_list () =
                `Assoc
                  [
                    ("start", `Assoc [ ("line", `Int 0); ("character", `Int 0) ]);
-                   ("end", `Assoc [ ("line", `Int 0); ("character", `Int 7) ]);
+                   ("end", `Assoc [ ("line", `Int 0); ("character", `Int 0) ]);
                  ] );
              ("context", `Assoc [ ("diagnostics", `List []) ]);
            ])
@@ -2410,9 +2410,14 @@ let test_code_action_missing_signature_quickfix () =
       let result = json |> member "result" in
       Alcotest.(check bool) "result is not null" true (result <> `Null);
       let actions = result |> to_list in
-      (* Should have exactly one quickfix action *)
-      Alcotest.(check int) "has one quickfix" 1 (List.length actions);
-      let action = List.hd actions in
+      (* Should have at least one quickfix action *)
+      let quickfix_actions =
+        List.filter
+          (fun a -> a |> member "kind" |> to_string = "quickfix")
+          actions
+      in
+      Alcotest.(check int) "has one quickfix" 1 (List.length quickfix_actions);
+      let action = List.hd quickfix_actions in
       (* Check the action title *)
       let title = action |> member "title" |> to_string in
       Alcotest.(check bool)
@@ -2612,9 +2617,17 @@ let test_code_action_respects_range () =
       let open Yojson.Safe.Util in
       let result = json |> member "result" in
       let actions = result |> to_list in
-      (* Should only return action for fn-two, not fn-one *)
-      Alcotest.(check int) "returns one action" 1 (List.length actions);
-      let action = List.hd actions in
+      (* Filter to quickfix actions (not extract function) *)
+      let quickfix_actions =
+        List.filter
+          (fun a -> a |> member "kind" |> to_string = "quickfix")
+          actions
+      in
+      (* Should only return quickfix action for fn-two, not fn-one *)
+      Alcotest.(check int)
+        "returns one quickfix action" 1
+        (List.length quickfix_actions);
+      let action = List.hd quickfix_actions in
       let title = action |> member "title" |> to_string in
       Alcotest.(check bool)
         "action is for fn-two" true
@@ -2622,6 +2635,332 @@ let test_code_action_respects_range () =
            let _ = Str.search_forward (Str.regexp_string "fn-two") title 0 in
            true
          with Not_found -> false)
+
+(** {1 Extract Function Tests} *)
+
+(** Test that extract function action appears when selecting code *)
+let test_extract_function_appears_on_selection () =
+  let init_msg =
+    make_message ~id:(`Int 1) ~method_:"initialize"
+      ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+      ()
+  in
+  let did_open_msg =
+    make_message ~method_:"textDocument/didOpen"
+      ~params:
+        (`Assoc
+           [
+             ( "textDocument",
+               `Assoc
+                 [
+                   ("uri", `String "file:///test.el");
+                   ("languageId", `String "elisp");
+                   ("version", `Int 1);
+                   ("text", `String "(defun foo (x) (+ x 1))");
+                 ] );
+           ])
+      ()
+  in
+  (* Select the (+ x 1) expression: chars 16-23 on line 0 *)
+  let code_action_msg =
+    make_message ~id:(`Int 2) ~method_:"textDocument/codeAction"
+      ~params:
+        (`Assoc
+           [
+             ("textDocument", `Assoc [ ("uri", `String "file:///test.el") ]);
+             ( "range",
+               `Assoc
+                 [
+                   ("start", `Assoc [ ("line", `Int 0); ("character", `Int 16) ]);
+                   ("end", `Assoc [ ("line", `Int 0); ("character", `Int 23) ]);
+                 ] );
+             ("context", `Assoc [ ("diagnostics", `List []) ]);
+           ])
+      ()
+  in
+  let shutdown_msg = make_message ~id:(`Int 3) ~method_:"shutdown" () in
+  let exit_msg = make_message ~method_:"exit" () in
+  let input =
+    init_msg ^ did_open_msg ^ code_action_msg ^ shutdown_msg ^ exit_msg
+  in
+  let in_file = Filename.temp_file "lsp_in" ".json" in
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
+  let ic = In_channel.open_bin in_file in
+  let out_file = Filename.temp_file "lsp_out" ".json" in
+  let oc = Out_channel.open_bin out_file in
+  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let exit_code = Server.run server in
+  In_channel.close ic;
+  Out_channel.close oc;
+  Alcotest.(check int) "exit code" 0 exit_code;
+  let output = In_channel.with_open_bin out_file In_channel.input_all in
+  let messages = parse_messages output in
+  match find_response messages 2 with
+  | None -> Alcotest.fail "No code action response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      let actions = result |> to_list in
+      (* Should have extract function action *)
+      let extract_actions =
+        List.filter
+          (fun a -> a |> member "kind" |> to_string = "refactor.extract")
+          actions
+      in
+      Alcotest.(check int) "has extract action" 1 (List.length extract_actions);
+      let action = List.hd extract_actions in
+      let title = action |> member "title" |> to_string in
+      Alcotest.(check string)
+        "title is extract function" "Extract function" title
+
+(** Test that extract function generates correct workspace edit *)
+let test_extract_function_has_edit () =
+  let init_msg =
+    make_message ~id:(`Int 1) ~method_:"initialize"
+      ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+      ()
+  in
+  let did_open_msg =
+    make_message ~method_:"textDocument/didOpen"
+      ~params:
+        (`Assoc
+           [
+             ( "textDocument",
+               `Assoc
+                 [
+                   ("uri", `String "file:///test.el");
+                   ("languageId", `String "elisp");
+                   ("version", `Int 1);
+                   ("text", `String "(defun foo (x) (+ x 1))");
+                 ] );
+           ])
+      ()
+  in
+  let code_action_msg =
+    make_message ~id:(`Int 2) ~method_:"textDocument/codeAction"
+      ~params:
+        (`Assoc
+           [
+             ("textDocument", `Assoc [ ("uri", `String "file:///test.el") ]);
+             ( "range",
+               `Assoc
+                 [
+                   ("start", `Assoc [ ("line", `Int 0); ("character", `Int 16) ]);
+                   ("end", `Assoc [ ("line", `Int 0); ("character", `Int 23) ]);
+                 ] );
+             ("context", `Assoc [ ("diagnostics", `List []) ]);
+           ])
+      ()
+  in
+  let shutdown_msg = make_message ~id:(`Int 3) ~method_:"shutdown" () in
+  let exit_msg = make_message ~method_:"exit" () in
+  let input =
+    init_msg ^ did_open_msg ^ code_action_msg ^ shutdown_msg ^ exit_msg
+  in
+  let in_file = Filename.temp_file "lsp_in" ".json" in
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
+  let ic = In_channel.open_bin in_file in
+  let out_file = Filename.temp_file "lsp_out" ".json" in
+  let oc = Out_channel.open_bin out_file in
+  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let exit_code = Server.run server in
+  In_channel.close ic;
+  Out_channel.close oc;
+  Alcotest.(check int) "exit code" 0 exit_code;
+  let output = In_channel.with_open_bin out_file In_channel.input_all in
+  let messages = parse_messages output in
+  match find_response messages 2 with
+  | None -> Alcotest.fail "No code action response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      let actions = result |> to_list in
+      let extract_actions =
+        List.filter
+          (fun a -> a |> member "kind" |> to_string = "refactor.extract")
+          actions
+      in
+      let action = List.hd extract_actions in
+      (* Check that edit exists *)
+      let edit = action |> member "edit" in
+      Alcotest.(check bool) "has edit" true (edit <> `Null);
+      (* Check document changes *)
+      let doc_changes = edit |> member "documentChanges" |> to_list in
+      Alcotest.(check int) "has one doc change" 1 (List.length doc_changes);
+      let doc_change = List.hd doc_changes in
+      (* Check there are edits (insert defun + replace selection) *)
+      let edits = doc_change |> member "edits" |> to_list in
+      Alcotest.(check int) "has two edits" 2 (List.length edits)
+
+(** Test that extract function captures free variables as parameters *)
+let test_extract_function_captures_free_vars () =
+  let init_msg =
+    make_message ~id:(`Int 1) ~method_:"initialize"
+      ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+      ()
+  in
+  let did_open_msg =
+    make_message ~method_:"textDocument/didOpen"
+      ~params:
+        (`Assoc
+           [
+             ( "textDocument",
+               `Assoc
+                 [
+                   ("uri", `String "file:///test.el");
+                   ("languageId", `String "elisp");
+                   ("version", `Int 1);
+                   ("text", `String "(defun foo (x y) (+ x y))");
+                 ] );
+           ])
+      ()
+  in
+  (* Select (+ x y) - position 17 is the opening paren, 24 is closing paren *)
+  let code_action_msg =
+    make_message ~id:(`Int 2) ~method_:"textDocument/codeAction"
+      ~params:
+        (`Assoc
+           [
+             ("textDocument", `Assoc [ ("uri", `String "file:///test.el") ]);
+             ( "range",
+               `Assoc
+                 [
+                   ("start", `Assoc [ ("line", `Int 0); ("character", `Int 17) ]);
+                   ("end", `Assoc [ ("line", `Int 0); ("character", `Int 24) ]);
+                 ] );
+             ("context", `Assoc [ ("diagnostics", `List []) ]);
+           ])
+      ()
+  in
+  let shutdown_msg = make_message ~id:(`Int 3) ~method_:"shutdown" () in
+  let exit_msg = make_message ~method_:"exit" () in
+  let input =
+    init_msg ^ did_open_msg ^ code_action_msg ^ shutdown_msg ^ exit_msg
+  in
+  let in_file = Filename.temp_file "lsp_in" ".json" in
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
+  let ic = In_channel.open_bin in_file in
+  let out_file = Filename.temp_file "lsp_out" ".json" in
+  let oc = Out_channel.open_bin out_file in
+  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let exit_code = Server.run server in
+  In_channel.close ic;
+  Out_channel.close oc;
+  Alcotest.(check int) "exit code" 0 exit_code;
+  let output = In_channel.with_open_bin out_file In_channel.input_all in
+  let messages = parse_messages output in
+  match find_response messages 2 with
+  | None -> Alcotest.fail "No code action response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      let actions = result |> to_list in
+      let extract_actions =
+        List.filter
+          (fun a -> a |> member "kind" |> to_string = "refactor.extract")
+          actions
+      in
+      let action = List.hd extract_actions in
+      let edit = action |> member "edit" in
+      let doc_changes = edit |> member "documentChanges" |> to_list in
+      let doc_change = List.hd doc_changes in
+      let edits = doc_change |> member "edits" |> to_list in
+      (* Find the insert edit (contains defun) *)
+      let insert_edit =
+        List.find
+          (fun e ->
+            let new_text = e |> member "newText" |> to_string in
+            try
+              let _ =
+                Str.search_forward (Str.regexp_string "defun") new_text 0
+              in
+              true
+            with Not_found -> false)
+          edits
+      in
+      let new_text = insert_edit |> member "newText" |> to_string in
+      (* Check the defun has both x and y as parameters *)
+      Alcotest.(check bool)
+        "has x param" true
+        (try
+           let _ = Str.search_forward (Str.regexp_string "(x y)") new_text 0 in
+           true
+         with Not_found -> false)
+
+(** Test that extract function does not appear without selection *)
+let test_extract_function_no_cursor () =
+  let init_msg =
+    make_message ~id:(`Int 1) ~method_:"initialize"
+      ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+      ()
+  in
+  let did_open_msg =
+    make_message ~method_:"textDocument/didOpen"
+      ~params:
+        (`Assoc
+           [
+             ( "textDocument",
+               `Assoc
+                 [
+                   ("uri", `String "file:///test.el");
+                   ("languageId", `String "elisp");
+                   ("version", `Int 1);
+                   ("text", `String "(defun foo (x) (+ x 1))");
+                 ] );
+           ])
+      ()
+  in
+  (* Cursor position only, no selection *)
+  let code_action_msg =
+    make_message ~id:(`Int 2) ~method_:"textDocument/codeAction"
+      ~params:
+        (`Assoc
+           [
+             ("textDocument", `Assoc [ ("uri", `String "file:///test.el") ]);
+             ( "range",
+               `Assoc
+                 [
+                   ("start", `Assoc [ ("line", `Int 0); ("character", `Int 16) ]);
+                   ("end", `Assoc [ ("line", `Int 0); ("character", `Int 16) ]);
+                 ] );
+             ("context", `Assoc [ ("diagnostics", `List []) ]);
+           ])
+      ()
+  in
+  let shutdown_msg = make_message ~id:(`Int 3) ~method_:"shutdown" () in
+  let exit_msg = make_message ~method_:"exit" () in
+  let input =
+    init_msg ^ did_open_msg ^ code_action_msg ^ shutdown_msg ^ exit_msg
+  in
+  let in_file = Filename.temp_file "lsp_in" ".json" in
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
+  let ic = In_channel.open_bin in_file in
+  let out_file = Filename.temp_file "lsp_out" ".json" in
+  let oc = Out_channel.open_bin out_file in
+  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let exit_code = Server.run server in
+  In_channel.close ic;
+  Out_channel.close oc;
+  Alcotest.(check int) "exit code" 0 exit_code;
+  let output = In_channel.with_open_bin out_file In_channel.input_all in
+  let messages = parse_messages output in
+  match find_response messages 2 with
+  | None -> Alcotest.fail "No code action response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      let actions = result |> to_list in
+      (* Should NOT have extract function action (no selection) *)
+      let extract_actions =
+        List.filter
+          (fun a -> a |> member "kind" |> to_string = "refactor.extract")
+          actions
+      in
+      Alcotest.(check int) "no extract action" 0 (List.length extract_actions)
 
 let () =
   Alcotest.run "server"
@@ -2712,5 +3051,13 @@ let () =
             test_code_action_quickfix_has_edit;
           Alcotest.test_case "respects range" `Quick
             test_code_action_respects_range;
+          Alcotest.test_case "extract function appears" `Quick
+            test_extract_function_appears_on_selection;
+          Alcotest.test_case "extract function has edit" `Quick
+            test_extract_function_has_edit;
+          Alcotest.test_case "extract function captures vars" `Quick
+            test_extract_function_captures_free_vars;
+          Alcotest.test_case "extract function no cursor" `Quick
+            test_extract_function_no_cursor;
         ] );
     ]

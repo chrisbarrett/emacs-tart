@@ -850,6 +850,315 @@ let generate_defun_signature (name : string) (ty : Core.Types.typ) : string =
       (* Not a function type - shouldn't happen for defuns but handle gracefully *)
       Printf.sprintf "(defvar %s %s)" name (type_to_sig_string ty)
 
+(** {1 Extract Function Refactoring} *)
+
+(** Elisp special forms that introduce variable bindings *)
+let binding_forms =
+  [
+    "let";
+    "let*";
+    "letrec";
+    "if-let";
+    "when-let";
+    "if-let*";
+    "when-let*";
+    "pcase-let";
+    "pcase-let*";
+    "cl-destructuring-bind";
+    "lambda";
+    "defun";
+    "defsubst";
+    "defmacro";
+    "cl-defun";
+    "cl-defsubst";
+    "cl-defmacro";
+  ]
+
+(** Check if a symbol is a binding form *)
+let is_binding_form (name : string) : bool = List.mem name binding_forms
+
+(** Check if a symbol is a builtin that shouldn't be extracted as a parameter *)
+let is_builtin_symbol (name : string) : bool =
+  (* Common elisp builtins that should not become parameters *)
+  let builtins =
+    [
+      (* Control flow *)
+      "if";
+      "when";
+      "unless";
+      "cond";
+      "and";
+      "or";
+      "not";
+      "progn";
+      "prog1";
+      "prog2";
+      "while";
+      "dolist";
+      "dotimes";
+      (* Binding forms *)
+      "let";
+      "let*";
+      "lambda";
+      "defun";
+      "defvar";
+      "defconst";
+      "setq";
+      "setf";
+      (* List operations *)
+      "car";
+      "cdr";
+      "cons";
+      "list";
+      "append";
+      "nth";
+      "nthcdr";
+      "length";
+      "mapcar";
+      "mapc";
+      "member";
+      "assoc";
+      "assq";
+      (* Arithmetic *)
+      "+";
+      "-";
+      "*";
+      "/";
+      "mod";
+      "1+";
+      "1-";
+      "max";
+      "min";
+      "abs";
+      (* Comparison *)
+      "<";
+      ">";
+      "<=";
+      ">=";
+      "=";
+      "/=";
+      "eq";
+      "eql";
+      "equal";
+      "string=";
+      (* String operations *)
+      "concat";
+      "substring";
+      "string-to-number";
+      "number-to-string";
+      "format";
+      "message";
+      (* Type predicates *)
+      "null";
+      "consp";
+      "listp";
+      "stringp";
+      "numberp";
+      "integerp";
+      "symbolp";
+      "functionp";
+      (* Quoting *)
+      "quote";
+      "function";
+      "backquote";
+      (* Special *)
+      "t";
+      "nil";
+      "error";
+      "signal";
+      "funcall";
+      "apply";
+    ]
+  in
+  List.mem name builtins || is_binding_form name
+
+(** Extract bound variables from a binding clause.
+
+    For `let`/`let*`, the clause is either `(var value)` or just `var`. *)
+let extract_bound_from_clause (clause : Syntax.Sexp.t) : string list =
+  match clause with
+  | Syntax.Sexp.List (Syntax.Sexp.Symbol (name, _) :: _, _) -> [ name ]
+  | Syntax.Sexp.Symbol (name, _) -> [ name ]
+  | _ -> []
+
+(** Extract bound variables from a let-style binding list.
+
+    Given `((x 1) (y 2) z)`, returns `["x"; "y"; "z"]`. *)
+let extract_bindings_from_let (bindings : Syntax.Sexp.t) : string list =
+  match bindings with
+  | Syntax.Sexp.List (clauses, _) ->
+      List.concat_map extract_bound_from_clause clauses
+  | _ -> []
+
+(** Extract parameter names from a lambda/defun argument list.
+
+    Given `(x y &optional z)`, returns `["x"; "y"; "z"]`. *)
+let extract_params (args : Syntax.Sexp.t) : string list =
+  let rec collect = function
+    | [] -> []
+    | Syntax.Sexp.Symbol ("&optional", _) :: rest -> collect rest
+    | Syntax.Sexp.Symbol ("&rest", _) :: rest -> collect rest
+    | Syntax.Sexp.Symbol ("&key", _) :: rest -> collect rest
+    | Syntax.Sexp.Symbol (name, _) :: rest -> name :: collect rest
+    | _ :: rest -> collect rest
+  in
+  match args with Syntax.Sexp.List (elems, _) -> collect elems | _ -> []
+
+(** Collect all symbol references in an S-expression.
+
+    Returns the set of symbol names that appear in the expression, excluding:
+    - Symbols in function position of special forms
+    - Symbols bound by let/lambda/etc. within the expression *)
+let collect_symbol_refs (sexp : Syntax.Sexp.t) : string list =
+  let rec collect ~(bound : string list) (expr : Syntax.Sexp.t) : string list =
+    match expr with
+    | Syntax.Sexp.Symbol (name, _) ->
+        if List.mem name bound || is_builtin_symbol name then [] else [ name ]
+    | Syntax.Sexp.List
+        (Syntax.Sexp.Symbol (("let" | "let*"), _) :: bindings :: body, _) ->
+        (* Collect refs from binding values (before they're bound) *)
+        let binding_refs = collect_from_let_bindings ~bound bindings in
+        (* Then collect from body with new bindings in scope *)
+        let new_bound = extract_bindings_from_let bindings @ bound in
+        let body_refs = List.concat_map (collect ~bound:new_bound) body in
+        binding_refs @ body_refs
+    | Syntax.Sexp.List
+        ( Syntax.Sexp.Symbol (("lambda" | "defun" | "defsubst" | "defmacro"), _)
+          :: args :: body,
+          _ ) ->
+        (* For lambda/defun, first arg is params (skip if symbol for defun name) *)
+        let params, actual_body =
+          match args with
+          | Syntax.Sexp.Symbol _ ->
+              (* defun name - skip it, next is args *)
+              ( (match body with [] -> [] | h :: _ -> extract_params h),
+                match body with [] | [ _ ] -> [] | _ :: t -> t )
+          | _ -> (extract_params args, body)
+        in
+        let new_bound = params @ bound in
+        List.concat_map (collect ~bound:new_bound) actual_body
+    | Syntax.Sexp.List (Syntax.Sexp.Symbol (form, _) :: _, _)
+      when is_binding_form form ->
+        (* Other binding forms - conservatively just collect from all children *)
+        collect_from_children ~bound expr
+    | Syntax.Sexp.List (head :: args, _) ->
+        (* Regular function call - collect from head (unless it's a symbol being called)
+           and all arguments *)
+        let head_refs =
+          match head with
+          | Syntax.Sexp.Symbol _ ->
+              [] (* Don't treat function name as free var *)
+          | _ -> collect ~bound head
+        in
+        head_refs @ List.concat_map (collect ~bound) args
+    | Syntax.Sexp.List ([], _) -> []
+    | Syntax.Sexp.Vector (elems, _) -> List.concat_map (collect ~bound) elems
+    | Syntax.Sexp.Cons (car, cdr, _) -> collect ~bound car @ collect ~bound cdr
+    | Syntax.Sexp.Int _ | Syntax.Sexp.Float _ | Syntax.Sexp.String _
+    | Syntax.Sexp.Keyword _ | Syntax.Sexp.Char _ | Syntax.Sexp.Error _ ->
+        []
+  and collect_from_let_bindings ~(bound : string list)
+      (bindings : Syntax.Sexp.t) : string list =
+    match bindings with
+    | Syntax.Sexp.List (clauses, _) ->
+        List.concat_map
+          (fun clause ->
+            match clause with
+            | Syntax.Sexp.List (_ :: value :: _, _) -> collect ~bound value
+            | _ -> [])
+          clauses
+    | _ -> []
+  and collect_from_children ~(bound : string list) (expr : Syntax.Sexp.t) :
+      string list =
+    match expr with
+    | Syntax.Sexp.List (elems, _) -> List.concat_map (collect ~bound) elems
+    | Syntax.Sexp.Vector (elems, _) -> List.concat_map (collect ~bound) elems
+    | Syntax.Sexp.Cons (car, cdr, _) -> collect ~bound car @ collect ~bound cdr
+    | _ -> []
+  in
+  collect ~bound:[] sexp |> List.sort_uniq String.compare
+
+(** Find the S-expression that best matches a given LSP range.
+
+    The range is 0-based (LSP convention). Returns the first sexp whose span
+    contains the start position of the range, provided the selection is
+    non-trivial (not just a cursor position). *)
+let find_sexp_at_range (range : Protocol.range) (sexps : Syntax.Sexp.t list) :
+    Syntax.Sexp.t option =
+  (* Only offer extract if there's a real selection (not just a cursor) *)
+  if
+    range.start.line = range.end_.line
+    && range.start.character = range.end_.character
+  then None
+  else
+    (* Find sexp at start of range *)
+    Syntax.Sexp.find_at_position_in_forms ~line:range.start.line
+      ~col:range.start.character sexps
+
+(** Generate "Extract function" refactoring action.
+
+    Creates a workspace edit that: 1. Inserts a new defun before the current
+    top-level form 2. Replaces the selection with a call to the new function *)
+let generate_extract_function_action ~(uri : string) ~(doc_text : string)
+    ~(sexp : Syntax.Sexp.t) : Protocol.code_action option =
+  let free_vars = collect_symbol_refs sexp in
+  let fn_name = "extracted-fn" in
+  let span = Syntax.Sexp.span_of sexp in
+
+  (* Generate the new function definition *)
+  let params_str =
+    if free_vars = [] then "()" else "(" ^ String.concat " " free_vars ^ ")"
+  in
+  let body_str = Syntax.Sexp.to_string sexp in
+  let new_defun =
+    Printf.sprintf "(defun %s %s\n  %s)\n\n" fn_name params_str body_str
+  in
+
+  (* Generate the replacement call *)
+  let call_str =
+    if free_vars = [] then Printf.sprintf "(%s)" fn_name
+    else Printf.sprintf "(%s %s)" fn_name (String.concat " " free_vars)
+  in
+
+  (* Find position to insert new defun - at start of line containing the selection *)
+  let insert_line = span.start_pos.line - 1 in
+  (* Convert to 0-based *)
+  let insert_pos : Protocol.position = { line = insert_line; character = 0 } in
+
+  (* Convert span to LSP range for replacement *)
+  let replace_range = range_of_span span in
+
+  (* Create edits:
+     1. Insert new defun at start of the line
+     2. Replace selected expression with function call *)
+  let insert_edit : Protocol.text_edit =
+    {
+      te_range = { start = insert_pos; end_ = insert_pos };
+      new_text = new_defun;
+    }
+  in
+  let replace_edit : Protocol.text_edit =
+    { te_range = replace_range; new_text = call_str }
+  in
+
+  (* Both edits target the same document *)
+  let _ = doc_text in
+  let doc_edit : Protocol.text_document_edit =
+    { tde_uri = uri; tde_version = None; edits = [ insert_edit; replace_edit ] }
+  in
+  let workspace_edit : Protocol.workspace_edit =
+    { document_changes = [ doc_edit ] }
+  in
+
+  Some
+    {
+      Protocol.ca_title = "Extract function";
+      ca_kind = Some Protocol.RefactorExtract;
+      ca_diagnostics = [];
+      ca_is_preferred = false;
+      ca_edit = Some workspace_edit;
+    }
+
 (** {1 Code Action Generation} *)
 
 (** Get the sibling .tart file path for an .el file *)
@@ -1006,10 +1315,27 @@ let handle_code_action (server : t) (params : Yojson.Safe.t option) :
                 check_result.missing_signature_warnings
             in
 
+            (* Generate "Extract function" refactoring if selection covers a sexp *)
+            let extract_actions =
+              match find_sexp_at_range range parse_result.sexps with
+              | Some sexp -> (
+                  debug server
+                    (Printf.sprintf "Found sexp for extraction: %s"
+                       (Syntax.Sexp.to_string sexp));
+                  match
+                    generate_extract_function_action ~uri ~doc_text:doc.text
+                      ~sexp
+                  with
+                  | Some action -> [ action ]
+                  | None -> [])
+              | None -> []
+            in
+
+            let all_actions = missing_sig_actions @ extract_actions in
             debug server
               (Printf.sprintf "Generated %d code actions"
-                 (List.length missing_sig_actions));
-            Ok (Protocol.code_action_result_to_json (Some missing_sig_actions)))
+                 (List.length all_actions));
+            Ok (Protocol.code_action_result_to_json (Some all_actions)))
 
 (** Dispatch a request to its handler *)
 let dispatch_request (server : t) (msg : Rpc.message) :
