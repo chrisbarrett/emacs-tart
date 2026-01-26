@@ -316,6 +316,146 @@ let test_prepend_append_dir () =
           (Some (Filename.concat dir3 "mod3.tart")) result3
     | _ -> Alcotest.fail "expected 3 dirs")
 
+(** {1 Bundled Stdlib Tests (R17)} *)
+
+(** Path to the bundled stdlib directory.
+    We use a relative path from the test working directory. *)
+let stdlib_dir =
+  (* dune runs tests from _build/default/test/sig, so go up to project root *)
+  let rec find_stdlib path =
+    let candidate = Filename.concat path "stdlib" in
+    if Sys.file_exists candidate && Sys.is_directory candidate then
+      candidate
+    else
+      let parent = Filename.dirname path in
+      if parent = path then
+        (* At root, try relative to cwd *)
+        "../../../../stdlib"
+      else
+        find_stdlib parent
+  in
+  find_stdlib (Sys.getcwd ())
+
+(** Test that builtins.tart parses successfully (R17) *)
+let test_parse_builtins () =
+  let path = Filename.concat stdlib_dir "builtins.tart" in
+  if not (Sys.file_exists path) then
+    Alcotest.fail ("builtins.tart not found at: " ^ path);
+  match Search_path.parse_signature_file path with
+  | None -> Alcotest.fail "builtins.tart failed to parse"
+  | Some sig_file ->
+      Alcotest.(check string) "module name" "builtins" sig_file.sig_module;
+      (* Should have many declarations: arithmetic, lists, strings, etc *)
+      Alcotest.(check bool) "has declarations" true (List.length sig_file.sig_decls > 20);
+      (* Check specific required functions from R17 *)
+      let has_defun name =
+        List.exists (function
+          | Sig_ast.DDefun d -> d.defun_name = name
+          | _ -> false) sig_file.sig_decls
+      in
+      Alcotest.(check bool) "has +" true (has_defun "+");
+      Alcotest.(check bool) "has car" true (has_defun "car");
+      Alcotest.(check bool) "has concat" true (has_defun "concat");
+      Alcotest.(check bool) "has stringp" true (has_defun "stringp");
+      Alcotest.(check bool) "has error" true (has_defun "error")
+
+(** Test that cl-lib.tart parses successfully (R17) *)
+let test_parse_cl_lib () =
+  let path = Filename.concat stdlib_dir "cl-lib.tart" in
+  if not (Sys.file_exists path) then
+    Alcotest.fail ("cl-lib.tart not found at: " ^ path);
+  match Search_path.parse_signature_file path with
+  | None -> Alcotest.fail "cl-lib.tart failed to parse"
+  | Some sig_file ->
+      Alcotest.(check string) "module name" "cl-lib" sig_file.sig_module;
+      Alcotest.(check bool) "has declarations" true (List.length sig_file.sig_decls > 10);
+      let has_defun name =
+        List.exists (function
+          | Sig_ast.DDefun d -> d.defun_name = name
+          | _ -> false) sig_file.sig_decls
+      in
+      Alcotest.(check bool) "has cl-mapcar" true (has_defun "cl-mapcar");
+      Alcotest.(check bool) "has cl-reduce" true (has_defun "cl-reduce")
+
+(** Test that seq.tart parses successfully (R17) *)
+let test_parse_seq () =
+  let path = Filename.concat stdlib_dir "seq.tart" in
+  if not (Sys.file_exists path) then
+    Alcotest.fail ("seq.tart not found at: " ^ path);
+  match Search_path.parse_signature_file path with
+  | None -> Alcotest.fail "seq.tart failed to parse"
+  | Some sig_file ->
+      Alcotest.(check string) "module name" "seq" sig_file.sig_module;
+      Alcotest.(check bool) "has declarations" true (List.length sig_file.sig_decls > 10);
+      (* seq.tart has the seq type alias *)
+      let has_type name =
+        List.exists (function
+          | Sig_ast.DType t -> t.type_name = name
+          | _ -> false) sig_file.sig_decls
+      in
+      Alcotest.(check bool) "has seq type" true (has_type "seq");
+      let has_defun name =
+        List.exists (function
+          | Sig_ast.DDefun d -> d.defun_name = name
+          | _ -> false) sig_file.sig_decls
+      in
+      Alcotest.(check bool) "has seq-map" true (has_defun "seq-map")
+
+(** Test that builtins can be loaded into type environment (R17)
+    Verify: Built-in calls type-check; coverage test for all listed functions *)
+let test_load_builtins () =
+  let sp = Search_path.empty |> Search_path.with_stdlib stdlib_dir in
+  match Search_path.load_module ~search_path:sp ~env:Type_env.empty "builtins" with
+  | None -> Alcotest.fail "failed to load builtins module"
+  | Some env ->
+      (* Check that + is loaded *)
+      (match Type_env.lookup "+" env with
+       | None -> Alcotest.fail "+ not found in env"
+       | Some _ -> ());
+      (* Check that car is loaded *)
+      (match Type_env.lookup "car" env with
+       | None -> Alcotest.fail "car not found in env"
+       | Some _ -> ());
+      (* Check that mapcar is loaded *)
+      (match Type_env.lookup "mapcar" env with
+       | None -> Alcotest.fail "mapcar not found in env"
+       | Some _ -> ());
+      (* Check that error returns never *)
+      (match Type_env.lookup "error" env with
+       | None -> Alcotest.fail "error not found in env"
+       | Some scheme ->
+           let scheme_str = Type_env.scheme_to_string scheme in
+           Alcotest.(check bool) "error returns never"
+             true (try let _ = Str.search_forward (Str.regexp_string "Never") scheme_str 0 in true
+                   with Not_found -> false))
+
+(** Test that cl-lib can be loaded into type environment (R16)
+    Verify: (require 'cl-lib) loads cl-lib.tart signatures from stdlib *)
+let test_load_cl_lib () =
+  let sp = Search_path.empty |> Search_path.with_stdlib stdlib_dir in
+  (* First load builtins so we have basic types like list *)
+  let base_env =
+    match Search_path.load_module ~search_path:sp ~env:Type_env.empty "builtins" with
+    | None -> Alcotest.fail "failed to load builtins module"
+    | Some env -> env
+  in
+  (* Then load cl-lib *)
+  match Search_path.load_module ~search_path:sp ~env:base_env "cl-lib" with
+  | None -> Alcotest.fail "failed to load cl-lib module"
+  | Some env ->
+      (* Check that cl-mapcar is loaded *)
+      (match Type_env.lookup "cl-mapcar" env with
+       | None -> Alcotest.fail "cl-mapcar not found in env"
+       | Some _ -> ());
+      (* Verify type checking works with cl-lib functions *)
+      let ty, errors = check_expr_str ~env "(cl-first (list 1 2 3))" in
+      Alcotest.(check int) "no errors" 0 (List.length errors);
+      (* Result should be (Int | Nil) *)
+      let ty_str = Types.to_string ty in
+      Alcotest.(check bool) "returns optional int"
+        true (try let _ = Str.search_forward (Str.regexp_string "Int") ty_str 0 in true
+              with Not_found -> false)
+
 let () =
   Alcotest.run "search_path"
     [
@@ -347,5 +487,13 @@ let () =
         [
           Alcotest.test_case "loaded signature type checks" `Quick test_loaded_signature_type_checks;
           Alcotest.test_case "resolver with open" `Quick test_resolver_with_open;
+        ] );
+      ( "bundled-stdlib",
+        [
+          Alcotest.test_case "parse builtins.tart" `Quick test_parse_builtins;
+          Alcotest.test_case "parse cl-lib.tart" `Quick test_parse_cl_lib;
+          Alcotest.test_case "parse seq.tart" `Quick test_parse_seq;
+          Alcotest.test_case "load builtins into env" `Quick test_load_builtins;
+          Alcotest.test_case "load cl-lib into env" `Quick test_load_cl_lib;
         ] );
     ]

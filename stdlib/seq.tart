@@ -1,0 +1,72 @@
+;;; seq.tart --- Type signatures for seq.el
+
+;; The seq type represents any sequence (list, vector, string)
+(type seq [a])
+
+;; Basic sequence operations
+(defun seq-elt [a] ((seq a) int) -> a)
+(defun seq-length ((seq any)) -> int)
+(defun seq-do [a] (((a) -> any) (seq a)) -> nil)
+(defun seq-each [a] (((a) -> any) (seq a)) -> nil)
+(defun seq-map [a b] (((a) -> b) (seq a)) -> (list b))
+(defun seq-mapn [a b] (((a) -> b) (seq a) &rest (seq any)) -> (list b))
+(defun seq-map-indexed [a b] (((a int) -> b) (seq a)) -> (list b))
+(defun seq-reduce [a b] (((b a) -> b) (seq a) b) -> b)
+(defun seq-copy [a] ((seq a)) -> (seq a))
+(defun seq-subseq [a] ((seq a) int &optional int) -> (seq a))
+
+;; Predicates
+(defun seqp (any) -> bool)
+(defun seq-empty-p ((seq any)) -> bool)
+
+;; Searching
+(defun seq-find [a] (((a) -> truthy) (seq a) &optional a) -> (a | nil))
+(defun seq-contains-p [a] ((seq a) a &optional ((a a) -> bool)) -> bool)
+(defun seq-position [a] ((seq a) a &optional ((a a) -> bool)) -> (int | nil))
+(defun seq-positions [a] ((seq a) a &optional ((a a) -> bool)) -> (list int))
+
+;; Filtering
+(defun seq-filter [a] (((a) -> truthy) (seq a)) -> (list a))
+(defun seq-remove [a] (((a) -> truthy) (seq a)) -> (list a))
+
+;; Taking and dropping
+(defun seq-take [a] ((seq a) int) -> (list a))
+(defun seq-drop [a] ((seq a) int) -> (list a))
+(defun seq-take-while [a] (((a) -> truthy) (seq a)) -> (list a))
+(defun seq-drop-while [a] (((a) -> truthy) (seq a)) -> (list a))
+
+;; Predicates over all elements
+(defun seq-every-p [a] (((a) -> truthy) (seq a)) -> bool)
+(defun seq-some [a] (((a) -> truthy) (seq a)) -> (truthy | nil))
+
+;; Sorting and grouping
+(defun seq-sort [a] (((a a) -> bool) (seq a)) -> (list a))
+(defun seq-sort-by [a b] (((a) -> b) ((b b) -> bool) (seq a)) -> (list a))
+(defun seq-reverse [a] ((seq a)) -> (list a))
+(defun seq-group-by [a k] (((a) -> k) (seq a)) -> (list (pair k (list a))))
+(defun seq-partition [a] (((a) -> truthy) (seq a)) -> (tuple (list a) (list a)))
+(defun seq-uniq [a] ((seq a) &optional ((a a) -> bool)) -> (list a))
+
+;; Combining
+(defun seq-concatenate [a] (symbol &rest (seq a)) -> (seq a))
+(defun seq-into [a] ((seq a) symbol) -> (seq a))
+(defun seq-mapcat [a b] (((a) -> (seq b)) (seq a) &optional symbol) -> (seq b))
+
+;; Counting
+(defun seq-count [a] (((a) -> truthy) (seq a)) -> int)
+
+;; Min/max
+(defun seq-min [a] ((seq a) &optional ((a a) -> bool)) -> a)
+(defun seq-max [a] ((seq a) &optional ((a a) -> bool)) -> a)
+
+;; First/rest
+(defun seq-first [a] ((seq a)) -> (a | nil))
+(defun seq-rest [a] ((seq a)) -> (seq a))
+
+;; Set operations
+(defun seq-difference [a] ((seq a) (seq a) &optional ((a a) -> bool)) -> (list a))
+(defun seq-intersection [a] ((seq a) (seq a) &optional ((a a) -> bool)) -> (list a))
+(defun seq-union [a] ((seq a) (seq a) &optional ((a a) -> bool)) -> (list a))
+
+;; Splitting
+(defun seq-split [a] ((seq a) int) -> (list (list a)))

@@ -1,0 +1,90 @@
+;;; cl-lib.tart --- Type signatures for cl-lib.el
+
+;; List operations
+(defun cl-first [a] ((list a)) -> (a | nil))
+(defun cl-second [a] ((list a)) -> (a | nil))
+(defun cl-third [a] ((list a)) -> (a | nil))
+(defun cl-fourth [a] ((list a)) -> (a | nil))
+(defun cl-fifth [a] ((list a)) -> (a | nil))
+(defun cl-rest [a] ((list a)) -> (list a))
+(defun cl-copy-list [a] ((list a)) -> (list a))
+(defun cl-list* [a] (a &rest a) -> (list a))
+
+;; Sequence operations
+(defun cl-mapcar [a b] (((a) -> b) (list a) &rest (list any)) -> (list b))
+(defun cl-maplist [a b] ((((list a)) -> b) (list a)) -> (list b))
+(defun cl-mapc [a b] (((a) -> b) (list a)) -> (list a))
+(defun cl-mapcan [a b] (((a) -> (list b)) (list a)) -> (list b))
+(defun cl-reduce [a b] (((b a) -> b) (list a) &key :initial-value b :from-end bool) -> b)
+(defun cl-remove [a] (a (list a) &key :test ((a a) -> bool) :key ((a) -> any) :count int :from-end bool) -> (list a))
+(defun cl-remove-if [a] (((a) -> truthy) (list a) &key :key ((a) -> any) :count int :from-end bool) -> (list a))
+(defun cl-remove-if-not [a] (((a) -> truthy) (list a) &key :key ((a) -> any) :count int :from-end bool) -> (list a))
+(defun cl-delete [a] (a (list a) &key :test ((a a) -> bool) :key ((a) -> any) :count int :from-end bool) -> (list a))
+(defun cl-delete-if [a] (((a) -> truthy) (list a) &key :key ((a) -> any) :count int :from-end bool) -> (list a))
+(defun cl-delete-if-not [a] (((a) -> truthy) (list a) &key :key ((a) -> any) :count int :from-end bool) -> (list a))
+(defun cl-member [a] (a (list a) &key :test ((a a) -> bool) :key ((a) -> any)) -> (list a))
+(defun cl-member-if [a] (((a) -> truthy) (list a) &key :key ((a) -> any)) -> (list a))
+(defun cl-find [a] (a (list a) &key :test ((a a) -> bool) :key ((a) -> any) :from-end bool) -> (a | nil))
+(defun cl-find-if [a] (((a) -> truthy) (list a) &key :key ((a) -> any) :from-end bool) -> (a | nil))
+(defun cl-find-if-not [a] (((a) -> truthy) (list a) &key :key ((a) -> any) :from-end bool) -> (a | nil))
+(defun cl-position [a] (a (list a) &key :test ((a a) -> bool) :key ((a) -> any) :from-end bool) -> (int | nil))
+(defun cl-position-if [a] (((a) -> truthy) (list a) &key :key ((a) -> any) :from-end bool) -> (int | nil))
+(defun cl-count [a] (a (list a) &key :test ((a a) -> bool) :key ((a) -> any)) -> int)
+(defun cl-count-if [a] (((a) -> truthy) (list a) &key :key ((a) -> any)) -> int)
+(defun cl-every [a] (((a) -> truthy) (list a)) -> bool)
+(defun cl-some [a] (((a) -> truthy) (list a)) -> (truthy | nil))
+(defun cl-notany [a] (((a) -> truthy) (list a)) -> bool)
+(defun cl-notevery [a] (((a) -> truthy) (list a)) -> bool)
+(defun cl-substitute [a] (a a (list a) &key :test ((a a) -> bool) :key ((a) -> any) :count int :from-end bool) -> (list a))
+(defun cl-nsubstitute [a] (a a (list a) &key :test ((a a) -> bool) :key ((a) -> any) :count int :from-end bool) -> (list a))
+
+;; Association list operations
+(defun cl-assoc [k v] (k (list (pair k v)) &key :test ((k k) -> bool) :key ((k) -> any)) -> ((pair k v) | nil))
+(defun cl-assoc-if [k v] (((k) -> truthy) (list (pair k v))) -> ((pair k v) | nil))
+(defun cl-rassoc [k v] (v (list (pair k v)) &key :test ((v v) -> bool) :key ((v) -> any)) -> ((pair k v) | nil))
+(defun cl-rassoc-if [k v] (((v) -> truthy) (list (pair k v))) -> ((pair k v) | nil))
+(defun cl-acons [k v] (k v (list (pair k v))) -> (list (pair k v)))
+
+;; Sorting
+(defun cl-sort [a] ((list a) ((a a) -> bool) &key :key ((a) -> any)) -> (list a))
+(defun cl-stable-sort [a] ((list a) ((a a) -> bool) &key :key ((a) -> any)) -> (list a))
+(defun cl-merge [a] ((list a) (list a) ((a a) -> bool)) -> (list a))
+
+;; Set operations
+(defun cl-union [a] ((list a) (list a) &key :test ((a a) -> bool) :key ((a) -> any)) -> (list a))
+(defun cl-nunion [a] ((list a) (list a) &key :test ((a a) -> bool) :key ((a) -> any)) -> (list a))
+(defun cl-intersection [a] ((list a) (list a) &key :test ((a a) -> bool) :key ((a) -> any)) -> (list a))
+(defun cl-nintersection [a] ((list a) (list a) &key :test ((a a) -> bool) :key ((a) -> any)) -> (list a))
+(defun cl-set-difference [a] ((list a) (list a) &key :test ((a a) -> bool) :key ((a) -> any)) -> (list a))
+(defun cl-nset-difference [a] ((list a) (list a) &key :test ((a a) -> bool) :key ((a) -> any)) -> (list a))
+(defun cl-set-exclusive-or [a] ((list a) (list a) &key :test ((a a) -> bool) :key ((a) -> any)) -> (list a))
+(defun cl-subsetp [a] ((list a) (list a) &key :test ((a a) -> bool) :key ((a) -> any)) -> bool)
+(defun cl-adjoin [a] (a (list a) &key :test ((a a) -> bool) :key ((a) -> any)) -> (list a))
+
+;; Sequence slicing
+(defun cl-subseq [a] ((list a) int &optional int) -> (list a))
+
+;; Tree operations
+(defun cl-copy-tree [a] (a) -> a)
+(defun cl-tree-equal (any any &key :test ((any any) -> bool)) -> bool)
+
+;; Property lists
+(defun cl-getf [a] ((list any) symbol &optional a) -> (a | nil))
+
+;; Numeric functions
+(defun cl-floor (num &optional num) -> (tuple int num))
+(defun cl-ceiling (num &optional num) -> (tuple int num))
+(defun cl-truncate (num &optional num) -> (tuple int num))
+(defun cl-round (num &optional num) -> (tuple int num))
+(defun cl-rem (num num) -> num)
+(defun cl-mod (num num) -> num)
+(defun cl-parse-integer (string &key :radix int) -> int)
+(defun cl-random (num &optional any) -> num)
+(defun cl-gcd (&rest int) -> int)
+(defun cl-lcm (&rest int) -> int)
+(defun cl-isqrt (int) -> int)
+
+;; Misc
+(defun cl-coerce [a] (any symbol) -> a)
+(defun cl-equalp (any any) -> bool)
+(defun cl-type-of (any) -> symbol)

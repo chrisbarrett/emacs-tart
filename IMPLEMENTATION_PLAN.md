@@ -33,13 +33,13 @@ Foundation for module boundaries and type-checked code.
 ### 1.6 Signature Search Path
 - [x] [R15] Implement `tart-type-path` search path configuration
 - [x] [R16] Implement module discovery order (sibling, search path, stdlib)
-- [ ] Verify: `(require 'cl-lib)` loads signatures from search path
+- [x] Verify: `(require 'cl-lib)` loads signatures from search path
 
 ### 1.7 Stdlib Signatures
-- [ ] [R17] Create `stdlib/builtins.tart` with arithmetic, list, string, predicate signatures
-- [ ] [R17] Create `stdlib/cl-lib.tart` with basic cl-lib signatures
-- [ ] [R17] Create `stdlib/seq.tart` with seq.el signatures
-- [ ] Verify: Built-in calls type-check correctly
+- [x] [R17] Create `stdlib/builtins.tart` with arithmetic, list, string, predicate signatures
+- [x] [R17] Create `stdlib/cl-lib.tart` with basic cl-lib signatures
+- [x] [R17] Create `stdlib/seq.tart` with seq.el signatures
+- [x] Verify: Built-in calls type-check correctly
 
 ## Phase 2: Forall Inference (Spec 15)
 

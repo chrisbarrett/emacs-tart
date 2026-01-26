@@ -262,7 +262,7 @@ Minimum coverage:
 - [x] [R14] Parse union types with `|` syntax
 - [x] [R15] Implement signature search path
 - [x] [R16] Implement module discovery with search order
-- [ ] [R17] Write bundled stdlib signatures
+- [x] [R17] Write bundled stdlib signatures
 
 Run review agent after `builtins.tart` covers basic list/string functions before
 proceeding to Spec 08.

@@ -1,0 +1,126 @@
+;;; builtins.tart --- Type signatures for Emacs built-in functions
+
+;; Arithmetic operations
+(defun + (&rest num) -> num)
+(defun - (num &rest num) -> num)
+(defun * (&rest num) -> num)
+(defun / (num &rest num) -> num)
+(defun % (int int) -> int)
+(defun mod (num num) -> num)
+(defun 1+ (num) -> num)
+(defun 1- (num) -> num)
+(defun abs (num) -> num)
+(defun max (num &rest num) -> num)
+(defun min (num &rest num) -> num)
+
+;; Comparison operations
+(defun < (num num) -> bool)
+(defun > (num num) -> bool)
+(defun <= (num num) -> bool)
+(defun >= (num num) -> bool)
+(defun = (num num) -> bool)
+(defun /= (num num) -> bool)
+
+;; Equality predicates
+(defun eq (any any) -> bool)
+(defun eql (any any) -> bool)
+(defun equal (any any) -> bool)
+
+;; List operations
+(defun car [a] ((list a)) -> (a | nil))
+(defun cdr [a] ((list a)) -> (list a))
+(defun cons [a] (a (list a)) -> (list a))
+(defun list [a] (&rest a) -> (list a))
+(defun append [a] (&rest (list a)) -> (list a))
+(defun nth [a] (int (list a)) -> (a | nil))
+(defun nthcdr [a] (int (list a)) -> (list a))
+(defun length ((list any)) -> int)
+(defun reverse [a] ((list a)) -> (list a))
+(defun nreverse [a] ((list a)) -> (list a))
+(defun sort [a] ((list a) ((a a) -> bool)) -> (list a))
+(defun member [a] (a (list a)) -> (list a))
+(defun memq [a] (a (list a)) -> (list a))
+(defun assoc [k v] (k (list (pair k v))) -> ((pair k v) | nil))
+(defun assq [k v] (k (list (pair k v))) -> ((pair k v) | nil))
+(defun rassoc [k v] (v (list (pair k v))) -> ((pair k v) | nil))
+(defun rassq [k v] (v (list (pair k v))) -> ((pair k v) | nil))
+(defun mapcar [a b] (((a) -> b) (list a)) -> (list b))
+(defun mapc [a b] (((a) -> b) (list a)) -> (list a))
+(defun mapcan [a b] (((a) -> (list b)) (list a)) -> (list b))
+(defun delq [a] (a (list a)) -> (list a))
+(defun delete [a] (a (list a)) -> (list a))
+
+;; Type predicates
+(defun null (any) -> bool)
+(defun listp (any) -> bool)
+(defun consp (any) -> bool)
+(defun atom (any) -> bool)
+(defun stringp (any) -> bool)
+(defun numberp (any) -> bool)
+(defun integerp (any) -> bool)
+(defun floatp (any) -> bool)
+(defun symbolp (any) -> bool)
+(defun functionp (any) -> bool)
+(defun vectorp (any) -> bool)
+(defun arrayp (any) -> bool)
+(defun sequencep (any) -> bool)
+(defun bufferp (any) -> bool)
+
+;; String operations
+(defun concat (&rest string) -> string)
+(defun substring (string int &optional int) -> string)
+(defun string-match (string string &optional int) -> (int | nil))
+(defun string= (string string) -> bool)
+(defun string< (string string) -> bool)
+(defun string> (string string) -> bool)
+(defun upcase (string) -> string)
+(defun downcase (string) -> string)
+(defun capitalize (string) -> string)
+(defun string-to-number (string &optional int) -> num)
+(defun number-to-string (num) -> string)
+(defun format (string &rest any) -> string)
+(defun string-prefix-p (string string &optional bool) -> bool)
+(defun string-suffix-p (string string &optional bool) -> bool)
+(defun string-join ((list string) &optional string) -> string)
+(defun split-string (string &optional string bool string) -> (list string))
+
+;; Symbol operations
+(defun symbol-name (symbol) -> string)
+(defun intern (string) -> symbol)
+(defun intern-soft (string) -> (symbol | nil))
+(defun make-symbol (string) -> symbol)
+(defun symbol-value (symbol) -> any)
+(defun symbol-function (symbol) -> any)
+(defun boundp (symbol) -> bool)
+(defun fboundp (symbol) -> bool)
+(defun fset (symbol any) -> any)
+(defun set (symbol any) -> any)
+
+;; Vector operations
+(defun make-vector [a] (int a) -> (vector a))
+(defun vector [a] (&rest a) -> (vector a))
+(defun aref [a] ((vector a) int) -> a)
+(defun aset [a] ((vector a) int a) -> a)
+(defun vconcat [a] (&rest (vector a)) -> (vector a))
+
+;; Control flow (these return never because they don't return normally)
+(defun error (string &rest any) -> never)
+(defun signal (symbol any) -> never)
+(defun throw (symbol any) -> never)
+(defun user-error (string &rest any) -> never)
+
+;; Identity and type coercion
+(defun identity [a] (a) -> a)
+(defun not (any) -> bool)
+(defun ignore (&rest any) -> nil)
+
+;; Function application
+(defun funcall [a b] (((a) -> b) a) -> b)
+(defun apply [a b] (((a) -> b) (list a)) -> b)
+
+;; Misc
+(defun message (string &rest any) -> string)
+(defun prin1-to-string (any &optional bool) -> string)
+(defun princ (any &optional any) -> any)
+(defun print (any &optional any) -> any)
+(defun pp (any) -> any)
