@@ -128,8 +128,8 @@ Improve error message quality.
 
 ### 6.1 Type Mismatch Formatting
 
-- [ ] [R1] Format type mismatch errors with expected/found
-- [ ] [R2] Format branch type mismatch errors
+- [x] [R1] Format type mismatch errors with expected/found
+- [x] [R2] Format branch type mismatch errors
 - [ ] [R3] Format Option/nil errors with suggestions
 - [ ] Verify: Errors show context and suggestions
 

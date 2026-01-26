@@ -75,6 +75,20 @@ val occurs_check :
 val missing_signature : span:Syntax.Location.span -> name:string -> unit -> t
 (** Create a warning for a public function not in signature file. *)
 
+val branch_mismatch :
+  span:Syntax.Location.span ->
+  this_type:Core.Types.typ ->
+  other_branch_span:Syntax.Location.span ->
+  other_type:Core.Types.typ ->
+  is_then:bool ->
+  unit ->
+  t
+(** Create a branch type mismatch diagnostic (E0317).
+
+    Used when if/cond branches have incompatible types. [span] is the location
+    of the branch with the error, [other_branch_span] is the location of the
+    other branch, and [is_then] indicates whether this is the then branch. *)
+
 (** {1 Conversion from unification errors} *)
 
 val of_unify_error : Unify.error -> t

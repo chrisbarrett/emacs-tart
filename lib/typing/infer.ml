@@ -169,8 +169,12 @@ and infer_lambda env params body span =
 (** Infer the type of an if expression with else branch.
 
     Generates constraint: then_type = else_type Result type is a fresh variable
-    unified with both branches. *)
-and infer_if env cond then_branch else_branch span =
+    unified with both branches.
+
+    Each branch constraint includes context about the other branch for better
+    error messages when branches have incompatible types. *)
+and infer_if env cond then_branch else_branch _span =
+  let open Syntax.Sexp in
   let cond_result = infer env cond in
   let then_result = infer env then_branch in
   let else_result = infer env else_branch in
@@ -178,9 +182,36 @@ and infer_if env cond then_branch else_branch span =
   (* Result type is a fresh variable *)
   let result_ty = fresh_tvar (Env.current_level env) in
 
-  (* Constraints: both branches unify with result *)
-  let then_constraint = C.equal result_ty then_result.ty span in
-  let else_constraint = C.equal result_ty else_result.ty span in
+  (* Get spans for each branch *)
+  let then_span = span_of then_branch in
+  let else_span = span_of else_branch in
+
+  (* Constraints: both branches unify with result, with context about the other
+     branch for error messages. The then constraint goes first so if there's a
+     mismatch, the error points to the else branch (which is typically where the
+     user needs to look when they wrote the then branch correctly). *)
+  let then_context =
+    C.IfBranch
+      {
+        is_then = true;
+        other_branch_span = else_span;
+        other_branch_type = else_result.ty;
+      }
+  in
+  let else_context =
+    C.IfBranch
+      {
+        is_then = false;
+        other_branch_span = then_span;
+        other_branch_type = then_result.ty;
+      }
+  in
+  let then_constraint =
+    C.equal ~context:then_context result_ty then_result.ty then_span
+  in
+  let else_constraint =
+    C.equal ~context:else_context result_ty else_result.ty else_span
+  in
 
   let all_constraints =
     C.combine cond_result.constraints

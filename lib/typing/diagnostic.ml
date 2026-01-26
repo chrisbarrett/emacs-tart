@@ -194,29 +194,111 @@ let function_arg_note fn_name fn_type arg_index expected : related_location list
     };
   ]
 
-(** Create a type mismatch diagnostic with context *)
-let type_mismatch_with_context ~span ~expected ~actual ~context () =
-  let base_help = suggest_type_fix ~expected ~actual in
-  let is_nil_error = is_option_type actual && not (is_option_type expected) in
-  let message =
-    if is_nil_error then "possible nil value" else "type mismatch"
-  in
+(** Generate a note about the other branch in an if expression *)
+let if_branch_note ~is_then ~other_branch_span ~other_branch_type :
+    related_location list =
+  let this_branch = if is_then then "then" else "else" in
+  let other_branch = if is_then then "else" else "then" in
+  [
+    {
+      span = other_branch_span;
+      message =
+        Printf.sprintf "the %s branch has type %s" other_branch
+          (Types.to_string other_branch_type);
+    };
+    {
+      span = Loc.dummy_span;
+      message =
+        Printf.sprintf
+          "both branches of `if` must have the same type; %s branch type does \
+           not match"
+          this_branch;
+    };
+  ]
+
+(** Generate help suggestions for branch type mismatches *)
+let suggest_branch_fix ~this_type ~other_type : string list =
+  let this_type = Types.repr this_type in
+  let other_type = Types.repr other_type in
+  match (this_type, other_type) with
+  (* Int vs String: suggest conversion *)
+  | Types.TCon "Int", Types.TCon "String" ->
+      [ "convert the integer to a string: (number-to-string ...)" ]
+  | Types.TCon "String", Types.TCon "Int" ->
+      [ "convert the string to an integer: (string-to-number ...)" ]
+  (* Option vs non-Option: suggest handling nil *)
+  | _, Types.TApp ("Option", [ inner ])
+    when Types.equal this_type inner || Types.equal this_type (Types.repr inner)
+    ->
+      [ "wrap the non-optional value: (some ...)" ]
+  | Types.TApp ("Option", [ inner ]), _
+    when Types.equal other_type inner
+         || Types.equal other_type (Types.repr inner) ->
+      [ "unwrap the optional value or provide a default" ]
+  | _ -> []
+
+(** Create a branch type mismatch diagnostic (E0317) *)
+let branch_mismatch ~span ~this_type ~other_branch_span ~other_type ~is_then ()
+    =
   let related =
-    match context with
-    | Constraint.FunctionArg { fn_name; fn_type; arg_index } ->
-        function_arg_note fn_name fn_type arg_index expected
-    | Constraint.NoContext -> []
+    if_branch_note ~is_then ~other_branch_span ~other_branch_type:other_type
   in
+  let help = suggest_branch_fix ~this_type ~other_type in
   {
     severity = Error;
-    code = Some E0308;
+    code = Some E0317;
     span;
-    message;
-    expected = Some expected;
-    actual = Some actual;
+    message = "if branches have incompatible types";
+    expected = Some other_type;
+    actual = Some this_type;
     related;
-    help = base_help;
+    help;
   }
+
+(** Create a type mismatch diagnostic with context *)
+let type_mismatch_with_context ~span ~expected ~actual ~context () =
+  match context with
+  | Constraint.IfBranch { is_then; other_branch_span; other_branch_type } ->
+      (* For if branches, create a branch mismatch diagnostic instead *)
+      branch_mismatch ~span ~this_type:actual ~other_branch_span
+        ~other_type:other_branch_type ~is_then ()
+  | Constraint.FunctionArg { fn_name; fn_type; arg_index } ->
+      let base_help = suggest_type_fix ~expected ~actual in
+      let is_nil_error =
+        is_option_type actual && not (is_option_type expected)
+      in
+      let message =
+        if is_nil_error then "possible nil value" else "type mismatch"
+      in
+      let related = function_arg_note fn_name fn_type arg_index expected in
+      {
+        severity = Error;
+        code = Some E0308;
+        span;
+        message;
+        expected = Some expected;
+        actual = Some actual;
+        related;
+        help = base_help;
+      }
+  | Constraint.NoContext ->
+      let base_help = suggest_type_fix ~expected ~actual in
+      let is_nil_error =
+        is_option_type actual && not (is_option_type expected)
+      in
+      let message =
+        if is_nil_error then "possible nil value" else "type mismatch"
+      in
+      {
+        severity = Error;
+        code = Some E0308;
+        span;
+        message;
+        expected = Some expected;
+        actual = Some actual;
+        related = [];
+        help = base_help;
+      }
 
 (** Convert a unification error to a diagnostic *)
 let of_unify_error (err : Unify.error) : t =

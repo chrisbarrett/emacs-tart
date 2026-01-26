@@ -15,6 +15,11 @@ type context =
       fn_type : typ;  (** Full function type *)
       arg_index : int;  (** Which argument (0-indexed) *)
     }
+  | IfBranch of {
+      is_then : bool;  (** True for then branch, false for else branch *)
+      other_branch_span : Syntax.Location.span;  (** Span of the other branch *)
+      other_branch_type : typ;  (** Type of the other branch *)
+    }
 
 type t = {
   lhs : typ;  (** Left-hand side type *)

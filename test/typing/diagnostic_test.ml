@@ -262,6 +262,118 @@ let test_end_to_end_function_arg_error () =
     (contains_pattern (Str.regexp "upcase") related_msg)
 
 (* =============================================================================
+   Branch Mismatch Tests (R2)
+   ============================================================================= *)
+
+let test_branch_mismatch_diagnostic_creation () =
+  let span1 = Loc.dummy_span in
+  let span2 = Loc.dummy_span in
+  let d =
+    Diag.branch_mismatch ~span:span1 ~this_type:Types.Prim.int
+      ~other_branch_span:span2 ~other_type:Types.Prim.string ~is_then:false ()
+  in
+  Alcotest.(check bool) "is error" true (Diag.is_error d);
+  Alcotest.(
+    check
+      (option
+         (of_pp (fun fmt c ->
+              Format.fprintf fmt "%s" (Diag.error_code_to_string c)))))
+    "code is E0317" (Some Diag.E0317) d.code;
+  Alcotest.(check bool)
+    "message mentions incompatible" true
+    (contains_pattern (Str.regexp_case_fold "incompatible") d.message)
+
+let test_branch_mismatch_has_related_info () =
+  let span1 = Loc.dummy_span in
+  let span2 = Loc.dummy_span in
+  let d =
+    Diag.branch_mismatch ~span:span1 ~this_type:Types.Prim.int
+      ~other_branch_span:span2 ~other_type:Types.Prim.string ~is_then:true ()
+  in
+  Alcotest.(check bool) "has related info" true (List.length d.related > 0);
+  let related_msgs =
+    List.map (fun (r : Diag.related_location) -> r.message) d.related
+  in
+  let combined = String.concat " " related_msgs in
+  Alcotest.(check bool)
+    "mentions other branch" true
+    (contains_pattern (Str.regexp_case_fold "else branch") combined);
+  Alcotest.(check bool)
+    "mentions must have same type" true
+    (contains_pattern (Str.regexp_case_fold "same type") combined)
+
+let test_branch_mismatch_with_if_context () =
+  let span = Loc.dummy_span in
+  let other_span = Loc.dummy_span in
+  let context =
+    Constraint.IfBranch
+      {
+        is_then = false;
+        other_branch_span = other_span;
+        other_branch_type = Types.Prim.int;
+      }
+  in
+  let err =
+    Unify.TypeMismatch (Types.Prim.int, Types.Prim.string, span, context)
+  in
+  let d = Diag.of_unify_error err in
+  Alcotest.(check bool) "is error" true (Diag.is_error d);
+  Alcotest.(
+    check
+      (option
+         (of_pp (fun fmt c ->
+              Format.fprintf fmt "%s" (Diag.error_code_to_string c)))))
+    "code is E0317" (Some Diag.E0317) d.code
+
+let test_end_to_end_if_branch_mismatch () =
+  (* Type-check (if t n "negative") - should get branch mismatch error *)
+  let sexp = parse "(if t 42 \"negative\")" in
+  let _, errors = Check.check_expr sexp in
+  Alcotest.(check bool) "has error" true (List.length errors > 0);
+  let diagnostics = Diag.of_unify_errors errors in
+  (* Find the E0317 error *)
+  let branch_errors =
+    List.filter (fun d -> d.Diag.code = Some Diag.E0317) diagnostics
+  in
+  Alcotest.(check bool)
+    "has branch mismatch error" true
+    (List.length branch_errors > 0);
+  let d = List.hd branch_errors in
+  let str = Diag.to_string d in
+  Alcotest.(check bool)
+    "mentions incompatible types" true
+    (contains_pattern (Str.regexp_case_fold "incompatible") str)
+
+let test_if_branch_mismatch_shows_both_types () =
+  let sexp = parse "(if t 42 \"negative\")" in
+  let _, errors = Check.check_expr sexp in
+  let diagnostics = Diag.of_unify_errors errors in
+  let branch_errors =
+    List.filter (fun d -> d.Diag.code = Some Diag.E0317) diagnostics
+  in
+  let d = List.hd branch_errors in
+  let str = Diag.to_string d in
+  (* Should show both Int and String types *)
+  Alcotest.(check bool)
+    "shows Int" true
+    (contains_pattern (Str.regexp "Int") str);
+  Alcotest.(check bool)
+    "shows String" true
+    (contains_pattern (Str.regexp "String") str)
+
+let test_branch_mismatch_help_for_int_string () =
+  let span = Loc.dummy_span in
+  let d =
+    Diag.branch_mismatch ~span ~this_type:Types.Prim.int ~other_branch_span:span
+      ~other_type:Types.Prim.string ~is_then:false ()
+  in
+  Alcotest.(check bool) "has help" true (List.length d.help > 0);
+  let help_combined = String.concat " " d.help in
+  Alcotest.(check bool)
+    "suggests conversion" true
+    (contains_pattern (Str.regexp_case_fold "number-to-string") help_combined)
+
+(* =============================================================================
    Integration Tests with Real Type Checking
    ============================================================================= *)
 
@@ -337,6 +449,21 @@ let () =
           Alcotest.test_case "of errors list" `Quick test_of_unify_errors_list;
           Alcotest.test_case "function context" `Quick
             test_type_mismatch_with_function_context;
+        ] );
+      ( "branch_mismatch",
+        [
+          Alcotest.test_case "diagnostic creation" `Quick
+            test_branch_mismatch_diagnostic_creation;
+          Alcotest.test_case "has related info" `Quick
+            test_branch_mismatch_has_related_info;
+          Alcotest.test_case "with if context" `Quick
+            test_branch_mismatch_with_if_context;
+          Alcotest.test_case "end-to-end if mismatch" `Quick
+            test_end_to_end_if_branch_mismatch;
+          Alcotest.test_case "shows both types" `Quick
+            test_if_branch_mismatch_shows_both_types;
+          Alcotest.test_case "help for int/string" `Quick
+            test_branch_mismatch_help_for_int_string;
         ] );
       ( "integration",
         [
