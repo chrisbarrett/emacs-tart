@@ -543,3 +543,72 @@ The following areas are mentioned as future work in the specs:
 16. **Phase 16**: Scoped Type Variables ✓
 17. **Phase 17**: Expanded Stdlib Phase 2 ✓
 18. **Phase 18**: Type Classes ✓
+19. **Phase 19**: Documentation
+
+---
+
+## Phase 19: Documentation
+
+Create comprehensive documentation using AsciiDoc, plus refresh the README.
+
+### 19.1 Documentation Structure
+
+- [ ] Create `docs/getting-started.adoc` - Quick start guide
+- [ ] Create `docs/library-authors.adoc` - Guide for library authors writing `.tart` files
+- [ ] Create `docs/tooling-setup.adoc` - LSP setup guide for Emacs users
+- [ ] Create `docs/cli-reference.adoc` - CLI reference (manpage source)
+
+### 19.2 README Refresh
+
+- [ ] Rewrite `README.md` with elevator pitch and friendly introduction
+  - Lead with "what problem does this solve"
+  - Show compelling before/after examples
+  - Quick installation instructions
+  - Link to full documentation
+  - Make development status less prominent
+
+### Documentation Content Outline
+
+**`getting-started.adoc`**
+1. What is Tart? (2 paragraphs)
+2. Installation (Nix, building from source)
+3. Your first `.tart` file
+4. Running the type checker
+5. Seeing errors in your editor
+6. Next steps (links to other guides)
+
+**`library-authors.adoc`**
+1. The `.tart` file format
+2. Declaring functions (`defun`)
+3. Declaring variables (`defvar`)
+4. Type aliases (`type`)
+5. Opaque types (`opaque`)
+6. Generic functions (type parameters, bounds)
+7. Module organization (`open`, `include`)
+8. Publishing type definitions
+9. Stdlib coverage and contributing signatures
+
+**`tooling-setup.adoc`**
+1. Prerequisites (Emacs 29+, eglot)
+2. Installing tart-mode
+3. Configuring eglot for tart
+4. Features: hover, diagnostics, go-to-definition
+5. The REPL (inferior-tart-mode)
+6. Troubleshooting common issues
+7. For init.el users (type checking your config)
+
+**`cli-reference.adoc`**
+1. Synopsis
+2. Description
+3. Commands
+   - `tart [check]` - Type check files
+   - `tart eval` - Evaluate expression
+   - `tart expand` - Macro expansion
+   - `tart repl` - Interactive REPL
+   - `tart lsp` - Language server
+4. Options
+5. Exit codes
+6. Environment variables
+7. Files (search paths, stdlib location)
+8. Examples
+9. See also
