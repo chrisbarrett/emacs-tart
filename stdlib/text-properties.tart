@@ -1,0 +1,59 @@
+;;; text-properties.tart --- Type signatures for Emacs text property functions
+
+(open 'buffers)
+
+;; Getting text properties
+(defun get-text-property (int symbol &optional any) -> any)
+(defun get-char-property (int symbol &optional any) -> any)
+(defun text-properties-at (int &optional any) -> (list any))
+(defun text-property-any (int int symbol any &optional any) -> (int | nil))
+(defun text-property-not-all (int int symbol any &optional any) -> (int | nil))
+
+;; Setting text properties
+(defun put-text-property (int int symbol any &optional any) -> nil)
+(defun add-text-properties (int int (list any) &optional any) -> bool)
+(defun set-text-properties (int int (list any) &optional any) -> bool)
+(defun remove-text-properties (int int (list any) &optional any) -> bool)
+(defun remove-list-of-text-properties (int int (list symbol) &optional any) -> bool)
+
+;; Property inheritance
+(defun insert-and-inherit (&rest (string | char)) -> nil)
+(defun insert-before-markers-and-inherit (&rest (string | char)) -> nil)
+
+;; Searching by properties
+(defun next-property-change (int &optional any int) -> (int | nil))
+(defun previous-property-change (int &optional any int) -> (int | nil))
+(defun next-single-property-change (int symbol &optional any int) -> (int | nil))
+(defun previous-single-property-change (int symbol &optional any int) -> (int | nil))
+(defun next-char-property-change (int &optional any) -> int)
+(defun previous-char-property-change (int &optional any) -> int)
+(defun next-single-char-property-change (int symbol &optional any int) -> int)
+(defun previous-single-char-property-change (int symbol &optional any int) -> int)
+
+;; Property intervals
+(defun property-change-between (int int) -> (int | nil))
+(defun text-property-search-forward (symbol &optional any any bool) -> any)
+(defun text-property-search-backward (symbol &optional any any bool) -> any)
+
+;; Propertized strings
+(defun propertize (string &rest any) -> string)
+(defun substring-no-properties (string &optional int int) -> string)
+
+;; Property list utilities
+(defun plist-get [a] ((list any) symbol) -> (a | nil))
+(defun plist-put ((list any) symbol any) -> (list any))
+(defun plist-member ((list any) symbol) -> (list any))
+
+;; Face properties (common text property)
+(defvar default-text-properties (list any))
+(defvar char-property-alias-alist (list (pair symbol (list symbol))))
+
+;; Sticky properties
+(defvar text-property-default-nonsticky (list (pair symbol bool)))
+
+;; Special properties
+;; Common text properties: 'face, 'font-lock-face, 'mouse-face, 'display,
+;; 'help-echo, 'keymap, 'local-map, 'syntax-table, 'read-only, 'invisible,
+;; 'intangible, 'field, 'cursor, 'pointer, 'line-height, 'line-spacing,
+;; 'wrap-prefix, 'line-prefix, 'modification-hooks, 'insert-in-front-hooks,
+;; 'insert-behind-hooks, 'point-entered, 'point-left, 'composition

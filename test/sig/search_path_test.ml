@@ -822,6 +822,97 @@ let test_load_files () =
            true
          with Not_found -> false)
 
+(** Test that text-properties.tart parses successfully *)
+let test_parse_text_properties () =
+  let path = Filename.concat stdlib_dir "text-properties.tart" in
+  if not (Sys.file_exists path) then
+    Alcotest.fail ("text-properties.tart not found at: " ^ path);
+  match Search_path.parse_signature_file path with
+  | None -> Alcotest.fail "text-properties.tart failed to parse"
+  | Some sig_file ->
+      Alcotest.(check string)
+        "module name" "text-properties" sig_file.sig_module;
+      Alcotest.(check bool)
+        "has declarations" true
+        (List.length sig_file.sig_decls > 20);
+      (* Check key text property functions *)
+      let has_defun name =
+        List.exists
+          (function Sig_ast.DDefun d -> d.defun_name = name | _ -> false)
+          sig_file.sig_decls
+      in
+      Alcotest.(check bool)
+        "has get-text-property" true
+        (has_defun "get-text-property");
+      Alcotest.(check bool)
+        "has put-text-property" true
+        (has_defun "put-text-property");
+      Alcotest.(check bool)
+        "has add-text-properties" true
+        (has_defun "add-text-properties");
+      Alcotest.(check bool)
+        "has next-property-change" true
+        (has_defun "next-property-change");
+      Alcotest.(check bool) "has propertize" true (has_defun "propertize")
+
+(** Test that text-properties can be loaded into type environment *)
+let test_load_text_properties () =
+  let sp = Search_path.empty |> Search_path.with_stdlib stdlib_dir in
+  (* First load builtins and buffers for dependency types *)
+  let base_env =
+    match
+      Search_path.load_module ~search_path:sp ~env:Type_env.empty "builtins"
+    with
+    | None -> Alcotest.fail "failed to load builtins module"
+    | Some env -> env
+  in
+  let base_env =
+    match Search_path.load_module ~search_path:sp ~env:base_env "buffers" with
+    | None -> Alcotest.fail "failed to load buffers module"
+    | Some env -> env
+  in
+  match
+    Search_path.load_module ~search_path:sp ~env:base_env "text-properties"
+  with
+  | None -> Alcotest.fail "failed to load text-properties module"
+  | Some env ->
+      (* Check that get-text-property is loaded *)
+      (match Type_env.lookup "get-text-property" env with
+      | None -> Alcotest.fail "get-text-property not found in env"
+      | Some _ -> ());
+      (* Check that put-text-property is loaded *)
+      (match Type_env.lookup "put-text-property" env with
+      | None -> Alcotest.fail "put-text-property not found in env"
+      | Some _ -> ());
+      (* Check that propertize is loaded *)
+      (match Type_env.lookup "propertize" env with
+      | None -> Alcotest.fail "propertize not found in env"
+      | Some _ -> ());
+      (* Verify type checking works with text property functions *)
+      let ty, errors =
+        check_expr_str ~env "(propertize \"hello\" 'face 'bold)"
+      in
+      Alcotest.(check int) "propertize: no errors" 0 (List.length errors);
+      (* Result should be String *)
+      let ty_str = Types.to_string ty in
+      Alcotest.(check bool)
+        "returns string type" true
+        (try
+           let _ = Str.search_forward (Str.regexp_string "String") ty_str 0 in
+           true
+         with Not_found -> false);
+      (* Check next-property-change returns optional int *)
+      let ty2, errors2 = check_expr_str ~env "(next-property-change 1)" in
+      Alcotest.(check int)
+        "next-property-change: no errors" 0 (List.length errors2);
+      let ty2_str = Types.to_string ty2 in
+      Alcotest.(check bool)
+        "returns optional int" true
+        (try
+           let _ = Str.search_forward (Str.regexp_string "Nil") ty2_str 0 in
+           true
+         with Not_found -> false)
+
 let () =
   Alcotest.run "search_path"
     [
@@ -879,5 +970,9 @@ let () =
           Alcotest.test_case "load windows into env" `Quick test_load_windows;
           Alcotest.test_case "load frames into env" `Quick test_load_frames;
           Alcotest.test_case "load files into env" `Quick test_load_files;
+          Alcotest.test_case "parse text-properties.tart" `Quick
+            test_parse_text_properties;
+          Alcotest.test_case "load text-properties into env" `Quick
+            test_load_text_properties;
         ] );
     ]

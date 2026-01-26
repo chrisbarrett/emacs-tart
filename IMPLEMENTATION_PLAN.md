@@ -317,7 +317,7 @@ Broader coverage of common Emacs packages.
 
 ### 13.3 Text Properties and Overlays
 
-- [ ] Add `stdlib/text-properties.tart`
+- [x] Add `stdlib/text-properties.tart`
 - [ ] Add `stdlib/overlays.tart`
 - [ ] Verify: Text property code type-checks
 
