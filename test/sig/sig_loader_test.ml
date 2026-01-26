@@ -707,6 +707,139 @@ let test_include_cycle_detection () =
    | None -> Alcotest.fail "a-fn should be in environment"
    | Some _ -> ())
 
+(** {1 Import-Struct Tests (R11)}
+
+    Tests for import-struct that generates type, constructor, predicate, and accessors. *)
+
+(** Test that import-struct generates the struct type.
+    R11: Type `person` is generated *)
+let test_import_struct_generates_type () =
+  let sig_src = {|
+    (import-struct person :slots ((name string) (age int)))
+  |} in
+  let env = load_sig_str sig_src in
+  (* The constructor should return the struct type *)
+  match Type_env.lookup "make-person" env with
+  | None -> Alcotest.fail "make-person not found"
+  | Some scheme ->
+      let scheme_str = Type_env.scheme_to_string scheme in
+      (* Should return the opaque type test/person *)
+      Alcotest.(check bool) "constructor returns struct type"
+        true (try let _ = Str.search_forward (Str.regexp_string "test/person") scheme_str 0 in true
+              with Not_found -> false)
+
+(** Test that import-struct generates the constructor.
+    R11: Constructor `make-person` is generated *)
+let test_import_struct_generates_constructor () =
+  let sig_src = {|
+    (import-struct person :slots ((name string) (age int)))
+  |} in
+  let env = load_sig_str sig_src in
+  (* Call constructor with correct types *)
+  let ty, errors = check_expr_str ~env "(make-person \"Alice\" 30)" in
+  Alcotest.(check int) "no type errors" 0 (List.length errors);
+  (* The result type should be the struct type *)
+  Alcotest.(check string) "result is struct type" "test/person" (Types.to_string ty)
+
+(** Test that import-struct constructor type-checks arguments.
+    R11: Constructor enforces slot types *)
+let test_import_struct_constructor_type_error () =
+  let sig_src = {|
+    (import-struct person :slots ((name string) (age int)))
+  |} in
+  let env = load_sig_str sig_src in
+  (* Call constructor with wrong types *)
+  let _, errors = check_expr_str ~env "(make-person 42 \"wrong\")" in
+  Alcotest.(check bool) "type error for wrong slot types" true (List.length errors > 0)
+
+(** Test that import-struct generates the predicate.
+    R11: Predicate `person-p` is generated *)
+let test_import_struct_generates_predicate () =
+  let sig_src = {|
+    (import-struct person :slots ((name string) (age int)))
+  |} in
+  let env = load_sig_str sig_src in
+  (* Check predicate exists with correct type *)
+  match Type_env.lookup "person-p" env with
+  | None -> Alcotest.fail "person-p not found"
+  | Some scheme ->
+      let scheme_str = Type_env.scheme_to_string scheme in
+      (* Should be Any -> Bool *)
+      Alcotest.(check bool) "predicate takes Any"
+        true (try let _ = Str.search_forward (Str.regexp_string "Any") scheme_str 0 in true
+              with Not_found -> false);
+      Alcotest.(check bool) "predicate returns Bool"
+        true (try let _ = Str.search_forward (Str.regexp_string "Bool") scheme_str 0 in true
+              with Not_found -> false)
+
+(** Test that import-struct generates accessors.
+    R11: Accessors for each slot are generated *)
+let test_import_struct_generates_accessors () =
+  let sig_src = {|
+    (import-struct person :slots ((name string) (age int)))
+  |} in
+  let env = load_sig_str sig_src in
+  (* Check person-name accessor *)
+  (match Type_env.lookup "person-name" env with
+   | None -> Alcotest.fail "person-name not found"
+   | Some _ -> ());
+  (* Check person-age accessor *)
+  (match Type_env.lookup "person-age" env with
+   | None -> Alcotest.fail "person-age not found"
+   | Some _ -> ())
+
+(** Test that accessors type-check correctly.
+    R11: Accessor calls type-check based on slot types *)
+let test_import_struct_accessor_types () =
+  let sig_src = {|
+    (import-struct person :slots ((name string) (age int)))
+  |} in
+  let env = load_sig_str sig_src in
+  (* Access name from a person - should return string *)
+  let ty1, errors1 = check_expr_str ~env "(person-name (make-person \"Alice\" 30))" in
+  Alcotest.(check int) "no type errors for name" 0 (List.length errors1);
+  Alcotest.(check string) "name accessor returns String" "String" (Types.to_string ty1);
+  (* Access age from a person - should return int *)
+  let ty2, errors2 = check_expr_str ~env "(person-age (make-person \"Alice\" 30))" in
+  Alcotest.(check int) "no type errors for age" 0 (List.length errors2);
+  Alcotest.(check string) "age accessor returns Int" "Int" (Types.to_string ty2)
+
+(** Test that accessors require the correct struct type.
+    R11: Accessors reject wrong types *)
+let test_import_struct_accessor_type_error () =
+  let sig_src = {|
+    (import-struct person :slots ((name string) (age int)))
+  |} in
+  let env = load_sig_str sig_src in
+  (* Accessor with wrong argument type *)
+  let _, errors = check_expr_str ~env "(person-name 42)" in
+  Alcotest.(check bool) "type error for accessor with wrong type" true (List.length errors > 0)
+
+(** Test import-struct with empty slots.
+    R11: Struct with no slots is valid *)
+let test_import_struct_no_slots () =
+  let sig_src = {|
+    (import-struct marker :slots ())
+  |} in
+  let env = load_sig_str sig_src in
+  (* Constructor takes no arguments *)
+  let ty, errors = check_expr_str ~env "(make-marker)" in
+  Alcotest.(check int) "no type errors" 0 (List.length errors);
+  Alcotest.(check string) "result is struct type" "test/marker" (Types.to_string ty)
+
+(** Test that two different structs have different types.
+    R11: Struct types are distinct *)
+let test_import_struct_types_distinct () =
+  let sig_src = {|
+    (import-struct person :slots ((name string)))
+    (import-struct company :slots ((name string)))
+    (defun process-person (person) -> nil)
+  |} in
+  let env = load_sig_str sig_src in
+  (* Trying to pass a company where person is expected should fail *)
+  let _, errors = check_expr_str ~env "(process-person (make-company \"Acme\"))" in
+  Alcotest.(check bool) "type error for wrong struct type" true (List.length errors > 0)
+
 let () =
   Alcotest.run "sig_loader"
     [
@@ -775,5 +908,17 @@ let () =
           Alcotest.test_case "include preserves opaque identity" `Quick test_include_preserves_opaque_identity;
           Alcotest.test_case "include transitive" `Quick test_include_transitive;
           Alcotest.test_case "include cycle detection" `Quick test_include_cycle_detection;
+        ] );
+      ( "import-struct",
+        [
+          Alcotest.test_case "generates type" `Quick test_import_struct_generates_type;
+          Alcotest.test_case "generates constructor" `Quick test_import_struct_generates_constructor;
+          Alcotest.test_case "constructor type error" `Quick test_import_struct_constructor_type_error;
+          Alcotest.test_case "generates predicate" `Quick test_import_struct_generates_predicate;
+          Alcotest.test_case "generates accessors" `Quick test_import_struct_generates_accessors;
+          Alcotest.test_case "accessor types" `Quick test_import_struct_accessor_types;
+          Alcotest.test_case "accessor type error" `Quick test_import_struct_accessor_type_error;
+          Alcotest.test_case "no slots" `Quick test_import_struct_no_slots;
+          Alcotest.test_case "types distinct" `Quick test_import_struct_types_distinct;
         ] );
     ]

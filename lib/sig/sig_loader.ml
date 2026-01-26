@@ -195,6 +195,7 @@ let build_context (sig_file : signature) : tvar_context =
     (fun ctx decl ->
        match decl with
        | DType d -> with_type ctx d.type_name
+       | DImportStruct d -> with_type ctx d.struct_name
        | _ -> ctx)
     empty_context sig_file.sig_decls
 
@@ -629,6 +630,58 @@ let add_opaque_to_state name opaque state =
 let add_value_to_state name scheme state =
   { state with ls_env = Type_env.extend name scheme state.ls_env }
 
+(** {1 Import-Struct Processing}
+
+    import-struct generates types and functions for cl-defstruct imports:
+    - Type: The struct type (opaque)
+    - Constructor: make-<name> taking slot values, returning struct
+    - Predicate: <name>-p taking any, returning bool
+    - Accessors: <name>-<slot> for each slot, taking struct, returning slot type *)
+
+(** Load an import-struct declaration.
+    Generates the struct type, constructor, predicate, and accessors. *)
+let load_import_struct
+    (module_name : string)
+    (d : import_struct_decl)
+    (state : load_state) : load_state =
+  let struct_name = d.struct_name in
+
+  (* 1. Add the struct type as an opaque type *)
+  let opaque = {
+    opaque_params = [];
+    opaque_con = opaque_con_name module_name struct_name;
+  } in
+  let state = add_opaque_to_state struct_name opaque state in
+
+  (* The struct type for use in function signatures *)
+  let struct_typ = Types.TCon opaque.opaque_con in
+
+  (* 2. Add constructor: make-<name> *)
+  let constructor_name = "make-" ^ struct_name in
+  let slot_params = List.map
+      (fun (_, slot_type) ->
+         Types.PPositional (sig_type_to_typ_with_ctx state.ls_type_ctx [] slot_type))
+      d.struct_slots
+  in
+  let constructor_scheme = Type_env.Mono (Types.TArrow (slot_params, struct_typ)) in
+  let state = add_value_to_state constructor_name constructor_scheme state in
+
+  (* 3. Add predicate: <name>-p *)
+  let predicate_name = struct_name ^ "-p" in
+  let predicate_scheme = Type_env.Mono (Types.TArrow ([Types.PPositional Types.Prim.any], Types.Prim.bool)) in
+  let state = add_value_to_state predicate_name predicate_scheme state in
+
+  (* 4. Add accessors: <name>-<slot> for each slot *)
+  let state = List.fold_left
+      (fun state (slot_name, slot_type) ->
+         let accessor_name = struct_name ^ "-" ^ slot_name in
+         let slot_typ = sig_type_to_typ_with_ctx state.ls_type_ctx [] slot_type in
+         let accessor_scheme = Type_env.Mono (Types.TArrow ([Types.PPositional struct_typ], slot_typ)) in
+         add_value_to_state accessor_name accessor_scheme state)
+      state d.struct_slots
+  in
+  state
+
 (** {1 Open and Include Processing}
 
     - open: Import types for use in signatures (not re-exported to value env)
@@ -722,9 +775,8 @@ and load_decls_into_state (sig_file : signature) (state : load_state) : load_sta
        | DDefvar d ->
            let scheme = load_defvar_with_ctx state.ls_type_ctx d in
            add_value_to_state d.defvar_name scheme state
-       | DImportStruct _ ->
-           (* Not implemented yet *)
-           state)
+       | DImportStruct d ->
+           load_import_struct sig_file.sig_module d state)
     state sig_file.sig_decls
 
 (** {1 Signature Loading}

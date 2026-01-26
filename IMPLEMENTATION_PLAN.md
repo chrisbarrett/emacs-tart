@@ -27,8 +27,8 @@ Foundation for module boundaries and type-checked code.
 - [x] Verify: Opened types available but not exported
 
 ### 1.5 Struct Imports
-- [ ] [R11] Implement `import-struct` to generate type, constructor, predicate, accessors
-- [ ] Verify: Struct accessor calls type-check based on slot types
+- [x] [R11] Implement `import-struct` to generate type, constructor, predicate, accessors
+- [x] Verify: Struct accessor calls type-check based on slot types
 
 ### 1.6 Signature Search Path
 - [ ] [R15] Implement `tart-type-path` search path configuration
