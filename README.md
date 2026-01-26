@@ -1,34 +1,51 @@
 # Tart
 
-Tart is a static type system for Emacs Lisp--think TypeScript but for Emacs Lisp
-and you're on the right track.
+**Catch type errors in your Emacs Lisp before runtime.**
 
-It's designed to be unobtrusive and is designed from the ground up to support
-idiomatic Emacs Lisp library code. There's no runtime component--just pure
-static analysis. :)
+Tart is a static type checker for Emacs Lisp. Write type declarations for your
+library's public functions, and Tart verifies your implementation matches--no
+runtime overhead, no code changes required.
 
-The big ideas are:
+## The Problem
 
-- write `.tart` files that declare the public interface for your libraries
-- what you write in your library is type-checked against that interface
-- users `require`s your lib as normal
+Emacs Lisp's dynamic typing means type errors only appear at runtime:
 
-The `.tart` file doesn't change anything from the consumer's perspective...
-unless they also use Tart, in which case your public types are used when
-typechecking their code too.
+```elisp
+(defun greet (name)
+  (concat "Hello, " name "!"))
 
-> [!WARNING]
-> Tart is under active development and is not yet usable. See
-> [DEVELOPMENT.md](DEVELOPMENT.md) for build instructions and project status.
+(greet 42)  ; Runtime error: wrong-type-argument stringp 42
+```
 
-> [!NOTE]
-> Heavy use of AI assistance in this codebase. You have been warned.
+## The Solution
 
-## Installation
+Add a `.tart` file next to your `.el` file:
 
-### Building
+```elisp
+;; greeter.tart
+(defun greet (string) -> string)
+```
 
-Tart is built with OCaml and Dune. Nix users can get a development shell:
+Now Tart catches the error before you even run the code:
+
+```
+greeter.el:4:8: error: type mismatch
+  expected: String
+  found: Int
+  note: `greet` expects argument 1 to be String
+```
+
+## Features
+
+- **Zero runtime cost** -- Tart is purely static analysis
+- **Gradual typing** -- Add types incrementally; untyped code keeps working
+- **LSP integration** -- Real-time feedback in Emacs via eglot
+- **Familiar syntax** -- Type declarations look like Elisp
+- **Comprehensive stdlib** -- Built-in signatures for common packages (dash, s, f, cl-lib, seq, and more)
+
+## Quick Start
+
+### 1. Install
 
 ```bash
 git clone https://github.com/chrisbarrett/emacs-tart.git
@@ -37,217 +54,75 @@ nix develop
 dune build
 ```
 
-The `tart` executable will be at `_build/default/bin/tart.exe`.
+### 2. Create a .tart file
 
-### Emacs Package
-
-Add `lisp/` to your `load-path`:
+For `my-lib.el`, create `my-lib.tart`:
 
 ```elisp
-(add-to-list 'load-path "/path/to/emacs-tart/lisp")
+;; my-lib.tart
+(defun my-lib-process (string int) -> string)
+(defvar my-lib-timeout int)
 ```
 
-Tart provides two Emacs packages:
+### 3. Type-check
 
-- `tart` - Runtime macros (`tart`, `tart-type`, `tart-declare`). No dependencies.
-- `tart-mode` - Development tools (LSP, REPL, keybindings). Requires eglot and comint.
+```bash
+tart my-lib.el
+```
 
-## Editor Integration
-
-Tart provides an LSP server for editor integration. In Emacs, use the built-in
-eglot package.
-
-### Eglot Setup
-
-The `tart-mode` package automatically registers Tart as an LSP server for
-`emacs-lisp-mode`. To enable LSP automatically when editing files with a sibling
-`.tart` signature file:
+### 4. Get editor feedback
 
 ```elisp
+;; In your Emacs config
+(add-to-list 'load-path "/path/to/emacs-tart/lisp")
 (require 'tart-mode)
 (add-hook 'emacs-lisp-mode-hook #'tart-eglot-ensure)
 ```
 
-Or start eglot manually in any elisp buffer:
+## Examples
 
-```
-M-x eglot
-```
-
-### Customization
-
-| Variable          | Default   | Description                       |
-|-------------------|-----------|-----------------------------------|
-| `tart-executable` | `"tart"`  | Path to the tart binary           |
-| `tart-lsp-args`   | `nil`     | Additional arguments for LSP mode |
-
-## Quick Tour
-
-The public interface for your libraries are written in `.tart` files with the
-same basename. That's where most of this happens.
-
-Tart also provides a few ways to write type declarations inside regular Emacs
-Lisp; these are just used by the type-checker and have no runtime effect.
-
-### Basic Types
-
-Tart defines the types you'd expect for Emacs' primitive data structures. You
-can declare your own types to make type signatures more meaningful.
+### Generic functions
 
 ```elisp
-(type id int)
+;; Type parameters in square brackets
+(defun my-map [a b] (((a) -> b) (list a)) -> (list b))
 ```
 
-Union types are defined like so:
+### Union types
 
 ```elisp
-(type opt-string (string | nil))
+;; A value that might be nil
+(defun my-find (string) -> (string | nil))
 ```
 
-The normal type checks you'd do in an `if`, `cond`, `when`, etc will narrow down
-which type you actually have in a given branch.
-
-### Variables
-
-Variables (`defvar`, `defconst` and friends) are all declared via `defvar`.
+### Type classes
 
 ```elisp
-(defvar my-variable string) ; my-variable is a value of type 'string'
+;; Constrained polymorphism
+(defun my-sort [a] (Ord a) => ((list a)) -> (list a))
 ```
 
-Tart will type-check the definition and how it gets used.
+### Inline annotations
 
 ```elisp
-;; regular elisp code
-
-(defvar my-variable "bar")
-
-(setq my-variable 1) ; => type error
-(setq my-variable nil) ; => type error
-(setq my-variable "ok")
+;; In your .el file
+(defun my-internal-fn (x y)
+  (declare (tart (int int) -> int))
+  (+ x y))
 ```
 
-### Truthiness
+## Documentation
 
-This is a fun one!
+- **[Getting Started](docs/getting-started.adoc)** -- Tutorial for new users
+- **[Library Authors Guide](docs/library-authors.adoc)** -- Writing `.tart` files
+- **[Tooling Setup](docs/tooling-setup.adoc)** -- Editor configuration
+- **[CLI Reference](docs/cli-reference.adoc)** -- Command-line usage
 
-In Emacs Lisp, `nil` is always logically false, and anything else is considered
-'truthy'. This notion is central to Emacs Lisp, and all sorts of language
-features and idioms depend on it, which mean it's very normal to have 'optional'
-values in your program. Tart knows about it and helps you work with it.
+## Status
 
-The `any` type is defined in the standard library, for when you just need to
-check if something is truthy and don't need to know exactly what it is:
+Tart is under active development. Core type checking works well, but APIs may
+change. Contributions and bug reports welcome!
 
-```elisp
-(type any (truthy | nil))
-```
+## License
 
-There's also an `option` type, for when you _do_ know:
-
-```elisp
-(type option [(a : truthy)] (a | nil))
-```
-
-The `(a : truthy)` part is a _bound_--it says the type parameter `a` must be
-truthy (i.e., can't itself be `nil`). This ensures you can always distinguish
-"no value" from "has a value".
-
-Checking a value's truthiness will narrow a type as you'd hope. Let's use the
-`tart` macro to do a type assertion and see how this plays out:
-
-```elisp
-; regular elisp code
-
-(defvar mystery (tart (option string) nil))
-
-(setq mystery "hello!")
-(setq mystery nil)
-(setq mystery 1) ; => type error
-
-(if mystery
-
-  (tart truthy mystery) ; ok - mystery is non-nil in this branch
-
- (tart truthy mystery) ; => type error - mystery is nil in this branch
- )
-```
-
-### Functions
-
-Functions are declared in `.tart` files with `defun`. Params are in parentheses,
-and the return type is after the arrow.
-
-```elisp
-(defun my-add (num num) -> num)
-```
-
-Callers will then get red squiggly type errors in their own code.
-
-```elisp
-;; regular elisp code
-
-(require 'my)
-
-(my-add 1 "hello") ; => type error
-```
-
-It is sometimes useful to declare types for internal functions too. In regular
-Emacs Lisp files, you can put the type signature in a `(declare (tart ...))`
-spec.
-
-```elisp
-;; regular elisp code
-
-(defun my-package--internal-add (n m)
-  (declare (tart (num num) -> num))
-  (+ n m))
-```
-
-Tart supports `&rest`, `&optional`, `&key` and `&allow-other-keys`.
-
-```elisp
-(defun my-greet (string &optional string) -> string)
-(defun my-sum (&rest int) -> int)
-(defun my-make-person (&key :name string :age int) -> person)
-```
-
-Optional parameters and keys are inferred as `(t | nil)`. `&rest` becomes
-`(list t)`.
-
-### Generic Functions
-
-Type parameters must be explicitly declared in square brackets after the
-function name.
-
-```elisp
-(defun seq-map [a b] (((a -> b)) (list a)) -> (list b))
-```
-
-Type parameters can have bounds:
-
-```elisp
-(defun unwrap-or [(a : truthy)] ((a | nil) a) -> a)
-```
-
-### Named vs Anonymous Functions
-
-Emacs Lisp treats values and named functions differently. The type-checker makes
-sure you use `funcall` or `apply` correctly.
-
-```elisp
-;; regular elisp code
-
-(let ((fn (lambda () "hello")))
-  (fn)) ; => type error - values cannot can be called directly.
-        ;                 Use `funcall' or `apply' to call `fn'.
-
-
-(let ((fn (lambda () "hello")))
-  (funcall fn) ; ok
-  (apply fn))  ; ok
-```
-
-### Parameters
-
-See [tart-format.md](docs/reference/tart-format.md) for the full specification.
+GPL-3.0

@@ -560,7 +560,7 @@ Create comprehensive documentation using AsciiDoc, plus refresh the README.
 
 ### 19.2 README Refresh
 
-- [ ] Rewrite `README.md` with elevator pitch and friendly introduction
+- [x] Rewrite `README.md` with elevator pitch and friendly introduction
   - Lead with "what problem does this solve"
   - Show compelling before/after examples
   - Quick installation instructions
