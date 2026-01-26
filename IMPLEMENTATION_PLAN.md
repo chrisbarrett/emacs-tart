@@ -31,8 +31,8 @@ Foundation for module boundaries and type-checked code.
 - [x] Verify: Struct accessor calls type-check based on slot types
 
 ### 1.6 Signature Search Path
-- [ ] [R15] Implement `tart-type-path` search path configuration
-- [ ] [R16] Implement module discovery order (sibling, search path, stdlib)
+- [x] [R15] Implement `tart-type-path` search path configuration
+- [x] [R16] Implement module discovery order (sibling, search path, stdlib)
 - [ ] Verify: `(require 'cl-lib)` loads signatures from search path
 
 ### 1.7 Stdlib Signatures

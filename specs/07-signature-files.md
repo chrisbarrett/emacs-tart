@@ -260,8 +260,8 @@ Minimum coverage:
 - [x] [R12] Handle open directive (import types)
 - [x] [R13] Handle include directive (re-export declarations)
 - [x] [R14] Parse union types with `|` syntax
-- [ ] [R15] Implement signature search path
-- [ ] [R16] Implement module discovery with search order
+- [x] [R15] Implement signature search path
+- [x] [R16] Implement module discovery with search order
 - [ ] [R17] Write bundled stdlib signatures
 
 Run review agent after `builtins.tart` covers basic list/string functions before

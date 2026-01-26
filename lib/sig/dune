@@ -1,4 +1,4 @@
 (library
  (name sig)
  (public_name tart.sig)
- (libraries syntax core))
+ (libraries syntax core unix))
