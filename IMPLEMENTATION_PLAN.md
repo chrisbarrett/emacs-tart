@@ -159,7 +159,7 @@ Interactive development workflow.
 ### 7.2 Minor Mode
 
 - [x] [R7] Implement `tart-mode` minor mode with keymap
-- [ ] [R10] Add compilation-mode error parsing
+- [x] [R10] Add compilation-mode error parsing
 - [ ] Verify: Keybindings work, errors are clickable
 
 ## Phase 8: tart.el Runtime (Spec 14)

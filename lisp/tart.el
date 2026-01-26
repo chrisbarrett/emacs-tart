@@ -42,6 +42,7 @@
 
 (require 'cl-lib)
 (require 'comint)
+(require 'compile)
 (require 'eglot)
 
 ;;; Customization
@@ -78,6 +79,14 @@ Set to nil to disable history persistence."
   :group 'tart)
 
 ;;; Inferior Tart Mode (REPL)
+
+(defvar tart-error-regexp
+  '(tart
+    "^\\([^ \n]+\\):\\([0-9]+\\):\\([0-9]+\\)\\(?:-[0-9]+\\)?\\(?::[0-9]+\\)?: \\(?:error\\|warning\\): "
+    1 2 3 2)
+  "Compilation error regexp for tart output.
+Matches file:line:col: error/warning: format.
+The type is 2 (error) for both errors and warnings.")
 
 (defvar inferior-tart-mode-map
   (let ((map (make-sparse-keymap)))
@@ -132,7 +141,11 @@ Commands:
     (setq-local comint-input-ring-file-name tart-repl-history-file)
     (comint-read-input-ring t))
   ;; Font-lock for output
-  (setq-local font-lock-defaults '(nil nil nil nil)))
+  (setq-local font-lock-defaults '(nil nil nil nil))
+  ;; Enable compilation-mode style error parsing
+  (add-to-list 'compilation-error-regexp-alist 'tart)
+  (add-to-list 'compilation-error-regexp-alist-alist tart-error-regexp)
+  (compilation-shell-minor-mode 1))
 
 (defun tart--repl-buffer ()
   "Return the tart REPL buffer, or nil if none exists."
