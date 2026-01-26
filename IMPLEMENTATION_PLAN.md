@@ -327,36 +327,57 @@ Broader coverage of common Emacs packages.
 - [x] Add `stdlib/f.tart` for f.el
 - [x] Verify: Code using these packages type-checks
 
+## Phase 14: Higher-Kinded Types (Spec 17)
+
+Enable polymorphism over type constructors via kind inference.
+
+### 14.1 Kind Representation
+
+- [x] [R1] Add `kind` type to lib/typing/kind.ml
+- [x] [R1] Add kind comparison and pretty-printing
+- [x] Verify: `dune test`; kinds construct and compare
+
+### 14.2 Kind Defaulting
+
+- [ ] [R5] Default existing type variables to kind `*`
+- [ ] Verify: Existing signatures unchanged
+
+### 14.3 Kind Inference
+
+- [ ] [R2] Implement kind inference algorithm in kind_infer.ml
+- [ ] [R3] Add kind checking to type applications
+- [ ] Verify: HK type variable `f` inferred as `* -> *`
+
+### 14.4 Explicit Annotations and Errors
+
+- [ ] [R4] Parse explicit kind annotations `(f : (* -> *))`
+- [ ] [R6] Implement kind error formatting
+- [ ] Verify: Kind mismatch shows expected/found
+
+### 14.5 HK Instantiation
+
+- [ ] [R7] Update unification for HK instantiation
+- [ ] [R8] Test nested/partial type constructors
+- [ ] Verify: `fmap` instantiation preserves type safety
+
 ---
 
-## Implementation Complete
+## Future Work (Requires New Specs)
 
-All specs 07-16 have been fully implemented. The remaining unchecked items above
-were manual Emacs integration testing tasks; the implementation code is complete
-and all automated tests pass.
+The following areas are mentioned as future work in the specs:
 
-### Future Work (Requires New Specs)
-
-The following areas are mentioned as future work in the specs but require new
-specification documents before implementation:
-
-1. **Higher-Kinded Types (HKT) / Kind Inference** (mentioned in Spec 15)
-   - Would allow type-level functions like `(Functor f) => f a -> f b`
-   - Requires new type representation, kind checking, and constraint solving
-   - Major undertaking requiring new spec
-
-2. **Scoped Type Variables** (mentioned in Spec 15)
+1. **Scoped Type Variables** (mentioned in Spec 15)
    - Allow type variables to span multiple signatures in a scope
 
-3. **Explicit Type Instantiation** (mentioned in Spec 15)
+2. **Explicit Type Instantiation** (mentioned in Spec 15)
    - Allow explicit instantiation of polymorphic types at call sites
 
-4. **Additional Stdlib Coverage**
+3. **Additional Stdlib Coverage**
    - More Emacs packages (org-mode, magit, etc.)
    - More cl-lib functions
    - Third-party package signatures
 
-## Priority Order (All Complete)
+## Priority Order
 
 1. **Phase 1**: Signature system ✓
 2. **Phase 2**: Prek migration ✓
@@ -371,3 +392,4 @@ specification documents before implementation:
 11. **Phase 11**: LSP navigation features ✓
 12. **Phase 12**: LSP completion and symbols ✓
 13. **Phase 13**: Expanded stdlib ✓
+14. **Phase 14**: Higher-Kinded Types (in progress)

@@ -197,7 +197,7 @@ Error: kind mismatch
 
 ## Tasks
 
-- [ ] [R1] Add `kind` type to lib/typing
+- [x] [R1] Add `kind` type to lib/typing
 - [ ] [R5] Default existing type variables to kind `*`
 - [ ] [R2] Implement kind inference algorithm
 - [ ] [R3] Add kind checking to type application
