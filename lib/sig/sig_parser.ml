@@ -55,7 +55,7 @@ let rec parse_tvar_binder (sexp : Sexp.t) : tvar_binder result =
   match sexp with
   | Sexp.Symbol (name, span) ->
       Ok { name; bound = None; loc = span }
-  | Sexp.List ([Sexp.Symbol (name, _); Sexp.Keyword (":", _); bound_sexp], span) ->
+  | Sexp.List ([Sexp.Symbol (name, _); Sexp.Symbol (":", _); bound_sexp], span) ->
       (match parse_sig_type bound_sexp with
        | Ok bound -> Ok { name; bound = Some bound; loc = span }
        | Error e -> Error e)

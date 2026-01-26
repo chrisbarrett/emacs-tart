@@ -1,3 +1,3 @@
-(test
- (name sig_parser_test)
- (libraries alcotest sig syntax))
+(tests
+ (names sig_parser_test sig_loader_test)
+ (libraries alcotest sig syntax str))
