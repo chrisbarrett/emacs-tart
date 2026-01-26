@@ -12,8 +12,12 @@ and what constitutes the public interface of a module.
 ## Constraints
 
 - **Always available**: Any `.el` file can be type-checked via LSP
-- **Gradual**: Types come from search path; untyped code is `Any`
+- **Gradual**: Types come from search path; untyped code is `any`
 - **Sound within typed world**: No `any` escape hatch
+
+## Output
+
+No new files; extends `lib/typing/check.ml` and `lib/sig/sig_loader.ml`.
 
 ## Requirements
 
@@ -34,31 +38,30 @@ and what constitutes the public interface of a module.
 
 **Given** `foo.tart` declares:
 ```elisp
-(defun foo-add (Int Int) -> Int)
+(defun foo-add (int int) -> int)
 ```
 **And** `foo.el` defines:
 ```elisp
-(defun foo-add (a b) (concat a b))  ; Wrong: returns String
+(defun foo-add (a b) (concat a b))  ; Wrong: returns string
 ```
 **When** type-checked
 **Then** error: signature mismatch
 
-**Verify:** Mismatched implementations produce errors
+**Verify:** `dune test`; mismatched implementations produce errors
 
 ### R3: Typed calling untyped
 
 **Given** typed module uses an untyped module
 **And** a signature exists in the search path:
 ```elisp
-;; ~/.config/emacs/eli/external-lib.tart
-(module external-lib)
-(defun external-lib-process String -> String)
+;; ~/.config/emacs/tart/external-lib.tart
+(defun external-lib-process (string) -> string)
 ```
 **And** `my-app.el` calls `(require 'external-lib)` and uses `external-lib-process`
 **When** type-checked
 **Then** the call is checked against the signature from the search path
 
-**Verify:** Wrong argument types produce errors
+**Verify:** `dune test`; wrong argument types produce errors
 
 ### R4: Untyped calling typed
 
@@ -66,13 +69,13 @@ and what constitutes the public interface of a module.
 **When** the typed module is compiled
 **Then** no checking occurs at the call site (caller is untyped)
 
-**Verify:** System remains sound within typed world
+**Verify:** Document behavior; no automated test needed (soundness is maintained)
 
 ### R5: Public vs internal
 
 **Given** `foo.tart` lists:
 ```elisp
-(defun foo-public-api String -> String)
+(defun foo-public-api (string) -> string)
 ;; foo--internal not listed
 ```
 **And** `foo.el` defines both `foo-public-api` and `foo--internal`
@@ -81,7 +84,7 @@ and what constitutes the public interface of a module.
 - `foo-public-api`: checked against signature
 - `foo--internal`: inferred, not exported
 
-**Verify:** Internal functions are inferred but not part of module interface
+**Verify:** `dune test`; internal functions are inferred but not part of module interface
 
 ### R6: require/provide interaction
 
@@ -92,26 +95,25 @@ and what constitutes the public interface of a module.
 ```
 **And** `my-utils.tart` exists with:
 ```elisp
-(defun my-utils-foo Int -> String)
+(defun my-utils-foo (int) -> string)
 ```
 **When** type-checked
 **Then** `my-utils-foo` is available as a directly callable function
 
-**Verify:** Required module signatures are loaded
+**Verify:** `dune test`; required module signatures are loaded
 
 ### R7: Autoload handling
 
 **Given** code calls an autoloaded function `my-package-autoload-fn`
 **And** `my-package.tart` exists in the search path:
 ```elisp
-(module my-package)
-(defun my-package-autoload-fn Int -> String)
+(defun my-package-autoload-fn (int) -> string)
 ```
 **When** type-checked
 **Then** tart searches for `my-package.tart` based on the function's prefix
 **And** the signature is used for type checking
 
-**Verify:** Autoloaded functions type-check using signatures from search path
+**Verify:** `dune test`; autoloaded functions type-check using signatures from search path
 
 ### R8: Missing signature warning
 
@@ -121,7 +123,7 @@ and what constitutes the public interface of a module.
 **Then** warning: "Function `foo-public-fn` defined but not in signature file"
 (only for public-looking names, not `--internal` names)
 
-**Verify:** Drift between implementation and signatures is detected
+**Verify:** `dune test`; drift between implementation and signatures is detected
 
 ### R9: Circular dependencies
 
@@ -131,7 +133,7 @@ and what constitutes the public interface of a module.
 **When** type-checked
 **Then** signatures are loaded lazily; cycles are handled
 
-**Verify:** Mutual recursion between modules works
+**Verify:** `dune test`; mutual recursion between modules works
 
 ## Tasks
 
@@ -144,3 +146,5 @@ and what constitutes the public interface of a module.
 - [ ] [R7] Handle autoloaded function lookup via search path
 - [ ] [R8] Warn on undefined exports
 - [ ] [R9] Handle circular module dependencies
+
+Run review agent after R1-R3 work (basic module loading) before implementing R7-R9.
