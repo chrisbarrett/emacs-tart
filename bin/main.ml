@@ -9,8 +9,11 @@ let format_parse_error (err : Tart.Read.parse_error) : string =
   Printf.sprintf "%s:%d:%d: error: %s" pos.file pos.line (pos.col + 1)
     err.message
 
-(** Type-check a single file, returning error count *)
-let check_file filename : int =
+(** Type-check a single file with a given environment.
+
+    Returns the updated environment (with definitions from this file)
+    and the error count for this file. *)
+let check_file env filename : Tart.Type_env.t * int =
   (* Parse the file *)
   let parse_result = Tart.Read.parse_file filename in
 
@@ -21,9 +24,9 @@ let check_file filename : int =
     parse_result.errors;
 
   (* Type-check if we have any successfully parsed forms *)
-  if parse_result.sexps = [] then parse_error_count
+  if parse_result.sexps = [] then (env, parse_error_count)
   else
-    let check_result = Tart.Check.check_program parse_result.sexps in
+    let check_result = Tart.Check.check_program ~env parse_result.sexps in
 
     (* Convert unify errors to diagnostics and print them *)
     let diagnostics = Tart.Diagnostic.of_unify_errors check_result.errors in
@@ -31,17 +34,26 @@ let check_file filename : int =
       (fun d -> prerr_endline (Tart.Diagnostic.to_string_compact d))
       diagnostics;
 
-    parse_error_count + Tart.Diagnostic.count_errors diagnostics
+    let error_count = parse_error_count + Tart.Diagnostic.count_errors diagnostics in
+    (check_result.env, error_count)
 
-(** Default command: type-check files *)
+(** Default command: type-check files.
+
+    Files are processed in order; definitions from earlier files
+    are visible to later files. *)
 let cmd_check files =
   if files = [] then (
     prerr_endline "tart: no input files. Use --help for usage.";
     exit 2)
   else
-    (* Check each file and count total errors *)
-    let total_errors =
-      List.fold_left (fun acc f -> acc + check_file f) 0 files
+    (* Check each file, accumulating the environment *)
+    let initial_env = Tart.Check.default_env () in
+    let _, total_errors =
+      List.fold_left
+        (fun (env, acc_errors) file ->
+          let env', file_errors = check_file env file in
+          (env', acc_errors + file_errors))
+        (initial_env, 0) files
     in
     (* Exit code: 0 if no errors, 1 if errors *)
     if total_errors > 0 then exit 1
