@@ -65,9 +65,9 @@ Enable hover and diagnostics in Emacs via eglot.
 
 ### 3.1 CLI LSP Command
 
-- [ ] [R9] Wire `tart lsp` to start LSP server on stdio
-- [ ] [R10] Add `--port` option for TCP mode
-- [ ] Verify: LSP client connects and receives diagnostics
+- [x] [R9] Wire `tart lsp` to start LSP server on stdio
+- [x] [R10] Add `--port` option for TCP mode
+- [x] Verify: LSP client connects and receives diagnostics
 
 ### 3.2 Eglot Integration
 

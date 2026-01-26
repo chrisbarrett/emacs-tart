@@ -187,7 +187,7 @@ macros.el
 - [x] [R3,R4] Implement `eval` subcommand
 - [x] [R5,R6] Implement `expand` subcommand
 - [x] [R7,R8] Implement `repl` subcommand with commands
-- [ ] [R9,R10] Implement `lsp` subcommand (stub; full impl in Spec 08)
+- [x] [R9,R10] Implement `lsp` subcommand (stdio and TCP port modes)
 - [x] [R12] Standardize exit codes across all commands
 - [x] Add test fixtures for CLI integration tests
 

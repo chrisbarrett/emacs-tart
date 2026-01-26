@@ -356,13 +356,33 @@ let cmd_repl () =
   done
 
 (** LSP subcommand: start language server *)
-let cmd_lsp ~log_level _port =
-  (* TODO: Support TCP port mode *)
-  let server =
-    Tart.Server.create ~log_level ~ic:In_channel.stdin ~oc:Out_channel.stdout ()
-  in
-  let exit_code = Tart.Server.run server in
-  exit exit_code
+let cmd_lsp ~log_level port =
+  match port with
+  | None ->
+      (* stdio mode *)
+      let server =
+        Tart.Server.create ~log_level ~ic:In_channel.stdin
+          ~oc:Out_channel.stdout ()
+      in
+      let exit_code = Tart.Server.run server in
+      exit exit_code
+  | Some p ->
+      (* TCP mode *)
+      let addr = Unix.ADDR_INET (Unix.inet_addr_loopback, p) in
+      let socket = Unix.socket Unix.PF_INET Unix.SOCK_STREAM 0 in
+      Unix.setsockopt socket Unix.SO_REUSEADDR true;
+      Unix.bind socket addr;
+      Unix.listen socket 1;
+      prerr_endline (Printf.sprintf "[tart-lsp] Listening on port %d" p);
+      let client_socket, _client_addr = Unix.accept socket in
+      prerr_endline "[tart-lsp] Client connected";
+      let ic = Unix.in_channel_of_descr client_socket in
+      let oc = Unix.out_channel_of_descr client_socket in
+      let server = Tart.Server.create ~log_level ~ic ~oc () in
+      let exit_code = Tart.Server.run server in
+      Unix.close client_socket;
+      Unix.close socket;
+      exit exit_code
 
 (** Print version and exit *)
 let print_version () =
