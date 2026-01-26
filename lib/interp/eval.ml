@@ -119,6 +119,7 @@ let rec eval env global sexp =
       match name with
       (* Core special forms *)
       | "quote" -> eval_quote span args
+      | "backquote" -> eval_backquote env global span args
       | "function" -> eval_function env global span args
       | "if" -> eval_if env global span args
       | "and" -> eval_and env global args
@@ -171,6 +172,71 @@ and eval_progn env global = function
 and eval_quote span = function
   | [ arg ] -> sexp_to_value arg
   | _ -> error span "quote requires exactly one argument"
+
+(** backquote - quasiquote with unquote and unquote-splicing *)
+and eval_backquote env global span = function
+  | [ arg ] -> eval_bq env global arg
+  | _ -> error span "backquote requires exactly one argument"
+
+(** Evaluate a backquoted form with depth tracking *)
+and eval_bq env global sexp = eval_bq_depth env global 1 sexp
+
+and eval_bq_depth env global depth sexp =
+  match sexp with
+  (* Nested backquote - increase depth *)
+  | List ([ Symbol ("backquote", _); inner ], _span) ->
+      let inner_result = eval_bq_depth env global (depth + 1) inner in
+      Value.Cons (Value.Symbol "backquote", Value.Cons (inner_result, Nil))
+  (* Unquote at current depth - evaluate *)
+  | List ([ Symbol ("unquote", _); inner ], _span) ->
+      if depth = 1 then eval env global inner
+      else
+        let inner_result = eval_bq_depth env global (depth - 1) inner in
+        Value.Cons (Value.Symbol "unquote", Value.Cons (inner_result, Nil))
+  (* Unquote-splicing - should only appear in list context *)
+  | List ([ Symbol ("unquote-splicing", _); _ ], _span) ->
+      (* This case is handled specially in list processing below *)
+      sexp_to_value sexp
+  (* List - process each element, handling splicing *)
+  | List (elts, _span) -> eval_bq_list env global depth elts
+  (* Vector - process elements *)
+  | Vector (elts, _span) ->
+      let items = List.map (eval_bq_depth env global depth) elts in
+      Value.Vector (Array.of_list items)
+  (* Cons cell *)
+  | Cons (car, cdr, _span) ->
+      let car_val = eval_bq_depth env global depth car in
+      let cdr_val = eval_bq_depth env global depth cdr in
+      Value.Cons (car_val, cdr_val)
+  (* Everything else - quote it *)
+  | _ -> sexp_to_value sexp
+
+(** Evaluate list elements in backquote context, handling unquote-splicing *)
+and eval_bq_list env global depth elts =
+  let rec loop acc = function
+    | [] -> of_list (List.rev acc)
+    | List ([ Symbol ("unquote-splicing", _); inner ], _span) :: rest
+      when depth = 1 ->
+        (* Evaluate and splice *)
+        let spliced = eval env global inner in
+        (match to_list spliced with
+        | Some items -> loop (List.rev_append items acc) rest
+        | None ->
+            (* If not a proper list, just append as single element *)
+            loop (spliced :: acc) rest)
+    | List ([ Symbol ("unquote-splicing", _); inner ], _span) :: rest ->
+        (* Nested backquote - decrease depth *)
+        let inner_result = eval_bq_depth env global (depth - 1) inner in
+        let form =
+          Value.Cons
+            (Value.Symbol "unquote-splicing", Value.Cons (inner_result, Nil))
+        in
+        loop (form :: acc) rest
+    | elt :: rest ->
+        let val_ = eval_bq_depth env global depth elt in
+        loop (val_ :: acc) rest
+  in
+  loop [] elts
 
 (** function - create closure or get function value *)
 and eval_function env global span = function

@@ -112,10 +112,49 @@ let cmd_eval expr =
       prerr_endline "tart eval: expected single expression";
       exit 1
 
-(** Expand subcommand: print macro-expanded source *)
-let cmd_expand _file =
-  prerr_endline "tart expand: not yet implemented";
-  exit 2
+(** Expand subcommand: print macro-expanded source.
+
+    Parses the file, expands all macros, and pretty-prints the result.
+    Optionally loads macros from other files via --load. *)
+let cmd_expand ~load_files file =
+  (* Create interpreter with builtins *)
+  let global = Tart.Eval.make_interpreter () in
+
+  (* Load macro definitions from --load files *)
+  List.iter
+    (fun load_file ->
+      let parse_result = Tart.Read.parse_file load_file in
+      if parse_result.errors <> [] then (
+        List.iter
+          (fun err -> prerr_endline (format_parse_error err))
+          parse_result.errors;
+        exit 1);
+      Tart.Expand.load_macros global parse_result.sexps)
+    load_files;
+
+  (* Parse the main file *)
+  let parse_result = Tart.Read.parse_file file in
+
+  (* Check for parse errors *)
+  if parse_result.errors <> [] then (
+    List.iter
+      (fun err -> prerr_endline (format_parse_error err))
+      parse_result.errors;
+    exit 1);
+
+  (* Expand each top-level form and print *)
+  List.iter
+    (fun sexp ->
+      match Tart.Expand.expand_all global sexp with
+      | Tart.Expand.Expanded expanded ->
+          print_endline (Tart.Sexp.to_string expanded)
+      | Tart.Expand.Expansion_error { message; span } ->
+          let pos = span.start_pos in
+          prerr_endline
+            (Printf.sprintf "%s:%d:%d: error: %s" pos.file pos.line
+               (pos.col + 1) message);
+          exit 1)
+    parse_result.sexps
 
 (** REPL subcommand: interactive read-eval-print loop *)
 let cmd_repl () =
@@ -187,24 +226,46 @@ let () =
       | _ ->
           prerr_endline "tart eval: expected single expression";
           exit 2)
-  | "expand" :: rest -> (
-      match rest with
-      | [] ->
-          prerr_endline "tart expand: missing file";
-          exit 2
-      | [ "--help" ] | [ "-h" ] ->
-          print_endline "Usage: tart expand [--load FILE] FILE";
-          print_endline "";
-          print_endline "Macro-expand FILE and print the result.";
-          print_endline "";
-          print_endline "Options:";
-          print_endline "  --load FILE  Load macros from FILE before expanding";
-          exit 0
-      | [ file ] -> cmd_expand file
-      | [ "--load"; _load_file; file ] -> cmd_expand file
-      | _ ->
-          prerr_endline "tart expand: invalid arguments";
-          exit 2)
+  | "expand" :: rest ->
+      let load_files = ref [] in
+      let target_file = ref None in
+      let show_help = ref false in
+      let rec parse_expand_args = function
+        | [] -> ()
+        | "--help" :: _ | "-h" :: _ -> show_help := true
+        | "--load" :: f :: rest ->
+            load_files := !load_files @ [ f ];
+            parse_expand_args rest
+        | "--load" :: [] ->
+            prerr_endline "tart expand: --load requires a file";
+            exit 2
+        | arg :: _ when String.starts_with ~prefix:"-" arg ->
+            prerr_endline ("tart expand: unknown option: " ^ arg);
+            exit 2
+        | file :: rest -> (
+            match !target_file with
+            | None ->
+                target_file := Some file;
+                parse_expand_args rest
+            | Some _ ->
+                prerr_endline "tart expand: only one file allowed";
+                exit 2)
+      in
+      parse_expand_args rest;
+      if !show_help then (
+        print_endline "Usage: tart expand [--load FILE]... FILE";
+        print_endline "";
+        print_endline "Macro-expand FILE and print the result.";
+        print_endline "";
+        print_endline "Options:";
+        print_endline "  --load FILE  Load macros from FILE before expanding (repeatable)";
+        exit 0)
+      else (
+        match !target_file with
+        | None ->
+            prerr_endline "tart expand: missing file";
+            exit 2
+        | Some file -> cmd_expand ~load_files:!load_files file)
   | "repl" :: rest -> (
       match rest with
       | [] -> cmd_repl ()
