@@ -531,6 +531,65 @@ let test_tart_annotation_polymorphic () =
     (String.sub ty 0 4 = "(-> ")
 
 (* =============================================================================
+   Explicit Type Instantiation Tests: (@type [T1 T2 ...] fn args...)
+   ============================================================================= *)
+
+let test_at_type_result_is_tvar () =
+  (* (@type [int] identity 42) returns a fresh type variable before solving *)
+  let env =
+    Env.extend_poly "identity" [ "a" ] (arrow [ TCon "a" ] (TCon "a")) Env.empty
+  in
+  let ty = infer_type ~env "(@type [int] identity 42)" in
+  (* Result is a type variable that will unify with Int after solving *)
+  Alcotest.(check bool)
+    "@type result is tvar" true
+    (String.length ty > 0 && ty.[0] = '\'')
+
+let test_at_type_generates_constraints () =
+  (* (@type [int] identity 42) generates constraints for instantiation *)
+  let env =
+    Env.extend_poly "identity" [ "a" ] (arrow [ TCon "a" ] (TCon "a")) Env.empty
+  in
+  let count = constraint_count ~env "(@type [int] identity 42)" in
+  (* 1 constraint for fn type, 1 for the argument *)
+  Alcotest.(check bool) "@type generates constraints" true (count >= 2)
+
+let test_at_type_with_placeholder () =
+  (* (@type [_] identity 42) uses placeholder for inference *)
+  let env =
+    Env.extend_poly "identity" [ "a" ] (arrow [ TCon "a" ] (TCon "a")) Env.empty
+  in
+  let count = constraint_count ~env "(@type [_] identity 42)" in
+  Alcotest.(check bool) "placeholder generates constraints" true (count >= 2)
+
+let test_at_type_multi_arg_function () =
+  (* (@type [int string] pair 1 "hi") instantiates multi-param function *)
+  let pair_ty =
+    arrow [ TCon "a"; TCon "b" ] (TApp (TCon "cons", [ TCon "a"; TCon "b" ]))
+  in
+  let env = Env.extend_poly "pair" [ "a"; "b" ] pair_ty Env.empty in
+  let count = constraint_count ~env {|(@type [int string] pair 1 "hi")|} in
+  Alcotest.(check bool) "multi-arg generates constraints" true (count >= 3)
+
+let test_at_type_partial_instantiation () =
+  (* (@type [_ string] pair 1 "hi") infers first type arg *)
+  let pair_ty =
+    arrow [ TCon "a"; TCon "b" ] (TApp (TCon "cons", [ TCon "a"; TCon "b" ]))
+  in
+  let env = Env.extend_poly "pair" [ "a"; "b" ] pair_ty Env.empty in
+  let count = constraint_count ~env {|(@type [_ string] pair 1 "hi")|} in
+  Alcotest.(check bool)
+    "partial instantiation generates constraints" true (count >= 3)
+
+let test_at_type_no_type_args () =
+  (* (@type [] identity 42) with empty type args - uses all inference *)
+  let env =
+    Env.extend_poly "identity" [ "a" ] (arrow [ TCon "a" ] (TCon "a")) Env.empty
+  in
+  let count = constraint_count ~env "(@type [] identity 42)" in
+  Alcotest.(check bool) "empty type args" true (count >= 1)
+
+(* =============================================================================
    Constraint Content Tests
    ============================================================================= *)
 
@@ -684,6 +743,19 @@ let () =
           Alcotest.test_case "list type" `Quick test_tart_annotation_list_type;
           Alcotest.test_case "polymorphic" `Quick
             test_tart_annotation_polymorphic;
+        ] );
+      ( "@type",
+        [
+          Alcotest.test_case "result is tvar" `Quick test_at_type_result_is_tvar;
+          Alcotest.test_case "generates constraints" `Quick
+            test_at_type_generates_constraints;
+          Alcotest.test_case "with placeholder" `Quick
+            test_at_type_with_placeholder;
+          Alcotest.test_case "multi-arg function" `Quick
+            test_at_type_multi_arg_function;
+          Alcotest.test_case "partial instantiation" `Quick
+            test_at_type_partial_instantiation;
+          Alcotest.test_case "no type args" `Quick test_at_type_no_type_args;
         ] );
       ( "constraints",
         [

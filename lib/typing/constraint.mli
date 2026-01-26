@@ -28,6 +28,12 @@ type context =
       fn_name : string;  (** Name of the function *)
       declared_type : Core.Types.typ;  (** Declared return type *)
     }  (** Function body vs declared return type *)
+  | ExplicitInstantiation of {
+      type_args : Core.Types.typ list;
+          (** Explicit type arguments from @type *)
+      arg_index : int;
+          (** Which type argument caused the mismatch (0-indexed) *)
+    }  (** Explicit type instantiation via (@type [T1 T2] fn args) *)
 
 type t = {
   lhs : Core.Types.typ;  (** Left-hand side type *)

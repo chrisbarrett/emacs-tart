@@ -328,7 +328,7 @@ let arity_mismatch_with_context ~span ~expected ~actual ~context () =
         help = [];
       }
   | Constraint.NoContext | Constraint.IfBranch _ | Constraint.TartAnnotation _
-  | Constraint.DeclaredReturn _ ->
+  | Constraint.DeclaredReturn _ | Constraint.ExplicitInstantiation _ ->
       arity_mismatch ~span ~expected ~actual ()
 
 (** Generate a note about the other branch in an if expression *)
@@ -479,6 +479,31 @@ let type_mismatch_with_context ~span ~expected ~actual ~context () =
         code = Some E0308;
         span;
         message;
+        expected = Some expected;
+        actual = Some actual;
+        related;
+        help = base_help;
+      }
+  | Constraint.ExplicitInstantiation { type_args; arg_index } ->
+      let base_help = suggest_type_fix ~expected ~actual in
+      let type_args_str =
+        String.concat ", " (List.map Types.to_string type_args)
+      in
+      let related =
+        [
+          {
+            span = Loc.dummy_span;
+            message =
+              Printf.sprintf "from @type annotation [%s], argument %d"
+                type_args_str (arg_index + 1);
+          };
+        ]
+      in
+      {
+        severity = Error;
+        code = Some E0308;
+        span;
+        message = "type mismatch in explicit instantiation";
         expected = Some expected;
         actual = Some actual;
         related;

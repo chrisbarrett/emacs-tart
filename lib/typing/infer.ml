@@ -130,6 +130,9 @@ let rec infer (env : Env.t) (sexp : Syntax.Sexp.t) : result =
       infer_pcase env expr clauses span
   | List (Symbol ("pcase-exhaustive", _) :: expr :: clauses, span) ->
       infer_pcase env expr clauses span
+  (* === Explicit type instantiation: (@type [T1 T2 ...] fn args...) === *)
+  | List (Symbol ("@type", _) :: Vector (type_args, _) :: fn :: args, span) ->
+      infer_explicit_instantiation env type_args fn args span
   (* === Function application (catch-all for lists) === *)
   | List (fn :: args, span) -> infer_application env fn args span
   | List ([], _span) ->
@@ -711,6 +714,111 @@ and infer_tart_annotation env type_sexp form _span =
   | None ->
       (* Parse failed - return form's type unchanged with a fresh tvar *)
       { form_result with ty = fresh_tvar (Env.current_level env) }
+
+(** Infer the type of an explicit type instantiation.
+
+    (@type [T1 T2 ...] fn args...) explicitly instantiates the polymorphic
+    function fn with the given type arguments, then applies it to args.
+
+    The type arguments are parsed using sig_parser and applied to the function's
+    type parameters in order. The underscore [_] can be used as a placeholder
+    to let inference determine that type argument. *)
+and infer_explicit_instantiation (env : Env.t) (type_arg_sexps : Syntax.Sexp.t list)
+    (fn : Syntax.Sexp.t) (args : Syntax.Sexp.t list) (span : Loc.span) : result =
+  let open Syntax.Sexp in
+  (* Parse the type arguments *)
+  let parsed_type_args =
+    List.map
+      (fun sexp ->
+        match sexp with
+        | Symbol ("_", _) -> None (* Placeholder - infer this type *)
+        | _ -> (
+            match Sig_parser.parse_sig_type sexp with
+            | Ok sig_type ->
+                (* Apply forall inference for implicit quantifiers *)
+                let sig_type = Forall_infer.infer_sig_type ~known_types:[] sig_type in
+                Some (Sig_loader.sig_type_to_typ [] sig_type)
+            | Error _ -> None))
+      type_arg_sexps
+  in
+
+  (* Look up the function's type *)
+  let fn_name = get_fn_name fn in
+  let fn_scheme =
+    match fn_name with
+    | Some name -> Env.lookup name env
+    | None -> None
+  in
+
+  (* Get the function's quantified type variables and body type *)
+  let tvar_names, fn_body_type =
+    match fn_scheme with
+    | Some (Env.Poly (vars, ty)) -> (vars, ty)
+    | Some (Env.Mono ty) -> ([], ty)
+    | None -> ([], fresh_tvar (Env.current_level env))
+  in
+
+  (* Create substitution mapping type variable names to explicit/inferred types *)
+  let tvar_subst =
+    List.mapi
+      (fun i name ->
+        let explicit_ty =
+          if i < List.length parsed_type_args then List.nth parsed_type_args i
+          else None
+        in
+        match explicit_ty with
+        | Some ty -> (name, ty)
+        | None -> (name, fresh_tvar (Env.current_level env)))
+      tvar_names
+  in
+
+  (* Apply substitution to get instantiated function type *)
+  let instantiated_fn_type = substitute_tvar_names tvar_subst fn_body_type in
+
+  (* Now type-check the application with the instantiated type *)
+  let arg_results = List.map (infer env) args in
+
+  (* Fresh type variable for the result *)
+  let result_ty = fresh_tvar (Env.current_level env) in
+
+  (* Build expected function type with per-argument constraints *)
+  let type_args_for_context =
+    List.map (fun (_, ty) -> ty) tvar_subst
+  in
+  let arg_constraints_with_context =
+    List.mapi
+      (fun i arg_result ->
+        let expected_param_ty = fresh_tvar (Env.current_level env) in
+        let arg_expr = List.nth args i in
+        let context =
+          C.ExplicitInstantiation
+            { type_args = type_args_for_context; arg_index = i }
+        in
+        ( expected_param_ty,
+          C.equal ~context expected_param_ty arg_result.ty (span_of arg_expr) ))
+      arg_results
+  in
+
+  (* Build the expected function type *)
+  let param_types =
+    List.map (fun (ty, _) -> PPositional ty) arg_constraints_with_context
+  in
+  let expected_fn_type = TArrow (param_types, result_ty) in
+
+  (* Constraint: instantiated function type = expected function type *)
+  let fn_constraint = C.equal instantiated_fn_type expected_fn_type span in
+
+  (* Collect all constraints *)
+  let arg_type_constraints =
+    List.fold_left (fun acc (_, c) -> C.add c acc) C.empty arg_constraints_with_context
+  in
+  let arg_constraints = combine_results arg_results in
+  let all_constraints =
+    C.combine arg_constraints (C.add fn_constraint arg_type_constraints)
+  in
+  let all_undefineds = combine_undefineds arg_results in
+
+  { ty = result_ty; constraints = all_constraints; undefineds = all_undefineds }
 
 (** Extract function name from a function expression for error context *)
 and get_fn_name (fn : Syntax.Sexp.t) : string option =

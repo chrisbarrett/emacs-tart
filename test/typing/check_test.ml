@@ -641,6 +641,75 @@ let test_invariance_poly_function_ok () =
   Alcotest.(check int) "no errors" 0 (List.length result.errors)
 
 (* =============================================================================
+   @type (Explicit Type Instantiation) Tests
+   ============================================================================= *)
+
+(** Test that (@type [int] identity 42) type-checks correctly *)
+let test_at_type_basic () =
+  let env =
+    Env.extend_poly "identity" [ "a" ] (arrow [ TCon "a" ] (TCon "a")) Env.empty
+  in
+  let sexp = parse "(@type [int] identity 42)" in
+  let ty, errors = Check.check_expr ~env sexp in
+  Alcotest.(check int) "no errors" 0 (List.length errors);
+  Alcotest.(check string) "returns Int" "Int" (to_string ty)
+
+(** Test that (@type [string] identity 42) produces type error *)
+let test_at_type_type_mismatch () =
+  let env =
+    Env.extend_poly "identity" [ "a" ] (arrow [ TCon "a" ] (TCon "a")) Env.empty
+  in
+  let sexp = parse {|(@type [string] identity 42)|} in
+  let _, errors = Check.check_expr ~env sexp in
+  (* Should error: 42 is Int, but String was specified *)
+  Alcotest.(check bool) "has type error" true (List.length errors > 0)
+
+(** Test that (@type [_] identity 42) with placeholder infers correctly *)
+let test_at_type_placeholder () =
+  let env =
+    Env.extend_poly "identity" [ "a" ] (arrow [ TCon "a" ] (TCon "a")) Env.empty
+  in
+  let sexp = parse "(@type [_] identity 42)" in
+  let ty, errors = Check.check_expr ~env sexp in
+  Alcotest.(check int) "no errors" 0 (List.length errors);
+  Alcotest.(check string) "returns Int" "Int" (to_string ty)
+
+(** Test multi-parameter function with explicit types *)
+let test_at_type_multi_param () =
+  let pair_ty =
+    arrow [ TCon "a"; TCon "b" ] (TApp (TCon "cons", [ TCon "a"; TCon "b" ]))
+  in
+  let env = Env.extend_poly "pair" [ "a"; "b" ] pair_ty Env.empty in
+  let sexp = parse {|(@type [int string] pair 1 "hi")|} in
+  let ty, errors = Check.check_expr ~env sexp in
+  Alcotest.(check int) "no errors" 0 (List.length errors);
+  Alcotest.(check string) "returns cons" "(cons Int String)" (to_string ty)
+
+(** Test partial instantiation with mixed explicit and inferred *)
+let test_at_type_partial () =
+  let pair_ty =
+    arrow [ TCon "a"; TCon "b" ] (TApp (TCon "cons", [ TCon "a"; TCon "b" ]))
+  in
+  let env = Env.extend_poly "pair" [ "a"; "b" ] pair_ty Env.empty in
+  let sexp = parse {|(@type [_ string] pair 1 "hi")|} in
+  let ty, errors = Check.check_expr ~env sexp in
+  Alcotest.(check int) "no errors" 0 (List.length errors);
+  (* First param inferred from 1 (Int), second explicit (String) *)
+  Alcotest.(check string) "returns cons" "(cons Int String)" (to_string ty)
+
+(** Test @type in a program context *)
+let test_at_type_in_program () =
+  let sexps =
+    parse_many
+      {|(defun my-identity (x)
+          (declare (tart [a] (a) -> a))
+          x)
+        (@type [int] my-identity 42)|}
+  in
+  let result = Check.check_program sexps in
+  Alcotest.(check int) "no errors" 0 (List.length result.errors)
+
+(* =============================================================================
    Pcase Tests
    ============================================================================= *)
 
@@ -804,6 +873,15 @@ let () =
             test_invariance_hash_table_key;
           Alcotest.test_case "polymorphic function ok" `Quick
             test_invariance_poly_function_ok;
+        ] );
+      ( "@type",
+        [
+          Alcotest.test_case "basic instantiation" `Quick test_at_type_basic;
+          Alcotest.test_case "type mismatch" `Quick test_at_type_type_mismatch;
+          Alcotest.test_case "placeholder" `Quick test_at_type_placeholder;
+          Alcotest.test_case "multi-param" `Quick test_at_type_multi_param;
+          Alcotest.test_case "partial instantiation" `Quick test_at_type_partial;
+          Alcotest.test_case "in program" `Quick test_at_type_in_program;
         ] );
       ( "pcase",
         [

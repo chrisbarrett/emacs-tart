@@ -366,20 +366,20 @@ Enable explicit instantiation of polymorphic types at call sites.
 
 ### 15.1 Runtime Macro
 
-- [ ] [R5] Add `@type` macro to tart.el (expands to function call)
-- [ ] Verify: ERT tests; `(@type [int] identity 42)` expands to `(identity 42)`
+- [x] [R5] Add `@type` macro to tart.el (expands to function call)
+- [x] Verify: ERT tests; `(@type [int] identity 42)` expands to `(identity 42)`
 
 ### 15.2 Basic Instantiation
 
-- [ ] [R1] Recognize `@type` forms in infer.ml
-- [ ] [R1] Parse type arguments from vector using sig_parser
-- [ ] [R1] Apply explicit type arguments during inference
-- [ ] Verify: `(@type [int] identity 42)` type-checks
+- [x] [R1] Recognize `@type` forms in infer.ml
+- [x] [R1] Parse type arguments from vector using sig_parser
+- [x] [R1] Apply explicit type arguments during inference
+- [x] Verify: `(@type [int] identity 42)` type-checks
 
 ### 15.3 Partial Instantiation
 
-- [ ] [R3] Handle `_` placeholder for partial instantiation
-- [ ] Verify: `(@type [_ string] pair 1 "hi")` infers first arg
+- [x] [R3] Handle `_` placeholder for partial instantiation
+- [x] Verify: `(@type [_ string] pair 1 "hi")` infers first arg
 
 ### 15.4 HK Instantiation
 
