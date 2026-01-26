@@ -473,10 +473,10 @@ Enable ad-hoc polymorphism through type classes and instances.
 
 ### 18.3 Constraint Syntax
 
-- [ ] [R3] Add constraint syntax to defun signatures
-- [ ] [R3] Parse `(Constraint var) =>` in function types
-- [ ] [R3] Store constraints in type schemes
-- [ ] Verify: `dune test`; constrained functions parse correctly
+- [x] [R3] Add constraint syntax to defun signatures
+- [x] [R3] Parse `(Constraint var) =>` in function types
+- [x] [R3] Store constraints in type schemes
+- [x] Verify: `dune test`; constrained functions parse correctly
 
 ### 18.4 Basic Instance Resolution
 

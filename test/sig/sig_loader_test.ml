@@ -1503,6 +1503,63 @@ let test_instance_unbound_tvar_error () =
             "error mentions unbound type variable" true
             (String.length e.message > 0))
 
+(** {1 Constraint Loading Tests (Spec 21 R3)} *)
+
+(** Test that defun constraints are stored in the type scheme *)
+let test_constraint_in_scheme () =
+  let sig_src =
+    {|
+    (class (Eq a) (eq (a a) -> bool))
+    (defun elem [a] (Eq a) => (a (list a)) -> bool)
+  |}
+  in
+  let env = load_sig_str sig_src in
+  match Type_env.lookup "elem" env with
+  | None -> Alcotest.fail "elem not found in environment"
+  | Some (Type_env.Mono _) ->
+      Alcotest.fail "Expected polymorphic scheme with constraints"
+  | Some (Type_env.Poly (_vars, constraints, _ty)) ->
+      Alcotest.(check int) "one constraint" 1 (List.length constraints);
+      let cls, _ = List.hd constraints in
+      Alcotest.(check string) "constraint is Eq" "Eq" cls
+
+(** Test that multiple constraints are all stored *)
+let test_multiple_constraints_in_scheme () =
+  let sig_src =
+    {|
+    (class (Eq a) (eq (a a) -> bool))
+    (class (Ord a) (lt (a a) -> bool))
+    (defun sort-unique [a] (Eq a) (Ord a) => ((list a)) -> (list a))
+  |}
+  in
+  let env = load_sig_str sig_src in
+  match Type_env.lookup "sort-unique" env with
+  | None -> Alcotest.fail "sort-unique not found"
+  | Some (Type_env.Mono _) -> Alcotest.fail "Expected polymorphic scheme"
+  | Some (Type_env.Poly (_vars, constraints, _ty)) ->
+      Alcotest.(check int) "two constraints" 2 (List.length constraints);
+      let cls1, _ = List.hd constraints in
+      let cls2, _ = List.nth constraints 1 in
+      Alcotest.(check string) "first constraint is Eq" "Eq" cls1;
+      Alcotest.(check string) "second constraint is Ord" "Ord" cls2
+
+(** Test that instantiate_with_constraints returns constraints *)
+let test_instantiate_with_constraints () =
+  let sig_src =
+    {|
+    (class (Eq a) (eq (a a) -> bool))
+    (defun elem [a] (Eq a) => (a (list a)) -> bool)
+  |}
+  in
+  let env = load_sig_str sig_src in
+  match Type_env.lookup "elem" env with
+  | None -> Alcotest.fail "elem not found"
+  | Some scheme ->
+      let _ty, constraints = Type_env.instantiate_with_constraints scheme env in
+      Alcotest.(check int) "one constraint returned" 1 (List.length constraints);
+      let cls, _ = List.hd constraints in
+      Alcotest.(check string) "constraint is Eq" "Eq" cls
+
 let () =
   Alcotest.run "sig_loader"
     [
@@ -1684,5 +1741,14 @@ let () =
           Alcotest.test_case "HKT instance loads" `Quick test_instance_hkt_loads;
           Alcotest.test_case "unbound tvar error" `Quick
             test_instance_unbound_tvar_error;
+        ] );
+      ( "constraint-loading",
+        [
+          Alcotest.test_case "constraint in scheme" `Quick
+            test_constraint_in_scheme;
+          Alcotest.test_case "multiple constraints in scheme" `Quick
+            test_multiple_constraints_in_scheme;
+          Alcotest.test_case "instantiate with constraints" `Quick
+            test_instantiate_with_constraints;
         ] );
     ]

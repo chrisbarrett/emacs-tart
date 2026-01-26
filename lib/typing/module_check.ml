@@ -424,14 +424,16 @@ let check_module ~(config : config) ~(filename : string)
                     let inferred =
                       match scheme with
                       | Env.Mono ty -> ty
-                      | Env.Poly (vars, ty) -> Types.TForall (vars, ty)
+                      | Env.Poly (vars, _constraints, ty) ->
+                          Types.TForall (vars, ty)
                     in
                     (* Get the declared type from the signature *)
                     let declared = Loader.load_defun d in
                     let declared_ty =
                       match declared with
                       | Env.Mono ty -> ty
-                      | Env.Poly (vars, ty) -> Types.TForall (vars, ty)
+                      | Env.Poly (vars, _constraints, ty) ->
+                          Types.TForall (vars, ty)
                     in
                     (* Find implementation span - look up by name, fallback to first sexp *)
                     let impl_span =

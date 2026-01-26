@@ -138,7 +138,8 @@ let generalize level ty : Env.scheme =
       let names = List.map snd var_map in
       (* Replace tvars with named type constants *)
       let body = replace_tvars_with_names var_map ty in
-      Env.Poly (names, body)
+      (* No constraints for inference-generated schemes *)
+      Env.Poly (names, [], body)
 
 (** Generalize a type only if the expression is a syntactic value.
 

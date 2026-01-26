@@ -230,7 +230,7 @@ let test_loaded_signature_polymorphic () =
   | Ok sig_file -> (
       let env = Sig_loader.load_signature Core.Type_env.empty sig_file in
       match Core.Type_env.lookup "identity" env with
-      | Some (Core.Type_env.Poly (vars, _)) ->
+      | Some (Core.Type_env.Poly (vars, _constraints, _)) ->
           Alcotest.(check (list string))
             "identity is polymorphic with [a]" [ "a" ] vars
       | Some (Core.Type_env.Mono _) ->
@@ -245,7 +245,7 @@ let test_loaded_seq_map_polymorphic () =
   | Ok sig_file -> (
       let env = Sig_loader.load_signature Core.Type_env.empty sig_file in
       match Core.Type_env.lookup "seq-map" env with
-      | Some (Core.Type_env.Poly (vars, _)) ->
+      | Some (Core.Type_env.Poly (vars, _constraints, _)) ->
           Alcotest.(check (list string))
             "seq-map is polymorphic with [a b]" [ "a"; "b" ] vars
       | Some (Core.Type_env.Mono _) ->

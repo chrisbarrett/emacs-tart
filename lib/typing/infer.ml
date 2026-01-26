@@ -755,7 +755,7 @@ and infer_explicit_instantiation (env : Env.t) (type_arg_sexps : Syntax.Sexp.t l
   (* Get the function's quantified type variables and body type *)
   let tvar_names, fn_body_type =
     match fn_scheme with
-    | Some (Env.Poly (vars, ty)) -> (vars, ty)
+    | Some (Env.Poly (vars, _constraints, ty)) -> (vars, ty)
     | Some (Env.Mono ty) -> ([], ty)
     | None -> ([], fresh_tvar (Env.current_level env))
   in
@@ -1180,7 +1180,7 @@ and infer_defun_inferred (env : Env.t) (name : string)
   let generalized_ty =
     match scheme with
     | Env.Mono ty -> ty
-    | Env.Poly (vars, ty) -> TForall (vars, ty)
+    | Env.Poly (vars, _constraints, ty) -> TForall (vars, ty)
   in
 
   Some
