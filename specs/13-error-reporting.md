@@ -236,6 +236,6 @@ error[E0308]: implementation does not match signature
 - [x] [R4] Implement typo suggestions (Levenshtein)
 - [x] [R5] Implement arity error formatting
 - [x] [R6] Implement signature mismatch formatting
-- [ ] [R7] Map to LSP diagnostic format
+- [x] [R7] Map to LSP diagnostic format
 
 Run review agent after R1-R3 work (basic error formatting) before implementing R4-R6.

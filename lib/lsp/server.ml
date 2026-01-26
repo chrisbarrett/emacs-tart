@@ -74,7 +74,32 @@ let range_of_span (span : Syntax.Location.span) : Protocol.range =
     end_ = { line = span.end_pos.line - 1; character = span.end_pos.col };
   }
 
-(** Convert a Typing.Diagnostic.t to an LSP diagnostic *)
+(** Convert a source location span to an LSP location.
+
+    Creates a location with a file:// URI from the span's file path. *)
+let location_of_span (span : Syntax.Location.span) : Protocol.location =
+  let uri = "file://" ^ span.start_pos.file in
+  { Protocol.uri; range = range_of_span span }
+
+(** Convert a related location to LSP DiagnosticRelatedInformation.
+
+    Skips locations with dummy spans (used for notes without source locations).
+*)
+let related_info_of_related_location (rel : Typing.Diagnostic.related_location)
+    : Protocol.diagnostic_related_information option =
+  (* Skip dummy spans - these are notes without specific locations *)
+  if rel.span.start_pos.file = "<generated>" then None
+  else
+    Some
+      { Protocol.location = location_of_span rel.span; message = rel.message }
+
+(** Convert a Typing.Diagnostic.t to an LSP diagnostic.
+
+    Maps the rich diagnostic structure to LSP format:
+    - Primary span → diagnostic range
+    - Error code → diagnostic code string
+    - Related locations → relatedInformation (skipping dummy spans)
+    - Help suggestions → appended to message with "help: " prefix *)
 let lsp_diagnostic_of_diagnostic (d : Typing.Diagnostic.t) : Protocol.diagnostic
     =
   let severity =
@@ -83,11 +108,33 @@ let lsp_diagnostic_of_diagnostic (d : Typing.Diagnostic.t) : Protocol.diagnostic
     | Typing.Diagnostic.Warning -> Protocol.Warning
     | Typing.Diagnostic.Hint -> Protocol.Hint
   in
+  (* Build the message with help suggestions appended *)
+  let message =
+    match d.help with
+    | [] -> d.message
+    | helps ->
+        let help_lines =
+          List.map (fun h -> "help: " ^ h) helps |> String.concat "\n"
+        in
+        d.message ^ "\n\n" ^ help_lines
+  in
+  (* Convert error code to string *)
+  let code =
+    match d.code with
+    | Some c -> Some (Typing.Diagnostic.error_code_to_string c)
+    | None -> None
+  in
+  (* Convert related locations to LSP format, filtering out dummy spans *)
+  let related_information =
+    List.filter_map related_info_of_related_location d.related
+  in
   {
     Protocol.range = range_of_span d.span;
     severity = Some severity;
-    message = d.message;
+    code;
+    message;
     source = Some "tart";
+    related_information;
   }
 
 (** Convert a parse error to an LSP diagnostic *)
@@ -96,8 +143,10 @@ let lsp_diagnostic_of_parse_error (err : Syntax.Read.parse_error) :
   {
     Protocol.range = range_of_span err.span;
     severity = Some Protocol.Error;
+    code = None;
     message = err.message;
     source = Some "tart";
+    related_information = [];
   }
 
 (** Get the default module check configuration.

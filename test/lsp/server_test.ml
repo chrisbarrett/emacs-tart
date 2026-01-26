@@ -1201,6 +1201,128 @@ let test_hover_at_error_site () =
         (* Should have some content (best-effort type) *)
         Alcotest.(check bool) "has some content" true (String.length value > 0)
 
+(** {1 Diagnostic Formatting Tests} *)
+
+(** Test that diagnostics include error codes in LSP format *)
+let test_diagnostic_has_error_code () =
+  let init_msg =
+    make_message ~id:(`Int 1) ~method_:"initialize"
+      ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+      ()
+  in
+  (* Type error: adding string to int *)
+  let did_open_msg =
+    make_message ~method_:"textDocument/didOpen"
+      ~params:
+        (`Assoc
+           [
+             ( "textDocument",
+               `Assoc
+                 [
+                   ("uri", `String "file:///test.el");
+                   ("languageId", `String "elisp");
+                   ("version", `Int 1);
+                   ("text", `String "(+ 1 \"hello\")");
+                 ] );
+           ])
+      ()
+  in
+  let shutdown_msg = make_message ~id:(`Int 2) ~method_:"shutdown" () in
+  let exit_msg = make_message ~method_:"exit" () in
+  let input = init_msg ^ did_open_msg ^ shutdown_msg ^ exit_msg in
+  let in_file = Filename.temp_file "lsp_in" ".json" in
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
+  let ic = In_channel.open_bin in_file in
+  let out_file = Filename.temp_file "lsp_out" ".json" in
+  let oc = Out_channel.open_bin out_file in
+  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let _ = Server.run server in
+  In_channel.close ic;
+  Out_channel.close oc;
+  let output = In_channel.with_open_bin out_file In_channel.input_all in
+  let messages = parse_messages output in
+  match find_publish_diagnostics messages "file:///test.el" with
+  | None -> Alcotest.fail "No publishDiagnostics notification found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let params = json |> member "params" in
+      let diagnostics = params |> member "diagnostics" |> to_list in
+      Alcotest.(check bool) "has diagnostics" true (List.length diagnostics > 0);
+      let first = List.hd diagnostics in
+      (* Check error code is present *)
+      let code = first |> member "code" in
+      Alcotest.(check bool) "has code" true (code <> `Null);
+      Alcotest.(check string) "code is E0308" "E0308" (code |> to_string)
+
+(** Test that diagnostics include help suggestions in message *)
+let test_diagnostic_has_help_suggestions () =
+  let init_msg =
+    make_message ~id:(`Int 1) ~method_:"initialize"
+      ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+      ()
+  in
+  (* Type error: passing int to string function *)
+  let did_open_msg =
+    make_message ~method_:"textDocument/didOpen"
+      ~params:
+        (`Assoc
+           [
+             ( "textDocument",
+               `Assoc
+                 [
+                   ("uri", `String "file:///test.el");
+                   ("languageId", `String "elisp");
+                   ("version", `Int 1);
+                   ("text", `String "(upcase 42)");
+                 ] );
+           ])
+      ()
+  in
+  let shutdown_msg = make_message ~id:(`Int 2) ~method_:"shutdown" () in
+  let exit_msg = make_message ~method_:"exit" () in
+  let input = init_msg ^ did_open_msg ^ shutdown_msg ^ exit_msg in
+  let in_file = Filename.temp_file "lsp_in" ".json" in
+  Out_channel.with_open_bin in_file (fun oc ->
+      Out_channel.output_string oc input);
+  let ic = In_channel.open_bin in_file in
+  let out_file = Filename.temp_file "lsp_out" ".json" in
+  let oc = Out_channel.open_bin out_file in
+  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let _ = Server.run server in
+  In_channel.close ic;
+  Out_channel.close oc;
+  let output = In_channel.with_open_bin out_file In_channel.input_all in
+  let messages = parse_messages output in
+  match find_publish_diagnostics messages "file:///test.el" with
+  | None -> Alcotest.fail "No publishDiagnostics notification found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let params = json |> member "params" in
+      let diagnostics = params |> member "diagnostics" |> to_list in
+      Alcotest.(check bool) "has diagnostics" true (List.length diagnostics > 0);
+      let first = List.hd diagnostics in
+      let message = first |> member "message" |> to_string in
+      (* Check message includes help suggestion *)
+      let has_help =
+        try
+          let _ = Str.search_forward (Str.regexp_string "help:") message 0 in
+          true
+        with Not_found -> false
+      in
+      Alcotest.(check bool) "message has help" true has_help;
+      (* Check specific suggestion for int->string conversion *)
+      let has_number_to_string =
+        try
+          let _ =
+            Str.search_forward (Str.regexp_string "number-to-string") message 0
+          in
+          true
+        with Not_found -> false
+      in
+      Alcotest.(check bool)
+        "suggests number-to-string" true has_number_to_string
+
 let () =
   Alcotest.run "server"
     [
@@ -1234,6 +1356,10 @@ let () =
           Alcotest.test_case "valid document" `Quick
             test_diagnostics_valid_document;
           Alcotest.test_case "parse error" `Quick test_diagnostics_parse_error;
+          Alcotest.test_case "has error code" `Quick
+            test_diagnostic_has_error_code;
+          Alcotest.test_case "has help suggestions" `Quick
+            test_diagnostic_has_help_suggestions;
         ] );
       ( "hover",
         [

@@ -152,11 +152,19 @@ type diagnostic_severity = Error | Warning | Information | Hint
 type position = { line : int; character : int }
 type range = { start : position; end_ : position }
 
+type location = { uri : string; range : range }
+(** A location in a document (uri + range) *)
+
+type diagnostic_related_information = { location : location; message : string }
+(** Related information for a diagnostic *)
+
 type diagnostic = {
   range : range;
   severity : diagnostic_severity option;
+  code : string option;
   message : string;
   source : string option;
+  related_information : diagnostic_related_information list;
 }
 
 type publish_diagnostics_params = {
@@ -181,6 +189,17 @@ let range_to_json (range : range) : Yojson.Safe.t =
       ("end", position_to_json range.end_);
     ]
 
+let location_to_json (loc : location) : Yojson.Safe.t =
+  `Assoc [ ("uri", `String loc.uri); ("range", range_to_json loc.range) ]
+
+let diagnostic_related_information_to_json
+    (rel : diagnostic_related_information) : Yojson.Safe.t =
+  `Assoc
+    [
+      ("location", location_to_json rel.location);
+      ("message", `String rel.message);
+    ]
+
 let diagnostic_to_json (d : diagnostic) : Yojson.Safe.t =
   let fields =
     [ ("range", range_to_json d.range); ("message", `String d.message) ]
@@ -191,9 +210,22 @@ let diagnostic_to_json (d : diagnostic) : Yojson.Safe.t =
     | None -> fields
   in
   let fields =
+    match d.code with
+    | Some code -> ("code", `String code) :: fields
+    | None -> fields
+  in
+  let fields =
     match d.source with
     | Some src -> ("source", `String src) :: fields
     | None -> fields
+  in
+  let fields =
+    match d.related_information with
+    | [] -> fields
+    | infos ->
+        ( "relatedInformation",
+          `List (List.map diagnostic_related_information_to_json infos) )
+        :: fields
   in
   `Assoc fields
 

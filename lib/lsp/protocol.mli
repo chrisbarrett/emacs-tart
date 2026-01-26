@@ -73,11 +73,22 @@ type position = { line : int; character : int }
 type range = { start : position; end_ : position }
 (** A range in a document *)
 
+type location = { uri : string; range : range }
+(** A location in a document (uri + range) *)
+
+type diagnostic_related_information = { location : location; message : string }
+(** Related information for a diagnostic.
+
+    Used to point to related code that helps explain the error, such as where an
+    expected type originated or the other branch in a branch type mismatch. *)
+
 type diagnostic = {
   range : range;
   severity : diagnostic_severity option;
+  code : string option;
   message : string;
   source : string option;
+  related_information : diagnostic_related_information list;
 }
 (** A diagnostic represents a compiler error or warning *)
 
