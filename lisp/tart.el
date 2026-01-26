@@ -308,6 +308,31 @@ Sends `,expand <sexp>' to the tart REPL and displays the result."
          (result (tart--send-repl-command (concat ",expand " sexp))))
     (message "%s" result)))
 
+;;; Minor Mode
+
+(defvar tart-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "C-c C-z") #'tart-switch-to-repl)
+    (define-key map (kbd "C-c C-c") #'tart-send-defun)
+    (define-key map (kbd "C-c C-r") #'tart-send-region)
+    (define-key map (kbd "C-c C-e") #'tart-send-last-sexp)
+    (define-key map (kbd "C-c C-b") #'tart-send-buffer)
+    (define-key map (kbd "C-c C-t") #'tart-type-at-point)
+    (define-key map (kbd "C-c C-x") #'tart-expand-at-point)
+    map)
+  "Keymap for `tart-mode'.")
+
+;;;###autoload
+(define-minor-mode tart-mode
+  "Minor mode for Tart type checker integration.
+
+Provides keybindings for REPL interaction and type inspection.
+
+\\{tart-mode-map}"
+  :lighter " Tart"
+  :keymap tart-mode-map
+  :group 'tart)
+
 ;;; Eglot Integration
 
 (defun tart--eglot-server-program (_interactive)
