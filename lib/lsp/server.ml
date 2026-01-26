@@ -261,10 +261,31 @@ let handle_did_close (server : t) (params : Yojson.Safe.t option) : unit =
 
     This infers the type for the target sexp. If the target is in function
     position of an application, the enclosing application is inferred first
-    to resolve instantiated type variables. *)
+    to resolve instantiated type variables.
+
+    Handles errors gracefully:
+    - If unification fails, returns the best-effort type (before solving)
+    - If type inference itself fails, returns None
+    - Never raises exceptions *)
 let type_at_sexp (env : Typing.Check.check_result) (ctx : Syntax.Sexp.position_context) : Core.Types.typ option =
   let open Core.Types in
   reset_tvar_counter ();
+
+  (* Helper to safely infer and solve, returning best-effort type on error.
+     Even if unification fails, we return the inferred type so the user
+     gets some information. *)
+  let safe_infer_and_solve infer_fn =
+    try
+      let result = infer_fn () in
+      (* Try to solve constraints - if it fails, we still have the inferred type *)
+      (match Typing.Unify.solve result.Typing.Infer.constraints with
+       | Ok () -> ()
+       | Error _ -> ());
+      Some (repr result.Typing.Infer.ty)
+    with _ ->
+      (* On any exception during inference, return None *)
+      None
+  in
 
   (* Determine what to infer based on context *)
   match ctx.enclosing_application with
@@ -272,31 +293,30 @@ let type_at_sexp (env : Typing.Check.check_result) (ctx : Syntax.Sexp.position_c
       (* Target is in function position of an application.
          We need to infer the whole application so type variables are resolved.
          Then extract the function type. *)
-      let fn_result = Typing.Infer.infer env.Typing.Check.env fn in
-      let arg_results = List.map (Typing.Infer.infer env.Typing.Check.env) args in
+      safe_infer_and_solve (fun () ->
+        let fn_result = Typing.Infer.infer env.Typing.Check.env fn in
+        let arg_results = List.map (Typing.Infer.infer env.Typing.Check.env) args in
 
-      (* Build the application constraint *)
-      let result_ty = fresh_tvar 0 in
-      let arg_types = List.map (fun r -> PPositional r.Typing.Infer.ty) arg_results in
-      let expected_fn_type = TArrow (arg_types, result_ty) in
-      let fn_constraint = Typing.Constraint.equal fn_result.Typing.Infer.ty expected_fn_type _span in
+        (* Build the application constraint *)
+        let result_ty = fresh_tvar 0 in
+        let arg_types = List.map (fun r -> PPositional r.Typing.Infer.ty) arg_results in
+        let expected_fn_type = TArrow (arg_types, result_ty) in
+        let fn_constraint = Typing.Constraint.equal fn_result.Typing.Infer.ty expected_fn_type _span in
 
-      (* Combine all constraints *)
-      let all_constraints =
-        List.fold_left
-          (fun acc r -> Typing.Constraint.combine acc r.Typing.Infer.constraints)
-          (Typing.Constraint.add fn_constraint fn_result.Typing.Infer.constraints)
-          arg_results
-      in
+        (* Combine all constraints *)
+        let all_constraints =
+          List.fold_left
+            (fun acc r -> Typing.Constraint.combine acc r.Typing.Infer.constraints)
+            (Typing.Constraint.add fn_constraint fn_result.Typing.Infer.constraints)
+            arg_results
+        in
 
-      (* Solve and return the function's instantiated type *)
-      let _ = Typing.Unify.solve all_constraints in
-      Some (repr fn_result.Typing.Infer.ty)
+        (* Return combined result - solve happens in safe_infer_and_solve *)
+        { Typing.Infer.ty = fn_result.Typing.Infer.ty; constraints = all_constraints })
   | _ ->
       (* Not in an application context, just infer the target directly *)
-      let result = Typing.Infer.infer env.Typing.Check.env ctx.target in
-      let _ = Typing.Unify.solve result.Typing.Infer.constraints in
-      Some (repr result.Typing.Infer.ty)
+      safe_infer_and_solve (fun () ->
+        Typing.Infer.infer env.Typing.Check.env ctx.target)
 
 (** Handle textDocument/hover request *)
 let handle_hover (server : t) (params : Yojson.Safe.t option) :

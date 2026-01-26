@@ -1014,6 +1014,141 @@ let test_hover_instantiated_type () =
       in
       Alcotest.(check bool) "no unresolved tvars" false has_tvar
 
+(** Test hover still works on valid code when document has type errors elsewhere *)
+let test_hover_with_errors_elsewhere () =
+  let init_msg =
+    make_message ~id:(`Int 1) ~method_:"initialize"
+      ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+      ()
+  in
+  (* Document with a type error on line 2, but valid code on line 1 *)
+  let did_open_msg =
+    make_message ~method_:"textDocument/didOpen"
+      ~params:
+        (`Assoc
+          [
+            ( "textDocument",
+              `Assoc
+                [
+                  ("uri", `String "file:///test.el");
+                  ("languageId", `String "elisp");
+                  ("version", `Int 1);
+                  (* Line 0: valid code (42)
+                     Line 1: type error (+ 1 "hello") *)
+                  ("text", `String "42\n(+ 1 \"hello\")");
+                ] );
+          ])
+      ()
+  in
+  (* Hover at position (0, 0) - on the valid literal 42 *)
+  let hover_msg =
+    make_message ~id:(`Int 2) ~method_:"textDocument/hover"
+      ~params:
+        (`Assoc
+          [
+            ("textDocument", `Assoc [ ("uri", `String "file:///test.el") ]);
+            ("position", `Assoc [ ("line", `Int 0); ("character", `Int 0) ]);
+          ])
+      ()
+  in
+  let shutdown_msg = make_message ~id:(`Int 3) ~method_:"shutdown" () in
+  let exit_msg = make_message ~method_:"exit" () in
+  let input = init_msg ^ did_open_msg ^ hover_msg ^ shutdown_msg ^ exit_msg in
+  let in_file = Filename.temp_file "lsp_in" ".json" in
+  Out_channel.with_open_bin in_file (fun oc -> Out_channel.output_string oc input);
+  let ic = In_channel.open_bin in_file in
+  let out_file = Filename.temp_file "lsp_out" ".json" in
+  let oc = Out_channel.open_bin out_file in
+  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let exit_code = Server.run server in
+  In_channel.close ic;
+  Out_channel.close oc;
+  Alcotest.(check int) "exit code" 0 exit_code;
+  (* Parse output and find hover response *)
+  let output = In_channel.with_open_bin out_file In_channel.input_all in
+  let messages = parse_messages output in
+  match find_response messages 2 with
+  | None -> Alcotest.fail "No hover response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      (* Should still get a type for the valid code *)
+      Alcotest.(check bool) "result is not null" true (result <> `Null);
+      let contents = result |> member "contents" in
+      let value = contents |> member "value" |> to_string in
+      (* Should contain "Int" type for the literal 42 *)
+      Alcotest.(check bool) "contains Int type" true
+        (try
+          let _ = Str.search_forward (Str.regexp_string "Int") value 0 in true
+        with Not_found -> false)
+
+(** Test hover on code at the error site itself still provides info *)
+let test_hover_at_error_site () =
+  let init_msg =
+    make_message ~id:(`Int 1) ~method_:"initialize"
+      ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+      ()
+  in
+  (* Document with a type error: (+ 1 "hello") *)
+  let did_open_msg =
+    make_message ~method_:"textDocument/didOpen"
+      ~params:
+        (`Assoc
+          [
+            ( "textDocument",
+              `Assoc
+                [
+                  ("uri", `String "file:///test.el");
+                  ("languageId", `String "elisp");
+                  ("version", `Int 1);
+                  ("text", `String "(+ 1 \"hello\")");
+                ] );
+          ])
+      ()
+  in
+  (* Hover at position (0, 1) - on the + function *)
+  let hover_msg =
+    make_message ~id:(`Int 2) ~method_:"textDocument/hover"
+      ~params:
+        (`Assoc
+          [
+            ("textDocument", `Assoc [ ("uri", `String "file:///test.el") ]);
+            ("position", `Assoc [ ("line", `Int 0); ("character", `Int 1) ]);
+          ])
+      ()
+  in
+  let shutdown_msg = make_message ~id:(`Int 3) ~method_:"shutdown" () in
+  let exit_msg = make_message ~method_:"exit" () in
+  let input = init_msg ^ did_open_msg ^ hover_msg ^ shutdown_msg ^ exit_msg in
+  let in_file = Filename.temp_file "lsp_in" ".json" in
+  Out_channel.with_open_bin in_file (fun oc -> Out_channel.output_string oc input);
+  let ic = In_channel.open_bin in_file in
+  let out_file = Filename.temp_file "lsp_out" ".json" in
+  let oc = Out_channel.open_bin out_file in
+  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let exit_code = Server.run server in
+  In_channel.close ic;
+  Out_channel.close oc;
+  Alcotest.(check int) "exit code" 0 exit_code;
+  (* Parse output and find hover response *)
+  let output = In_channel.with_open_bin out_file In_channel.input_all in
+  let messages = parse_messages output in
+  match find_response messages 2 with
+  | None -> Alcotest.fail "No hover response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      (* Should still get some response - either type or null, but not an error *)
+      Alcotest.(check bool) "response succeeded (not error)" true
+        (json |> member "error" = `Null);
+      (* If we get a result, it should have some type info *)
+      if result <> `Null then begin
+        let contents = result |> member "contents" in
+        let value = contents |> member "value" |> to_string in
+        (* Should have some content (best-effort type) *)
+        Alcotest.(check bool) "has some content" true (String.length value > 0)
+      end
+
 let () =
   Alcotest.run "server"
     [
@@ -1047,5 +1182,7 @@ let () =
           Alcotest.test_case "outside code" `Quick test_hover_outside_code;
           Alcotest.test_case "has range" `Quick test_hover_has_range;
           Alcotest.test_case "instantiated type" `Quick test_hover_instantiated_type;
+          Alcotest.test_case "with errors elsewhere" `Quick test_hover_with_errors_elsewhere;
+          Alcotest.test_case "at error site" `Quick test_hover_at_error_site;
         ] );
     ]
