@@ -543,7 +543,7 @@ The following areas are mentioned as future work in the specs:
 16. **Phase 16**: Scoped Type Variables ✓
 17. **Phase 17**: Expanded Stdlib Phase 2 ✓
 18. **Phase 18**: Type Classes ✓
-19. **Phase 19**: Documentation
+19. **Phase 19**: Documentation ✓
 
 ---
 
