@@ -453,6 +453,62 @@ Additional commonly-used Emacs libraries for broader type checking coverage.
 
 ---
 
+## Phase 18: Type Classes (Spec 21)
+
+Enable ad-hoc polymorphism through type classes and instances.
+
+### 18.1 Class Definitions
+
+- [ ] [R1] Add class definition AST to sig_ast.ml
+- [ ] [R1] Parse class definitions in sig_parser.ml
+- [ ] [R1] Load class definitions in sig_loader.ml
+- [ ] Verify: `dune test`; class definitions parse and load
+
+### 18.2 Instance Declarations
+
+- [ ] [R2] Add instance declaration AST to sig_ast.ml
+- [ ] [R2] Parse instance declarations in sig_parser.ml
+- [ ] [R2] Load instances and validate method mappings
+- [ ] Verify: `dune test`; instance declarations parse and load
+
+### 18.3 Constraint Syntax
+
+- [ ] [R3] Add constraint syntax to defun signatures
+- [ ] [R3] Parse `(Constraint var) =>` in function types
+- [ ] [R3] Store constraints in type schemes
+- [ ] Verify: `dune test`; constrained functions parse correctly
+
+### 18.4 Basic Instance Resolution
+
+- [ ] [R4] Create instance.ml with resolution algorithm
+- [ ] [R4] Resolve monomorphic constraints at call sites
+- [ ] [R4] Integrate resolution with type inference
+- [ ] Verify: `dune test`; basic instance resolution works
+
+### 18.5 Advanced Resolution
+
+- [ ] [R5] Implement recursive constraint resolution
+- [ ] [R6] Implement superclass constraint checking
+- [ ] [R7] Add HKT class support (Functor-like)
+- [ ] Verify: `dune test`; nested and HKT constraints resolve
+
+### 18.6 Error Handling
+
+- [ ] [R8] Implement missing instance error formatting
+- [ ] [R9] Add overlapping instance detection
+- [ ] [R10] Implement default method support
+- [ ] Verify: Error messages are clear and actionable
+
+### 18.7 Standard Classes
+
+- [ ] Create stdlib/classes/eq.tart with Eq class
+- [ ] Create stdlib/classes/ord.tart with Ord class
+- [ ] Create stdlib/classes/show.tart with Show class
+- [ ] Create stdlib/classes/functor.tart with Functor class
+- [ ] Verify: Standard classes parse and load
+
+---
+
 ## Future Work (Requires New Specs)
 
 The following areas are mentioned as future work in the specs:
@@ -461,8 +517,9 @@ The following areas are mentioned as future work in the specs:
    - More Emacs packages (org-mode, magit, etc.)
    - Additional third-party package signatures
 
-2. **Type Classes / Traits** (mentioned in Spec 17 Non-Requirements)
-   - Typeclass/trait syntax
+2. **Advanced Type Class Features**
+   - Multi-parameter type classes
+   - Functional dependencies
    - Associated types
    - Type families
 
@@ -485,3 +542,4 @@ The following areas are mentioned as future work in the specs:
 15. **Phase 15**: Explicit Type Instantiation ✓
 16. **Phase 16**: Scoped Type Variables ✓
 17. **Phase 17**: Expanded Stdlib Phase 2 ✓
+18. **Phase 18**: Type Classes
