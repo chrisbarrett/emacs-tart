@@ -192,9 +192,9 @@ Phase 7).
 
 ### 8.3 Type Aliases
 
-- [ ] [R5,R6] Implement file-local type alias scope
+- [x] [R5,R6] Implement file-local type alias scope
 - [ ] [R7] Enforce invariance for parameterized types
-- [ ] Verify: Aliases usable in same file, not exported
+- [x] Verify: Aliases usable in same file, not exported
 
 ### 8.4 Integration
 

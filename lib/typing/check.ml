@@ -25,6 +25,7 @@ type form_result =
   | DefunForm of { name : string; fn_type : typ }
   | DefvarForm of { name : string; var_type : typ }
   | TartDeclareForm of { name : string; var_type : typ }
+  | TartTypeForm of { name : string; params : string list }
   | ExprForm of { ty : typ }
 
 type check_result = {
@@ -32,8 +33,20 @@ type check_result = {
   forms : form_result list;  (** Results for each top-level form *)
   errors : Unify.error list;  (** Any type errors encountered *)
   undefineds : Infer.undefined_var list;  (** Undefined variable references *)
+  aliases : Sig_loader.alias_context;
+      (** File-local type aliases from tart-type forms *)
 }
 (** Result of type-checking a program *)
+
+type check_state = {
+  st_env : Env.t;
+  st_aliases : Sig_loader.alias_context;
+  st_errors : Unify.error list;
+  st_undefineds : Infer.undefined_var list;
+  st_forms : form_result list;
+}
+(** Internal state for type checking a program. Tracks environment, aliases, and
+    accumulated errors. *)
 
 (** Parse a tart type annotation from an S-expression.
 
@@ -71,14 +84,23 @@ let rec substitute_tvar_names (subst : (string * typ) list) (ty : typ) : typ =
   | TUnion types -> TUnion (List.map (substitute_tvar_names subst) types)
   | TTuple types -> TTuple (List.map (substitute_tvar_names subst) types)
 
-(** Convert a sig_type to a typ at the given level.
+(** Get the list of known type names from an alias context. Used to avoid
+    inferring type constructors as type variables during forall inference. *)
+let known_types_of_aliases (aliases : Sig_loader.alias_context) : string list =
+  Sig_loader.alias_names aliases
+
+(** Convert a sig_type to a typ at the given level with alias expansion.
 
     Applies forall inference, creates fresh TVars for type parameters, and
-    substitutes them in the type body. *)
-let sig_type_to_typ_with_tvars (level : int) (sig_type : Sig_ast.sig_type) : typ
-    =
+    substitutes them in the type body. [aliases] provides file-local type
+    aliases for expansion. *)
+let sig_type_to_typ_with_tvars ?(aliases = Sig_loader.empty_aliases)
+    (level : int) (sig_type : Sig_ast.sig_type) : typ =
+  (* Get known types from aliases to prevent them from becoming type variables *)
+  let known_types = known_types_of_aliases aliases in
+
   (* Apply forall inference to get implicit quantifiers *)
-  let sig_type = Forall_infer.infer_sig_type ~known_types:[] sig_type in
+  let sig_type = Forall_infer.infer_sig_type ~known_types sig_type in
 
   (* Extract type variable names from forall, if present *)
   let tvar_names, inner_type =
@@ -91,8 +113,10 @@ let sig_type_to_typ_with_tvars (level : int) (sig_type : Sig_ast.sig_type) : typ
   (* Create fresh type variables for polymorphic type parameters *)
   let tvar_subst = List.map (fun name -> (name, fresh_tvar level)) tvar_names in
 
-  (* Convert sig_type to typ and substitute fresh TVars *)
-  let base_ty = Sig_loader.sig_type_to_typ tvar_names inner_type in
+  (* Convert sig_type to typ with alias expansion and substitute fresh TVars *)
+  let base_ty =
+    Sig_loader.sig_type_to_typ_with_aliases aliases tvar_names inner_type
+  in
   substitute_tvar_names tvar_subst base_ty
 
 (** Extract a tart annotation from defvar/defconst initialization.
@@ -109,9 +133,10 @@ let extract_defvar_tart_annotation (init : Syntax.Sexp.t) :
 (** Check a defvar/defconst form with optional tart annotation.
 
     If the init is [(tart TYPE VALUE)], binds NAME with TYPE in the environment
-    and checks VALUE against TYPE. Otherwise, infers the type from the init. *)
-let check_defvar (env : Env.t) (name : string) (init : Syntax.Sexp.t option)
-    (_span : Loc.span) :
+    and checks VALUE against TYPE. Otherwise, infers the type from the init.
+    [aliases] provides file-local type aliases for expansion. *)
+let check_defvar ~(aliases : Sig_loader.alias_context) (env : Env.t)
+    (name : string) (init : Syntax.Sexp.t option) (_span : Loc.span) :
     Env.t * form_result * Unify.error list * Infer.undefined_var list =
   match init with
   | Some init_expr -> (
@@ -121,7 +146,8 @@ let check_defvar (env : Env.t) (name : string) (init : Syntax.Sexp.t option)
           match parse_tart_type type_sexp with
           | Some sig_type ->
               let var_type =
-                sig_type_to_typ_with_tvars (Env.current_level env) sig_type
+                sig_type_to_typ_with_tvars ~aliases (Env.current_level env)
+                  sig_type
               in
 
               (* Check the value against the declared type *)
@@ -187,13 +213,14 @@ let check_defvar (env : Env.t) (name : string) (init : Syntax.Sexp.t option)
 (** Check a tart-declare form: (tart-declare NAME TYPE)
 
     Binds NAME with TYPE in the environment. Does not require an initial value.
-*)
-let check_tart_declare (env : Env.t) (name : string) (type_sexp : Syntax.Sexp.t)
-    : Env.t * form_result * Unify.error list * Infer.undefined_var list =
+    [aliases] provides file-local type aliases for expansion. *)
+let check_tart_declare ~(aliases : Sig_loader.alias_context) (env : Env.t)
+    (name : string) (type_sexp : Syntax.Sexp.t) :
+    Env.t * form_result * Unify.error list * Infer.undefined_var list =
   match parse_tart_type type_sexp with
   | Some sig_type ->
       let var_type =
-        sig_type_to_typ_with_tvars (Env.current_level env) sig_type
+        sig_type_to_typ_with_tvars ~aliases (Env.current_level env) sig_type
       in
       let scheme = Generalize.generalize (Env.current_level env) var_type in
       let env' = Env.extend name scheme env in
@@ -234,73 +261,210 @@ let match_tart_declare (sexp : Syntax.Sexp.t) : (string * Syntax.Sexp.t) option
       Some (name, type_sexp)
   | _ -> None
 
+(** Try to match a tart-type form (file-local type alias).
+
+    Handles two forms:
+    - Simple: (tart-type NAME DEFINITION)
+    - Parameterized: (tart-type NAME [VARS] DEFINITION)
+
+    Returns [Some (name, params_opt, def_sexp)] if matched, [None] otherwise. *)
+let match_tart_type (sexp : Syntax.Sexp.t) :
+    (string * Syntax.Sexp.t option * Syntax.Sexp.t) option =
+  let open Syntax.Sexp in
+  match sexp with
+  | List ([ Symbol ("tart-type", _); Symbol (name, _); def_sexp ], _) ->
+      (* Simple alias: (tart-type NAME DEFINITION) *)
+      Some (name, None, def_sexp)
+  | List
+      ([ Symbol ("tart-type", _); Symbol (name, _); params_sexp; def_sexp ], _)
+    ->
+      (* Parameterized alias: (tart-type NAME [VARS] DEFINITION) *)
+      Some (name, Some params_sexp, def_sexp)
+  | _ -> None
+
+(** Parse type parameter list from bracket syntax [a b c].
+
+    Returns the list of parameter names, or None if parsing fails. *)
+let parse_tart_type_params (sexp : Syntax.Sexp.t) : string list option =
+  let open Syntax.Sexp in
+  match sexp with
+  | Vector (items, _) ->
+      let names =
+        List.filter_map
+          (function Symbol (name, _) -> Some name | _ -> None)
+          items
+      in
+      if List.length names = List.length items then Some names else None
+  | _ -> None
+
+(** Check a tart-type form (file-local type alias).
+
+    Parses the type definition and adds it to the alias context. Returns the
+    updated alias context. Does not modify the value environment.
+
+    Handles:
+    - Simple: (tart-type int-pair (tuple int int))
+    - Parameterized: (tart-type predicate [a] ((a) -> bool)) *)
+let check_tart_type ~(aliases : Sig_loader.alias_context) (name : string)
+    (params_sexp : Syntax.Sexp.t option) (def_sexp : Syntax.Sexp.t) :
+    Sig_loader.alias_context * form_result =
+  (* Parse type parameters if present *)
+  let params =
+    match params_sexp with
+    | Some ps -> Option.value ~default:[] (parse_tart_type_params ps)
+    | None -> []
+  in
+
+  (* Parse the type definition body *)
+  match parse_tart_type def_sexp with
+  | Some sig_type ->
+      (* Create the alias entry *)
+      let alias : Sig_loader.type_alias =
+        { alias_params = params; alias_body = sig_type }
+      in
+      let aliases' = Sig_loader.add_alias name alias aliases in
+      (aliases', TartTypeForm { name; params })
+  | None ->
+      (* Parse failed - return unchanged aliases *)
+      (aliases, TartTypeForm { name; params })
+
+(** Check a single top-level form and update the state.
+
+    Returns the updated state with new environment, aliases, form result, and
+    accumulated errors/undefineds. *)
+let check_form_with_state (state : check_state) (sexp : Syntax.Sexp.t) :
+    check_state =
+  reset_tvar_counter ();
+  let aliases = state.st_aliases in
+  let env = state.st_env in
+
+  (* Try to match tart-type first (file-local type alias) *)
+  match match_tart_type sexp with
+  | Some (name, params_sexp, def_sexp) ->
+      let aliases', result =
+        check_tart_type ~aliases name params_sexp def_sexp
+      in
+      { state with st_aliases = aliases'; st_forms = result :: state.st_forms }
+  | None -> (
+      (* Try to match tart-declare *)
+      match match_tart_declare sexp with
+      | Some (name, type_sexp) ->
+          let env', result, errors, undefs =
+            check_tart_declare ~aliases env name type_sexp
+          in
+          {
+            st_env = env';
+            st_aliases = aliases;
+            st_errors = List.rev_append errors state.st_errors;
+            st_undefineds = List.rev_append undefs state.st_undefineds;
+            st_forms = result :: state.st_forms;
+          }
+      | None -> (
+          (* Try to match defvar/defconst *)
+          match match_defvar sexp with
+          | Some (name, init, span) ->
+              let env', result, errors, undefs =
+                check_defvar ~aliases env name init span
+              in
+              {
+                st_env = env';
+                st_aliases = aliases;
+                st_errors = List.rev_append errors state.st_errors;
+                st_undefineds = List.rev_append undefs state.st_undefineds;
+                st_forms = result :: state.st_forms;
+              }
+          | None -> (
+              (* Try to handle it as a defun *)
+              match Infer.infer_defun env sexp with
+              | Some defun_result ->
+                  (* Bind the function name in the environment *)
+                  let scheme =
+                    Generalize.generalize (Env.current_level env)
+                      defun_result.Infer.fn_type
+                  in
+                  let env' = Env.extend defun_result.Infer.name scheme env in
+                  (* Solve constraints and collect errors *)
+                  let errors =
+                    Unify.solve_all defun_result.Infer.defun_constraints
+                  in
+                  let result =
+                    DefunForm
+                      {
+                        name = defun_result.Infer.name;
+                        fn_type = defun_result.Infer.fn_type;
+                      }
+                  in
+                  {
+                    st_env = env';
+                    st_aliases = aliases;
+                    st_errors = List.rev_append errors state.st_errors;
+                    st_undefineds =
+                      List.rev_append defun_result.Infer.defun_undefineds
+                        state.st_undefineds;
+                    st_forms = result :: state.st_forms;
+                  }
+              | None ->
+                  (* Regular expression *)
+                  let result = Infer.infer env sexp in
+                  let errors = Unify.solve_all result.Infer.constraints in
+                  {
+                    st_env = env;
+                    st_aliases = aliases;
+                    st_errors = List.rev_append errors state.st_errors;
+                    st_undefineds =
+                      List.rev_append result.Infer.undefineds
+                        state.st_undefineds;
+                    st_forms =
+                      ExprForm { ty = result.Infer.ty } :: state.st_forms;
+                  })))
+
 (** Check a single top-level form and update the environment.
 
-    Returns the updated environment, form result, errors, and undefined vars. *)
+    Returns the updated environment, form result, errors, and undefined vars.
+    This is the backward-compatible API that doesn't track file-local aliases.
+*)
 let check_form (env : Env.t) (sexp : Syntax.Sexp.t) :
     Env.t * form_result * Unify.error list * Infer.undefined_var list =
-  reset_tvar_counter ();
-
-  (* Try to match tart-declare first *)
-  match match_tart_declare sexp with
-  | Some (name, type_sexp) -> check_tart_declare env name type_sexp
-  | None -> (
-      (* Try to match defvar/defconst *)
-      match match_defvar sexp with
-      | Some (name, init, span) -> check_defvar env name init span
-      | None -> (
-          (* Try to handle it as a defun *)
-          match Infer.infer_defun env sexp with
-          | Some defun_result ->
-              (* Bind the function name in the environment *)
-              let scheme =
-                Generalize.generalize (Env.current_level env)
-                  defun_result.Infer.fn_type
-              in
-              let env' = Env.extend defun_result.Infer.name scheme env in
-              (* Solve constraints and collect errors *)
-              let errors =
-                Unify.solve_all defun_result.Infer.defun_constraints
-              in
-              ( env',
-                DefunForm
-                  {
-                    name = defun_result.Infer.name;
-                    fn_type = defun_result.Infer.fn_type;
-                  },
-                errors,
-                defun_result.Infer.defun_undefineds )
-          | None ->
-              (* Regular expression *)
-              let result = Infer.infer env sexp in
-              let errors = Unify.solve_all result.Infer.constraints in
-              ( env,
-                ExprForm { ty = result.Infer.ty },
-                errors,
-                result.Infer.undefineds )))
+  let state =
+    {
+      st_env = env;
+      st_aliases = Sig_loader.empty_aliases;
+      st_errors = [];
+      st_undefineds = [];
+      st_forms = [];
+    }
+  in
+  let state' = check_form_with_state state sexp in
+  let result = List.hd state'.st_forms in
+  ( state'.st_env,
+    result,
+    List.rev state'.st_errors,
+    List.rev state'.st_undefineds )
 
 (** Check a sequence of top-level forms.
 
-    Processes forms in order, accumulating type bindings from defuns. Uses the
-    default environment with built-in types unless overridden. *)
+    Processes forms in order, accumulating type bindings from defuns and
+    file-local type aliases from tart-type forms. Uses the default environment
+    with built-in types unless overridden. *)
 let check_program ?(env = default_env ()) (forms : Syntax.Sexp.t list) :
     check_result =
-  let rec loop env forms results errors undefineds =
-    match forms with
-    | [] ->
-        {
-          env;
-          forms = List.rev results;
-          errors = List.rev errors;
-          undefineds = List.rev undefineds;
-        }
-    | form :: rest ->
-        let env', result, form_errors, form_undefs = check_form env form in
-        loop env' rest (result :: results)
-          (List.rev_append form_errors errors)
-          (List.rev_append form_undefs undefineds)
+  let init_state =
+    {
+      st_env = env;
+      st_aliases = Sig_loader.empty_aliases;
+      st_errors = [];
+      st_undefineds = [];
+      st_forms = [];
+    }
   in
-  loop env forms [] [] []
+  let final_state = List.fold_left check_form_with_state init_state forms in
+  {
+    env = final_state.st_env;
+    forms = List.rev final_state.st_forms;
+    errors = List.rev final_state.st_errors;
+    undefineds = List.rev final_state.st_undefineds;
+    aliases = final_state.st_aliases;
+  }
 
 (** Check a single expression and return its type.
 
@@ -322,4 +486,7 @@ let form_result_to_string = function
       Printf.sprintf "(defvar %s %s)" name (to_string var_type)
   | TartDeclareForm { name; var_type } ->
       Printf.sprintf "(tart-declare %s %s)" name (to_string var_type)
+  | TartTypeForm { name; params } ->
+      if params = [] then Printf.sprintf "(tart-type %s)" name
+      else Printf.sprintf "(tart-type %s [%s])" name (String.concat " " params)
   | ExprForm { ty } -> to_string ty

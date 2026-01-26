@@ -76,6 +76,12 @@ val empty_aliases : alias_context
 val lookup_alias : string -> alias_context -> type_alias option
 (** Look up a type alias *)
 
+val add_alias : string -> type_alias -> alias_context -> alias_context
+(** Add a type alias to the context *)
+
+val alias_names : alias_context -> string list
+(** Get all alias names from the context *)
+
 val build_alias_context : Sig_ast.signature -> alias_context
 (** Build alias context from signature declarations. Only includes type
     declarations with bodies (aliases, not opaque types). *)

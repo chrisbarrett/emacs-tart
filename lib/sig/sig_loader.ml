@@ -225,6 +225,9 @@ let add_alias (name : string) (alias : type_alias) (ctx : alias_context) :
     alias_context =
   (name, alias) :: ctx
 
+(** Get all alias names from the context *)
+let alias_names (ctx : alias_context) : string list = List.map fst ctx
+
 (** Build alias context from signature declarations. Only includes type
     declarations with bodies (aliases, not opaque types). *)
 let build_alias_context (sig_file : signature) : alias_context =

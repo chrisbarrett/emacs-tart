@@ -405,6 +405,118 @@ let test_form_result_expr_string () =
   Alcotest.(check string) "Int" "Int" str
 
 (* =============================================================================
+   tart-type (file-local type alias) Tests (R5, R6)
+   ============================================================================= *)
+
+(** Test that simple tart-type creates form result *)
+let test_tart_type_simple () =
+  let sexps = parse_many "(tart-type int-pair (tuple int int))" in
+  let result = Check.check_program sexps in
+  Alcotest.(check int) "no errors" 0 (List.length result.errors);
+  match result.forms with
+  | [ Check.TartTypeForm { name; params } ] ->
+      Alcotest.(check string) "name" "int-pair" name;
+      Alcotest.(check int) "no params" 0 (List.length params)
+  | _ -> Alcotest.fail "expected TartTypeForm"
+
+(** Test that tart-type is usable in annotation in same file *)
+let test_tart_type_usable_in_annotation () =
+  let sexps =
+    parse_many
+      {|(tart-type my-int int)
+        (defvar my-num (tart my-int 42))|}
+  in
+  let result = Check.check_program sexps in
+  Alcotest.(check int) "no errors" 0 (List.length result.errors);
+  (* my-num should have type Int (the expanded alias) *)
+  match result.forms with
+  | [ _; Check.DefvarForm { name; var_type } ] ->
+      Alcotest.(check string) "name" "my-num" name;
+      Alcotest.(check string) "type" "Int" (to_string var_type)
+  | _ -> Alcotest.fail "expected TartTypeForm then DefvarForm"
+
+(** Test that tart-type type error when value doesn't match *)
+let test_tart_type_annotation_mismatch () =
+  let sexps =
+    parse_many
+      {|(tart-type my-string string)
+        (defvar x (tart my-string 42))|}
+  in
+  let result = Check.check_program sexps in
+  (* Should have error: Int is not String *)
+  Alcotest.(check bool) "has error" true (List.length result.errors > 0)
+
+(** Test parameterized tart-type *)
+let test_tart_type_parameterized () =
+  let sexps = parse_many "(tart-type predicate [a] ((a) -> bool))" in
+  let result = Check.check_program sexps in
+  Alcotest.(check int) "no errors" 0 (List.length result.errors);
+  match result.forms with
+  | [ Check.TartTypeForm { name; params } ] ->
+      Alcotest.(check string) "name" "predicate" name;
+      Alcotest.(check (list string)) "params" [ "a" ] params
+  | _ -> Alcotest.fail "expected TartTypeForm"
+
+(** Test parameterized tart-type instantiation *)
+let test_tart_type_parameterized_usage () =
+  let sexps =
+    parse_many
+      {|(tart-type predicate [a] ((a) -> bool))
+        (defvar is-positive (tart (predicate int) (lambda (x) (> x 0))))|}
+  in
+  let result = Check.check_program sexps in
+  Alcotest.(check int) "no errors" 0 (List.length result.errors);
+  match result.forms with
+  | [ _; Check.DefvarForm { var_type; _ } ] ->
+      Alcotest.(check string) "type" "(-> (Int) Bool)" (to_string var_type)
+  | _ -> Alcotest.fail "expected TartTypeForm then DefvarForm"
+
+(** Test multi-param tart-type *)
+let test_tart_type_multi_param () =
+  let sexps =
+    parse_many
+      {|(tart-type mapping [k v] (hash-table k v))
+        (tart-declare my-map (mapping string int))|}
+  in
+  let result = Check.check_program sexps in
+  Alcotest.(check int) "no errors" 0 (List.length result.errors);
+  match result.forms with
+  | [ Check.TartTypeForm { params; _ }; Check.TartDeclareForm { var_type; _ } ]
+    ->
+      Alcotest.(check (list string)) "params" [ "k"; "v" ] params;
+      Alcotest.(check string)
+        "type" "(HashTable String Int)" (to_string var_type)
+  | _ -> Alcotest.fail "expected forms"
+
+(** Test tart-type to_string for simple alias *)
+let test_tart_type_to_string_simple () =
+  let result = Check.TartTypeForm { name = "foo"; params = [] } in
+  let str = Check.form_result_to_string result in
+  Alcotest.(check string) "string" "(tart-type foo)" str
+
+(** Test tart-type to_string for parameterized alias *)
+let test_tart_type_to_string_params () =
+  let result = Check.TartTypeForm { name = "foo"; params = [ "a"; "b" ] } in
+  let str = Check.form_result_to_string result in
+  Alcotest.(check string) "string" "(tart-type foo [a b])" str
+
+(** Test that tart-type union alias is parsed and stored *)
+let test_tart_type_union () =
+  let sexps = parse_many {|(tart-type result (string | error))|} in
+  let result = Check.check_program sexps in
+  Alcotest.(check int) "no errors" 0 (List.length result.errors);
+  (* Check the alias was stored *)
+  let alias_opt = Tart.Sig_loader.lookup_alias "result" result.aliases in
+  Alcotest.(check bool) "alias found" true (Option.is_some alias_opt)
+
+(** Test that aliases added to result *)
+let test_tart_type_in_result () =
+  let sexps = parse_many "(tart-type foo int)" in
+  let result = Check.check_program sexps in
+  let alias_opt = Tart.Sig_loader.lookup_alias "foo" result.aliases in
+  Alcotest.(check bool) "alias found" true (Option.is_some alias_opt)
+
+(* =============================================================================
    Test Suite
    ============================================================================= *)
 
@@ -493,5 +605,23 @@ let () =
             test_setq_tart_declare_checks;
           Alcotest.test_case "read declared variable" `Quick
             test_read_declared_variable;
+        ] );
+      ( "tart_type",
+        [
+          Alcotest.test_case "simple alias" `Quick test_tart_type_simple;
+          Alcotest.test_case "usable in annotation" `Quick
+            test_tart_type_usable_in_annotation;
+          Alcotest.test_case "annotation mismatch" `Quick
+            test_tart_type_annotation_mismatch;
+          Alcotest.test_case "parameterized" `Quick test_tart_type_parameterized;
+          Alcotest.test_case "parameterized usage" `Quick
+            test_tart_type_parameterized_usage;
+          Alcotest.test_case "multi param" `Quick test_tart_type_multi_param;
+          Alcotest.test_case "to_string simple" `Quick
+            test_tart_type_to_string_simple;
+          Alcotest.test_case "to_string params" `Quick
+            test_tart_type_to_string_params;
+          Alcotest.test_case "union alias" `Quick test_tart_type_union;
+          Alcotest.test_case "in result" `Quick test_tart_type_in_result;
         ] );
     ]

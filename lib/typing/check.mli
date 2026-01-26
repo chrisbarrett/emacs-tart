@@ -14,6 +14,7 @@ type form_result =
   | DefunForm of { name : string; fn_type : Core.Types.typ }
   | DefvarForm of { name : string; var_type : Core.Types.typ }
   | TartDeclareForm of { name : string; var_type : Core.Types.typ }
+  | TartTypeForm of { name : string; params : string list }
   | ExprForm of { ty : Core.Types.typ }
 
 type check_result = {
@@ -21,6 +22,8 @@ type check_result = {
   forms : form_result list;  (** Results for each top-level form *)
   errors : Unify.error list;  (** Any type errors encountered *)
   undefineds : Infer.undefined_var list;  (** Undefined variable references *)
+  aliases : Sig.Sig_loader.alias_context;
+      (** File-local type aliases from tart-type forms *)
 }
 (** Result of type-checking a program. *)
 
