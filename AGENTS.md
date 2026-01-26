@@ -1,14 +1,18 @@
-# AGENTS.md
+# tart
 
-Agent workflow for tart—Elisp type checker in OCaml.
+Elisp type checker in OCaml.
+
+## Commands
+
+build: `Bash(command="nix develop --command dune build 2>&1")`
 
 ## Required Skills
 
-| Condition                         | Skill                                 |
-| --------------------------------- | ------------------------------------- |
-| Git commits                       | `Skill(skill="git:committing")`       |
-| Emacs interaction                 | `Skill(skill="emacs:emacsclient")`    |
-| Writing specs, updating DESIGN.md | `Skill(skill="claude:writing-specs")` |
+| Condition              | Skill                                 |
+| ---------------------- | ------------------------------------- |
+| Git commits            | `Skill(skill="git:committing")`       |
+| Emacs interaction      | `Skill(skill="emacs:emacsclient")`    |
+| Specs, updating DESIGN | `Skill(skill="claude:writing-specs")` |
 
 ## Constraints
 
@@ -16,15 +20,15 @@ Agent workflow for tart—Elisp type checker in OCaml.
 >
 > - Write `.mli` for every `lib/**/*.ml`
 > - Update `DESIGN.md` when completing specs
-> - Development workflow kept up-to-date in `DEVELOPMENT.md`
+> - Keep `DEVELOPMENT.md` current
 
 ## Reference
 
-| Resource                 | Location          |
-| ------------------------ | ----------------- |
-| Design decisions         | `DESIGN.md`       |
-| Implementation reference | `docs/reference/` |
-| Background research      | `docs/research/`  |
-| Active specs             | `specs/`          |
-| Archived specs           | `specs/.archive/` |
-| Progress log             | `progress.txt`    |
+| Resource        | Location          |
+| --------------- | ----------------- |
+| Design          | `DESIGN.md`       |
+| Implementation  | `docs/reference/` |
+| Research        | `docs/research/`  |
+| Active specs    | `specs/`          |
+| Archived specs  | `specs/.archive/` |
+| Progress        | `progress.txt`    |
