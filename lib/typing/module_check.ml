@@ -83,6 +83,111 @@ let extract_requires (sexps : Syntax.Sexp.t list) : string list =
       | _ -> None)
     sexps
 
+(** {1 Autoload Detection (R7)} *)
+
+(** Extract candidate module prefixes from a function name.
+
+    Emacs convention: function names are `package-name-function-name`. We try
+    progressively shorter prefixes to find a matching module.
+
+    Example: `my-package-autoload-fn` yields
+    [`my-package-autoload`; `my-package`; `my`] *)
+let extract_module_prefixes (name : string) : string list =
+  let parts = String.split_on_char '-' name in
+  (* Generate prefixes from longest to shortest (but never the full name).
+     For ["my"; "package"; "fn"], we want:
+     - "my-package" (first 2 parts)
+     - "my" (first 1 part) *)
+  let rec build_prefixes n acc =
+    if n < 1 then acc
+    else
+      let prefix_parts = List.filteri (fun i _ -> i < n) parts in
+      let prefix = String.concat "-" prefix_parts in
+      build_prefixes (n - 1) (prefix :: acc)
+  in
+  (* Start from (num_parts - 1), never include the full name *)
+  let num_parts = List.length parts in
+  if num_parts <= 1 then [] else build_prefixes (num_parts - 1) [] |> List.rev
+
+(** Collect all symbol references in function call position.
+
+    We only care about symbols at the head of a list (function calls), not
+    variable references. *)
+let rec collect_call_symbols (sexp : Syntax.Sexp.t) : string list =
+  let open Syntax.Sexp in
+  match sexp with
+  | List (Symbol (name, _) :: args, _) ->
+      (* Function call - collect the function name and recurse into args *)
+      let from_args = List.concat_map collect_call_symbols args in
+      name :: from_args
+  | List (fn :: args, _) ->
+      (* Non-symbol in call position - just recurse *)
+      let from_fn = collect_call_symbols fn in
+      let from_args = List.concat_map collect_call_symbols args in
+      from_fn @ from_args
+  | List ([], _) -> []
+  | Vector (elems, _) -> List.concat_map collect_call_symbols elems
+  | Cons (car, cdr, _) -> collect_call_symbols car @ collect_call_symbols cdr
+  | _ -> []
+
+(** Collect all call symbols from a list of top-level forms *)
+let collect_all_call_symbols (sexps : Syntax.Sexp.t list) : string list =
+  let all = List.concat_map collect_call_symbols sexps in
+  (* Deduplicate *)
+  List.sort_uniq String.compare all
+
+(** Try to load a module for an autoloaded function.
+
+    Tries progressively shorter prefixes until one matches a `.tart` file. *)
+let try_load_autoload_module ~(config : config) ~(el_path : string option)
+    ~(env : Env.t) ~(loaded_modules : string list ref) (name : string) :
+    Env.t option =
+  let prefixes = extract_module_prefixes name in
+  let rec try_prefixes = function
+    | [] -> None
+    | prefix :: rest ->
+        if List.mem prefix !loaded_modules then
+          (* Already tried this module - skip *)
+          try_prefixes rest
+        else (
+          loaded_modules := prefix :: !loaded_modules;
+          match
+            Search.load_module ~search_path:config.search_path ?el_path ~env
+              prefix
+          with
+          | Some env' -> Some env'
+          | None -> try_prefixes rest)
+  in
+  try_prefixes prefixes
+
+(** Load signatures for autoloaded functions (R7).
+
+    Scans the code for function calls not in the environment, extracts module
+    prefixes from their names, and tries to load matching `.tart` files. *)
+let load_autoload_signatures ~(config : config) ~(el_path : string option)
+    ~(env : Env.t) ~(required_modules : string list)
+    (sexps : Syntax.Sexp.t list) : Env.t =
+  (* Track which modules we've already tried loading *)
+  let loaded_modules = ref required_modules in
+
+  (* Collect all function calls *)
+  let call_symbols = collect_all_call_symbols sexps in
+
+  (* For each symbol not in env, try to load its module *)
+  List.fold_left
+    (fun env name ->
+      match Env.lookup name env with
+      | Some _ ->
+          (* Already in environment - skip *)
+          env
+      | None -> (
+          match
+            try_load_autoload_module ~config ~el_path ~env ~loaded_modules name
+          with
+          | Some env' -> env'
+          | None -> env))
+    env call_symbols
+
 (** {1 Signature Loading} *)
 
 (** Load signature for a module, returning the extended environment *)
@@ -212,10 +317,16 @@ let check_module ~(config : config) ~(filename : string)
       base_env required_modules
   in
 
-  (* Step 4: Type-check the implementation *)
-  let check_result = Check.check_program ~env:env_with_requires sexps in
+  (* Step 4: Load signatures for autoloaded functions (R7) *)
+  let env_with_autoloads =
+    load_autoload_signatures ~config ~el_path:(Some filename)
+      ~env:env_with_requires ~required_modules sexps
+  in
 
-  (* Step 5: If we have a signature, verify implementations match *)
+  (* Step 5: Type-check the implementation *)
+  let check_result = Check.check_program ~env:env_with_autoloads sexps in
+
+  (* Step 6: If we have a signature, verify implementations match *)
   let mismatch_errors =
     match sig_ast_opt with
     | None -> []
@@ -253,7 +364,7 @@ let check_module ~(config : config) ~(filename : string)
           sig_ast.sig_decls
   in
 
-  (* Step 6: Warn on public functions not in signature file (R5, R8) *)
+  (* Step 7: Warn on public functions not in signature file (R5, R8) *)
   let missing_signature_warnings =
     match sig_ast_opt with
     | None -> [] (* No signature file - no warnings *)

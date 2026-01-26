@@ -71,6 +71,22 @@ val check_module :
 val extract_requires : Syntax.Sexp.t list -> string list
 (** Extract module names from require forms in parsed sexps *)
 
+(** {1 Autoload Detection (R7)} *)
+
+val extract_module_prefixes : string -> string list
+(** Extract candidate module prefixes from a function name.
+
+    Example: [extract_module_prefixes "my-package-autoload-fn"] returns
+    [["my-package-autoload"; "my-package"; "my"]].
+
+    Returns an empty list for single-word names (no hyphens). *)
+
+val collect_all_call_symbols : Syntax.Sexp.t list -> string list
+(** Collect all symbol references in function call position from parsed sexps.
+
+    Only symbols at the head of a list (function calls) are collected. Returns a
+    deduplicated, sorted list. *)
+
 (** {1 Diagnostics} *)
 
 val mismatch_to_diagnostic : mismatch_error -> Diagnostic.t

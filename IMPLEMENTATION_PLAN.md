@@ -118,7 +118,7 @@ Enables type-checked module interactions.
 ### 5.3 Module Dependencies
 
 - [x] [R6] Load signatures when `(require 'module)` is encountered
-- [ ] [R7] Handle autoloaded function lookup via prefix-based search
+- [x] [R7] Handle autoloaded function lookup via prefix-based search
 - [ ] [R9] Handle circular module dependencies with lazy loading
 - [x] Verify: Required module signatures available for type checking
 

@@ -143,7 +143,7 @@ No new files; extends `lib/typing/check.ml` and `lib/sig/sig_loader.ml`.
 - [ ] [R4] Document untyped→typed boundary (no action needed)
 - [x] [R5] Distinguish public vs internal functions
 - [x] [R6] Load signatures for required modules
-- [ ] [R7] Handle autoloaded function lookup via search path
+- [x] [R7] Handle autoloaded function lookup via search path
 - [x] [R8] Warn on undefined exports
 - [ ] [R9] Handle circular module dependencies
 

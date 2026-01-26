@@ -321,6 +321,157 @@ let test_missing_signature_diagnostic () =
       Alcotest.(check bool) "is warning" true (diag.severity = Warning))
 
 (* =============================================================================
+   Autoload Detection Tests (R7)
+   ============================================================================= *)
+
+(** extract_module_prefixes: basic three-part name *)
+let test_extract_module_prefixes_basic () =
+  let prefixes = Module_check.extract_module_prefixes "my-package-fn" in
+  Alcotest.(check (list string))
+    "yields two prefixes" [ "my-package"; "my" ] prefixes
+
+(** extract_module_prefixes: four-part name *)
+let test_extract_module_prefixes_long () =
+  let prefixes =
+    Module_check.extract_module_prefixes "my-package-autoload-fn"
+  in
+  Alcotest.(check (list string))
+    "yields three prefixes"
+    [ "my-package-autoload"; "my-package"; "my" ]
+    prefixes
+
+(** extract_module_prefixes: two-part name *)
+let test_extract_module_prefixes_short () =
+  let prefixes = Module_check.extract_module_prefixes "foo-bar" in
+  Alcotest.(check (list string)) "yields one prefix" [ "foo" ] prefixes
+
+(** extract_module_prefixes: single word returns empty list *)
+let test_extract_module_prefixes_single () =
+  let prefixes = Module_check.extract_module_prefixes "foo" in
+  Alcotest.(check (list string)) "no prefixes" [] prefixes
+
+(** collect_all_call_symbols: collects function calls *)
+let test_collect_call_symbols () =
+  let sexps = parse "(foo (bar 1) (baz 2))" in
+  let symbols = Module_check.collect_all_call_symbols sexps in
+  Alcotest.(check (list string))
+    "collects all calls" [ "bar"; "baz"; "foo" ] symbols
+
+(** collect_all_call_symbols: handles nested calls *)
+let test_collect_call_symbols_nested () =
+  let sexps = parse "(a (b (c (d 1))))" in
+  let symbols = Module_check.collect_all_call_symbols sexps in
+  Alcotest.(check (list string))
+    "collects nested" [ "a"; "b"; "c"; "d" ] symbols
+
+(** collect_all_call_symbols: deduplicates *)
+let test_collect_call_symbols_dedup () =
+  let sexps = parse "(foo (foo (foo 1)))" in
+  let symbols = Module_check.collect_all_call_symbols sexps in
+  Alcotest.(check (list string)) "deduplicated" [ "foo" ] symbols
+
+(** Autoload lookup: function from unloaded module *)
+let test_autoload_lookup () =
+  let files =
+    [
+      ("main.el", "(my-package-fn 42)");
+      ("my-package.tart", "(defun my-package-fn (int) -> string)");
+    ]
+  in
+  with_temp_dir files (fun dir ->
+      let config = Module_check.default_config () in
+      let el_path = Filename.concat dir "main.el" in
+      let sexps = parse "(my-package-fn 42)" in
+      let result = Module_check.check_module ~config ~filename:el_path sexps in
+      (* Should type check successfully - my-package.tart loaded via prefix *)
+      Alcotest.(check int) "no type errors" 0 (List.length result.type_errors))
+
+(** Autoload lookup: type error on wrong argument type *)
+let test_autoload_type_error () =
+  let files =
+    [
+      ("main.el", "(my-package-fn \"wrong\")");
+      ("my-package.tart", "(defun my-package-fn (int) -> string)");
+    ]
+  in
+  with_temp_dir files (fun dir ->
+      let config = Module_check.default_config () in
+      let el_path = Filename.concat dir "main.el" in
+      let sexps = parse "(my-package-fn \"wrong\")" in
+      let result = Module_check.check_module ~config ~filename:el_path sexps in
+      (* Should have type error - string passed to int parameter *)
+      Alcotest.(check bool)
+        "has type error" true
+        (List.length result.type_errors > 0))
+
+(** Autoload lookup: doesn't reload already-required modules *)
+let test_autoload_skip_required () =
+  let files =
+    [
+      ("main.el", "(require 'my-package)\n(my-package-fn 42)");
+      ("my-package.tart", "(defun my-package-fn (int) -> string)");
+    ]
+  in
+  with_temp_dir files (fun dir ->
+      let config = Module_check.default_config () in
+      let el_path = Filename.concat dir "main.el" in
+      let sexps = parse "(require 'my-package)\n(my-package-fn 42)" in
+      let result = Module_check.check_module ~config ~filename:el_path sexps in
+      (* Should type check successfully - module loaded via require, not autoload *)
+      Alcotest.(check int) "no type errors" 0 (List.length result.type_errors))
+
+(** Autoload lookup: longer prefix tried first *)
+let test_autoload_longer_prefix_first () =
+  (* If we call my-pkg-sub-fn, we should find my-pkg-sub.tart before my-pkg.tart *)
+  let files =
+    [
+      ("main.el", "(my-pkg-sub-fn 42)");
+      (* my-pkg-sub has the function, returns string *)
+      ("my-pkg-sub.tart", "(defun my-pkg-sub-fn (int) -> string)");
+      (* my-pkg does NOT have it *)
+      ("my-pkg.tart", "(defun my-pkg-other (int) -> int)");
+    ]
+  in
+  with_temp_dir files (fun dir ->
+      let config = Module_check.default_config () in
+      let el_path = Filename.concat dir "main.el" in
+      let sexps = parse "(my-pkg-sub-fn 42)" in
+      let result = Module_check.check_module ~config ~filename:el_path sexps in
+      (* my-pkg-sub.tart should be found first and used *)
+      Alcotest.(check int) "no type errors" 0 (List.length result.type_errors))
+
+(** Autoload lookup: uses search path *)
+let test_autoload_search_path () =
+  (* Create a separate search directory *)
+  let search_dir = Filename.temp_dir "tart_search" "" in
+  let cleanup () = try Unix.rmdir search_dir with _ -> () in
+  try
+    (* Write signature to search path *)
+    let sig_path = Filename.concat search_dir "ext-lib.tart" in
+    let oc = open_out sig_path in
+    output_string oc "(defun ext-lib-process (string) -> int)";
+    close_out oc;
+
+    let files = [ ("main.el", "(ext-lib-process \"hello\")") ] in
+    with_temp_dir files (fun dir ->
+        let config =
+          Module_check.default_config ()
+          |> Module_check.with_search_dirs [ search_dir ]
+        in
+        let el_path = Filename.concat dir "main.el" in
+        let sexps = parse "(ext-lib-process \"hello\")" in
+        let result =
+          Module_check.check_module ~config ~filename:el_path sexps
+        in
+        (* Should find ext-lib.tart in search path *)
+        Alcotest.(check int) "no type errors" 0 (List.length result.type_errors));
+    Sys.remove sig_path;
+    cleanup ()
+  with e ->
+    cleanup ();
+    raise e
+
+(* =============================================================================
    Test Suite
    ============================================================================= *)
 
@@ -372,5 +523,37 @@ let () =
             test_mixed_internal_public;
           Alcotest.test_case "diagnostic created" `Quick
             test_missing_signature_diagnostic;
+        ] );
+      ( "extract_module_prefixes",
+        [
+          Alcotest.test_case "basic three-part name" `Quick
+            test_extract_module_prefixes_basic;
+          Alcotest.test_case "four-part name" `Quick
+            test_extract_module_prefixes_long;
+          Alcotest.test_case "two-part name" `Quick
+            test_extract_module_prefixes_short;
+          Alcotest.test_case "single word" `Quick
+            test_extract_module_prefixes_single;
+        ] );
+      ( "collect_call_symbols",
+        [
+          Alcotest.test_case "collects function calls" `Quick
+            test_collect_call_symbols;
+          Alcotest.test_case "handles nested calls" `Quick
+            test_collect_call_symbols_nested;
+          Alcotest.test_case "deduplicates" `Quick
+            test_collect_call_symbols_dedup;
+        ] );
+      ( "autoload_lookup",
+        [
+          Alcotest.test_case "function from unloaded module" `Quick
+            test_autoload_lookup;
+          Alcotest.test_case "type error on wrong argument" `Quick
+            test_autoload_type_error;
+          Alcotest.test_case "skip already-required modules" `Quick
+            test_autoload_skip_required;
+          Alcotest.test_case "longer prefix tried first" `Quick
+            test_autoload_longer_prefix_first;
+          Alcotest.test_case "uses search path" `Quick test_autoload_search_path;
         ] );
     ]
