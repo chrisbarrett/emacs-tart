@@ -100,6 +100,9 @@ let scheme_to_string = function
   | Poly (vars, ty) ->
       Printf.sprintf "(forall (%s) %s)" (String.concat " " vars) (to_string ty)
 
+(** Get all names bound in the environment *)
+let names env = List.map fst env.bindings
+
 (** Pretty-print the environment for debugging *)
 let to_string env =
   let bindings_str =

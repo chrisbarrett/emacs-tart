@@ -186,7 +186,9 @@ let test_diagnostics_empty () =
       Module_check.type_errors = [];
       mismatch_errors = [];
       missing_signature_warnings = [];
+      undefined_errors = [];
       signature_env = None;
+      final_env = Core.Type_env.empty;
     }
   in
   let diagnostics = Module_check.diagnostics_of_result result in

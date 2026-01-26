@@ -15,13 +15,21 @@
 
 (** {1 Types} *)
 
-type result = { ty : Core.Types.typ; constraints : Constraint.set }
-(** Result of inference: the inferred type and generated constraints. *)
+type undefined_var = { name : string; span : Syntax.Location.span }
+(** An undefined variable reference. *)
+
+type result = {
+  ty : Core.Types.typ;
+  constraints : Constraint.set;
+  undefineds : undefined_var list;
+}
+(** Result of inference: the inferred type, constraints, and undefined vars. *)
 
 type defun_result = {
   name : string;
   fn_type : Core.Types.typ;
   defun_constraints : Constraint.set;
+  defun_undefineds : undefined_var list;
 }
 (** Result of inferring a top-level definition. *)
 
@@ -43,10 +51,13 @@ val infer_defun : Core.Type_env.t -> Syntax.Sexp.t -> defun_result option
 (** {1 Helpers} *)
 
 val pure : Core.Types.typ -> result
-(** Create a result with no constraints. *)
+(** Create a result with no constraints and no undefined vars. *)
 
 val with_constraint : Core.Types.typ -> Constraint.t -> result
 (** Create a result with a single constraint. *)
 
 val combine_results : result list -> Constraint.set
 (** Combine results, merging constraints. *)
+
+val combine_undefineds : result list -> undefined_var list
+(** Combine undefined variables from results. *)

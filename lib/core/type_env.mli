@@ -46,6 +46,9 @@ val exit_level : t -> t
 val lookup : string -> t -> scheme option
 (** Look up a name in the environment. *)
 
+val names : t -> string list
+(** Get all names bound in the environment. *)
+
 (** {1 Extension} *)
 
 val extend : string -> scheme -> t -> t

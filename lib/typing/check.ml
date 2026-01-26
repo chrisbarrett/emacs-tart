@@ -24,14 +24,15 @@ type check_result = {
   env : Env.t;  (** Final type environment with all bindings *)
   forms : form_result list;  (** Results for each top-level form *)
   errors : Unify.error list;  (** Any type errors encountered *)
+  undefineds : Infer.undefined_var list;  (** Undefined variable references *)
 }
 (** Result of type-checking a program *)
 
 (** Check a single top-level form and update the environment.
 
-    Returns the updated environment and the form result. *)
+    Returns the updated environment, form result, errors, and undefined vars. *)
 let check_form (env : Env.t) (sexp : Syntax.Sexp.t) :
-    Env.t * form_result * Unify.error list =
+    Env.t * form_result * Unify.error list * Infer.undefined_var list =
   reset_tvar_counter ();
 
   (* First, try to handle it as a defun *)
@@ -50,12 +51,13 @@ let check_form (env : Env.t) (sexp : Syntax.Sexp.t) :
             name = defun_result.Infer.name;
             fn_type = defun_result.Infer.fn_type;
           },
-        errors )
+        errors,
+        defun_result.Infer.defun_undefineds )
   | None ->
       (* Regular expression *)
       let result = Infer.infer env sexp in
       let errors = Unify.solve_all result.Infer.constraints in
-      (env, ExprForm { ty = result.Infer.ty }, errors)
+      (env, ExprForm { ty = result.Infer.ty }, errors, result.Infer.undefineds)
 
 (** Check a sequence of top-level forms.
 
@@ -63,14 +65,22 @@ let check_form (env : Env.t) (sexp : Syntax.Sexp.t) :
     default environment with built-in types unless overridden. *)
 let check_program ?(env = default_env ()) (forms : Syntax.Sexp.t list) :
     check_result =
-  let rec loop env forms results errors =
+  let rec loop env forms results errors undefineds =
     match forms with
-    | [] -> { env; forms = List.rev results; errors = List.rev errors }
+    | [] ->
+        {
+          env;
+          forms = List.rev results;
+          errors = List.rev errors;
+          undefineds = List.rev undefineds;
+        }
     | form :: rest ->
-        let env', result, form_errors = check_form env form in
-        loop env' rest (result :: results) (List.rev_append form_errors errors)
+        let env', result, form_errors, form_undefs = check_form env form in
+        loop env' rest (result :: results)
+          (List.rev_append form_errors errors)
+          (List.rev_append form_undefs undefineds)
   in
-  loop env forms [] []
+  loop env forms [] [] []
 
 (** Check a single expression and return its type.
 

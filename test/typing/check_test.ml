@@ -43,7 +43,7 @@ let test_check_expr_type_error () =
 
 let test_check_form_defun () =
   let sexp = parse "(defun foo () 42)" in
-  let env', result, _ = Check.check_form Env.empty sexp in
+  let env', result, _, _ = Check.check_form Env.empty sexp in
   (* Should bind foo in environment *)
   Alcotest.(check bool)
     "foo bound" true
@@ -56,7 +56,7 @@ let test_check_form_defun () =
 
 let test_check_form_expr () =
   let sexp = parse "42" in
-  let env', result, _ = Check.check_form Env.empty sexp in
+  let env', result, _, _ = Check.check_form Env.empty sexp in
   (* Environment unchanged *)
   Alcotest.(check int) "env unchanged" 0 (List.length env'.Env.bindings);
   (* Result should be ExprForm *)

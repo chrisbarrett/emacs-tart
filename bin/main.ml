@@ -268,7 +268,7 @@ let repl_eval state input =
                  (pos.col + 1) eval_err.message)
         | Ok value ->
             (* Update type environment for defuns *)
-            let env', _form_result, errors =
+            let env', _form_result, errors, _undefs =
               Tart.Check.check_form state.type_env sexp
             in
             state.type_env <- env';

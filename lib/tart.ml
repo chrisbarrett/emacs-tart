@@ -32,6 +32,7 @@ module Generalize = Typing.Generalize
 module Check = Typing.Check
 module Module_check = Typing.Module_check
 module Diagnostic = Typing.Diagnostic
+module Levenshtein = Typing.Levenshtein
 
 module Sig_ast = Sig.Sig_ast
 (** Re-export signature modules *)

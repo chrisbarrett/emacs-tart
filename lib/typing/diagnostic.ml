@@ -25,6 +25,7 @@ type error_code =
   | E0317  (** Incompatible branch types *)
   | E0061  (** Wrong number of arguments (arity) *)
   | E0106  (** Infinite type (occurs check) *)
+  | E0425  (** Undefined variable *)
 
 (** Format an error code for display. *)
 let error_code_to_string = function
@@ -32,6 +33,7 @@ let error_code_to_string = function
   | E0317 -> "E0317"
   | E0061 -> "E0061"
   | E0106 -> "E0106"
+  | E0425 -> "E0425"
 
 (** Severity level for diagnostics *)
 type severity = Error | Warning | Hint
@@ -162,6 +164,30 @@ let missing_signature ~span ~name () =
     actual = None;
     related = [];
     help = [];
+  }
+
+(** Create an undefined variable diagnostic (E0425) with typo suggestions.
+
+    Takes the undefined name and a list of candidate names from the environment
+    to generate "did you mean?" suggestions using Levenshtein distance. *)
+let undefined_variable ~span ~name ~candidates () =
+  let message = Printf.sprintf "variable `%s` is not defined" name in
+  let suggestion = Levenshtein.suggest_name ~query:name ~candidates in
+  let help =
+    match suggestion with
+    | Some similar ->
+        [ Printf.sprintf "a variable with a similar name exists: `%s`" similar ]
+    | None -> []
+  in
+  {
+    severity = Error;
+    code = Some E0425;
+    span;
+    message;
+    expected = None;
+    actual = None;
+    related = [];
+    help;
   }
 
 (** Format a function signature for display in error messages *)

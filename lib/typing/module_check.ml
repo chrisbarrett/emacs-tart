@@ -59,7 +59,10 @@ type check_result = {
   mismatch_errors : mismatch_error list;  (** Signature mismatch errors *)
   missing_signature_warnings : missing_signature_warning list;
       (** Warnings for public functions not in signature *)
-  signature_env : Env.t option;  (** Environment from loaded signature, if any *)
+  undefined_errors : Infer.undefined_var list;  (** Undefined variable errors *)
+  signature_env : Env.t option;
+      (** Environment from loaded signature, if any *)
+  final_env : Env.t;  (** Final type environment after checking *)
 }
 (** Result of module-aware type checking *)
 
@@ -396,11 +399,13 @@ let check_module ~(config : config) ~(filename : string)
   in
 
   {
-    type_errors = check_result.errors;
+    type_errors = check_result.Check.errors;
     mismatch_errors;
     missing_signature_warnings;
+    undefined_errors = check_result.Check.undefineds;
     signature_env =
       (match sibling_result with Some (env, _) -> Some env | None -> None);
+    final_env = check_result.Check.env;
   }
 
 (** {1 Diagnostic Conversion} *)
@@ -415,6 +420,11 @@ let missing_signature_to_diagnostic (warn : missing_signature_warning) :
     Diagnostic.t =
   Diagnostic.missing_signature ~span:warn.span ~name:warn.name ()
 
+(** Convert an undefined variable error to a diagnostic *)
+let undefined_to_diagnostic (candidates : string list)
+    (err : Infer.undefined_var) : Diagnostic.t =
+  Diagnostic.undefined_variable ~span:err.span ~name:err.name ~candidates ()
+
 (** Get all diagnostics from a check result *)
 let diagnostics_of_result (result : check_result) : Diagnostic.t list =
   let type_diagnostics = Diagnostic.of_unify_errors result.type_errors in
@@ -424,4 +434,9 @@ let diagnostics_of_result (result : check_result) : Diagnostic.t list =
   let missing_sig_diagnostics =
     List.map missing_signature_to_diagnostic result.missing_signature_warnings
   in
+  let candidates = Env.names result.final_env in
+  let undefined_diagnostics =
+    List.map (undefined_to_diagnostic candidates) result.undefined_errors
+  in
   type_diagnostics @ mismatch_diagnostics @ missing_sig_diagnostics
+  @ undefined_diagnostics

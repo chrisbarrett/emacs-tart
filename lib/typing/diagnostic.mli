@@ -18,6 +18,7 @@ type error_code =
   | E0317  (** Incompatible branch types *)
   | E0061  (** Wrong number of arguments (arity) *)
   | E0106  (** Infinite type (occurs check) *)
+  | E0425  (** Undefined variable *)
 
 val error_code_to_string : error_code -> string
 (** Format an error code for display. *)
@@ -74,6 +75,17 @@ val occurs_check :
 
 val missing_signature : span:Syntax.Location.span -> name:string -> unit -> t
 (** Create a warning for a public function not in signature file. *)
+
+val undefined_variable :
+  span:Syntax.Location.span ->
+  name:string ->
+  candidates:string list ->
+  unit ->
+  t
+(** Create an undefined variable diagnostic (E0425) with typo suggestions.
+
+    Takes the undefined name and a list of candidate names from the environment
+    to generate "did you mean?" suggestions using Levenshtein distance. *)
 
 val branch_mismatch :
   span:Syntax.Location.span ->

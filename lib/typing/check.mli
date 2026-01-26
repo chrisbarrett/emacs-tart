@@ -18,6 +18,7 @@ type check_result = {
   env : Core.Type_env.t;  (** Final type environment with all bindings *)
   forms : form_result list;  (** Results for each top-level form *)
   errors : Unify.error list;  (** Any type errors encountered *)
+  undefineds : Infer.undefined_var list;  (** Undefined variable references *)
 }
 (** Result of type-checking a program. *)
 
@@ -31,11 +32,12 @@ val default_env : unit -> Core.Type_env.t
 val check_form :
   Core.Type_env.t ->
   Syntax.Sexp.t ->
-  Core.Type_env.t * form_result * Unify.error list
+  Core.Type_env.t * form_result * Unify.error list * Infer.undefined_var list
 (** [check_form env sexp] type-checks a single top-level form.
 
     Returns the updated environment (with new bindings from defun), the form
-    result, and any type errors encountered. *)
+    result, any type errors encountered, and any undefined variable references.
+*)
 
 val check_program : ?env:Core.Type_env.t -> Syntax.Sexp.t list -> check_result
 (** [check_program ?env forms] type-checks a sequence of top-level forms.

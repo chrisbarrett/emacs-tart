@@ -355,6 +355,7 @@ let type_at_sexp (env : Typing.Check.check_result)
           {
             Typing.Infer.ty = fn_result.Typing.Infer.ty;
             constraints = all_constraints;
+            undefineds = fn_result.Typing.Infer.undefineds;
           })
   | _ ->
       (* Not in an application context, just infer the target directly *)

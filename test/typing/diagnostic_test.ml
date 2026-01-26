@@ -534,6 +534,118 @@ let test_option_nil_variable_source () =
     (contains_pattern (Str.regexp "maybe-name") str)
 
 (* =============================================================================
+   Undefined Variable Tests (R4)
+   ============================================================================= *)
+
+let test_undefined_variable_diagnostic () =
+  let span = Loc.dummy_span in
+  let d = Diag.undefined_variable ~span ~name:"foobar" ~candidates:[] () in
+  Alcotest.(check bool) "is error" true (Diag.is_error d);
+  Alcotest.(
+    check
+      (option
+         (of_pp (fun fmt c ->
+              Format.fprintf fmt "%s" (Diag.error_code_to_string c)))))
+    "code is E0425" (Some Diag.E0425) d.code;
+  Alcotest.(check bool)
+    "message mentions foobar" true
+    (contains_pattern (Str.regexp "foobar") d.message)
+
+let test_undefined_variable_with_suggestion () =
+  let span = Loc.dummy_span in
+  let d =
+    Diag.undefined_variable ~span ~name:"foobar"
+      ~candidates:[ "foobar1"; "foobaz"; "qux" ]
+      ()
+  in
+  Alcotest.(check bool) "has help" true (List.length d.help > 0);
+  let help_combined = String.concat " " d.help in
+  Alcotest.(check bool)
+    "suggests similar name" true
+    (contains_pattern (Str.regexp "foobar1\\|foobaz") help_combined)
+
+let test_undefined_variable_no_similar () =
+  let span = Loc.dummy_span in
+  let d =
+    Diag.undefined_variable ~span ~name:"foobar"
+      ~candidates:[ "completely"; "different"; "names" ]
+      ()
+  in
+  Alcotest.(check bool) "no help when no similar" true (List.length d.help = 0)
+
+let test_levenshtein_distance () =
+  let module Lev = Tart.Levenshtein in
+  (* Identical strings *)
+  Alcotest.(check int) "identical" 0 (Lev.distance "hello" "hello");
+  (* Empty strings *)
+  Alcotest.(check int) "empty vs empty" 0 (Lev.distance "" "");
+  Alcotest.(check int) "empty vs hello" 5 (Lev.distance "" "hello");
+  Alcotest.(check int) "hello vs empty" 5 (Lev.distance "hello" "");
+  (* Single character difference *)
+  Alcotest.(check int) "substitution" 1 (Lev.distance "cat" "bat");
+  Alcotest.(check int) "insertion" 1 (Lev.distance "cat" "cats");
+  Alcotest.(check int) "deletion" 1 (Lev.distance "cats" "cat");
+  (* Multiple differences *)
+  Alcotest.(check int) "kitten vs sitting" 3 (Lev.distance "kitten" "sitting")
+
+let test_find_similar_names () =
+  let module Lev = Tart.Levenshtein in
+  let candidates = [ "length"; "concat"; "car"; "cdr"; "cons"; "cadr" ] in
+  (* Exact match should not be returned *)
+  Alcotest.(check (list string))
+    "no exact match" []
+    (Lev.find_similar_names ~query:"length" ~candidates);
+  (* Single typo should be found *)
+  let result = Lev.find_similar_names ~query:"caar" ~candidates in
+  Alcotest.(check bool) "finds car" true (List.mem "car" result);
+  Alcotest.(check bool) "finds cadr" true (List.mem "cadr" result);
+  (* Too different should not be found *)
+  Alcotest.(check (list string))
+    "nothing similar to xyz" []
+    (Lev.find_similar_names ~query:"xyz" ~candidates)
+
+let test_suggest_name () =
+  let module Lev = Tart.Levenshtein in
+  let candidates = [ "length"; "concat"; "car"; "cdr"; "cons" ] in
+  Alcotest.(check (option string))
+    "suggests car for caar" (Some "car")
+    (Lev.suggest_name ~query:"caar" ~candidates);
+  Alcotest.(check (option string))
+    "nothing for xyz" None
+    (Lev.suggest_name ~query:"xyz" ~candidates)
+
+let test_end_to_end_undefined_variable () =
+  (* Type-check (+ unknwon 1) where unknwon is not defined *)
+  let sexp = parse "(+ unknwon 1)" in
+  let result = Check.check_program [ sexp ] in
+  Alcotest.(check bool) "has undefined" true (List.length result.undefineds > 0);
+  let undef = List.hd result.undefineds in
+  Alcotest.(check string) "name is unknwon" "unknwon" undef.name
+
+let test_end_to_end_undefined_with_suggestion () =
+  (* Type-check (+ lengtth xs) where lengtth is a typo for length *)
+  let sexp = parse "(lengtth xs)" in
+  let env =
+    Tart.Type_env.extend_mono "length"
+      (Types.arrow [ Types.Prim.any ] Types.Prim.int)
+      (Tart.Type_env.extend_mono "xs" Types.Prim.any Tart.Type_env.empty)
+  in
+  let result = Check.check_program ~env [ sexp ] in
+  Alcotest.(check bool) "has undefined" true (List.length result.undefineds > 0);
+  let undef = List.hd result.undefineds in
+  Alcotest.(check string) "name is lengtth" "lengtth" undef.name;
+  (* Get candidates from environment *)
+  let candidates = Tart.Type_env.names result.env in
+  let d =
+    Diag.undefined_variable ~span:undef.span ~name:undef.name ~candidates ()
+  in
+  Alcotest.(check bool) "has help" true (List.length d.help > 0);
+  let help_combined = String.concat " " d.help in
+  Alcotest.(check bool)
+    "suggests length" true
+    (contains_pattern (Str.regexp "length") help_combined)
+
+(* =============================================================================
    Integration Tests with Real Type Checking
    ============================================================================= *)
 
@@ -639,6 +751,23 @@ let () =
             test_end_to_end_option_nil_error;
           Alcotest.test_case "variable source" `Quick
             test_option_nil_variable_source;
+        ] );
+      ( "undefined_variable",
+        [
+          Alcotest.test_case "diagnostic creation" `Quick
+            test_undefined_variable_diagnostic;
+          Alcotest.test_case "with suggestion" `Quick
+            test_undefined_variable_with_suggestion;
+          Alcotest.test_case "no similar names" `Quick
+            test_undefined_variable_no_similar;
+          Alcotest.test_case "levenshtein distance" `Quick
+            test_levenshtein_distance;
+          Alcotest.test_case "find similar names" `Quick test_find_similar_names;
+          Alcotest.test_case "suggest name" `Quick test_suggest_name;
+          Alcotest.test_case "end-to-end undefined" `Quick
+            test_end_to_end_undefined_variable;
+          Alcotest.test_case "end-to-end with suggestion" `Quick
+            test_end_to_end_undefined_with_suggestion;
         ] );
       ( "integration",
         [
