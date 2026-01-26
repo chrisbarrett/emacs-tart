@@ -250,8 +250,8 @@ Minimum coverage:
 - [x] [R2] Implement type syntax parser
 - [x] [R3] Enforce explicit quantification
 - [x] [R4] Implement bounded quantifiers
-- [ ] [R5] Handle function signatures
-- [ ] [R6] Handle variable declarations
+- [x] [R5] Handle function signatures
+- [x] [R6] Handle variable declarations
 - [ ] [R7] Handle type aliases (with definition)
 - [ ] [R8] Handle parameterized type aliases
 - [ ] [R9] Handle opaque types (no definition)

@@ -7,9 +7,9 @@ Based on specs 07-15, this plan prioritizes tasks by dependencies and impact.
 Foundation for module boundaries and type-checked code.
 
 ### 1.1 Function and Variable Loading
-- [ ] [R5] Load `defun` signatures into type environment
-- [ ] [R6] Load `defvar` declarations into type environment
-- [ ] Verify: Type checker uses loaded signatures for calls
+- [x] [R5] Load `defun` signatures into type environment
+- [x] [R6] Load `defvar` declarations into type environment
+- [x] Verify: Type checker uses loaded signatures for calls
 
 ### 1.2 Type Aliases
 - [ ] [R7] Load type aliases (with definition) into type context
