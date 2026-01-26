@@ -2,9 +2,25 @@
 
     This module provides structured diagnostic information for type errors,
     including source locations, expected vs actual types, and related locations
-    (provenance) for understanding where types originated. *)
+    (provenance) for understanding where types originated.
+
+    Error codes follow Rust conventions:
+    - E0308: Type mismatch
+    - E0317: Incompatible branch types
+    - E0061: Wrong number of arguments
+    - E0106: Infinite type (occurs check) *)
 
 (** {1 Types} *)
+
+(** Error codes for categorizing diagnostics. *)
+type error_code =
+  | E0308  (** Type mismatch *)
+  | E0317  (** Incompatible branch types *)
+  | E0061  (** Wrong number of arguments (arity) *)
+  | E0106  (** Infinite type (occurs check) *)
+
+val error_code_to_string : error_code -> string
+(** Format an error code for display. *)
 
 (** Severity level for diagnostics. *)
 type severity = Error | Warning | Hint
@@ -14,11 +30,13 @@ type related_location = { span : Syntax.Location.span; message : string }
 
 type t = {
   severity : severity;
+  code : error_code option;  (** Error code for categorization *)
   span : Syntax.Location.span;  (** Primary location of the error *)
   message : string;  (** Main error message *)
   expected : Core.Types.typ option;  (** Expected type (if applicable) *)
   actual : Core.Types.typ option;  (** Actual type found (if applicable) *)
   related : related_location list;  (** Related locations with context *)
+  help : string list;  (** Suggested fixes *)
 }
 (** A structured diagnostic message. *)
 
@@ -31,7 +49,10 @@ val type_mismatch :
   ?related:related_location list ->
   unit ->
   t
-(** Create a type mismatch diagnostic. *)
+(** Create a type mismatch diagnostic with help suggestions.
+
+    Automatically detects Option/nil mismatches and suggests appropriate fixes
+    like [when-let] or [or] for nil handling. *)
 
 val arity_mismatch :
   span:Syntax.Location.span ->
@@ -78,17 +99,23 @@ val to_string : t -> string
 
     Output format (similar to rustc/clang):
     {v
-      file.el:10:5: error: Type mismatch: expected Int but found String
+      error[E0308]: type mismatch: expected Int but found String
+        --> file.el:10:5
+        |
         = expected: Int
         = found: String
-        = note: expected type from function signature at file.el:5:1
+        |
+      note: expected type from function signature
+        --> file.el:5:1
+        |
+      help: convert the integer to a string: (number-to-string ...)
     v} *)
 
 val to_string_compact : t -> string
 (** Format a diagnostic in a compact single-line format.
 
     Useful for IDE integration and machine parsing. Format:
-    [file:line:col: severity: message [expected: T1, found: T2]] *)
+    [file:line:col: severity[CODE]: message [expected: T1, found: T2]] *)
 
 val to_string_list : t list -> string
 (** Format multiple diagnostics. *)
@@ -97,6 +124,12 @@ val to_string_list : t list -> string
 
 val span : t -> Syntax.Location.span
 (** Get the primary span of a diagnostic. *)
+
+val code : t -> error_code option
+(** Get the error code of a diagnostic. *)
+
+val help : t -> string list
+(** Get the help suggestions for a diagnostic. *)
 
 val all_spans : t -> Syntax.Location.span list
 (** Get all spans (primary and related) from a diagnostic. *)

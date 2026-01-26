@@ -5,10 +5,22 @@
 
 open Core.Types
 
+(** Context about where a constraint originated.
+
+    Used to provide better error messages with function names and signatures. *)
+type context =
+  | NoContext
+  | FunctionArg of {
+      fn_name : string;  (** Name of the function being called *)
+      fn_type : typ;  (** Full function type *)
+      arg_index : int;  (** Which argument (0-indexed) *)
+    }
+
 type t = {
   lhs : typ;  (** Left-hand side type *)
   rhs : typ;  (** Right-hand side type *)
   loc : Syntax.Location.span;  (** Source location for error reporting *)
+  context : context;  (** Optional context for better errors *)
 }
 (** An equality constraint: two types that must unify. *)
 
@@ -16,7 +28,7 @@ type set = t list
 (** A set of constraints to be solved *)
 
 (** Create an equality constraint *)
-let equal lhs rhs loc = { lhs; rhs; loc }
+let equal ?(context = NoContext) lhs rhs loc = { lhs; rhs; loc; context }
 
 (** Empty constraint set *)
 let empty : set = []

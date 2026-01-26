@@ -11,8 +11,8 @@ module C = Constraint
 
 (** Unification errors *)
 type error =
-  | TypeMismatch of typ * typ * Syntax.Location.span
-      (** Two concrete types that cannot unify *)
+  | TypeMismatch of typ * typ * Syntax.Location.span * C.context
+      (** Two concrete types that cannot unify, with optional context *)
   | OccursCheck of tvar_id * typ * Syntax.Location.span
       (** Type variable occurs in the type it's being unified with *)
   | ArityMismatch of int * int * Syntax.Location.span
@@ -20,7 +20,7 @@ type error =
 
 (** Format an error for display *)
 let error_to_string = function
-  | TypeMismatch (t1, t2, _) ->
+  | TypeMismatch (t1, t2, _, _) ->
       Printf.sprintf "Type mismatch: cannot unify %s with %s" (to_string t1)
         (to_string t2)
   | OccursCheck (id, ty, _) ->
@@ -32,9 +32,14 @@ let error_to_string = function
 
 (** Get the location from an error *)
 let error_location = function
-  | TypeMismatch (_, _, loc) -> loc
+  | TypeMismatch (_, _, loc, _) -> loc
   | OccursCheck (_, _, loc) -> loc
   | ArityMismatch (_, _, loc) -> loc
+
+(** Get the context from an error *)
+let error_context = function
+  | TypeMismatch (_, _, _, ctx) -> ctx
+  | OccursCheck _ | ArityMismatch _ -> C.NoContext
 
 type 'a result = ('a, error) Result.t
 (** Result type for unification *)
@@ -42,17 +47,20 @@ type 'a result = ('a, error) Result.t
 (** Bind operator for Result monad *)
 let ( let* ) = Result.bind
 
+type occurs_error = tvar_id * typ * Syntax.Location.span
+(** Internal occurs check error (without context) *)
+
 (** Occurs check: ensure a type variable does not occur in a type.
 
     This prevents infinite types like `a = List a`. Also updates levels for
     let-generalization: if we find a type variable with a higher level, we lower
     it to the current level. *)
-let rec occurs_check tv_id tv_level ty loc : unit result =
+let rec occurs_check tv_id tv_level ty loc : (unit, occurs_error) Result.t =
   match repr ty with
   | TVar tv -> (
       match !tv with
       | Unbound (id, level) ->
-          if id = tv_id then Error (OccursCheck (tv_id, ty, loc))
+          if id = tv_id then Error (tv_id, ty, loc)
           else (
             (* Level adjustment: if the type variable is at a higher level,
                lower it to the current level. This is essential for
@@ -87,11 +95,19 @@ and occurs_check_params tv_id tv_level params loc =
       occurs_check tv_id tv_level ty loc)
     (Ok ()) params
 
+(** Internal error type without context (used during unification) *)
+type internal_error =
+  | ITypeMismatch of typ * typ * Syntax.Location.span
+  | IOccursCheck of tvar_id * typ * Syntax.Location.span
+  | IArityMismatch of int * int * Syntax.Location.span
+
+type 'a internal_result = ('a, internal_error) Result.t
+
 (** Unify two types.
 
     This is the core unification algorithm. It follows links and handles each
     type constructor case. *)
-let rec unify t1 t2 loc : unit result =
+let rec unify t1 t2 loc : unit internal_result =
   let t1 = repr t1 in
   let t2 = repr t2 in
   if t1 == t2 then
@@ -103,21 +119,23 @@ let rec unify t1 t2 loc : unit result =
     | TVar tv, ty | ty, TVar tv -> (
         match !tv with
         | Link _ -> failwith "repr should have followed link"
-        | Unbound (id, level) ->
+        | Unbound (id, level) -> (
             (* Occurs check before linking *)
-            let* () = occurs_check id level ty loc in
-            tv := Link ty;
-            Ok ())
+            match occurs_check id level ty loc with
+            | Error (tv_id, ty, loc) -> Error (IOccursCheck (tv_id, ty, loc))
+            | Ok () ->
+                tv := Link ty;
+                Ok ()))
     (* Any is the top type - unifies with anything *)
     | TCon "Any", _ | _, TCon "Any" -> Ok ()
     (* Type constants must match exactly *)
     | TCon n1, TCon n2 ->
-        if n1 = n2 then Ok () else Error (TypeMismatch (t1, t2, loc))
+        if n1 = n2 then Ok () else Error (ITypeMismatch (t1, t2, loc))
     (* Type applications: constructor and args must match *)
     | TApp (c1, args1), TApp (c2, args2) ->
-        if c1 <> c2 then Error (TypeMismatch (t1, t2, loc))
+        if c1 <> c2 then Error (ITypeMismatch (t1, t2, loc))
         else if List.length args1 <> List.length args2 then
-          Error (ArityMismatch (List.length args1, List.length args2, loc))
+          Error (IArityMismatch (List.length args1, List.length args2, loc))
         else unify_list args1 args2 loc
     (* Function types: params and return must match.
        Handle rest/optional parameters specially. *)
@@ -128,7 +146,7 @@ let rec unify t1 t2 loc : unit result =
        Full higher-rank polymorphism would need more sophisticated handling. *)
     | TForall (vs1, b1), TForall (vs2, b2) ->
         if List.length vs1 <> List.length vs2 then
-          Error (TypeMismatch (t1, t2, loc))
+          Error (ITypeMismatch (t1, t2, loc))
         else
           (* Unify bodies directly - this is simplified.
              A full implementation would alpha-rename. *)
@@ -137,15 +155,15 @@ let rec unify t1 t2 loc : unit result =
        Full union handling would need subtyping. *)
     | TUnion ts1, TUnion ts2 ->
         if List.length ts1 <> List.length ts2 then
-          Error (TypeMismatch (t1, t2, loc))
+          Error (ITypeMismatch (t1, t2, loc))
         else unify_list ts1 ts2 loc
     (* Tuple types: element-wise unification *)
     | TTuple ts1, TTuple ts2 ->
         if List.length ts1 <> List.length ts2 then
-          Error (ArityMismatch (List.length ts1, List.length ts2, loc))
+          Error (IArityMismatch (List.length ts1, List.length ts2, loc))
         else unify_list ts1 ts2 loc
     (* All other combinations are type mismatches *)
-    | _ -> Error (TypeMismatch (t1, t2, loc))
+    | _ -> Error (ITypeMismatch (t1, t2, loc))
 
 and unify_list ts1 ts2 loc =
   List.fold_left2
@@ -218,9 +236,9 @@ and unify_param_lists ps1 ps2 loc =
         let* () = unify_param p1 p2 loc in
         unify_param_lists rest1 rest2 loc
   (* Left exhausted but right has more (and no rest on left) *)
-  | [], _ :: _ -> Error (ArityMismatch (0, List.length ps2, loc))
+  | [], _ :: _ -> Error (IArityMismatch (0, List.length ps2, loc))
   (* Right exhausted but left has more (and no rest on right) *)
-  | _ :: _, [] -> Error (ArityMismatch (List.length ps1, 0, loc))
+  | _ :: _, [] -> Error (IArityMismatch (List.length ps1, 0, loc))
 
 and unify_param p1 p2 loc =
   match (p1, p2) with
@@ -231,12 +249,19 @@ and unify_param p1 p2 loc =
       if n1 = n2 then unify t1 t2 loc
       else
         Error
-          (TypeMismatch
+          (ITypeMismatch
              (TArrow ([ p1 ], Prim.any), TArrow ([ p2 ], Prim.any), loc))
   | _ ->
       (* Different parameter kinds don't unify *)
       Error
-        (TypeMismatch (TArrow ([ p1 ], Prim.any), TArrow ([ p2 ], Prim.any), loc))
+        (ITypeMismatch
+           (TArrow ([ p1 ], Prim.any), TArrow ([ p2 ], Prim.any), loc))
+
+(** Convert an internal error to an external error with context *)
+let to_external_error (ctx : C.context) : internal_error -> error = function
+  | ITypeMismatch (t1, t2, loc) -> TypeMismatch (t1, t2, loc, ctx)
+  | IOccursCheck (id, ty, loc) -> OccursCheck (id, ty, loc)
+  | IArityMismatch (exp, act, loc) -> ArityMismatch (exp, act, loc)
 
 (** Solve a set of constraints.
 
@@ -245,7 +270,9 @@ let solve (constraints : C.set) : unit result =
   List.fold_left
     (fun acc (c : C.t) ->
       let* () = acc in
-      unify c.lhs c.rhs c.loc)
+      match unify c.lhs c.rhs c.loc with
+      | Ok () -> Ok ()
+      | Error e -> Error (to_external_error c.context e))
     (Ok ()) constraints
 
 (** Solve constraints and return all errors (not just the first).
@@ -254,5 +281,13 @@ let solve (constraints : C.set) : unit result =
 let solve_all (constraints : C.set) : error list =
   List.filter_map
     (fun (c : C.t) ->
-      match unify c.lhs c.rhs c.loc with Ok () -> None | Error e -> Some e)
+      match unify c.lhs c.rhs c.loc with
+      | Ok () -> None
+      | Error e -> Some (to_external_error c.context e))
     constraints
+
+(** Public unify function - wraps internal unify with NoContext *)
+let unify t1 t2 loc =
+  match unify t1 t2 loc with
+  | Ok () -> Ok ()
+  | Error e -> Error (to_external_error C.NoContext e)

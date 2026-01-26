@@ -10,8 +10,12 @@
 
 (** Unification errors. *)
 type error =
-  | TypeMismatch of Core.Types.typ * Core.Types.typ * Syntax.Location.span
-      (** Two concrete types that cannot unify. *)
+  | TypeMismatch of
+      Core.Types.typ
+      * Core.Types.typ
+      * Syntax.Location.span
+      * Constraint.context
+      (** Two concrete types that cannot unify, with optional context. *)
   | OccursCheck of Core.Types.tvar_id * Core.Types.typ * Syntax.Location.span
       (** Type variable occurs in the type it's being unified with. *)
   | ArityMismatch of int * int * Syntax.Location.span
@@ -22,6 +26,9 @@ val error_to_string : error -> string
 
 val error_location : error -> Syntax.Location.span
 (** Get the source location from an error. *)
+
+val error_context : error -> Constraint.context
+(** Get the context from an error. *)
 
 (** {1 Unification} *)
 

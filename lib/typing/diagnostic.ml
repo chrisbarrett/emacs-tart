@@ -8,10 +8,30 @@
     - Source location of the error
     - Expected type
     - Actual type
-    - Related locations (e.g., where expected type originated) *)
+    - Related locations (e.g., where expected type originated)
+
+    Error codes follow Rust conventions:
+    - E0308: Type mismatch
+    - E0317: Incompatible branch types
+    - E0061: Wrong number of arguments
+    - E0106: Infinite type (occurs check) *)
 
 module Types = Core.Types
 module Loc = Syntax.Location
+
+(** Error codes for categorizing diagnostics. *)
+type error_code =
+  | E0308  (** Type mismatch *)
+  | E0317  (** Incompatible branch types *)
+  | E0061  (** Wrong number of arguments (arity) *)
+  | E0106  (** Infinite type (occurs check) *)
+
+(** Format an error code for display. *)
+let error_code_to_string = function
+  | E0308 -> "E0308"
+  | E0317 -> "E0317"
+  | E0061 -> "E0061"
+  | E0106 -> "E0106"
 
 (** Severity level for diagnostics *)
 type severity = Error | Warning | Hint
@@ -21,72 +41,188 @@ type related_location = { span : Loc.span; message : string }
 
 type t = {
   severity : severity;
+  code : error_code option;  (** Error code for categorization *)
   span : Loc.span;  (** Primary location of the error *)
   message : string;  (** Main error message *)
   expected : Types.typ option;  (** Expected type (if applicable) *)
   actual : Types.typ option;  (** Actual type found (if applicable) *)
   related : related_location list;  (** Related locations with context *)
+  help : string list;  (** Suggested fixes *)
 }
 (** A structured diagnostic message *)
 
-(** Create a type mismatch diagnostic *)
+(** Check if a type is an Option type. *)
+let is_option_type ty =
+  match Types.repr ty with Types.TApp ("Option", _) -> true | _ -> false
+
+(** Generate help suggestions for type mismatches.
+
+    Analyzes expected and actual types to suggest common fixes. *)
+let suggest_type_fix ~expected ~actual : string list =
+  let expected = Types.repr expected in
+  let actual = Types.repr actual in
+  match (expected, actual) with
+  (* Int -> String: suggest number-to-string *)
+  | Types.TCon "String", Types.TCon "Int" ->
+      [ "convert the integer to a string: (number-to-string ...)" ]
+  (* String -> Int: suggest string-to-number *)
+  | Types.TCon "Int", Types.TCon "String" ->
+      [ "convert the string to a number: (string-to-number ...)" ]
+  (* Option inner -> inner: suggest nil handling *)
+  | _, Types.TApp ("Option", [ inner ])
+    when Types.equal expected inner || Types.equal expected (Types.repr inner)
+    ->
+      [
+        "check for nil first: (when-let ((x ...)) ...)";
+        "or provide a default: (or ... default-value)";
+      ]
+  (* inner -> Option inner: not usually an error, but could suggest wrapping *)
+  | Types.TApp ("Option", [ inner ]), _
+    when Types.equal (Types.repr inner) actual ->
+      [ "the value is already non-nil and can be used directly" ]
+  (* Symbol -> String: suggest symbol-name *)
+  | Types.TCon "String", Types.TCon "Symbol" ->
+      [ "convert the symbol to a string: (symbol-name ...)" ]
+  (* String -> Symbol: suggest intern *)
+  | Types.TCon "Symbol", Types.TCon "String" ->
+      [ "convert the string to a symbol: (intern ...)" ]
+  (* List -> single element: suggest car or first *)
+  | _, Types.TApp ("List", _) ->
+      [ "to get a single element from a list, use (car ...) or (nth N ...)" ]
+  | _ -> []
+
+(** Create a type mismatch diagnostic with help suggestions. *)
 let type_mismatch ~span ~expected ~actual ?(related = []) () =
+  let help = suggest_type_fix ~expected ~actual in
+  (* Detect Option/nil mismatch for better messaging *)
+  let is_nil_error = is_option_type actual && not (is_option_type expected) in
   let message =
-    Printf.sprintf "Type mismatch: expected %s but found %s"
-      (Types.to_string expected) (Types.to_string actual)
+    if is_nil_error then "possible nil value"
+    else
+      Printf.sprintf "type mismatch: expected %s but found %s"
+        (Types.to_string expected) (Types.to_string actual)
   in
   {
     severity = Error;
+    code = Some E0308;
     span;
     message;
     expected = Some expected;
     actual = Some actual;
     related;
+    help;
   }
 
 (** Create an arity mismatch diagnostic *)
 let arity_mismatch ~span ~expected ~actual ?(related = []) () =
   let message =
-    Printf.sprintf "Arity mismatch: expected %d arguments but got %d" expected
+    Printf.sprintf "wrong number of arguments: expected %d but got %d" expected
       actual
   in
-  { severity = Error; span; message; expected = None; actual = None; related }
+  {
+    severity = Error;
+    code = Some E0061;
+    span;
+    message;
+    expected = None;
+    actual = None;
+    related;
+    help = [];
+  }
 
 (** Create an occurs check diagnostic *)
 let occurs_check ~span ~tvar_id ~typ ?(related = []) () =
   let message =
-    Printf.sprintf "Infinite type: type variable '_%d occurs in %s" tvar_id
+    Printf.sprintf "infinite type: type variable '_%d occurs in %s" tvar_id
       (Types.to_string typ)
   in
   {
     severity = Error;
+    code = Some E0106;
     span;
     message;
     expected = None;
     actual = Some typ;
     related;
+    help = [ "recursive types require explicit type annotations" ];
   }
 
 (** Create a missing signature warning for a public function not in .tart file
 *)
 let missing_signature ~span ~name () =
   let message =
-    Printf.sprintf "Function `%s` defined but not in signature file" name
+    Printf.sprintf "function `%s` defined but not in signature file" name
   in
   {
     severity = Warning;
+    code = None;
     span;
     message;
     expected = None;
     actual = None;
     related = [];
+    help = [];
+  }
+
+(** Format a function signature for display in error messages *)
+let format_function_signature fn_name fn_type =
+  Printf.sprintf "(%s %s)" fn_name (Types.to_string fn_type)
+
+(** Generate a note about function argument expectation *)
+let function_arg_note fn_name fn_type arg_index expected : related_location list
+    =
+  let param_name =
+    match Types.repr fn_type with
+    | Types.TArrow (params, _) -> (
+        match List.nth_opt params arg_index with
+        | Some (Types.PPositional _) ->
+            Printf.sprintf "argument %d" (arg_index + 1)
+        | Some (Types.POptional _) ->
+            Printf.sprintf "optional argument %d" (arg_index + 1)
+        | Some (Types.PRest _) -> "rest argument"
+        | Some (Types.PKey (name, _)) -> Printf.sprintf "keyword :%s" name
+        | None -> Printf.sprintf "argument %d" (arg_index + 1))
+    | _ -> Printf.sprintf "argument %d" (arg_index + 1)
+  in
+  [
+    {
+      span = Loc.dummy_span;
+      message =
+        Printf.sprintf "`%s` expects %s to be %s\n      %s" fn_name param_name
+          (Types.to_string expected)
+          (format_function_signature fn_name fn_type);
+    };
+  ]
+
+(** Create a type mismatch diagnostic with context *)
+let type_mismatch_with_context ~span ~expected ~actual ~context () =
+  let base_help = suggest_type_fix ~expected ~actual in
+  let is_nil_error = is_option_type actual && not (is_option_type expected) in
+  let message =
+    if is_nil_error then "possible nil value" else "type mismatch"
+  in
+  let related =
+    match context with
+    | Constraint.FunctionArg { fn_name; fn_type; arg_index } ->
+        function_arg_note fn_name fn_type arg_index expected
+    | Constraint.NoContext -> []
+  in
+  {
+    severity = Error;
+    code = Some E0308;
+    span;
+    message;
+    expected = Some expected;
+    actual = Some actual;
+    related;
+    help = base_help;
   }
 
 (** Convert a unification error to a diagnostic *)
 let of_unify_error (err : Unify.error) : t =
   match err with
-  | Unify.TypeMismatch (expected, actual, span) ->
-      type_mismatch ~span ~expected ~actual ()
+  | Unify.TypeMismatch (expected, actual, span, context) ->
+      type_mismatch_with_context ~span ~expected ~actual ~context ()
   | Unify.OccursCheck (tvar_id, typ, span) ->
       occurs_check ~span ~tvar_id ~typ ()
   | Unify.ArityMismatch (expected, actual, span) ->
@@ -123,53 +259,75 @@ let format_severity = function
 
     Output format (similar to rustc/clang):
     {[
-       file.el:10:5: error: Type mismatch: expected Int but found String
-         |
-      10 |   (+ x "hello")
-         |        ^^^^^^^
-         |
-         = expected: Int
-         = found: String
-         = note: expected type from function signature at file.el:5:1
+      error[E0308]: type mismatch: expected Int but found String
+        --> file.el:10:5
+        |
+        = expected: Int
+        = found: String
+        |
+      note: expected type from function signature
+        --> file.el:5:1
+        |
+      help: convert the integer to a string: (number-to-string ...)
     ]} *)
 let to_string (d : t) : string =
   let buf = Buffer.create 256 in
 
-  (* Main error line *)
-  Buffer.add_string buf (format_span d.span);
-  Buffer.add_string buf ": ";
+  (* Main error line with code *)
   Buffer.add_string buf (format_severity d.severity);
+  (match d.code with
+  | Some code ->
+      Buffer.add_string buf "[";
+      Buffer.add_string buf (error_code_to_string code);
+      Buffer.add_string buf "]"
+  | None -> ());
   Buffer.add_string buf ": ";
   Buffer.add_string buf d.message;
+
+  (* Location *)
+  Buffer.add_string buf "\n  --> ";
+  Buffer.add_string buf (format_span d.span);
 
   (* Type information *)
   (match d.expected with
   | Some ty ->
-      Buffer.add_string buf "\n  = expected: ";
+      Buffer.add_string buf "\n   |\n   = expected: ";
       Buffer.add_string buf (Types.to_string ty)
   | None -> ());
   (match d.actual with
   | Some ty ->
-      Buffer.add_string buf "\n  = found: ";
+      Buffer.add_string buf "\n   = found: ";
       Buffer.add_string buf (Types.to_string ty)
   | None -> ());
 
   (* Related locations *)
   List.iter
     (fun (rel : related_location) ->
-      Buffer.add_string buf "\n  = note: ";
+      Buffer.add_string buf "\n   |\nnote: ";
       Buffer.add_string buf rel.message;
-      Buffer.add_string buf " at ";
+      Buffer.add_string buf "\n  --> ";
       Buffer.add_string buf (format_span rel.span))
     d.related;
+
+  (* Help suggestions *)
+  List.iter
+    (fun help ->
+      Buffer.add_string buf "\n   |\nhelp: ";
+      Buffer.add_string buf help)
+    d.help;
 
   Buffer.contents buf
 
 (** Format a diagnostic in a compact single-line format.
 
     Useful for IDE integration and machine parsing. Format: file:line:col:
-    severity: message [expected: T1, found: T2] *)
+    severity[CODE]: message [expected: T1, found: T2] *)
 let to_string_compact (d : t) : string =
+  let code_str =
+    match d.code with
+    | Some c -> "[" ^ error_code_to_string c ^ "]"
+    | None -> ""
+  in
   let type_info =
     match (d.expected, d.actual) with
     | Some exp, Some act ->
@@ -177,9 +335,9 @@ let to_string_compact (d : t) : string =
           (Types.to_string act)
     | _ -> ""
   in
-  Printf.sprintf "%s: %s: %s%s" (format_span d.span)
+  Printf.sprintf "%s: %s%s: %s%s" (format_span d.span)
     (format_severity d.severity)
-    d.message type_info
+    code_str d.message type_info
 
 (** Format multiple diagnostics *)
 let to_string_list (ds : t list) : string =
@@ -187,6 +345,12 @@ let to_string_list (ds : t list) : string =
 
 (** Get the primary span of a diagnostic *)
 let span (d : t) : Loc.span = d.span
+
+(** Get the error code of a diagnostic *)
+let code (d : t) : error_code option = d.code
+
+(** Get the help suggestions for a diagnostic *)
+let help (d : t) : string list = d.help
 
 (** Get all spans (primary and related) from a diagnostic *)
 let all_spans (d : t) : Loc.span list =

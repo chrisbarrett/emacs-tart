@@ -414,28 +414,65 @@ and infer_not env arg _span =
   let arg_result = infer env arg in
   { ty = Prim.bool; constraints = arg_result.constraints }
 
+(** Extract function name from a function expression for error context *)
+and get_fn_name (fn : Syntax.Sexp.t) : string option =
+  let open Syntax.Sexp in
+  match fn with Symbol (name, _) -> Some name | _ -> None
+
 (** Infer the type of a function application.
 
     Generates constraint: fn_type = (arg_types...) -> result_type *)
 and infer_application env fn args span =
   let fn_result = infer env fn in
   let arg_results = List.map (infer env) args in
+  let fn_name = get_fn_name fn in
 
   (* Fresh type variable for the result *)
   let result_ty = fresh_tvar (Env.current_level env) in
 
-  (* Build expected function type *)
-  let arg_types = List.map (fun r -> PPositional r.ty) arg_results in
-  let expected_fn_type = TArrow (arg_types, result_ty) in
+  (* Build expected function type - one constraint per argument for better
+     error messages *)
+  let arg_constraints_with_context =
+    List.mapi
+      (fun i arg_result ->
+        let expected_param_ty = fresh_tvar (Env.current_level env) in
+        let context =
+          match fn_name with
+          | Some name ->
+              C.FunctionArg
+                { fn_name = name; fn_type = fn_result.ty; arg_index = i }
+          | None -> C.NoContext
+        in
+        ( expected_param_ty,
+          C.equal ~context expected_param_ty arg_result.ty
+            (Syntax.Sexp.span_of (List.nth args i)) ))
+      arg_results
+  in
+
+  (* Build the expected function type using the fresh param types *)
+  let param_types =
+    List.map (fun (ty, _) -> PPositional ty) arg_constraints_with_context
+  in
+  let expected_fn_type = TArrow (param_types, result_ty) in
 
   (* Constraint: actual function type = expected function type *)
   let fn_constraint = C.equal fn_result.ty expected_fn_type span in
 
-  (* Combine all constraints *)
+  (* Collect all argument constraints *)
+  let arg_type_constraints =
+    List.fold_left
+      (fun acc (_, c) -> C.add c acc)
+      C.empty arg_constraints_with_context
+  in
+
+  (* Combine all constraints.
+     Order matters for error context: fn_constraint must come BEFORE
+     arg_type_constraints so that the function signature determines the
+     expected type before we compare with actual argument types. *)
   let arg_constraints = combine_results arg_results in
   let all_constraints =
     C.combine fn_result.constraints
-      (C.combine arg_constraints (C.add fn_constraint C.empty))
+      (C.combine arg_constraints (C.add fn_constraint arg_type_constraints))
   in
 
   { ty = result_ty; constraints = all_constraints }

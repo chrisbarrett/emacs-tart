@@ -5,6 +5,7 @@ module Loc = Tart.Location
 module Diag = Tart.Diagnostic
 module Check = Tart.Check
 module Unify = Tart.Unify
+module Constraint = Tart.Constraint
 
 (** Parse a string to S-expression for testing *)
 let parse str =
@@ -172,7 +173,10 @@ let test_to_string_compact () =
 
 let test_of_unify_type_mismatch () =
   let span = Loc.dummy_span in
-  let err = Unify.TypeMismatch (Types.Prim.int, Types.Prim.string, span) in
+  let err =
+    Unify.TypeMismatch
+      (Types.Prim.int, Types.Prim.string, span, Constraint.NoContext)
+  in
   let d = Diag.of_unify_error err in
   Alcotest.(check bool) "is error" true (Diag.is_error d);
   Alcotest.(check string)
@@ -197,20 +201,65 @@ let test_of_unify_arity_mismatch () =
   let d = Diag.of_unify_error err in
   Alcotest.(check bool) "is error" true (Diag.is_error d);
   Alcotest.(check bool)
-    "message contains arity" true
-    (contains_pattern (Str.regexp_case_fold "arity") d.message)
+    "message contains arguments" true
+    (contains_pattern (Str.regexp_case_fold "arguments") d.message)
 
 let test_of_unify_errors_list () =
   let span = Loc.dummy_span in
   let errors =
     [
-      Unify.TypeMismatch (Types.Prim.int, Types.Prim.string, span);
+      Unify.TypeMismatch
+        (Types.Prim.int, Types.Prim.string, span, Constraint.NoContext);
       Unify.ArityMismatch (1, 2, span);
     ]
   in
   let diagnostics = Diag.of_unify_errors errors in
   Alcotest.(check int) "two diagnostics" 2 (List.length diagnostics);
   Alcotest.(check int) "two errors" 2 (Diag.count_errors diagnostics)
+
+let test_type_mismatch_with_function_context () =
+  let span = Loc.dummy_span in
+  let fn_type = Types.arrow [ Types.Prim.string ] Types.Prim.string in
+  let context =
+    Constraint.FunctionArg { fn_name = "upcase"; fn_type; arg_index = 0 }
+  in
+  let err =
+    Unify.TypeMismatch (Types.Prim.string, Types.Prim.int, span, context)
+  in
+  let d = Diag.of_unify_error err in
+  Alcotest.(check bool) "is error" true (Diag.is_error d);
+  Alcotest.(check bool) "has related info" true (List.length d.related > 0);
+  let related_msg = (List.hd d.related).message in
+  Alcotest.(check bool)
+    "related mentions function name" true
+    (contains_pattern (Str.regexp "upcase") related_msg);
+  Alcotest.(check bool)
+    "related mentions expected type" true
+    (contains_pattern (Str.regexp "String") related_msg)
+
+let test_end_to_end_function_arg_error () =
+  (* Type-check (upcase count) where count is Int - should get context *)
+  let sexp = parse "(upcase count)" in
+  let env =
+    Tart.Type_env.extend_mono "upcase"
+      (Types.arrow [ Types.Prim.string ] Types.Prim.string)
+      (Tart.Type_env.extend_mono "count" Types.Prim.int Tart.Type_env.empty)
+  in
+  let _, errors = Check.check_expr ~env sexp in
+  Alcotest.(check bool) "has error" true (List.length errors > 0);
+  let diagnostics = Diag.of_unify_errors errors in
+  (* Check first - find an error with context (some errors may not have it) *)
+  let with_related =
+    List.filter (fun d -> List.length d.Diag.related > 0) diagnostics
+  in
+  Alcotest.(check bool)
+    "has diagnostic with related info" true
+    (List.length with_related > 0);
+  let d = List.hd with_related in
+  let related_msg = (List.hd d.related).message in
+  Alcotest.(check bool)
+    "mentions upcase" true
+    (contains_pattern (Str.regexp "upcase") related_msg)
 
 (* =============================================================================
    Integration Tests with Real Type Checking
@@ -286,6 +335,8 @@ let () =
           Alcotest.test_case "of arity mismatch" `Quick
             test_of_unify_arity_mismatch;
           Alcotest.test_case "of errors list" `Quick test_of_unify_errors_list;
+          Alcotest.test_case "function context" `Quick
+            test_type_mismatch_with_function_context;
         ] );
       ( "integration",
         [
@@ -294,5 +345,7 @@ let () =
           Alcotest.test_case "source location" `Quick
             test_diagnostic_has_source_location;
           Alcotest.test_case "all spans" `Quick test_all_spans;
+          Alcotest.test_case "function arg error context" `Quick
+            test_end_to_end_function_arg_error;
         ] );
     ]

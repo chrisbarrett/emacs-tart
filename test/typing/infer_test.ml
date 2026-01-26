@@ -129,9 +129,10 @@ let test_lambda_constraint_count () =
    ============================================================================= *)
 
 let test_application_generates_constraint () =
-  (* Applying unknown function generates a constraint *)
+  (* Applying unknown function generates constraints:
+     1 for the function type, 1 per argument for better error messages *)
   let count = constraint_count "(f 1)" in
-  Alcotest.(check int) "application constraint" 1 count
+  Alcotest.(check int) "application constraint" 2 count
 
 let test_application_result_type () =
   (* Result is a fresh type variable *)
@@ -141,19 +142,19 @@ let test_application_result_type () =
     (String.length ty > 0 && ty.[0] = '\'')
 
 let test_known_function_application () =
-  (* Applying a known function *)
+  (* Applying a known function generates 1 constraint for fn type + 1 per arg *)
   let env = Env.extend_mono "add1" (arrow [ Prim.int ] Prim.int) Env.empty in
   let result =
     reset_tvar_counter ();
     let sexp = parse "(add1 42)" in
     Infer.infer env sexp
   in
-  (* The constraint should relate the function types *)
-  Alcotest.(check int) "known fn constraint" 1 (List.length result.constraints)
+  Alcotest.(check int) "known fn constraint" 2 (List.length result.constraints)
 
 let test_multi_arg_application () =
+  (* 1 constraint for fn type + 3 constraints for 3 args *)
   let count = constraint_count "(f 1 2 3)" in
-  Alcotest.(check int) "multi-arg constraint" 1 count
+  Alcotest.(check int) "multi-arg constraint" 4 count
 
 (* =============================================================================
    If Tests
