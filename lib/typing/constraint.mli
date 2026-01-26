@@ -34,6 +34,11 @@ type context =
       arg_index : int;
           (** Which type argument caused the mismatch (0-indexed) *)
     }  (** Explicit type instantiation via (@type [T1 T2] fn args) *)
+  | TypeArgArity of {
+      fn_name : string;  (** Name of the polymorphic function *)
+      expected : int;  (** Number of type parameters *)
+      actual : int;  (** Number of type arguments provided *)
+    }  (** Wrong number of type arguments in @type *)
 
 type t = {
   lhs : Core.Types.typ;  (** Left-hand side type *)

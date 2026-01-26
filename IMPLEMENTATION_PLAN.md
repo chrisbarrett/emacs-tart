@@ -388,7 +388,7 @@ Enable explicit instantiation of polymorphic types at call sites.
 
 ### 15.5 Error Handling
 
-- [ ] [R4] Validate type argument arity
+- [x] [R4] Validate type argument arity
 - [ ] [R6] Format error messages with annotation context
 - [ ] Verify: Wrong arity and type mismatch errors show context
 

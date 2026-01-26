@@ -792,6 +792,58 @@ let test_at_type_hk_mismatch () =
   (* Should have error: list vs option *)
   Alcotest.(check bool) "has type error" true (List.length errors > 0)
 
+(** Test that (@type [int string] identity 42) fails: too many type args *)
+let test_at_type_too_many_args () =
+  let env =
+    Env.extend_poly "identity" [ "a" ] (arrow [ TCon "a" ] (TCon "a")) Env.empty
+  in
+  let sexp = parse {|(@type [int string] identity 42)|} in
+  let _, errors = Check.check_expr ~env sexp in
+  (* Should error: identity has 1 type param, we gave 2 *)
+  Alcotest.(check bool) "has type error" true (List.length errors > 0)
+
+(** Test that (@type [] identity 42) fails: too few type args *)
+let test_at_type_too_few_args () =
+  let env =
+    Env.extend_poly "identity" [ "a" ] (arrow [ TCon "a" ] (TCon "a")) Env.empty
+  in
+  let sexp = parse {|(@type [] identity 42)|} in
+  let _, errors = Check.check_expr ~env sexp in
+  (* Should error: identity has 1 type param, we gave 0 *)
+  Alcotest.(check bool) "has type error" true (List.length errors > 0)
+
+(** Check if needle is a substring of haystack *)
+let contains_substring haystack needle =
+  let re = Str.regexp_string needle in
+  try
+    ignore (Str.search_forward re haystack 0);
+    true
+  with Not_found -> false
+
+(** Test that error message mentions number of type arguments *)
+let test_at_type_arity_error_message () =
+  let env =
+    Env.extend_poly "identity" [ "a" ] (arrow [ TCon "a" ] (TCon "a")) Env.empty
+  in
+  let sexp = parse {|(@type [int string] identity 42)|} in
+  let _, errors = Check.check_expr ~env sexp in
+  Alcotest.(check bool) "has error" true (List.length errors > 0);
+  let diag = Tart.Diagnostic.of_unify_error (List.hd errors) in
+  Alcotest.(check bool)
+    "message mentions type arguments" true
+    (contains_substring diag.message "type argument")
+
+(** Test that multi-param function with wrong arity fails *)
+let test_at_type_multi_param_arity () =
+  let pair_ty =
+    arrow [ TCon "a"; TCon "b" ] (TApp (TCon "cons", [ TCon "a"; TCon "b" ]))
+  in
+  let env = Env.extend_poly "pair" [ "a"; "b" ] pair_ty Env.empty in
+  (* pair has 2 type params, we give 3 *)
+  let sexp = parse {|(@type [int string bool] pair 1 "hi")|} in
+  let _, errors = Check.check_expr ~env sexp in
+  Alcotest.(check bool) "has type error" true (List.length errors > 0)
+
 (* =============================================================================
    Pcase Tests
    ============================================================================= *)
@@ -969,6 +1021,14 @@ let () =
             test_at_type_hk_instantiation;
           Alcotest.test_case "HK partial" `Quick test_at_type_hk_partial;
           Alcotest.test_case "HK mismatch" `Quick test_at_type_hk_mismatch;
+          Alcotest.test_case "too many type args" `Quick
+            test_at_type_too_many_args;
+          Alcotest.test_case "too few type args" `Quick
+            test_at_type_too_few_args;
+          Alcotest.test_case "arity error message" `Quick
+            test_at_type_arity_error_message;
+          Alcotest.test_case "multi-param arity" `Quick
+            test_at_type_multi_param_arity;
         ] );
       ( "pcase",
         [

@@ -327,6 +327,31 @@ let arity_mismatch_with_context ~span ~expected ~actual ~context () =
         related = fn_related;
         help = [];
       }
+  | Constraint.TypeArgArity { fn_name; expected = exp; actual = act } ->
+      let arg_word n = if n = 1 then "argument" else "arguments" in
+      let message =
+        Printf.sprintf "wrong number of type arguments: expected %d but got %d"
+          exp act
+      in
+      let related =
+        [
+          {
+            span = Loc.dummy_span;
+            message =
+              Printf.sprintf "`%s` has %d type %s" fn_name exp (arg_word exp);
+          };
+        ]
+      in
+      {
+        severity = Error;
+        code = Some E0061;
+        span;
+        message;
+        expected = None;
+        actual = None;
+        related;
+        help = [];
+      }
   | Constraint.NoContext | Constraint.IfBranch _ | Constraint.TartAnnotation _
   | Constraint.DeclaredReturn _ | Constraint.ExplicitInstantiation _ ->
       arity_mismatch ~span ~expected ~actual ()
@@ -508,6 +533,33 @@ let type_mismatch_with_context ~span ~expected ~actual ~context () =
         actual = Some actual;
         related;
         help = base_help;
+      }
+  | Constraint.TypeArgArity { fn_name; expected = exp; actual = act } ->
+      (* TypeArgArity context on a type mismatch means we generated a fake
+         constraint to report the arity error. Format it properly. *)
+      let arg_word n = if n = 1 then "argument" else "arguments" in
+      let message =
+        Printf.sprintf "wrong number of type arguments: expected %d but got %d"
+          exp act
+      in
+      let related =
+        [
+          {
+            span = Loc.dummy_span;
+            message =
+              Printf.sprintf "`%s` has %d type %s" fn_name exp (arg_word exp);
+          };
+        ]
+      in
+      {
+        severity = Error;
+        code = Some E0061;
+        span;
+        message;
+        expected = None;
+        actual = None;
+        related;
+        help = [];
       }
   | Constraint.NoContext ->
       let base_help = suggest_type_fix ~expected ~actual in

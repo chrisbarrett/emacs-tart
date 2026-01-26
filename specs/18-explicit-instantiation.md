@@ -180,7 +180,7 @@ Error: type mismatch
 - [x] [R1] Apply explicit type arguments during inference
 - [x] [R3] Handle `_` placeholder for partial instantiation
 - [x] [R2] Test HK type constructor instantiation
-- [ ] [R4] Validate type argument arity
+- [x] [R4] Validate type argument arity
 - [ ] [R6] Format error messages with annotation context
 
 Run review agent after R1 complete to validate approach.

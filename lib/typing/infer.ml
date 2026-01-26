@@ -760,6 +760,26 @@ and infer_explicit_instantiation (env : Env.t) (type_arg_sexps : Syntax.Sexp.t l
     | None -> ([], fresh_tvar (Env.current_level env))
   in
 
+  (* Check type argument arity: number of type args must match type params *)
+  let num_type_args = List.length parsed_type_args in
+  let num_type_params = List.length tvar_names in
+  let arity_error_constraint =
+    if num_type_args <> num_type_params && num_type_params > 0 then
+      (* Arity mismatch - create a constraint that will fail *)
+      let context =
+        C.TypeArgArity
+          {
+            fn_name = Option.value fn_name ~default:"<unknown>";
+            expected = num_type_params;
+            actual = num_type_args;
+          }
+      in
+      (* Create a constraint between two different concrete types to force an error.
+         We use Int and String as they will never unify. *)
+      Some (C.equal ~context Prim.int Prim.string span)
+    else None
+  in
+
   (* Create substitution mapping type variable names to explicit/inferred types *)
   let tvar_subst =
     List.mapi
@@ -815,8 +835,14 @@ and infer_explicit_instantiation (env : Env.t) (type_arg_sexps : Syntax.Sexp.t l
     List.fold_left (fun acc (_, c) -> C.add c acc) C.empty arg_constraints_with_context
   in
   let arg_constraints = combine_results arg_results in
-  let all_constraints =
+  let base_constraints =
     C.combine arg_constraints (C.add fn_constraint arg_type_constraints)
+  in
+  (* Add arity error constraint if present *)
+  let all_constraints =
+    match arity_error_constraint with
+    | Some c -> C.add c base_constraints
+    | None -> base_constraints
   in
   let all_undefineds = combine_undefineds arg_results in
 
