@@ -145,6 +145,6 @@ No new files; extends `lib/typing/check.ml` and `lib/sig/sig_loader.ml`.
 - [x] [R6] Load signatures for required modules
 - [x] [R7] Handle autoloaded function lookup via search path
 - [x] [R8] Warn on undefined exports
-- [ ] [R9] Handle circular module dependencies
+- [x] [R9] Handle circular module dependencies
 
 Run review agent after R1-R3 work (basic module loading) before implementing R7-R9.

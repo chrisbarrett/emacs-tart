@@ -472,6 +472,95 @@ let test_autoload_search_path () =
     raise e
 
 (* =============================================================================
+   Circular Dependency Tests (R9)
+   ============================================================================= *)
+
+(** R9: Circular dependencies via open directives are handled *)
+let test_circular_open_dependencies () =
+  (* Create two modules that open each other.
+     a.tart opens b, b.tart opens a.
+     This tests that the sig_loader's cycle detection works through module_check. *)
+  let files =
+    [
+      (* Module A opens B and uses B's type *)
+      ("a.el", "(defun a-fn (x) x)");
+      ("a.tart", "(open 'b)\n(defun a-fn (btype) -> btype)");
+      (* Module B opens A (cycle!) and defines its own type *)
+      ("b.el", "(defun b-fn (x) x)");
+      ("b.tart", "(open 'a)\n(type btype (list int))\n(defun b-fn (int) -> int)");
+    ]
+  in
+  with_temp_dir files (fun dir ->
+      let config = Module_check.default_config () in
+      let el_path = Filename.concat dir "a.el" in
+      let sexps = parse "(defun a-fn (x) x)" in
+      (* Should not infinite loop - cycle detection should kick in *)
+      let result = Module_check.check_module ~config ~filename:el_path sexps in
+      (* The key assertion is that we don't infinite loop.
+         The type checking may or may not have errors depending on load order,
+         but it should complete. *)
+      let _ = result in
+      ())
+
+(** R9: Mutual require dependencies between modules work *)
+let test_mutual_require_dependencies () =
+  (* Two modules that require each other.
+     The .tart files should be loadable even with this pattern. *)
+  let files =
+    [
+      ("a.el", "(require 'b)\n(defun a-fn () (b-fn))");
+      ("a.tart", "(defun a-fn () -> int)");
+      ("b.el", "(require 'a)\n(defun b-fn () (a-fn))");
+      ("b.tart", "(defun b-fn () -> int)");
+    ]
+  in
+  with_temp_dir files (fun dir ->
+      let config = Module_check.default_config () in
+      (* Check module A which requires B *)
+      let el_path_a = Filename.concat dir "a.el" in
+      let sexps_a = parse "(require 'b)\n(defun a-fn () (b-fn))" in
+      let result_a =
+        Module_check.check_module ~config ~filename:el_path_a sexps_a
+      in
+      (* Should complete without infinite loop *)
+      Alcotest.(check int)
+        "no type errors for A" 0
+        (List.length result_a.type_errors);
+      (* Check module B which requires A *)
+      let el_path_b = Filename.concat dir "b.el" in
+      let sexps_b = parse "(require 'a)\n(defun b-fn () (a-fn))" in
+      let result_b =
+        Module_check.check_module ~config ~filename:el_path_b sexps_b
+      in
+      (* Should complete without infinite loop *)
+      Alcotest.(check int)
+        "no type errors for B" 0
+        (List.length result_b.type_errors))
+
+(** R9: Three-way circular dependencies work *)
+let test_three_way_circular_deps () =
+  (* A -> B -> C -> A via include directives *)
+  let files =
+    [
+      ("a.el", "(defun a-fn () 42)");
+      ("a.tart", "(include 'c)\n(defun a-fn () -> int)");
+      ("b.el", "(defun b-fn () 42)");
+      ("b.tart", "(include 'a)\n(defun b-fn () -> int)");
+      ("c.el", "(defun c-fn () 42)");
+      ("c.tart", "(include 'b)\n(defun c-fn () -> int)");
+    ]
+  in
+  with_temp_dir files (fun dir ->
+      let config = Module_check.default_config () in
+      (* Check module A which eventually includes itself via C -> B -> A *)
+      let el_path = Filename.concat dir "a.el" in
+      let sexps = parse "(defun a-fn () 42)" in
+      let result = Module_check.check_module ~config ~filename:el_path sexps in
+      (* Should complete without infinite loop due to cycle detection *)
+      let _ = result in
+      ())
+
+(* =============================================================================
    Test Suite
    ============================================================================= *)
 
@@ -555,5 +644,14 @@ let () =
           Alcotest.test_case "longer prefix tried first" `Quick
             test_autoload_longer_prefix_first;
           Alcotest.test_case "uses search path" `Quick test_autoload_search_path;
+        ] );
+      ( "circular_dependencies",
+        [
+          Alcotest.test_case "circular open dependencies" `Quick
+            test_circular_open_dependencies;
+          Alcotest.test_case "mutual require dependencies" `Quick
+            test_mutual_require_dependencies;
+          Alcotest.test_case "three-way circular deps" `Quick
+            test_three_way_circular_deps;
         ] );
     ]

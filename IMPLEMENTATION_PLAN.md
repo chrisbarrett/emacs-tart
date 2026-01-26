@@ -119,7 +119,7 @@ Enables type-checked module interactions.
 
 - [x] [R6] Load signatures when `(require 'module)` is encountered
 - [x] [R7] Handle autoloaded function lookup via prefix-based search
-- [ ] [R9] Handle circular module dependencies with lazy loading
+- [x] [R9] Handle circular module dependencies with lazy loading
 - [x] Verify: Required module signatures available for type checking
 
 ## Phase 6: Error Reporting (Spec 13)
