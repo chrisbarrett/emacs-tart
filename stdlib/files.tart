@@ -1,0 +1,147 @@
+;;; files.tart --- Type signatures for Emacs file functions
+
+(open 'buffers)
+
+;; File reading
+(defun find-file (string) -> buffer)
+(defun find-file-noselect (string &optional bool bool string) -> buffer)
+(defun find-file-literally (string) -> buffer)
+(defun find-file-read-only (string) -> buffer)
+(defun find-alternate-file (string) -> buffer)
+(defun view-file (string) -> buffer)
+(defun insert-file-contents (string &optional bool int int bool) -> (list any))
+(defun insert-file-contents-literally (string &optional bool int int bool) -> (list any))
+
+;; File writing
+(defun write-file (string &optional bool) -> nil)
+(defun write-region ((int | string | nil) (int | nil) string &optional bool any bool string) -> nil)
+(defun append-to-file (int int string) -> nil)
+(defun save-buffer (&optional any) -> nil)
+(defun save-some-buffers (&optional bool any) -> nil)
+(defun basic-save-buffer () -> nil)
+(defun basic-save-buffer-1 () -> bool)
+
+;; File existence and attributes
+(defun file-exists-p (string) -> bool)
+(defun file-readable-p (string) -> bool)
+(defun file-writable-p (string) -> bool)
+(defun file-executable-p (string) -> bool)
+(defun file-accessible-directory-p (string) -> bool)
+(defun file-regular-p (string) -> bool)
+(defun file-directory-p (string) -> bool)
+(defun file-symlink-p (string) -> (string | bool))
+(defun file-newer-than-file-p (string string) -> bool)
+(defun file-attributes (string &optional symbol) -> (list any))
+(defun file-modes (string &optional bool) -> (int | nil))
+(defun set-file-modes (string int &optional bool) -> nil)
+(defun file-ownership-preserved-p (string &optional bool) -> bool)
+
+;; File names
+(defun expand-file-name (string &optional string) -> string)
+(defun abbreviate-file-name (string) -> string)
+(defun file-name-absolute-p (string) -> bool)
+(defun file-relative-name (string &optional string) -> string)
+(defun file-name-nondirectory (string) -> string)
+(defun file-name-directory (string) -> (string | nil))
+(defun file-name-base (string) -> string)
+(defun file-name-extension (string &optional bool) -> (string | nil))
+(defun file-name-sans-extension (string) -> string)
+(defun file-name-sans-versions (string &optional bool) -> string)
+(defun file-name-as-directory (string) -> string)
+(defun directory-file-name (string) -> string)
+(defun file-truename (string) -> string)
+(defun file-chase-links (string &optional int) -> string)
+(defun file-name-concat (&rest string) -> string)
+
+;; File operations
+(defun copy-file (string string &optional bool bool bool bool) -> nil)
+(defun rename-file (string string &optional bool) -> nil)
+(defun delete-file (string &optional bool) -> nil)
+(defun make-symbolic-link (string string &optional bool) -> nil)
+(defun add-name-to-file (string string &optional bool) -> nil)
+
+;; Directory operations
+(defun make-directory (string &optional bool) -> nil)
+(defun delete-directory (string &optional bool bool) -> nil)
+(defun copy-directory (string string &optional bool bool bool) -> nil)
+(defun directory-files (string &optional bool string bool int) -> (list string))
+(defun directory-files-and-attributes (string &optional bool string bool string) -> (list any))
+(defun directory-files-recursively (string string &optional bool any bool) -> (list string))
+(defun file-expand-wildcards (string &optional bool bool) -> (list string))
+(defun locate-file (string (list string) &optional (string | (list string)) int) -> (string | nil))
+
+;; Default directory
+(defvar default-directory string)
+
+;; File local variables
+(defun hack-local-variables () -> nil)
+(defun hack-dir-local-variables () -> nil)
+(defun dir-locals-set-class-variables (symbol any) -> nil)
+(defun dir-locals-set-directory-class (string symbol &optional int) -> nil)
+
+;; Temporary files
+(defun make-temp-file (string &optional bool string string) -> string)
+(defun make-temp-name (string) -> string)
+(defvar temporary-file-directory string)
+
+;; Auto-save
+(defun auto-save-mode (&optional any) -> nil)
+(defun do-auto-save (&optional bool bool) -> nil)
+(defun make-auto-save-file-name () -> (string | nil))
+(defun recent-auto-save-p () -> bool)
+(defun set-buffer-auto-saved () -> nil)
+(defvar auto-save-default bool)
+(defvar auto-save-file-name-transforms (list any))
+
+;; Backup files
+(defun make-backup-file-name (string) -> string)
+(defun backup-file-name-p (string) -> bool)
+(defun file-newest-backup (string) -> (string | nil))
+(defvar make-backup-files bool)
+(defvar backup-directory-alist (list (pair string string)))
+(defvar version-control symbol)
+
+;; File visiting info
+(defun buffer-file-name (&optional buffer) -> (string | nil))
+(defun get-file-buffer (string) -> (buffer | nil))
+(defun find-buffer-visiting (string &optional any) -> (buffer | nil))
+(defun set-visited-file-name (string &optional bool bool) -> nil)
+(defun verify-visited-file-modtime (&optional buffer) -> bool)
+(defun visited-file-modtime () -> (list int))
+(defun set-visited-file-modtime (&optional (list int)) -> nil)
+(defun ask-user-about-supersession-threat (string) -> nil)
+
+;; Revert
+(defun revert-buffer (&optional bool bool bool) -> bool)
+(defvar revert-buffer-function (((bool bool) -> bool) | nil))
+(defvar before-revert-hook (list any))
+(defvar after-revert-hook (list any))
+
+;; File format
+(defun format-encode-buffer (&optional symbol) -> nil)
+(defun format-decode-buffer (&optional symbol) -> nil)
+(defun format-find-file (string symbol) -> buffer)
+(defun format-insert-file (string symbol &optional int int) -> (list any))
+(defun format-write-file (string symbol) -> nil)
+
+;; Misc
+(defun file-local-copy (string) -> (string | nil))
+(defun file-remote-p (string &optional symbol bool) -> (string | nil))
+(defun unhandled-file-name-directory (string) -> (string | nil))
+(defun file-name-case-insensitive-p (string) -> bool)
+(defun file-equal-p (string string) -> bool)
+(defun file-in-directory-p (string string) -> bool)
+(defun file-notify-add-watch (string (list symbol) ((list any) -> any)) -> any)
+(defun file-notify-rm-watch (any) -> nil)
+(defun file-notify-valid-p (any) -> bool)
+
+;; Coding systems
+(defun find-file-name-handler (string symbol) -> (any | nil))
+(defun set-auto-coding (string int) -> (symbol | nil))
+(defun find-operation-coding-system (symbol string &rest any) -> (any | nil))
+
+;; File locks
+(defun lock-buffer (&optional string) -> nil)
+(defun unlock-buffer () -> nil)
+(defun file-locked-p (string) -> (bool | string))
+(defvar create-lockfiles bool)

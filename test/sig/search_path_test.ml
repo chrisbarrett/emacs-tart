@@ -737,6 +737,91 @@ let test_load_frames () =
            true
          with Not_found -> false)
 
+(** Test that files.tart parses successfully *)
+let test_parse_files () =
+  let path = Filename.concat stdlib_dir "files.tart" in
+  if not (Sys.file_exists path) then
+    Alcotest.fail ("files.tart not found at: " ^ path);
+  match Search_path.parse_signature_file path with
+  | None -> Alcotest.fail "files.tart failed to parse"
+  | Some sig_file ->
+      Alcotest.(check string) "module name" "files" sig_file.sig_module;
+      Alcotest.(check bool)
+        "has declarations" true
+        (List.length sig_file.sig_decls > 50);
+      (* Check key file functions *)
+      let has_defun name =
+        List.exists
+          (function Sig_ast.DDefun d -> d.defun_name = name | _ -> false)
+          sig_file.sig_decls
+      in
+      Alcotest.(check bool) "has find-file" true (has_defun "find-file");
+      Alcotest.(check bool) "has write-file" true (has_defun "write-file");
+      Alcotest.(check bool) "has file-exists-p" true (has_defun "file-exists-p");
+      Alcotest.(check bool)
+        "has expand-file-name" true
+        (has_defun "expand-file-name");
+      Alcotest.(check bool) "has copy-file" true (has_defun "copy-file");
+      Alcotest.(check bool)
+        "has directory-files" true
+        (has_defun "directory-files")
+
+(** Test that files can be loaded into type environment *)
+let test_load_files () =
+  let sp = Search_path.empty |> Search_path.with_stdlib stdlib_dir in
+  (* First load builtins and buffers for dependency types *)
+  let base_env =
+    match
+      Search_path.load_module ~search_path:sp ~env:Type_env.empty "builtins"
+    with
+    | None -> Alcotest.fail "failed to load builtins module"
+    | Some env -> env
+  in
+  let base_env =
+    match Search_path.load_module ~search_path:sp ~env:base_env "buffers" with
+    | None -> Alcotest.fail "failed to load buffers module"
+    | Some env -> env
+  in
+  match Search_path.load_module ~search_path:sp ~env:base_env "files" with
+  | None -> Alcotest.fail "failed to load files module"
+  | Some env ->
+      (* Check that find-file is loaded *)
+      (match Type_env.lookup "find-file" env with
+      | None -> Alcotest.fail "find-file not found in env"
+      | Some _ -> ());
+      (* Check that file-exists-p is loaded *)
+      (match Type_env.lookup "file-exists-p" env with
+      | None -> Alcotest.fail "file-exists-p not found in env"
+      | Some _ -> ());
+      (* Check that expand-file-name is loaded *)
+      (match Type_env.lookup "expand-file-name" env with
+      | None -> Alcotest.fail "expand-file-name not found in env"
+      | Some _ -> ());
+      (* Verify type checking works with file functions *)
+      let _, errors = check_expr_str ~env "(file-exists-p \"/tmp/test\")" in
+      Alcotest.(check int) "file-exists-p: no errors" 0 (List.length errors);
+      (* Check find-file returns buffer type *)
+      let ty, errors2 = check_expr_str ~env "(find-file \"/tmp/test\")" in
+      Alcotest.(check int) "find-file: no errors" 0 (List.length errors2);
+      (* Result should be Buffer *)
+      let ty_str = Types.to_string ty in
+      Alcotest.(check bool)
+        "returns buffer type" true
+        (try
+           let _ = Str.search_forward (Str.regexp_string "uffer") ty_str 0 in
+           true
+         with Not_found -> false);
+      (* Check directory-files returns list of strings *)
+      let ty3, errors3 = check_expr_str ~env "(directory-files \"/tmp\")" in
+      Alcotest.(check int) "directory-files: no errors" 0 (List.length errors3);
+      let ty3_str = Types.to_string ty3 in
+      Alcotest.(check bool)
+        "returns list of strings" true
+        (try
+           let _ = Str.search_forward (Str.regexp_string "List") ty3_str 0 in
+           true
+         with Not_found -> false)
+
 let () =
   Alcotest.run "search_path"
     [
@@ -787,10 +872,12 @@ let () =
           Alcotest.test_case "parse buffers.tart" `Quick test_parse_buffers;
           Alcotest.test_case "parse windows.tart" `Quick test_parse_windows;
           Alcotest.test_case "parse frames.tart" `Quick test_parse_frames;
+          Alcotest.test_case "parse files.tart" `Quick test_parse_files;
           Alcotest.test_case "load builtins into env" `Quick test_load_builtins;
           Alcotest.test_case "load cl-lib into env" `Quick test_load_cl_lib;
           Alcotest.test_case "load buffers into env" `Quick test_load_buffers;
           Alcotest.test_case "load windows into env" `Quick test_load_windows;
           Alcotest.test_case "load frames into env" `Quick test_load_frames;
+          Alcotest.test_case "load files into env" `Quick test_load_files;
         ] );
     ]

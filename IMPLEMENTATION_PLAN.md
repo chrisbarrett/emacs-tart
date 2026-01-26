@@ -311,7 +311,7 @@ Broader coverage of common Emacs packages.
 
 ### 13.2 File Operations
 
-- [ ] Add `stdlib/files.tart` for file I/O
+- [x] Add `stdlib/files.tart` for file I/O
 - [ ] Add `stdlib/directories.tart` for directory operations
 - [ ] Verify: File manipulation code type-checks
 
