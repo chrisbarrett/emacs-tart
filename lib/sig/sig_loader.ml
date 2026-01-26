@@ -486,13 +486,15 @@ let rec sig_type_to_typ_with_ctx (ctx : type_context) (tvar_names : string list)
               let arg_types =
                 List.map (sig_type_to_typ_with_ctx ctx tvar_names) args
               in
-              Types.TApp (opaque.opaque_con, arg_types)
+              Types.TApp (Types.TCon opaque.opaque_con, arg_types)
           | _ ->
-              (* Not an alias/opaque or arity mismatch - treat as type application *)
+              (* Not an alias/opaque or arity mismatch - treat as type application.
+                 If name is a type variable, keep it as TCon for later substitution
+                 during instantiation. This enables higher-kinded types. *)
               let arg_types =
                 List.map (sig_type_to_typ_with_ctx ctx tvar_names) args
               in
-              Types.TApp (canonicalize_type_name name, arg_types)))
+              Types.TApp (Types.TCon (canonicalize_type_name name), arg_types)))
   | STArrow (params, ret, _) ->
       (* Function type *)
       let param_types =
@@ -762,7 +764,8 @@ let load_data (module_name : string) (d : data_decl) (state : load_state) :
         if type_params = [] then Types.TCon opaque.opaque_con
         else
           Types.TApp
-            (opaque.opaque_con, List.map (fun p -> Types.TCon p) type_params)
+            ( Types.TCon opaque.opaque_con,
+              List.map (fun p -> Types.TCon p) type_params )
       in
       let ctor_typ = Types.TArrow (field_params, return_typ) in
       (* If polymorphic, wrap in forall *)
@@ -808,7 +811,8 @@ let load_data (module_name : string) (d : data_decl) (state : load_state) :
             if type_params = [] then Types.TCon opaque.opaque_con
             else
               Types.TApp
-                (opaque.opaque_con, List.map (fun p -> Types.TCon p) type_params)
+                ( Types.TCon opaque.opaque_con,
+                  List.map (fun p -> Types.TCon p) type_params )
           in
           let accessor_typ =
             Types.TArrow ([ Types.PPositional input_typ ], field_typ)
@@ -824,7 +828,8 @@ let load_data (module_name : string) (d : data_decl) (state : load_state) :
             if type_params = [] then Types.TCon opaque.opaque_con
             else
               Types.TApp
-                (opaque.opaque_con, List.map (fun p -> Types.TCon p) type_params)
+                ( Types.TCon opaque.opaque_con,
+                  List.map (fun p -> Types.TCon p) type_params )
           in
           List.fold_left
             (fun (state, idx) field_ty ->

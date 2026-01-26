@@ -55,7 +55,8 @@ let rec collect_generalizable_tvars level ty acc =
           if tvar_level > level && not (List.mem id acc) then id :: acc else acc
       | Link _ -> failwith "repr should have followed link")
   | TCon _ -> acc
-  | TApp (_, args) ->
+  | TApp (con, args) ->
+      let acc = collect_generalizable_tvars level con acc in
       List.fold_left
         (fun acc ty -> collect_generalizable_tvars level ty acc)
         acc args
@@ -101,7 +102,9 @@ let rec replace_tvars_with_names var_map ty =
       | Link _ -> failwith "repr should have followed link")
   | TCon _ -> ty
   | TApp (con, args) ->
-      TApp (con, List.map (replace_tvars_with_names var_map) args)
+      TApp
+        ( replace_tvars_with_names var_map con,
+          List.map (replace_tvars_with_names var_map) args )
   | TArrow (params, ret) ->
       TArrow
         ( List.map (replace_tvar_in_param var_map) params,

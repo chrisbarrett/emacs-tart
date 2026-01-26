@@ -356,9 +356,9 @@ Enable polymorphism over type constructors via kind inference.
 
 ### 14.5 HK Instantiation
 
-- [ ] [R7] Update unification for HK instantiation
-- [ ] [R8] Test nested/partial type constructors
-- [ ] Verify: `fmap` instantiation preserves type safety
+- [x] [R7] Update unification for HK instantiation
+- [x] [R8] Test nested/partial type constructors
+- [x] Verify: `fmap` instantiation preserves type safety
 
 ---
 

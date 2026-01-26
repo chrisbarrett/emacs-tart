@@ -796,8 +796,8 @@ let rec type_to_sig_string (ty : Core.Types.typ) : string =
       | Core.Types.Link _ -> failwith "repr should have followed link")
   | Core.Types.TCon name -> String.lowercase_ascii name
   | Core.Types.TApp (con, args) ->
-      let con_lower = String.lowercase_ascii con in
-      Printf.sprintf "(%s %s)" con_lower
+      let con_str = type_to_sig_string con in
+      Printf.sprintf "(%s %s)" con_str
         (String.concat " " (List.map type_to_sig_string args))
   | Core.Types.TArrow (params, ret) ->
       Printf.sprintf "((%s) -> %s)"

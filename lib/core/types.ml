@@ -23,7 +23,8 @@ type tvar = Unbound of tvar_id * int  (** id, level *) | Link of typ
 
     - [TVar] - Mutable type variable for union-find unification
     - [TCon] - Type constant (Int, String, Nil, T, etc.)
-    - [TApp] - Type application (List a, Option a, etc.)
+    - [TApp] - Type application (List a, Option a, etc.). The first element is
+      the type constructor (TCon for concrete types, TVar for higher-kinded)
     - [TArrow] - Function type with grouped parameters
     - [TForall] - Universally quantified type
     - [TUnion] - Union types (Or a b)
@@ -31,7 +32,7 @@ type tvar = Unbound of tvar_id * int  (** id, level *) | Link of typ
 and typ =
   | TVar of tvar ref
   | TCon of string
-  | TApp of string * typ list
+  | TApp of typ * typ list
   | TArrow of param list * typ
   | TForall of string list * typ
   | TUnion of typ list
@@ -102,12 +103,12 @@ module Prim = struct
 end
 
 (** Construct common types *)
-let list_of elem = TApp ("List", [ elem ])
+let list_of elem = TApp (TCon "List", [ elem ])
 
-let vector_of elem = TApp ("Vector", [ elem ])
-let option_of elem = TApp ("Option", [ elem ])
-let pair_of a b = TApp ("Pair", [ a; b ])
-let hash_table_of k v = TApp ("HashTable", [ k; v ])
+let vector_of elem = TApp (TCon "Vector", [ elem ])
+let option_of elem = TApp (TCon "Option", [ elem ])
+let pair_of a b = TApp (TCon "Pair", [ a; b ])
+let hash_table_of k v = TApp (TCon "HashTable", [ k; v ])
 
 (** Create a function type with positional parameters *)
 let arrow params ret = TArrow (List.map (fun p -> PPositional p) params, ret)
@@ -124,7 +125,8 @@ let rec to_string ty =
       | Link _ -> failwith "repr should have followed link")
   | TCon name -> name
   | TApp (con, args) ->
-      Printf.sprintf "(%s %s)" con (String.concat " " (List.map to_string args))
+      Printf.sprintf "(%s %s)" (to_string con)
+        (String.concat " " (List.map to_string args))
   | TArrow (params, ret) ->
       Printf.sprintf "(-> (%s) %s)"
         (String.concat " " (List.map param_to_string params))
@@ -151,7 +153,7 @@ let rec equal t1 t2 =
   | TVar tv1, TVar tv2 -> tv1 == tv2 (* Physical equality *)
   | TCon n1, TCon n2 -> n1 = n2
   | TApp (c1, args1), TApp (c2, args2) ->
-      c1 = c2
+      equal c1 c2
       && List.length args1 = List.length args2
       && List.for_all2 equal args1 args2
   | TArrow (ps1, r1), TArrow (ps2, r2) ->
@@ -230,16 +232,22 @@ let rec is_truthy ty =
          (user-defined types without Nil) *)
       | _ -> true)
   | TApp (con, _args) -> (
-      match con with
-      | "Option" ->
+      match repr con with
+      | TCon "Option" ->
           (* Option a = a | Nil, so always includes Nil *)
           false
-      | "List" | "Vector" | "Pair" | "HashTable" ->
+      | TCon ("List" | "Vector" | "Pair" | "HashTable") ->
           (* Container types are truthy - empty list is still non-nil in Elisp.
              Note: This differs from some languages where empty containers are falsy. *)
           true
-      | _ ->
+      | TCon _ ->
           (* Unknown type constructors: assume truthy *)
+          true
+      | TVar _ ->
+          (* HK type variable applied to args - conservatively false *)
+          false
+      | _ ->
+          (* Other constructor types: assume truthy *)
           true)
   | TArrow _ ->
       (* Functions are always truthy *)

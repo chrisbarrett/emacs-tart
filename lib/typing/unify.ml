@@ -71,7 +71,9 @@ let rec occurs_check tv_id tv_level ty loc : (unit, occurs_error) Result.t =
             Ok ())
       | Link _ -> failwith "repr should have followed link")
   | TCon _ -> Ok ()
-  | TApp (_, args) -> occurs_check_list tv_id tv_level args loc
+  | TApp (con, args) ->
+      let* () = occurs_check tv_id tv_level con loc in
+      occurs_check_list tv_id tv_level args loc
   | TArrow (params, ret) ->
       let* () = occurs_check_params tv_id tv_level params loc in
       occurs_check tv_id tv_level ret loc
@@ -147,12 +149,16 @@ let rec unify ?(invariant = false) t1 t2 loc : unit internal_result =
     | TCon n1, TCon n2 ->
         if n1 = n2 then Ok () else Error (ITypeMismatch (t1, t2, loc))
     (* Type applications: constructor and args must match.
-       Arguments are unified with invariant=true to enforce invariance. *)
+       For HK types, the constructor may be a type variable that unifies
+       with a concrete constructor. Arguments are unified with invariant=true
+       to enforce invariance. *)
     | TApp (c1, args1), TApp (c2, args2) ->
-        if c1 <> c2 then Error (ITypeMismatch (t1, t2, loc))
-        else if List.length args1 <> List.length args2 then
+        if List.length args1 <> List.length args2 then
           Error (IArityMismatch (List.length args1, List.length args2, loc))
-        else unify_list ~invariant:true args1 args2 loc
+        else
+          (* Unify constructors first (enables HK instantiation) *)
+          let* () = unify ~invariant c1 c2 loc in
+          unify_list ~invariant:true args1 args2 loc
     (* Function types: params and return must match.
        Handle rest/optional parameters specially. *)
     | TArrow (ps1, r1), TArrow (ps2, r2) ->

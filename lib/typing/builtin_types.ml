@@ -17,13 +17,13 @@ module Env = Core.Type_env
 let tvar name = TCon name
 
 (** Helper to create a list type *)
-let list_t elem = TApp ("List", [ elem ])
+let list_t elem = TApp (TCon "List", [ elem ])
 
 (** Helper to create a vector type *)
-let vector_t elem = TApp ("Vector", [ elem ])
+let vector_t elem = TApp (TCon "Vector", [ elem ])
 
 (** Helper to create an option type *)
-let option_t elem = TApp ("Option", [ elem ])
+let option_t elem = TApp (TCon "Option", [ elem ])
 
 (** Helper for a simple function type with positional args *)
 let fn params ret = TArrow (List.map (fun t -> PPositional t) params, ret)

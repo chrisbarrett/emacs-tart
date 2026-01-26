@@ -25,7 +25,8 @@ type tvar = Unbound of tvar_id * int  (** id, level *) | Link of typ
 
     - [TVar] - Mutable type variable for union-find unification
     - [TCon] - Type constant (Int, String, Nil, T, etc.)
-    - [TApp] - Type application (List a, Option a, etc.)
+    - [TApp] - Type application (List a, Option a, etc.). The first element is
+      the type constructor (TCon for concrete types, TVar for higher-kinded)
     - [TArrow] - Function type with grouped parameters
     - [TForall] - Universally quantified type
     - [TUnion] - Union types (Or a b)
@@ -33,7 +34,7 @@ type tvar = Unbound of tvar_id * int  (** id, level *) | Link of typ
 and typ =
   | TVar of tvar ref
   | TCon of string
-  | TApp of string * typ list
+  | TApp of typ * typ list
   | TArrow of param list * typ
   | TForall of string list * typ
   | TUnion of typ list

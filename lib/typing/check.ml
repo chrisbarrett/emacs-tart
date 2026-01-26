@@ -76,7 +76,10 @@ let rec substitute_tvar_names (subst : (string * typ) list) (ty : typ) : typ =
           params
       in
       TArrow (params', substitute_tvar_names subst ret)
-  | TApp (con, args) -> TApp (con, List.map (substitute_tvar_names subst) args)
+  | TApp (con, args) ->
+      TApp
+        ( substitute_tvar_names subst con,
+          List.map (substitute_tvar_names subst) args )
   | TForall (vars, body) ->
       (* Remove substituted vars from the substitution to avoid capture *)
       let subst' = List.filter (fun (n, _) -> not (List.mem n vars)) subst in

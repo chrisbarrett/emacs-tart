@@ -137,7 +137,8 @@ let check_exhaustiveness ~(registry : adt_registry)
   let type_con =
     match Types.repr scrutinee_type with
     | Types.TCon name -> Some name
-    | Types.TApp (name, _) -> Some name
+    | Types.TApp (Types.TCon name, _) -> Some name
+    | Types.TApp _ -> None (* HK type - can't determine ADT *)
     | Types.TVar _ -> None (* Type variable - can't determine ADT *)
     | _ -> None
   in

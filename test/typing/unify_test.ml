@@ -354,6 +354,104 @@ let test_tvar_in_tapp_with_any () =
   Alcotest.(check string) "tv = Int" "Int" (to_string tv)
 
 (* =============================================================================
+   Higher-Kinded Type Unification Tests (R7 from spec 17)
+   ============================================================================= *)
+
+(** Test that HK type constructor variable unifies with concrete constructor.
+    When we have (f a) where f is a TVar and unify with (List Int), f should
+    unify to List and a should unify to Int. *)
+let test_hk_constructor_instantiation () =
+  setup ();
+  let f = fresh () in
+  let a = fresh () in
+  (* (f a) where f and a are type variables *)
+  let hk_app = TApp (f, [ a ]) in
+  (* (List Int) *)
+  let list_int = list_of Prim.int in
+  Alcotest.(check bool) "(f a) = (List Int)" true (unify_ok hk_app list_int);
+  (* f should resolve to List (as a TCon) *)
+  Alcotest.(check string) "f = List" "List" (to_string f);
+  (* a should resolve to Int *)
+  Alcotest.(check string) "a = Int" "Int" (to_string a)
+
+(** Test that HK constructor variable can unify with Option. *)
+let test_hk_option_instantiation () =
+  setup ();
+  let f = fresh () in
+  let a = fresh () in
+  let hk_app = TApp (f, [ a ]) in
+  let option_string = option_of Prim.string in
+  Alcotest.(check bool)
+    "(f a) = (Option String)" true
+    (unify_ok hk_app option_string);
+  Alcotest.(check string) "f = Option" "Option" (to_string f);
+  Alcotest.(check string) "a = String" "String" (to_string a)
+
+(** Test that two HK type applications with same constructor variable unify. *)
+let test_hk_same_constructor () =
+  setup ();
+  let f = fresh () in
+  let a = fresh () in
+  let b = fresh () in
+  (* Two applications with the same constructor variable *)
+  let app1 = TApp (f, [ a ]) in
+  let app2 = TApp (f, [ b ]) in
+  (* After unifying with List Int and List String *)
+  let _ = unify_ok app1 (list_of Prim.int) in
+  Alcotest.(check bool)
+    "(f b) = (List String)" true
+    (unify_ok app2 (list_of Prim.string));
+  (* Both should have f = List *)
+  Alcotest.(check string) "f = List" "List" (to_string f);
+  Alcotest.(check string) "a = Int" "Int" (to_string a);
+  Alcotest.(check string) "b = String" "String" (to_string b)
+
+(** Test that HK constructor variable fails when unified with different
+    constructors. *)
+let test_hk_different_constructors () =
+  setup ();
+  let f = fresh () in
+  let a = fresh () in
+  let b = fresh () in
+  let app1 = TApp (f, [ a ]) in
+  let app2 = TApp (f, [ b ]) in
+  (* First unify with List Int *)
+  let _ = unify_ok app1 (list_of Prim.int) in
+  (* Now unifying with Option should fail because f is already List *)
+  Alcotest.(check bool)
+    "(f b) != (Option String)" true
+    (unify_fails app2 (option_of Prim.string))
+
+(** Test nested HK application (f (g a)). *)
+let test_hk_nested_application () =
+  setup ();
+  let f = fresh () in
+  let g = fresh () in
+  let a = fresh () in
+  (* (f (g a)) *)
+  let inner = TApp (g, [ a ]) in
+  let outer = TApp (f, [ inner ]) in
+  (* (List (Option Int)) *)
+  let target = list_of (option_of Prim.int) in
+  Alcotest.(check bool)
+    "(f (g a)) = (List (Option Int))" true (unify_ok outer target);
+  Alcotest.(check string) "f = List" "List" (to_string f);
+  Alcotest.(check string) "g = Option" "Option" (to_string g);
+  Alcotest.(check string) "a = Int" "Int" (to_string a)
+
+(** Test HK with arity mismatch fails. *)
+let test_hk_arity_mismatch () =
+  setup ();
+  let f = fresh () in
+  let a = fresh () in
+  let b = fresh () in
+  (* (f a b) - two args *)
+  let app = TApp (f, [ a; b ]) in
+  (* (List Int) - one arg *)
+  let target = list_of Prim.int in
+  Alcotest.(check bool) "(f a b) != (List Int)" true (unify_fails app target)
+
+(* =============================================================================
    Complex Tests
    ============================================================================= *)
 
@@ -492,6 +590,20 @@ let () =
             test_hash_table_invariance;
           Alcotest.test_case "tvar in TApp with Any" `Quick
             test_tvar_in_tapp_with_any;
+        ] );
+      ( "higher-kinded",
+        [
+          Alcotest.test_case "HK constructor instantiation" `Quick
+            test_hk_constructor_instantiation;
+          Alcotest.test_case "HK option instantiation" `Quick
+            test_hk_option_instantiation;
+          Alcotest.test_case "HK same constructor" `Quick
+            test_hk_same_constructor;
+          Alcotest.test_case "HK different constructors fail" `Quick
+            test_hk_different_constructors;
+          Alcotest.test_case "HK nested application" `Quick
+            test_hk_nested_application;
+          Alcotest.test_case "HK arity mismatch" `Quick test_hk_arity_mismatch;
         ] );
       ( "complex",
         [

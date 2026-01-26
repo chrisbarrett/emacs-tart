@@ -57,7 +57,9 @@ type t = {
 
 (** Check if a type is an Option type. *)
 let is_option_type ty =
-  match Types.repr ty with Types.TApp ("Option", _) -> true | _ -> false
+  match Types.repr ty with
+  | Types.TApp (Types.TCon "Option", _) -> true
+  | _ -> false
 
 (** Generate help suggestions for type mismatches.
 
@@ -73,7 +75,7 @@ let suggest_type_fix ~expected ~actual : string list =
   | Types.TCon "Int", Types.TCon "String" ->
       [ "convert the string to a number: (string-to-number ...)" ]
   (* Option inner -> inner: suggest nil handling *)
-  | _, Types.TApp ("Option", [ inner ])
+  | _, Types.TApp (Types.TCon "Option", [ inner ])
     when Types.equal expected inner || Types.equal expected (Types.repr inner)
     ->
       [
@@ -81,7 +83,7 @@ let suggest_type_fix ~expected ~actual : string list =
         "or provide a default: (or ... default-value)";
       ]
   (* inner -> Option inner: not usually an error, but could suggest wrapping *)
-  | Types.TApp ("Option", [ inner ]), _
+  | Types.TApp (Types.TCon "Option", [ inner ]), _
     when Types.equal (Types.repr inner) actual ->
       [ "the value is already non-nil and can be used directly" ]
   (* Symbol -> String: suggest symbol-name *)
@@ -91,7 +93,7 @@ let suggest_type_fix ~expected ~actual : string list =
   | Types.TCon "Symbol", Types.TCon "String" ->
       [ "convert the string to a symbol: (intern ...)" ]
   (* List -> single element: suggest car or first *)
-  | _, Types.TApp ("List", _) ->
+  | _, Types.TApp (Types.TCon "List", _) ->
       [ "to get a single element from a list, use (car ...) or (nth N ...)" ]
   | _ -> []
 
@@ -362,11 +364,11 @@ let suggest_branch_fix ~this_type ~other_type : string list =
   | Types.TCon "String", Types.TCon "Int" ->
       [ "convert the string to an integer: (string-to-number ...)" ]
   (* Option vs non-Option: suggest handling nil *)
-  | _, Types.TApp ("Option", [ inner ])
+  | _, Types.TApp (Types.TCon "Option", [ inner ])
     when Types.equal this_type inner || Types.equal this_type (Types.repr inner)
     ->
       [ "wrap the non-optional value: (some ...)" ]
-  | Types.TApp ("Option", [ inner ]), _
+  | Types.TApp (Types.TCon "Option", [ inner ]), _
     when Types.equal other_type inner
          || Types.equal other_type (Types.repr inner) ->
       [ "unwrap the optional value or provide a default" ]

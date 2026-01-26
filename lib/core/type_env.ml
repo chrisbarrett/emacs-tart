@@ -78,7 +78,8 @@ and substitute subst ty =
       match !tv with Link ty' -> substitute subst ty' | Unbound _ -> ty)
   | TCon name -> (
       match List.assoc_opt name subst with Some ty' -> ty' | None -> ty)
-  | TApp (con, args) -> TApp (con, List.map (substitute subst) args)
+  | TApp (con, args) ->
+      TApp (substitute subst con, List.map (substitute subst) args)
   | TArrow (params, ret) ->
       TArrow (List.map (substitute_param subst) params, substitute subst ret)
   | TForall (vars, body) ->
