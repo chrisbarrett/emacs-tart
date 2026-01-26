@@ -210,7 +210,7 @@ my-file.el:10:1: error: function body doesn't match declared return type
   inferred: string
 ```
 
-**Verify:** Error messages contain expected/actual types and location
+**Verify:** `dune test`; error messages contain expected/actual types and location
 
 ### R10: Interaction with .tart files
 
