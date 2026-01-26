@@ -142,7 +142,7 @@ Suggested keymap (under `C-c` prefix):
 
 ## Tasks
 
-- [ ] [R1,R2,R9] Implement `inferior-tart-mode` with comint
+- [x] [R1,R2,R9] Implement `inferior-tart-mode` with comint
 - [ ] [R3] Implement send-to-REPL commands
 - [ ] [R4] Implement type/expand inspection commands
 - [x] [R5] Add eglot server configuration

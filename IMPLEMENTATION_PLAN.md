@@ -142,8 +142,8 @@ Improve error message quality.
 
 ### 6.3 LSP Integration
 
-- [ ] [R7] Map rich diagnostics to LSP format with related info
-- [ ] Verify: LSP clients show related information
+- [x] [R7] Map rich diagnostics to LSP format with related info
+- [x] Verify: LSP clients show related information
 
 ## Phase 7: Emacs REPL Integration (Spec 10)
 
@@ -151,7 +151,7 @@ Interactive development workflow.
 
 ### 7.1 Inferior Mode
 
-- [ ] [R1,R2,R9] Implement `inferior-tart-mode` with comint
+- [x] [R1,R2,R9] Implement `inferior-tart-mode` with comint
 - [ ] [R3] Implement send-to-REPL commands
 - [ ] [R4] Implement type/expand inspection commands
 - [ ] Verify: REPL interaction works from elisp buffers

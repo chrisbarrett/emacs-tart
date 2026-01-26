@@ -40,6 +40,7 @@
 
 ;;; Code:
 
+(require 'comint)
 (require 'eglot)
 
 ;;; Customization
@@ -60,6 +61,113 @@ Can be an absolute path or a command name to be found on `exec-path'."
 These are appended after the `lsp' subcommand."
   :type '(repeat string)
   :group 'tart)
+
+(defcustom tart-repl-args nil
+  "Additional arguments to pass to `tart repl'.
+These are appended after the `repl' subcommand."
+  :type '(repeat string)
+  :group 'tart)
+
+(defcustom tart-repl-history-file
+  (locate-user-emacs-file "tart-repl-history")
+  "File to save REPL input history.
+Set to nil to disable history persistence."
+  :type '(choice (file :tag "History file")
+                 (const :tag "No history file" nil))
+  :group 'tart)
+
+;;; Inferior Tart Mode (REPL)
+
+(defvar inferior-tart-mode-map
+  (let ((map (make-sparse-keymap)))
+    (set-keymap-parent map comint-mode-map)
+    map)
+  "Keymap for `inferior-tart-mode'.")
+
+(defconst tart--prompt-regexp "^\\(?:tart\\|\\.\\.\\.\\) ?> "
+  "Regexp matching the tart REPL prompt.
+Matches both the main prompt \"tart> \" and continuation \"... > \".")
+
+(defvar inferior-tart-mode-syntax-table
+  (let ((table (make-syntax-table)))
+    ;; Lisp-style syntax
+    (modify-syntax-entry ?\( "()" table)
+    (modify-syntax-entry ?\) ")(" table)
+    (modify-syntax-entry ?\[ "(]" table)
+    (modify-syntax-entry ?\] ")[" table)
+    (modify-syntax-entry ?\{ "(}" table)
+    (modify-syntax-entry ?\} "){" table)
+    ;; Comments
+    (modify-syntax-entry ?\; "<" table)
+    (modify-syntax-entry ?\n ">" table)
+    ;; Strings
+    (modify-syntax-entry ?\" "\"" table)
+    (modify-syntax-entry ?\\ "\\" table)
+    ;; Symbol constituents
+    (modify-syntax-entry ?- "_" table)
+    (modify-syntax-entry ?_ "_" table)
+    (modify-syntax-entry ?* "_" table)
+    (modify-syntax-entry ?+ "_" table)
+    (modify-syntax-entry ?/ "_" table)
+    (modify-syntax-entry ?< "_" table)
+    (modify-syntax-entry ?> "_" table)
+    (modify-syntax-entry ?= "_" table)
+    (modify-syntax-entry ?? "_" table)
+    (modify-syntax-entry ?! "_" table)
+    table)
+  "Syntax table for `inferior-tart-mode'.")
+
+(define-derived-mode inferior-tart-mode comint-mode "Inferior Tart"
+  "Major mode for interacting with a tart REPL process.
+
+Commands:
+\\{inferior-tart-mode-map}"
+  :syntax-table inferior-tart-mode-syntax-table
+  (setq-local comint-prompt-regexp tart--prompt-regexp)
+  (setq-local comint-prompt-read-only t)
+  ;; History configuration
+  (setq-local comint-input-ring-size 500)
+  (when tart-repl-history-file
+    (setq-local comint-input-ring-file-name tart-repl-history-file)
+    (comint-read-input-ring t))
+  ;; Font-lock for output
+  (setq-local font-lock-defaults '(nil nil nil nil)))
+
+(defun tart--repl-buffer ()
+  "Return the tart REPL buffer, or nil if none exists."
+  (get-buffer "*tart*"))
+
+(defun tart--repl-process ()
+  "Return the tart REPL process, or nil if none."
+  (when-let* ((buf (tart--repl-buffer)))
+    (get-buffer-process buf)))
+
+(defun tart--save-repl-history ()
+  "Save REPL history to file."
+  (when (and tart-repl-history-file
+             (derived-mode-p 'inferior-tart-mode))
+    (comint-write-input-ring)))
+
+;;;###autoload
+(defun run-tart ()
+  "Start an inferior tart REPL process.
+If a REPL is already running, switch to it."
+  (interactive)
+  (let* ((buffer (tart--repl-buffer))
+         (proc (and buffer (get-buffer-process buffer))))
+    (if (and proc (process-live-p proc))
+        (pop-to-buffer buffer)
+      ;; Start new process
+      (let ((program tart-executable)
+            (args (cons "repl" tart-repl-args)))
+        (with-current-buffer (apply #'make-comint "tart" program nil args)
+          (inferior-tart-mode)
+          (add-hook 'kill-buffer-hook #'tart--save-repl-history nil t))
+        (pop-to-buffer "*tart*")))))
+
+;;;###autoload
+(defalias 'inferior-tart #'run-tart
+  "Alias for `run-tart' for consistency with other inferior modes.")
 
 ;;; Eglot Integration
 
