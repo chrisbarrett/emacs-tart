@@ -84,3 +84,33 @@ let rec to_string = function
       ^ String.concat " " (List.map to_string elts)
       ^ " . " ^ to_string tail ^ ")"
   | Error (msg, _) -> Printf.sprintf "#<error: %s>" msg
+
+(** Find the innermost S-expression containing the given position.
+    Position is 0-based (LSP convention). *)
+let rec find_at_position ~(line : int) ~(col : int) (sexp : t) : t option =
+  let span = span_of sexp in
+  if not (Location.contains_position span ~line ~col) then
+    None
+  else
+    (* Position is within this sexp; check children for a more specific match *)
+    let children_result =
+      match sexp with
+      | List (children, _) ->
+          List.find_map (find_at_position ~line ~col) children
+      | Vector (children, _) ->
+          List.find_map (find_at_position ~line ~col) children
+      | Cons (car, cdr, _) -> (
+          match find_at_position ~line ~col car with
+          | Some _ as result -> result
+          | None -> find_at_position ~line ~col cdr)
+      | Int _ | Float _ | String _ | Symbol _ | Keyword _ | Char _ | Error _ ->
+          None
+    in
+    (* Return the most specific match, or this sexp if no child matched *)
+    match children_result with
+    | Some _ as result -> result
+    | None -> Some sexp
+
+(** Find the innermost S-expression at a position across multiple forms. *)
+let find_at_position_in_forms ~(line : int) ~(col : int) (forms : t list) : t option =
+  List.find_map (find_at_position ~line ~col) forms

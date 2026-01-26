@@ -227,3 +227,59 @@ let publish_diagnostics_params_to_json (params : publish_diagnostics_params) :
     | None -> fields
   in
   `Assoc fields
+
+(** {1 Hover} *)
+
+(** Markup content kind *)
+type markup_kind =
+  | PlainText
+  | Markdown
+
+(** Markup content for hover *)
+type markup_content = {
+  kind : markup_kind;
+  value : string;
+}
+
+(** Hover result *)
+type hover = {
+  contents : markup_content;
+  range : range option;
+}
+
+(** Hover params *)
+type hover_params = {
+  text_document : string;  (* URI *)
+  position : position;
+}
+
+let parse_hover_params (json : Yojson.Safe.t) : hover_params =
+  let open Yojson.Safe.Util in
+  let text_document =
+    json |> member "textDocument" |> member "uri" |> to_string
+  in
+  let pos_json = json |> member "position" in
+  let position =
+    { line = pos_json |> member "line" |> to_int;
+      character = pos_json |> member "character" |> to_int }
+  in
+  { text_document; position }
+
+let markup_kind_to_string = function
+  | PlainText -> "plaintext"
+  | Markdown -> "markdown"
+
+let markup_content_to_json (content : markup_content) : Yojson.Safe.t =
+  `Assoc [
+    ("kind", `String (markup_kind_to_string content.kind));
+    ("value", `String content.value);
+  ]
+
+let hover_to_json (hover : hover) : Yojson.Safe.t =
+  let fields = [("contents", markup_content_to_json hover.contents)] in
+  let fields =
+    match hover.range with
+    | Some r -> ("range", range_to_json r) :: fields
+    | None -> fields
+  in
+  `Assoc fields

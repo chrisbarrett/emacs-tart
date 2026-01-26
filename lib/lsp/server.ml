@@ -257,6 +257,81 @@ let handle_did_close (server : t) (params : Yojson.Safe.t option) : unit =
         ~method_:"textDocument/publishDiagnostics"
         ~params:(Protocol.publish_diagnostics_params_to_json params)
 
+(** Get the type at a specific S-expression within a document.
+
+    This re-type-checks the document and infers the type for the target sexp. *)
+let type_at_sexp (env : Typing.Check.check_result) (target : Syntax.Sexp.t) : Core.Types.typ option =
+  (* For now, use the simple approach: infer the type of the target expression directly *)
+  let open Core.Types in
+  reset_tvar_counter ();
+  let result = Typing.Infer.infer env.Typing.Check.env target in
+  let _ = Typing.Unify.solve result.Typing.Infer.constraints in
+  Some (repr result.Typing.Infer.ty)
+
+(** Handle textDocument/hover request *)
+let handle_hover (server : t) (params : Yojson.Safe.t option) :
+    (Yojson.Safe.t, Rpc.response_error) result =
+  match params with
+  | None ->
+      Error
+        {
+          Rpc.code = Rpc.invalid_params;
+          message = "Missing hover params";
+          data = None;
+        }
+  | Some json -> (
+      let hover_params = Protocol.parse_hover_params json in
+      let uri = hover_params.text_document in
+      let line = hover_params.position.line in
+      let col = hover_params.position.character in
+      debug server
+        (Printf.sprintf "Hover request at %s:%d:%d" uri line col);
+      match Document.get_doc server.documents uri with
+      | None ->
+          debug server (Printf.sprintf "Document not found: %s" uri);
+          Ok `Null
+      | Some doc -> (
+          let filename = filename_of_uri uri in
+          let parse_result = Syntax.Read.parse_string ~filename doc.text in
+          if parse_result.sexps = [] then (
+            debug server "No S-expressions parsed";
+            Ok `Null)
+          else
+            match
+              Syntax.Sexp.find_at_position_in_forms ~line ~col
+                parse_result.sexps
+            with
+            | None ->
+                debug server "No S-expression at position";
+                Ok `Null
+            | Some target_sexp -> (
+                debug server
+                  (Printf.sprintf "Found sexp: %s"
+                     (Syntax.Sexp.to_string target_sexp));
+                (* Type-check the document to get the environment *)
+                let check_result =
+                  Typing.Check.check_program parse_result.sexps
+                in
+                match type_at_sexp check_result target_sexp with
+                | None ->
+                    debug server "Could not infer type";
+                    Ok `Null
+                | Some ty ->
+                    let type_str = Core.Types.to_string ty in
+                    debug server (Printf.sprintf "Type: %s" type_str);
+                    let hover : Protocol.hover =
+                      {
+                        contents =
+                          {
+                            kind = Protocol.Markdown;
+                            value =
+                              Printf.sprintf "```elisp\n%s\n```" type_str;
+                          };
+                        range = Some (range_of_span (Syntax.Sexp.span_of target_sexp));
+                      }
+                    in
+                    Ok (Protocol.hover_to_json hover))))
+
 (** Dispatch a request to its handler *)
 let dispatch_request (server : t) (msg : Rpc.message) :
     (Yojson.Safe.t, Rpc.response_error) result =
@@ -264,6 +339,7 @@ let dispatch_request (server : t) (msg : Rpc.message) :
   match msg.method_ with
   | "initialize" -> handle_initialize server msg.params
   | "shutdown" -> handle_shutdown server
+  | "textDocument/hover" -> handle_hover server msg.params
   | _ ->
       Error
         {

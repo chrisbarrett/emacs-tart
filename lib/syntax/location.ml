@@ -50,3 +50,20 @@ let span_of_lexing file (start_lp : Lexing.position) (end_lp : Lexing.position)
     start_pos = pos_of_lexing file start_lp;
     end_pos = pos_of_lexing file end_lp;
   }
+
+(** Check if a position is within a span.
+    Uses 0-based line and column numbers (LSP convention).
+    Internal positions use 1-based lines, 0-based columns. *)
+let contains_position (span : span) ~(line : int) ~(col : int) : bool =
+  (* Convert from 0-based LSP line to 1-based internal line *)
+  let line = line + 1 in
+  (* Check if position is within the span *)
+  let start = span.start_pos in
+  let end_ = span.end_pos in
+  let after_start =
+    (line > start.line) || (line = start.line && col >= start.col)
+  in
+  let before_end =
+    (line < end_.line) || (line = end_.line && col < end_.col)
+  in
+  after_start && before_end

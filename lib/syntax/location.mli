@@ -56,3 +56,8 @@ val pos_of_lexing : string -> Lexing.position -> pos
 
 val span_of_lexing : string -> Lexing.position -> Lexing.position -> span
 (** [span_of_lexing file start_lp end_lp] creates a span from lexer positions. *)
+
+val contains_position : span -> line:int -> col:int -> bool
+(** [contains_position span ~line ~col] checks if a 0-based LSP position
+    is contained within the span. Note: Internal positions use 1-based lines,
+    0-based columns, so this function performs the necessary conversion. *)

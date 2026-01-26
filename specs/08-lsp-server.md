@@ -170,7 +170,7 @@ responses with proper headers
 - [x] [R3] Implement document manager with incremental sync
 - [x] [R4] Implement publishDiagnostics on document change
 - [x] [R5] Ensure diagnostic ranges are accurate
-- [ ] [R6] Implement textDocument/hover
+- [x] [R6] Implement textDocument/hover
 - [ ] [R7] Show instantiated types on hover
 - [ ] [R8] Handle hover gracefully on errors
 - [ ] [R9] Add query-based caching for incrementality

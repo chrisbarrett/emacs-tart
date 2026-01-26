@@ -45,3 +45,13 @@ val with_span : t -> Location.span -> t
 val to_string : t -> string
 (** Pretty-print an S-expression in Elisp syntax (without locations).
     Reader macros are printed in their sugared form. *)
+
+(** {1 Position Lookup} *)
+
+val find_at_position : line:int -> col:int -> t -> t option
+(** [find_at_position ~line ~col sexp] finds the innermost S-expression
+    containing the given position. Position is 0-based (LSP convention). *)
+
+val find_at_position_in_forms : line:int -> col:int -> t list -> t option
+(** [find_at_position_in_forms ~line ~col forms] finds the innermost
+    S-expression at a position across multiple top-level forms. *)

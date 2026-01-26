@@ -108,3 +108,34 @@ type publish_diagnostics_params = {
 
 (** Encode publishDiagnostics params to JSON *)
 val publish_diagnostics_params_to_json : publish_diagnostics_params -> Yojson.Safe.t
+
+(** {1 Hover} *)
+
+(** Markup content kind *)
+type markup_kind =
+  | PlainText
+  | Markdown
+
+(** Markup content for hover *)
+type markup_content = {
+  kind : markup_kind;
+  value : string;
+}
+
+(** Hover result *)
+type hover = {
+  contents : markup_content;
+  range : range option;
+}
+
+(** Hover params *)
+type hover_params = {
+  text_document : string;  (* URI *)
+  position : position;
+}
+
+(** Parse hover params from JSON *)
+val parse_hover_params : Yojson.Safe.t -> hover_params
+
+(** Encode hover result to JSON *)
+val hover_to_json : hover -> Yojson.Safe.t

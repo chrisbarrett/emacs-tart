@@ -681,6 +681,266 @@ let test_diagnostics_parse_error () =
       let diagnostics = params |> member "diagnostics" |> to_list in
       Alcotest.(check bool) "has parse error diagnostic" true (List.length diagnostics > 0)
 
+(** {1 Hover Tests} *)
+
+(** Helper to find a response with a given id *)
+let find_response (messages : Yojson.Safe.t list) (id : int) : Yojson.Safe.t option =
+  let open Yojson.Safe.Util in
+  List.find_opt
+    (fun json ->
+      match json |> member "id" with
+      | `Int i -> i = id
+      | _ -> false)
+    messages
+
+let test_hover_on_literal () =
+  let init_msg =
+    make_message ~id:(`Int 1) ~method_:"initialize"
+      ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+      ()
+  in
+  let did_open_msg =
+    make_message ~method_:"textDocument/didOpen"
+      ~params:
+        (`Assoc
+          [
+            ( "textDocument",
+              `Assoc
+                [
+                  ("uri", `String "file:///test.el");
+                  ("languageId", `String "elisp");
+                  ("version", `Int 1);
+                  ("text", `String "42");
+                ] );
+          ])
+      ()
+  in
+  (* Hover at position (0, 0) - should get int type *)
+  let hover_msg =
+    make_message ~id:(`Int 2) ~method_:"textDocument/hover"
+      ~params:
+        (`Assoc
+          [
+            ("textDocument", `Assoc [ ("uri", `String "file:///test.el") ]);
+            ("position", `Assoc [ ("line", `Int 0); ("character", `Int 0) ]);
+          ])
+      ()
+  in
+  let shutdown_msg = make_message ~id:(`Int 3) ~method_:"shutdown" () in
+  let exit_msg = make_message ~method_:"exit" () in
+  let input = init_msg ^ did_open_msg ^ hover_msg ^ shutdown_msg ^ exit_msg in
+  let in_file = Filename.temp_file "lsp_in" ".json" in
+  Out_channel.with_open_bin in_file (fun oc -> Out_channel.output_string oc input);
+  let ic = In_channel.open_bin in_file in
+  let out_file = Filename.temp_file "lsp_out" ".json" in
+  let oc = Out_channel.open_bin out_file in
+  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let exit_code = Server.run server in
+  In_channel.close ic;
+  Out_channel.close oc;
+  Alcotest.(check int) "exit code" 0 exit_code;
+  (* Parse output and find hover response *)
+  let output = In_channel.with_open_bin out_file In_channel.input_all in
+  let messages = parse_messages output in
+  match find_response messages 2 with
+  | None -> Alcotest.fail "No hover response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      Alcotest.(check bool) "result is not null" true (result <> `Null);
+      let contents = result |> member "contents" in
+      let value = contents |> member "value" |> to_string in
+      (* Should contain "Int" type *)
+      Alcotest.(check bool) "contains Int type" true
+        (String.length value > 0 && (try
+          let _ = Str.search_forward (Str.regexp_string "Int") value 0 in true
+        with Not_found -> false))
+
+let test_hover_on_function_call () =
+  let init_msg =
+    make_message ~id:(`Int 1) ~method_:"initialize"
+      ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+      ()
+  in
+  let did_open_msg =
+    make_message ~method_:"textDocument/didOpen"
+      ~params:
+        (`Assoc
+          [
+            ( "textDocument",
+              `Assoc
+                [
+                  ("uri", `String "file:///test.el");
+                  ("languageId", `String "elisp");
+                  ("version", `Int 1);
+                  ("text", `String "(+ 1 2)");
+                ] );
+          ])
+      ()
+  in
+  (* Hover at position (0, 1) - on the + symbol *)
+  let hover_msg =
+    make_message ~id:(`Int 2) ~method_:"textDocument/hover"
+      ~params:
+        (`Assoc
+          [
+            ("textDocument", `Assoc [ ("uri", `String "file:///test.el") ]);
+            ("position", `Assoc [ ("line", `Int 0); ("character", `Int 1) ]);
+          ])
+      ()
+  in
+  let shutdown_msg = make_message ~id:(`Int 3) ~method_:"shutdown" () in
+  let exit_msg = make_message ~method_:"exit" () in
+  let input = init_msg ^ did_open_msg ^ hover_msg ^ shutdown_msg ^ exit_msg in
+  let in_file = Filename.temp_file "lsp_in" ".json" in
+  Out_channel.with_open_bin in_file (fun oc -> Out_channel.output_string oc input);
+  let ic = In_channel.open_bin in_file in
+  let out_file = Filename.temp_file "lsp_out" ".json" in
+  let oc = Out_channel.open_bin out_file in
+  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let exit_code = Server.run server in
+  In_channel.close ic;
+  Out_channel.close oc;
+  Alcotest.(check int) "exit code" 0 exit_code;
+  (* Parse output and find hover response *)
+  let output = In_channel.with_open_bin out_file In_channel.input_all in
+  let messages = parse_messages output in
+  match find_response messages 2 with
+  | None -> Alcotest.fail "No hover response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      Alcotest.(check bool) "result is not null" true (result <> `Null);
+      let contents = result |> member "contents" in
+      let value = contents |> member "value" |> to_string in
+      (* Should have a function type with arrows *)
+      Alcotest.(check bool) "contains arrow" true
+        (try
+          let _ = Str.search_forward (Str.regexp_string "->") value 0 in true
+        with Not_found -> false)
+
+let test_hover_outside_code () =
+  let init_msg =
+    make_message ~id:(`Int 1) ~method_:"initialize"
+      ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+      ()
+  in
+  let did_open_msg =
+    make_message ~method_:"textDocument/didOpen"
+      ~params:
+        (`Assoc
+          [
+            ( "textDocument",
+              `Assoc
+                [
+                  ("uri", `String "file:///test.el");
+                  ("languageId", `String "elisp");
+                  ("version", `Int 1);
+                  ("text", `String "42\n");
+                ] );
+          ])
+      ()
+  in
+  (* Hover at position (1, 0) - empty line, outside any code *)
+  let hover_msg =
+    make_message ~id:(`Int 2) ~method_:"textDocument/hover"
+      ~params:
+        (`Assoc
+          [
+            ("textDocument", `Assoc [ ("uri", `String "file:///test.el") ]);
+            ("position", `Assoc [ ("line", `Int 1); ("character", `Int 0) ]);
+          ])
+      ()
+  in
+  let shutdown_msg = make_message ~id:(`Int 3) ~method_:"shutdown" () in
+  let exit_msg = make_message ~method_:"exit" () in
+  let input = init_msg ^ did_open_msg ^ hover_msg ^ shutdown_msg ^ exit_msg in
+  let in_file = Filename.temp_file "lsp_in" ".json" in
+  Out_channel.with_open_bin in_file (fun oc -> Out_channel.output_string oc input);
+  let ic = In_channel.open_bin in_file in
+  let out_file = Filename.temp_file "lsp_out" ".json" in
+  let oc = Out_channel.open_bin out_file in
+  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let exit_code = Server.run server in
+  In_channel.close ic;
+  Out_channel.close oc;
+  Alcotest.(check int) "exit code" 0 exit_code;
+  (* Parse output and find hover response *)
+  let output = In_channel.with_open_bin out_file In_channel.input_all in
+  let messages = parse_messages output in
+  match find_response messages 2 with
+  | None -> Alcotest.fail "No hover response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      (* Should return null when not hovering over code *)
+      Alcotest.(check bool) "result is null" true (result = `Null)
+
+let test_hover_has_range () =
+  let init_msg =
+    make_message ~id:(`Int 1) ~method_:"initialize"
+      ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
+      ()
+  in
+  let did_open_msg =
+    make_message ~method_:"textDocument/didOpen"
+      ~params:
+        (`Assoc
+          [
+            ( "textDocument",
+              `Assoc
+                [
+                  ("uri", `String "file:///test.el");
+                  ("languageId", `String "elisp");
+                  ("version", `Int 1);
+                  (* Use a simpler literal for testing range *)
+                  ("text", `String "42");
+                ] );
+          ])
+      ()
+  in
+  (* Hover on int literal at position 0 *)
+  let hover_msg =
+    make_message ~id:(`Int 2) ~method_:"textDocument/hover"
+      ~params:
+        (`Assoc
+          [
+            ("textDocument", `Assoc [ ("uri", `String "file:///test.el") ]);
+            ("position", `Assoc [ ("line", `Int 0); ("character", `Int 0) ]);
+          ])
+      ()
+  in
+  let shutdown_msg = make_message ~id:(`Int 3) ~method_:"shutdown" () in
+  let exit_msg = make_message ~method_:"exit" () in
+  let input = init_msg ^ did_open_msg ^ hover_msg ^ shutdown_msg ^ exit_msg in
+  let in_file = Filename.temp_file "lsp_in" ".json" in
+  Out_channel.with_open_bin in_file (fun oc -> Out_channel.output_string oc input);
+  let ic = In_channel.open_bin in_file in
+  let out_file = Filename.temp_file "lsp_out" ".json" in
+  let oc = Out_channel.open_bin out_file in
+  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let exit_code = Server.run server in
+  In_channel.close ic;
+  Out_channel.close oc;
+  Alcotest.(check int) "exit code" 0 exit_code;
+  (* Parse output and find hover response *)
+  let output = In_channel.with_open_bin out_file In_channel.input_all in
+  let messages = parse_messages output in
+  match find_response messages 2 with
+  | None -> Alcotest.fail "No hover response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      Alcotest.(check bool) "result is not null" true (result <> `Null);
+      (* Check that range is included *)
+      let range = result |> member "range" in
+      Alcotest.(check bool) "has range" true (range <> `Null);
+      (* Check range has start and end *)
+      let start = range |> member "start" in
+      let end_ = range |> member "end" in
+      Alcotest.(check bool) "has start" true (start <> `Null);
+      Alcotest.(check bool) "has end" true (end_ <> `Null)
+
 let () =
   Alcotest.run "server"
     [
@@ -706,5 +966,12 @@ let () =
           Alcotest.test_case "cleared on close" `Quick test_diagnostics_cleared_on_close;
           Alcotest.test_case "valid document" `Quick test_diagnostics_valid_document;
           Alcotest.test_case "parse error" `Quick test_diagnostics_parse_error;
+        ] );
+      ( "hover",
+        [
+          Alcotest.test_case "on literal" `Quick test_hover_on_literal;
+          Alcotest.test_case "on function call" `Quick test_hover_on_function_call;
+          Alcotest.test_case "outside code" `Quick test_hover_outside_code;
+          Alcotest.test_case "has range" `Quick test_hover_has_range;
         ] );
     ]
