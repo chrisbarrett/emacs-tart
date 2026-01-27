@@ -1,9 +1,15 @@
 # Tart 🍰
 
+> [!WARNING]
+> This project is under active iteration and isn't ready for general use.
+
 Tart is a static type checker built for Emacs Lisp that gives you the meaningful
 red squiggles you deserve.
 
-If you're an Emacs user, the goal is: you install Tart. You get squiggles.
+If you're an Emacs user, the goal is:
+
+1. you install Tart
+2. you get squiggles.
 
 If you're a library author, you can use Tart to define a type signature for your
 package with a `.tart` file. Tart checks your code conforms to it, and uses it
@@ -22,11 +28,10 @@ setting this up) download a pre-built version. You can run tart standalone with
 Tart comes with two Emacs Lisp libraries:
 
 - **tart** for library authors: macros for writing type annotations. They're
-    zero-cost at runtime.
+  zero-cost at runtime.
 
 - **tart-mode** for authors & users: a minor mode for Tart's commands and
-    integrating the LSP with Eglot.
-
+  integrating the LSP with Eglot.
 
 ## The Problem
 
@@ -92,11 +97,11 @@ The first time you open an Emacs Lisp file with a sibling `.tart` file,
 
 ### Customization
 
-| Variable                | Description                                      |
-|:------------------------|:-------------------------------------------------|
-| `tart-executable`       | `'managed` (default) or path to custom binary    |
-| `tart-version`          | `'latest` (default) or version string            |
-| `tart-install-directory`| Where managed binaries are stored                |
+| Variable                 | Description                                   |
+| :----------------------- | :-------------------------------------------- |
+| `tart-executable`        | `'managed` (default) or path to custom binary |
+| `tart-version`           | `'latest` (default) or version string         |
+| `tart-install-directory` | Where managed binaries are stored             |
 
 ### Building from source
 
@@ -146,7 +151,7 @@ to nail down the types of internal functions when it's helpful to do so.
 
 You can also use the `tart` macro for type annotations.
 
-``` elisp
+```elisp
 1            ; 1 :: int
 (tart num 1) ; 1 :: num
 
@@ -157,11 +162,12 @@ You can also use the `tart` macro for type annotations.
 
 > [!TIP]
 > Tart doesn't need type annotations most of the time, but they can be helpful
-> for *upcasting* to a more general type.
+> for _upcasting_ to a more general type.
 
 ## Documentation
 
 - **[Getting Started](docs/getting-started.adoc)** -- Tutorial for new users
-- **[Library Authors Guide](docs/library-authors.adoc)** -- Writing `.tart` files
+- **[Library Authors Guide](docs/library-authors.adoc)** -- Writing `.tart`
+  files
 - **[Tooling Setup](docs/tooling-setup.adoc)** -- Editor configuration
 - **[CLI Reference](docs/cli-reference.adoc)** -- Command-line usage
