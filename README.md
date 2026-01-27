@@ -76,10 +76,31 @@ details.
 
 ## Installation
 
-> [!NOTE]
-> Installation is currently manual and from source.
+Add the lisp directory to your load path and enable tart-mode:
 
-Clone the repo:
+```elisp
+(add-to-list 'load-path "/path/to/emacs-tart/lisp")
+(require 'tart-mode)
+
+(add-hook 'emacs-lisp-mode-hook #'tart-mode)
+(add-hook 'emacs-lisp-mode-hook #'tart-eglot)
+```
+
+The first time you open an Emacs Lisp file with a sibling `.tart` file,
+`tart-eglot` will prompt you to download the binary. You can also run
+`M-x tart-install-binary` manually.
+
+### Customization
+
+| Variable                | Description                                      |
+|:------------------------|:-------------------------------------------------|
+| `tart-executable`       | `'managed` (default) or path to custom binary    |
+| `tart-version`          | Version to install (`nil` = latest)              |
+| `tart-install-directory`| Where managed binaries are stored                |
+
+### Building from source
+
+If you prefer to build from source:
 
 ```bash
 git clone https://github.com/chrisbarrett/emacs-tart.git
@@ -87,21 +108,11 @@ cd emacs-tart
 nix build
 ```
 
-Configure the Emacs integration:
+Then point `tart-executable` to your binary:
 
-``` elisp
-(defvar tart-repo-path "/path/to/emacs-tart")
-
-(add-to-list 'load-path (file-name-concat tart-repo-path "lisp"))
-(autoload 'tart-mode (file-name-concat tart-repo-path "lisp/tart-mode"))
-
-(setq tart-executable (file-name-concat tart-repo-path "result/bin/tart")) ; assuming you used `nix build`; adjust as needed
-
-(add-hook 'emacs-lisp-mode-hook #'tart-mode)
-(add-hook 'emacs-lisp-mode-hook #'eglot)
+```elisp
+(setq tart-executable "/path/to/emacs-tart/result/bin/tart")
 ```
-
-That should be enough to get tart's LSP up-and-running.
 
 ## Examples
 
