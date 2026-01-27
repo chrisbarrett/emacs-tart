@@ -426,6 +426,111 @@ searches `exec-path' for relative paths."
     (_
      (error "Invalid tart-executable value: %S" tart-executable))))
 
+;;; Binary Installation
+
+(defvar url-http-end-of-headers)  ; defined by url.el
+
+(defun tart--github-api-url (endpoint)
+  "Return the GitHub API URL for ENDPOINT."
+  (format "https://api.github.com/repos/%s/%s" tart--github-repo endpoint))
+
+(defun tart--github-request (endpoint callback)
+  "Make async GitHub API request to ENDPOINT, calling CALLBACK with parsed JSON.
+CALLBACK receives two arguments: the parsed JSON on success, or nil and an
+error message string on failure."
+  (let ((url (tart--github-api-url endpoint))
+        (url-request-extra-headers
+         `(("Accept" . "application/vnd.github+json")
+           ("X-GitHub-Api-Version" . "2022-11-28")
+           ,@(when-let* ((token (getenv "GITHUB_TOKEN")))
+               `(("Authorization" . ,(concat "Bearer " token)))))))
+    (url-retrieve
+     url
+     (lambda (status)
+       (if-let* ((err (plist-get status :error)))
+           (funcall callback nil (format "Network error: %s" (cadr err)))
+         (goto-char url-http-end-of-headers)
+         (condition-case err
+             (let ((json (json-parse-buffer :object-type 'alist)))
+               (if-let* ((message (alist-get 'message json)))
+                   ;; GitHub API error response
+                   (funcall callback nil
+                            (if (string-match-p "rate limit" message)
+                                "GitHub rate limit exceeded. Set GITHUB_TOKEN environment variable."
+                              message))
+                 (funcall callback json nil)))
+           (error (funcall callback nil (format "JSON parse error: %s" err))))))
+     nil t t)))
+
+(defun tart--find-asset (release asset-name)
+  "Find ASSET-NAME in RELEASE's assets list.
+Returns the asset alist or nil if not found."
+  (let ((assets (alist-get 'assets release)))
+    (cl-find-if (lambda (a) (equal (alist-get 'name a) asset-name))
+                assets)))
+
+(defun tart--download-binary (url dest callback)
+  "Download binary from URL to DEST file, calling CALLBACK when done.
+CALLBACK receives two arguments: DEST path on success, or nil and error message."
+  (message "Downloading tart binary...")
+  (let ((url-request-extra-headers
+         `(("Accept" . "application/octet-stream")
+           ,@(when-let* ((token (getenv "GITHUB_TOKEN")))
+               `(("Authorization" . ,(concat "Bearer " token)))))))
+    (url-retrieve
+     url
+     (lambda (status)
+       (if-let* ((err (plist-get status :error)))
+           (funcall callback nil (format "Download failed: %s" (cadr err)))
+         ;; Write binary data to file
+         (goto-char url-http-end-of-headers)
+         (let ((coding-system-for-write 'binary))
+           (condition-case err
+               (progn
+                 (make-directory (file-name-directory dest) t)
+                 (write-region (point) (point-max) dest nil 'silent)
+                 (set-file-modes dest #o755)
+                 (message "Downloaded tart to %s" dest)
+                 (funcall callback dest nil))
+             (error (funcall callback nil (format "Write error: %s" err)))))))
+     nil t t)))
+
+;;;###autoload
+(defun tart-install-binary ()
+  "Download and install the tart binary from GitHub releases.
+Uses `tart-version' to determine which version to install, or
+the latest release if nil.
+
+The binary is installed to ~/.emacs.d/tart/bin/tart-VERSION
+and will be used automatically when `tart-executable' is `managed'."
+  (interactive)
+  (let ((version tart-version)
+        (asset-name (tart--platform-asset)))
+    (message "Fetching release information...")
+    (tart--github-request
+     (if version
+         (format "releases/tags/v%s" version)
+       "releases/latest")
+     (lambda (release err)
+       (if err
+           (user-error "Failed to fetch release: %s" err)
+         (let* ((tag (alist-get 'tag_name release))
+                (ver (if (string-prefix-p "v" tag) (substring tag 1) tag))
+                (asset (tart--find-asset release asset-name))
+                (dest (expand-file-name (concat "tart-" ver) (tart--bin-directory))))
+           (unless asset
+             (user-error "No binary available for %s. Supported: darwin-arm64, darwin-x86_64, linux-arm64, linux-x86_64"
+                         asset-name))
+           (if (file-exists-p dest)
+               (message "tart %s already installed at %s" ver dest)
+             (tart--download-binary
+              (alist-get 'browser_download_url asset)
+              dest
+              (lambda (_path err)
+                (if err
+                    (user-error "Installation failed: %s" err)
+                  (message "Successfully installed tart %s" ver)))))))))))
+
 ;;; Eglot Integration
 
 (defun tart--eglot-server-program (_interactive)
