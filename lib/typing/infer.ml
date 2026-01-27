@@ -38,7 +38,8 @@ type pattern_binding = { pb_name : string; pb_type : typ }
 let pure ty = { ty; constraints = C.empty; undefineds = [] }
 
 (** Create a result with a single constraint *)
-let with_constraint ty c = { ty; constraints = C.add c C.empty; undefineds = [] }
+let with_constraint ty c =
+  { ty; constraints = C.add c C.empty; undefineds = [] }
 
 (** Create a result with an undefined variable error *)
 let with_undefined ty name span =
@@ -519,7 +520,8 @@ and infer_not env arg _span =
 (** Extract bindings from a pcase pattern.
 
     Recognizes:
-    - [`(TAG . ,var)] - cons pattern with backquote, extracts var with field type
+    - [`(TAG . ,var)] - cons pattern with backquote, extracts var with field
+      type
     - [`(TAG ,v1 ,v2 ...)] - vector pattern for multi-field constructors
     - [,var] - unquote captures the matched value
     - [_] - wildcard, no bindings
@@ -721,8 +723,8 @@ and infer_tart_annotation env type_sexp form _span =
     function fn with the given type arguments, then applies it to args.
 
     The type arguments are parsed using sig_parser and applied to the function's
-    type parameters in order. The underscore [_] can be used as a placeholder
-    to let inference determine that type argument. *)
+    type parameters in order. The underscore [_] can be used as a placeholder to
+    let inference determine that type argument. *)
 and infer_explicit_instantiation (env : Env.t)
     (type_arg_sexps : Syntax.Sexp.t list) (fn : Syntax.Sexp.t)
     (args : Syntax.Sexp.t list) (span : Loc.span) : result =
@@ -930,24 +932,17 @@ and infer_application env fn args span =
 
   { ty = result_ty; constraints = all_constraints; undefineds = all_undefineds }
 
-(** Infer a defun as an expression.
-
-    As an expression, defun returns a symbol (the function name). The function
-    type is inferred like a lambda.
-
-    For the side effect of binding the name to the type, use [infer_defun]. *)
 (** Extract (declare (tart TYPE)) from a defun body.
 
     Returns [(Some type_sexp, remaining_body)] if a tart declaration is found,
-    or [(None, body)] if not. The declare form must be the first expression
-    in the body. *)
+    or [(None, body)] if not. The declare form must be the first expression in
+    the body. *)
 and extract_tart_declare (body : Syntax.Sexp.t list) :
     Syntax.Sexp.t option * Syntax.Sexp.t list =
   let open Syntax.Sexp in
   match body with
   | List
-      ( [ Symbol ("declare", _); List (Symbol ("tart", _) :: type_parts, _) ],
-        _ )
+      ([ Symbol ("declare", _); List (Symbol ("tart", _) :: type_parts, _) ], _)
     :: rest ->
       (* Found (declare (tart ...)), extract the type expression.
          The type parts should form a single arrow type: (params) -> return
@@ -970,6 +965,12 @@ and parse_tart_type (type_sexp : Syntax.Sexp.t) : Sig_ast.sig_type option =
   | Ok sig_type -> Some sig_type
   | Error _ -> None
 
+(** Infer a defun as an expression.
+
+    As an expression, defun returns a symbol (the function name). The function
+    type is inferred like a lambda.
+
+    For the side effect of binding the name to the type, use [infer_defun]. *)
 and infer_defun_as_expr env _name params body span =
   (* Infer as a lambda, but return Symbol as the expression type *)
   let fn_result = infer_lambda env params body span in
@@ -986,16 +987,17 @@ and infer_defun_as_expr env _name params body span =
     callers can bind it in the environment.
 
     If the body contains [(declare (tart TYPE))], the declared type is used
-    instead of inferring. The body is checked against the declared return type. *)
+    instead of inferring. The body is checked against the declared return type.
+*)
 and infer_defun (env : Env.t) (sexp : Syntax.Sexp.t) : defun_result option =
   let open Syntax.Sexp in
   match sexp with
   | List
       (Symbol ("defun", _) :: Symbol (name, _) :: List (params, _) :: body, span)
-    ->
+    -> (
       (* Check for inline type declaration *)
       let tart_decl, actual_body = extract_tart_declare body in
-      (match tart_decl with
+      match tart_decl with
       | Some type_sexp -> (
           match parse_tart_type type_sexp with
           | Some sig_type ->
@@ -1013,8 +1015,8 @@ and infer_defun (env : Env.t) (sexp : Syntax.Sexp.t) : defun_result option =
           infer_defun_inferred env name params body span)
   | _ -> None
 
-(** Substitute type variable names (as TCon) with actual TVars in a type.
-    Used to convert signature types to inferable types. *)
+(** Substitute type variable names (as TCon) with actual TVars in a type. Used
+    to convert signature types to inferable types. *)
 and substitute_tvar_names (subst : (string * typ) list) (ty : typ) : typ =
   match ty with
   | TCon name -> (
@@ -1034,7 +1036,8 @@ and substitute_tvar_names (subst : (string * typ) list) (ty : typ) : typ =
       TArrow (params', substitute_tvar_names subst ret)
   | TApp (con, args) ->
       TApp
-        (substitute_tvar_names subst con, List.map (substitute_tvar_names subst) args)
+        ( substitute_tvar_names subst con,
+          List.map (substitute_tvar_names subst) args )
   | TForall (vars, body) ->
       (* Remove substituted vars from the substitution to avoid capture *)
       let subst' = List.filter (fun (n, _) -> not (List.mem n vars)) subst in
@@ -1044,9 +1047,9 @@ and substitute_tvar_names (subst : (string * typ) list) (ty : typ) : typ =
 
 (** Infer a defun with a type declaration.
 
-    Uses the declared type for parameters and checks the body against
-    the declared return type. Creates fresh type variables for polymorphic
-    type parameters so they can be properly generalized. *)
+    Uses the declared type for parameters and checks the body against the
+    declared return type. Creates fresh type variables for polymorphic type
+    parameters so they can be properly generalized. *)
 and infer_defun_with_declaration (env : Env.t) (name : string)
     (params : Syntax.Sexp.t list) (body : Syntax.Sexp.t list) (span : Loc.span)
     (sig_type : Sig_ast.sig_type) : defun_result option =
@@ -1117,7 +1120,9 @@ and infer_defun_with_declaration (env : Env.t) (name : string)
   let context =
     C.DeclaredReturn { fn_name = name; declared_type = declared_return }
   in
-  let return_constraint = C.equal ~context body_result.ty declared_return span in
+  let return_constraint =
+    C.equal ~context body_result.ty declared_return span
+  in
   let all_constraints = C.add return_constraint body_result.constraints in
 
   (* Solve constraints *)
@@ -1148,8 +1153,8 @@ and infer_defun_with_declaration (env : Env.t) (name : string)
 
 (** Infer a defun without type declaration (original behavior). *)
 and infer_defun_inferred (env : Env.t) (name : string)
-    (params : Syntax.Sexp.t list) (body : Syntax.Sexp.t list) (span : Loc.span) :
-    defun_result option =
+    (params : Syntax.Sexp.t list) (body : Syntax.Sexp.t list) (span : Loc.span)
+    : defun_result option =
   let open Syntax.Sexp in
   let outer_level = Env.current_level env in
   let inner_env = Env.enter_level env in
