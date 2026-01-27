@@ -31,8 +31,8 @@ let fn params ret = TArrow (List.map (fun t -> PPositional t) params, ret)
 (** Helper for a function with rest args *)
 let fn_rest elem_ty ret = TArrow ([ PRest elem_ty ], ret)
 
-(** Create a polymorphic scheme (no constraints) *)
-let poly vars ty = Env.Poly (vars, [], ty)
+(** Create a polymorphic scheme *)
+let poly vars ty = Env.Poly (vars, ty)
 
 (** Create a monomorphic scheme *)
 let mono ty = Env.Mono ty

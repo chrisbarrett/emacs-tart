@@ -7,16 +7,12 @@ open Types
 
 (** A type scheme is a possibly-polymorphic type.
 
-    [Mono ty] is a monomorphic type (no quantified variables).
-    [Poly (vars, constraints, ty)] is a polymorphic type with bound type
-    variables and optional type class constraints.
+    [Mono ty] is a monomorphic type (no quantified variables). [Poly (vars, ty)]
+    is a polymorphic type with bound type variables.
 
     Type schemes are created during let-generalization when the RHS is a
-    syntactic value (lambda, literal, variable, constructor application).
-
-    Constraints are type class requirements like [(Eq a)] that must be satisfied
-    when the type is instantiated. *)
-type scheme = Mono of typ | Poly of string list * type_constraint list * typ
+    syntactic value (lambda, literal, variable, constructor application). *)
+type scheme = Mono of typ | Poly of string list * typ
 
 type t = {
   bindings : (string * scheme) list;
@@ -53,45 +49,21 @@ let extend_mono name ty env = extend name (Mono ty) env
 let extend_monos bindings env =
   List.fold_left (fun env (name, ty) -> extend_mono name ty env) env bindings
 
-(** Extend with a polymorphic binding (no constraints) *)
-let extend_poly name vars ty env = extend name (Poly (vars, [], ty)) env
-
-(** Extend with a constrained polymorphic binding *)
-let extend_poly_constrained name vars constraints ty env =
-  extend name (Poly (vars, constraints, ty)) env
+(** Extend with a polymorphic binding *)
+let extend_poly name vars ty env = extend name (Poly (vars, ty)) env
 
 (** Instantiate a type scheme at the current level.
 
     For monomorphic types, returns the type as-is. For polymorphic types,
-    replaces bound variables with fresh type variables.
-
-    Note: Constraints are not returned by this function. Use
-    [instantiate_with_constraints] when constraint information is needed (e.g.,
-    for instance resolution). *)
+    replaces bound variables with fresh type variables. *)
 let rec instantiate scheme env =
   match scheme with
   | Mono ty -> ty
-  | Poly (vars, _constraints, ty) ->
+  | Poly (vars, ty) ->
       (* Create fresh type variables for each bound variable *)
       let subst = List.map (fun v -> (v, fresh_tvar env.level)) vars in
       (* Apply substitution to the body *)
       substitute subst ty
-
-(** Instantiate a type scheme and return the instantiated constraints.
-
-    Returns (instantiated_type, instantiated_constraints) where constraints have
-    had type variables substituted with fresh tvars. Used for instance
-    resolution to check that constraints are satisfied at call sites. *)
-and instantiate_with_constraints scheme env =
-  match scheme with
-  | Mono ty -> (ty, [])
-  | Poly (vars, constraints, ty) ->
-      let subst = List.map (fun v -> (v, fresh_tvar env.level)) vars in
-      let inst_ty = substitute subst ty in
-      let inst_constraints =
-        List.map (fun (cls, cty) -> (cls, substitute subst cty)) constraints
-      in
-      (inst_ty, inst_constraints)
 
 (** Substitute type variables in a type.
 
@@ -123,18 +95,11 @@ and substitute_param subst = function
   | PRest ty -> PRest (substitute subst ty)
   | PKey (name, ty) -> PKey (name, substitute subst ty)
 
-(** Format a constraint to string *)
-let constraint_to_string (cls, ty) = Printf.sprintf "(%s %s)" cls (to_string ty)
-
 (** Convert a scheme to string for debugging *)
 let scheme_to_string = function
   | Mono ty -> to_string ty
-  | Poly (vars, [], ty) ->
+  | Poly (vars, ty) ->
       Printf.sprintf "(forall (%s) %s)" (String.concat " " vars) (to_string ty)
-  | Poly (vars, constraints, ty) ->
-      Printf.sprintf "(forall (%s) %s => %s)" (String.concat " " vars)
-        (String.concat " " (List.map constraint_to_string constraints))
-        (to_string ty)
 
 (** Get all names bound in the environment *)
 let names env = List.map fst env.bindings

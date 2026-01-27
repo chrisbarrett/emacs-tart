@@ -456,7 +456,6 @@ let type_at_sexp (env : Typing.Check.check_result)
             Typing.Infer.ty = fn_result.Typing.Infer.ty;
             constraints = all_constraints;
             undefineds = fn_result.Typing.Infer.undefineds;
-            class_constraints = fn_result.Typing.Infer.class_constraints;
           })
   | _ ->
       (* Not in an application context, just infer the target directly *)
@@ -1307,7 +1306,7 @@ let handle_code_action (server : t) (params : Yojson.Safe.t option) :
                         let ty =
                           match scheme with
                           | Core.Type_env.Mono t -> t
-                          | Core.Type_env.Poly (vars, _constraints, t) ->
+                          | Core.Type_env.Poly (vars, t) ->
                               Core.Types.TForall (vars, t)
                         in
                         generate_add_signature_action ~name:warn.name ~ty
@@ -1627,7 +1626,7 @@ let collect_env_completions (env : Core.Type_env.t) :
       let ty =
         match scheme with
         | Core.Type_env.Mono t -> t
-        | Core.Type_env.Poly (_, _constraints, t) -> t
+        | Core.Type_env.Poly (_, t) -> t
       in
       let kind =
         match ty with
@@ -1923,7 +1922,7 @@ let handle_signature_help (server : t) (params : Yojson.Safe.t option) :
                     let ty =
                       match scheme with
                       | Core.Type_env.Mono t -> t
-                      | Core.Type_env.Poly (vars, _constraints, t) ->
+                      | Core.Type_env.Poly (vars, t) ->
                           Core.Types.TForall (vars, t)
                     in
                     debug server

@@ -232,7 +232,6 @@ let test_build_registry_empty_for_non_data () =
             {
               defun_name = "foo";
               defun_tvar_binders = [];
-              defun_constraints = [];
               defun_params = [];
               defun_return = Sig_ast.STCon ("int", Loc.dummy_span);
               defun_loc = Loc.dummy_span;

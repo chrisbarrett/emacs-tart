@@ -69,7 +69,7 @@ let test_generalize_tvar_at_higher_level () =
   let scheme = G.generalize 0 tv in
   (* outer level 0 *)
   match scheme with
-  | Env.Poly ([ _ ], _, _) -> ()
+  | Env.Poly ([ _ ], _) -> ()
   | _ -> Alcotest.fail "expected Poly scheme"
 
 let test_no_generalize_tvar_at_same_level () =
@@ -91,7 +91,7 @@ let test_generalize_arrow_with_tvars () =
   let fn_type = TArrow ([ PPositional tv ], tv) in
   let scheme = G.generalize 0 fn_type in
   match scheme with
-  | Env.Poly ([ name ], _, TArrow ([ PPositional (TCon a) ], TCon b))
+  | Env.Poly ([ name ], TArrow ([ PPositional (TCon a) ], TCon b))
     when a = name && b = name ->
       ()
   | _ -> Alcotest.fail "expected polymorphic identity type"
@@ -104,7 +104,7 @@ let test_generalize_nested_tvars () =
   let fn_type = TArrow ([ PPositional tv1; PPositional tv2 ], tv1) in
   let scheme = G.generalize 0 fn_type in
   match scheme with
-  | Env.Poly (vars, _, _) when List.length vars = 2 -> ()
+  | Env.Poly (vars, _) when List.length vars = 2 -> ()
   | _ -> Alcotest.fail "expected two type variables"
 
 (* =============================================================================
@@ -156,9 +156,7 @@ let test_value_restriction_application () =
   let env =
     Env.of_list
       [
-        ( "f",
-          Env.Poly ([ "a" ], [], TArrow ([ PPositional (TCon "a") ], TCon "a"))
-        );
+        ("f", Env.Poly ([ "a" ], TArrow ([ PPositional (TCon "a") ], TCon "a")));
         ("y", Env.Mono Prim.int);
       ]
   in
@@ -181,7 +179,6 @@ let test_value_restriction_reverse () =
         ( "reverse",
           Env.Poly
             ( [ "a" ],
-              [],
               TArrow ([ PPositional (list_of (TCon "a")) ], list_of (TCon "a"))
             ) );
       ]

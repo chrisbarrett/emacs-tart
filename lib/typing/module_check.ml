@@ -328,10 +328,6 @@ let rec check_decl_kinds_with_scope (scope_env : Kind.env)
   | Sig.Sig_ast.DImportStruct _ ->
       (* These declarations don't have type parameters to kind-check *)
       []
-  | Sig.Sig_ast.DClass _ | Sig.Sig_ast.DInstance _ ->
-      (* Type classes are not supported; parsing is retained for
-         backwards compatibility but declarations are ignored *)
-      []
 
 (** Check kinds for a single declaration. Returns any kind errors found. *)
 let check_decl_kinds (decl : Sig.Sig_ast.decl) : kind_check_error list =
@@ -417,16 +413,14 @@ let check_module ~(config : config) ~(filename : string)
                     let inferred =
                       match scheme with
                       | Env.Mono ty -> ty
-                      | Env.Poly (vars, _constraints, ty) ->
-                          Types.TForall (vars, ty)
+                      | Env.Poly (vars, ty) -> Types.TForall (vars, ty)
                     in
                     (* Get the declared type from the signature *)
                     let declared = Loader.load_defun d in
                     let declared_ty =
                       match declared with
                       | Env.Mono ty -> ty
-                      | Env.Poly (vars, _constraints, ty) ->
-                          Types.TForall (vars, ty)
+                      | Env.Poly (vars, ty) -> Types.TForall (vars, ty)
                     in
                     (* Find implementation span - look up by name, fallback to first sexp *)
                     let impl_span =

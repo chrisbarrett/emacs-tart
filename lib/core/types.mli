@@ -50,12 +50,6 @@ and param =
   | PRest of typ  (** Type is the element type; expands to (List a) *)
   | PKey of string * typ  (** :keyword name and type *)
 
-type type_constraint = string * typ
-(** Type class constraint: (class_name, type).
-
-    For example, (Eq a) is represented as ("Eq", TVar a_ref). Multiple
-    constraints like (Eq a, Ord a) => ... are stored as a list. *)
-
 (** {1 Comparison} *)
 
 val equal : typ -> typ -> bool

@@ -86,16 +86,11 @@ type decl =
   | DData of data_decl  (** [(data name ...)] - algebraic data type *)
   | DTypeScope of type_scope_decl
       (** [(type-scope [vars] ...)] - scoped type variable declarations *)
-  | DClass of class_decl  (** [(class (Name a) ...)] - type class definition *)
-  | DInstance of instance_decl
-      (** [(instance (Class type) ...)] - type class instance *)
 
 and defun_decl = {
   defun_name : string;
   defun_tvar_binders : tvar_binder list;
       (** Type variables with optional bounds *)
-  defun_constraints : (string * sig_type) list;
-      (** Type class constraints: (ClassName, type-arg) pairs *)
   defun_params : sig_param list;  (** Parameter types *)
   defun_return : sig_type;  (** Return type *)
   defun_loc : span;
@@ -105,8 +100,7 @@ and defun_decl = {
     Examples:
     - [(defun add (int int) -> int)] - monomorphic
     - [(defun identity [a] (a) -> a)] - polymorphic
-    - [(defun map [a b] (((a -> b)) (list a)) -> (list b))] - higher-order
-    - [(defun elem [a] (Eq a) => (a (list a)) -> bool)] - with constraint *)
+    - [(defun map [a b] (((a -> b)) (list a)) -> (list b))] - higher-order *)
 
 and defvar_decl = {
   defvar_name : string;
@@ -184,63 +178,6 @@ and type_scope_decl = {
 
     The type variable [a] is shared across all declarations in the scope. *)
 
-and class_method = {
-  method_name : string;  (** Method name (e.g., "eq", "compare") *)
-  method_tvar_binders : tvar_binder list;
-      (** Method-local type variables (for HKT methods like fmap) *)
-  method_params : sig_param list;  (** Parameter types *)
-  method_return : sig_type;  (** Return type *)
-  method_loc : span;
-}
-(** Type class method declaration.
-
-    Examples:
-    - [(eq (a a) -> bool)] - simple method using class type variable
-    - [(fmap [a b] (((a) -> b) (f a)) -> (f b))] - HKT method with local vars *)
-
-and class_decl = {
-  class_name : string;  (** Class name (e.g., "Eq", "Functor") *)
-  class_tvar_binder : tvar_binder;
-      (** The single type parameter for the class *)
-  class_superclasses : (string * sig_type) list;
-      (** Superclass constraints: (ClassName, type-arg) pairs *)
-  class_methods : class_method list;  (** Method signatures *)
-  class_loc : span;
-}
-(** Type class definition.
-
-    Examples:
-    - [(class (Eq a) (eq (a a) -> bool))] - simple class
-    - [(class (Ord a) (Eq a) (compare (a a) -> ordering))] - with superclass
-    - [(class (Functor (f : (* -> *))) (fmap [a b] ...))] - HKT class *)
-
-and method_impl = {
-  impl_method : string;  (** Class method name (e.g., "eq") *)
-  impl_fn : string;  (** Implementation function name (e.g., "int-eq") *)
-  impl_loc : span;
-}
-(** Method implementation mapping in an instance declaration.
-
-    Example: [(eq . int-eq)] maps the [eq] method to the [int-eq] function. *)
-
-and instance_decl = {
-  inst_class : string;  (** Class name (e.g., "Eq", "Functor") *)
-  inst_type : sig_type;  (** Type being instantiated (e.g., int, (list a)) *)
-  inst_tvar_binders : tvar_binder list;
-      (** Type variables for parameterized instances *)
-  inst_constraints : (string * sig_type) list;
-      (** Required constraints for parameterized instances: (ClassName,
-          type-arg) *)
-  inst_methods : method_impl list;  (** Method implementations *)
-  inst_loc : span;
-}
-(** Type class instance declaration.
-
-    Examples:
-    - [(instance (Eq int) (eq . =))] - simple instance
-    - [(instance [a] (Eq a) => (Eq (list a)) (eq . list-eq))] - parameterized
-    - [(instance (Functor list) (fmap . mapcar))] - HKT instance *)
-
 (** {1 Signature File} *)
 
 type signature = {
@@ -275,8 +212,6 @@ let decl_loc = function
   | DImportStruct d -> d.struct_loc
   | DData d -> d.data_loc
   | DTypeScope d -> d.scope_loc
-  | DClass d -> d.class_loc
-  | DInstance d -> d.inst_loc
 
 (** {1 Constructors} *)
 

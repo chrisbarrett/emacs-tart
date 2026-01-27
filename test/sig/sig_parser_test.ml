@@ -165,7 +165,6 @@ let test_defun_simple () =
          {
            defun_name = "add";
            defun_tvar_binders = [];
-           defun_constraints = [];
            defun_params =
              [
                Sig_ast.SPPositional (Sig_ast.STCon ("int", _));
@@ -186,79 +185,12 @@ let test_defun_polymorphic () =
          {
            defun_name = "identity";
            defun_tvar_binders = [ { name = "a"; bound = None; _ } ];
-           defun_constraints = [];
            defun_params = [ Sig_ast.SPPositional (Sig_ast.STVar ("a", _)) ];
            defun_return = Sig_ast.STVar ("a", _);
            _;
          }) ->
       ()
   | Ok _ -> Alcotest.fail "Expected polymorphic defun with correct structure"
-  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
-
-let test_defun_with_constraint () =
-  (* (defun elem [a] (Eq a) => (a (list a)) -> bool) *)
-  match parse_decl_str "(defun elem [a] (Eq a) => (a (list a)) -> bool)" with
-  | Ok
-      (Sig_ast.DDefun
-         {
-           defun_name = "elem";
-           defun_tvar_binders = [ { name = "a"; _ } ];
-           defun_constraints = [ ("Eq", Sig_ast.STVar ("a", _)) ];
-           defun_params =
-             [
-               Sig_ast.SPPositional (Sig_ast.STVar ("a", _));
-               Sig_ast.SPPositional (Sig_ast.STApp ("list", _, _));
-             ];
-           defun_return = Sig_ast.STCon ("bool", _);
-           _;
-         }) ->
-      ()
-  | Ok _ -> Alcotest.fail "Expected defun with constraint"
-  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
-
-let test_defun_with_multiple_constraints () =
-  (* (defun sort-unique [a] (Eq a) (Ord a) => ((list a)) -> (list a)) *)
-  match
-    parse_decl_str
-      "(defun sort-unique [a] (Eq a) (Ord a) => ((list a)) -> (list a))"
-  with
-  | Ok
-      (Sig_ast.DDefun
-         {
-           defun_name = "sort-unique";
-           defun_tvar_binders = [ { name = "a"; _ } ];
-           defun_constraints =
-             [ ("Eq", Sig_ast.STVar ("a", _)); ("Ord", Sig_ast.STVar ("a", _)) ];
-           defun_params =
-             [ Sig_ast.SPPositional (Sig_ast.STApp ("list", _, _)) ];
-           defun_return = Sig_ast.STApp ("list", _, _);
-           _;
-         }) ->
-      ()
-  | Ok _ -> Alcotest.fail "Expected defun with multiple constraints"
-  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
-
-let test_defun_constraint_no_quantifiers () =
-  (* (defun member-p (Eq a) => (a (list a)) -> bool) - no explicit [a] *)
-  match parse_decl_str "(defun member-p (Eq a) => (a (list a)) -> bool)" with
-  | Ok
-      (Sig_ast.DDefun
-         {
-           defun_name = "member-p";
-           defun_tvar_binders = [];
-           (* no explicit quantifiers *)
-           defun_constraints = [ ("Eq", Sig_ast.STVar ("a", _)) ];
-           defun_params =
-             [
-               Sig_ast.SPPositional (Sig_ast.STVar ("a", _));
-               Sig_ast.SPPositional (Sig_ast.STApp ("list", _, _));
-             ];
-           defun_return = Sig_ast.STCon ("bool", _);
-           _;
-         }) ->
-      ()
-  | Ok _ ->
-      Alcotest.fail "Expected defun with constraint but no explicit quantifiers"
   | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
 
 let test_defvar () =
@@ -412,229 +344,6 @@ let test_data_recursive () =
   | Ok _ -> Alcotest.fail "Expected recursive data declaration"
   | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
 
-(** {1 Class Declaration Tests} *)
-
-let test_class_simple () =
-  (* (class (Eq a) (eq (a a) -> bool)) *)
-  match parse_decl_str "(class (Eq a) (eq (a a) -> bool))" with
-  | Ok
-      (Sig_ast.DClass
-         {
-           class_name = "Eq";
-           class_tvar_binder = { name = "a"; bound = None; kind = None; _ };
-           class_superclasses = [];
-           class_methods =
-             [
-               {
-                 method_name = "eq";
-                 method_tvar_binders = [];
-                 method_params =
-                   [
-                     Sig_ast.SPPositional (Sig_ast.STVar ("a", _));
-                     Sig_ast.SPPositional (Sig_ast.STVar ("a", _));
-                   ];
-                 method_return = Sig_ast.STCon ("bool", _);
-                 _;
-               };
-             ];
-           _;
-         }) ->
-      ()
-  | Ok _ -> Alcotest.fail "Expected simple class declaration"
-  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
-
-let test_class_multiple_methods () =
-  (* (class (Eq a) (eq (a a) -> bool) (neq (a a) -> bool)) *)
-  match
-    parse_decl_str "(class (Eq a) (eq (a a) -> bool) (neq (a a) -> bool))"
-  with
-  | Ok
-      (Sig_ast.DClass
-         {
-           class_name = "Eq";
-           class_methods =
-             [ { method_name = "eq"; _ }; { method_name = "neq"; _ } ];
-           _;
-         }) ->
-      ()
-  | Ok _ -> Alcotest.fail "Expected class with two methods"
-  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
-
-let test_class_with_superclass () =
-  (* (class (Ord a) (Eq a) (compare (a a) -> int)) *)
-  match parse_decl_str "(class (Ord a) (Eq a) (compare (a a) -> int))" with
-  | Ok
-      (Sig_ast.DClass
-         {
-           class_name = "Ord";
-           class_tvar_binder = { name = "a"; _ };
-           class_superclasses = [ ("Eq", Sig_ast.STVar ("a", _)) ];
-           class_methods = [ { method_name = "compare"; _ } ];
-           _;
-         }) ->
-      ()
-  | Ok _ -> Alcotest.fail "Expected class with superclass"
-  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
-
-let test_class_hkt () =
-  (* (class (Functor (f : (* -> *))) (fmap [a b] (((a) -> b) (f a)) -> (f b))) *)
-  match
-    parse_decl_str
-      "(class (Functor (f : (* -> *))) (fmap [a b] (((a) -> b) (f a)) -> (f \
-       b)))"
-  with
-  | Ok
-      (Sig_ast.DClass
-         {
-           class_name = "Functor";
-           class_tvar_binder =
-             {
-               name = "f";
-               kind = Some (Sig_ast.SKArrow (Sig_ast.SKStar, Sig_ast.SKStar));
-               _;
-             };
-           class_superclasses = [];
-           class_methods =
-             [
-               {
-                 method_name = "fmap";
-                 method_tvar_binders = [ { name = "a"; _ }; { name = "b"; _ } ];
-                 _;
-               };
-             ];
-           _;
-         }) ->
-      ()
-  | Ok _ -> Alcotest.fail "Expected HKT class declaration"
-  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
-
-let test_class_multiple_superclasses () =
-  (* (class (Num a) (Eq a) (Ord a) (add (a a) -> a)) *)
-  match parse_decl_str "(class (Num a) (Eq a) (Ord a) (add (a a) -> a))" with
-  | Ok
-      (Sig_ast.DClass
-         {
-           class_name = "Num";
-           class_superclasses =
-             [ ("Eq", Sig_ast.STVar ("a", _)); ("Ord", Sig_ast.STVar ("a", _)) ];
-           class_methods = [ { method_name = "add"; _ } ];
-           _;
-         }) ->
-      ()
-  | Ok _ -> Alcotest.fail "Expected class with multiple superclasses"
-  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
-
-let test_class_no_methods_error () =
-  (* (class (Eq a)) - should fail, no methods *)
-  match parse_decl_str "(class (Eq a))" with
-  | Ok _ -> Alcotest.fail "Expected error for class with no methods"
-  | Error e ->
-      Alcotest.(check bool)
-        "error mentions methods" true
-        (String.length e.message > 0)
-
-(** {1 Instance Declaration Tests} *)
-
-let test_instance_simple () =
-  (* (instance (Eq int) (eq . =)) *)
-  match parse_decl_str "(instance (Eq int) (eq . =))" with
-  | Ok
-      (Sig_ast.DInstance
-         {
-           inst_class = "Eq";
-           inst_type = Sig_ast.STCon ("int", _);
-           inst_tvar_binders = [];
-           inst_constraints = [];
-           inst_methods = [ { impl_method = "eq"; impl_fn = "="; _ } ];
-           _;
-         }) ->
-      ()
-  | Ok _ -> Alcotest.fail "Expected simple instance declaration"
-  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
-
-let test_instance_multiple_methods () =
-  (* (instance (Eq int) (eq . =) (neq . /=)) *)
-  match parse_decl_str "(instance (Eq int) (eq . =) (neq . /=))" with
-  | Ok
-      (Sig_ast.DInstance
-         {
-           inst_class = "Eq";
-           inst_methods =
-             [
-               { impl_method = "eq"; impl_fn = "="; _ };
-               { impl_method = "neq"; impl_fn = "/="; _ };
-             ];
-           _;
-         }) ->
-      ()
-  | Ok _ -> Alcotest.fail "Expected instance with two methods"
-  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
-
-let test_instance_parameterized () =
-  (* (instance [a] (Eq a) => (Eq (list a)) (eq . list-eq)) *)
-  match
-    parse_decl_str "(instance [a] (Eq a) => (Eq (list a)) (eq . list-eq))"
-  with
-  | Ok
-      (Sig_ast.DInstance
-         {
-           inst_class = "Eq";
-           inst_type = Sig_ast.STApp ("list", [ Sig_ast.STVar ("a", _) ], _);
-           inst_tvar_binders = [ { name = "a"; _ } ];
-           inst_constraints = [ ("Eq", Sig_ast.STVar ("a", _)) ];
-           inst_methods = [ { impl_method = "eq"; impl_fn = "list-eq"; _ } ];
-           _;
-         }) ->
-      ()
-  | Ok _ -> Alcotest.fail "Expected parameterized instance declaration"
-  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
-
-let test_instance_hkt () =
-  (* (instance (Functor list) (fmap . mapcar)) *)
-  match parse_decl_str "(instance (Functor list) (fmap . mapcar))" with
-  | Ok
-      (Sig_ast.DInstance
-         {
-           inst_class = "Functor";
-           inst_type = Sig_ast.STVar ("list", _);
-           inst_tvar_binders = [];
-           inst_constraints = [];
-           inst_methods = [ { impl_method = "fmap"; impl_fn = "mapcar"; _ } ];
-           _;
-         }) ->
-      ()
-  | Ok _ -> Alcotest.fail "Expected HKT instance declaration"
-  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
-
-let test_instance_multiple_constraints () =
-  (* (instance [a] (Eq a) (Ord a) => (Sortable (list a)) (sort . list-sort)) *)
-  match
-    parse_decl_str
-      "(instance [a] (Eq a) (Ord a) => (Sortable (list a)) (sort . list-sort))"
-  with
-  | Ok
-      (Sig_ast.DInstance
-         {
-           inst_class = "Sortable";
-           inst_tvar_binders = [ { name = "a"; _ } ];
-           inst_constraints =
-             [ ("Eq", Sig_ast.STVar ("a", _)); ("Ord", Sig_ast.STVar ("a", _)) ];
-           inst_methods = [ { impl_method = "sort"; impl_fn = "list-sort"; _ } ];
-           _;
-         }) ->
-      ()
-  | Ok _ -> Alcotest.fail "Expected instance with multiple constraints"
-  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
-
-let test_instance_no_methods_error () =
-  (* (instance (Eq int)) - should fail, no methods *)
-  match parse_decl_str "(instance (Eq int))" with
-  | Ok _ -> Alcotest.fail "Expected error for instance with no methods"
-  | Error e ->
-      Alcotest.(check bool)
-        "error mentions method" true
-        (String.length e.message > 0)
-
 (** {1 Signature File Tests} *)
 
 let test_parse_signature () =
@@ -672,12 +381,6 @@ let () =
         [
           Alcotest.test_case "defun simple" `Quick test_defun_simple;
           Alcotest.test_case "defun polymorphic" `Quick test_defun_polymorphic;
-          Alcotest.test_case "defun with constraint" `Quick
-            test_defun_with_constraint;
-          Alcotest.test_case "defun with multiple constraints" `Quick
-            test_defun_with_multiple_constraints;
-          Alcotest.test_case "defun constraint no quantifiers" `Quick
-            test_defun_constraint_no_quantifiers;
           Alcotest.test_case "defvar" `Quick test_defvar;
           Alcotest.test_case "type alias" `Quick test_type_alias;
           Alcotest.test_case "type opaque" `Quick test_type_opaque;
@@ -688,32 +391,6 @@ let () =
           Alcotest.test_case "data nullary" `Quick test_data_nullary;
           Alcotest.test_case "data multi-field" `Quick test_data_multi_field;
           Alcotest.test_case "data recursive" `Quick test_data_recursive;
-        ] );
-      ( "class-declarations",
-        [
-          Alcotest.test_case "class simple" `Quick test_class_simple;
-          Alcotest.test_case "class multiple methods" `Quick
-            test_class_multiple_methods;
-          Alcotest.test_case "class with superclass" `Quick
-            test_class_with_superclass;
-          Alcotest.test_case "class HKT" `Quick test_class_hkt;
-          Alcotest.test_case "class multiple superclasses" `Quick
-            test_class_multiple_superclasses;
-          Alcotest.test_case "class no methods error" `Quick
-            test_class_no_methods_error;
-        ] );
-      ( "instance-declarations",
-        [
-          Alcotest.test_case "instance simple" `Quick test_instance_simple;
-          Alcotest.test_case "instance multiple methods" `Quick
-            test_instance_multiple_methods;
-          Alcotest.test_case "instance parameterized" `Quick
-            test_instance_parameterized;
-          Alcotest.test_case "instance HKT" `Quick test_instance_hkt;
-          Alcotest.test_case "instance multiple constraints" `Quick
-            test_instance_multiple_constraints;
-          Alcotest.test_case "instance no methods error" `Quick
-            test_instance_no_methods_error;
         ] );
       ( "signature-files",
         [ Alcotest.test_case "parse signature" `Quick test_parse_signature ] );

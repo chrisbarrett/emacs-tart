@@ -131,14 +131,6 @@ let validate_defun ctx (d : defun_decl) : unit result =
   let inner_ctx = with_tvars ctx var_names in
   (* Validate binder bounds in outer context *)
   let* () = validate_binder_bounds ctx d.defun_tvar_binders in
-  (* Validate constraints *)
-  let* () =
-    List.fold_left
-      (fun acc (_, ty) ->
-        let* () = acc in
-        validate_type inner_ctx ty)
-      (Ok ()) d.defun_constraints
-  in
   (* Validate params and return type *)
   let* () = validate_params inner_ctx d.defun_params in
   validate_type inner_ctx d.defun_return
@@ -206,44 +198,6 @@ let rec validate_decl ctx (decl : decl) : unit result =
           let* () = acc in
           validate_decl scope_ctx inner_decl)
         (Ok ()) d.scope_decls
-  | DClass d ->
-      (* Validate class methods have valid type references *)
-      let class_tvar = d.class_tvar_binder.name in
-      let class_ctx = with_tvars ctx [ class_tvar ] in
-      List.fold_left
-        (fun acc method_decl ->
-          let* () = acc in
-          (* Add method-local type variables if any *)
-          let method_tvars =
-            List.map (fun b -> b.name) method_decl.method_tvar_binders
-          in
-          let method_ctx = with_tvars class_ctx method_tvars in
-          (* Validate param types *)
-          let* () =
-            List.fold_left
-              (fun acc param ->
-                let* () = acc in
-                match param with
-                | SPPositional ty | SPOptional ty | SPRest ty ->
-                    validate_type method_ctx ty
-                | SPKey (_, ty) -> validate_type method_ctx ty)
-              (Ok ()) method_decl.method_params
-          in
-          (* Validate return type *)
-          validate_type method_ctx method_decl.method_return)
-        (Ok ()) d.class_methods
-  | DInstance d ->
-      (* Validate instance type and constraints have valid type references *)
-      let inst_tvars = List.map (fun b -> b.name) d.inst_tvar_binders in
-      let inst_ctx = with_tvars ctx inst_tvars in
-      (* Validate instance type *)
-      let* () = validate_type inst_ctx d.inst_type in
-      (* Validate constraints *)
-      List.fold_left
-        (fun acc (_, ty) ->
-          let* () = acc in
-          validate_type inst_ctx ty)
-        (Ok ()) d.inst_constraints
 
 (** {1 Signature Validation} *)
 
@@ -731,15 +685,8 @@ let load_defun_with_ctx (ctx : type_context) (d : defun_decl) : Type_env.scheme
   in
   let ret = sig_type_to_typ_with_ctx ctx tvar_names d.defun_return in
   let arrow = Types.TArrow (params, ret) in
-  (* Convert AST constraints to type constraints *)
-  let constraints =
-    List.map
-      (fun (cls, sig_ty) ->
-        (cls, sig_type_to_typ_with_ctx ctx tvar_names sig_ty))
-      d.defun_constraints
-  in
-  if tvar_names = [] && constraints = [] then Type_env.Mono arrow
-  else Type_env.Poly (tvar_names, constraints, arrow)
+  if tvar_names = [] then Type_env.Mono arrow
+  else Type_env.Poly (tvar_names, arrow)
 
 (** Convert a defun declaration inside a type-scope to a type scheme. The scope
     type variables are added to the function's quantifier list. Uses the
@@ -764,16 +711,8 @@ let load_defun_with_scope (ctx : type_context)
     sig_type_to_typ_with_scope_ctx ctx scope_tvars fn_tvar_names d.defun_return
   in
   let arrow = Types.TArrow (params, ret) in
-  (* Convert AST constraints to type constraints *)
-  let constraints =
-    List.map
-      (fun (cls, sig_ty) ->
-        ( cls,
-          sig_type_to_typ_with_scope_ctx ctx scope_tvars fn_tvar_names sig_ty ))
-      d.defun_constraints
-  in
-  if all_tvar_names = [] && constraints = [] then Type_env.Mono arrow
-  else Type_env.Poly (all_tvar_names, constraints, arrow)
+  if all_tvar_names = [] then Type_env.Mono arrow
+  else Type_env.Poly (all_tvar_names, arrow)
 
 (** Convert a defvar declaration to a type scheme with full type context. The
     type may be polymorphic if it contains a forall. *)
@@ -784,8 +723,7 @@ let load_defvar_with_ctx (ctx : type_context) (d : defvar_decl) :
       (* Polymorphic variable - extract quantifiers *)
       let tvar_names = List.map (fun b -> b.name) binders in
       let body_type = sig_type_to_typ_with_ctx ctx tvar_names body in
-      (* defvars don't have constraints syntax *)
-      Type_env.Poly (tvar_names, [], body_type)
+      Type_env.Poly (tvar_names, body_type)
   | _ ->
       (* Monomorphic variable *)
       let ty = sig_type_to_typ_with_ctx ctx [] d.defvar_type in
@@ -974,7 +912,7 @@ let load_data (module_name : string) (d : data_decl) (state : load_state) :
       (* If polymorphic, wrap in forall (constructors have no constraints) *)
       let ctor_scheme =
         if type_params = [] then Type_env.Mono ctor_typ
-        else Type_env.Poly (type_params, [], ctor_typ)
+        else Type_env.Poly (type_params, ctor_typ)
       in
       let state = add_value_to_state ctor_name ctor_scheme state in
 
@@ -1022,7 +960,7 @@ let load_data (module_name : string) (d : data_decl) (state : load_state) :
           in
           let accessor_scheme =
             if type_params = [] then Type_env.Mono accessor_typ
-            else Type_env.Poly (type_params, [], accessor_typ)
+            else Type_env.Poly (type_params, accessor_typ)
           in
           add_value_to_state accessor_name accessor_scheme state
         else
@@ -1047,7 +985,7 @@ let load_data (module_name : string) (d : data_decl) (state : load_state) :
               in
               let accessor_scheme =
                 if type_params = [] then Type_env.Mono accessor_typ
-                else Type_env.Poly (type_params, [], accessor_typ)
+                else Type_env.Poly (type_params, accessor_typ)
               in
               (add_value_to_state accessor_name accessor_scheme state, idx + 1))
             (state, 1) ctor.ctor_fields
@@ -1173,16 +1111,7 @@ and load_decls_into_state (sig_file : signature) (state : load_state) :
           add_value_to_state d.defvar_name scheme state
       | DImportStruct d -> load_import_struct sig_file.sig_module d state
       | DData d -> load_data sig_file.sig_module d state
-      | DTypeScope d -> load_type_scope sig_file d state
-      | DClass _d ->
-          (* Type classes are loaded but don't add values to the environment yet.
-             Instance resolution and constraint checking will be implemented
-             separately. For now, classes are recorded for later use. *)
-          state
-      | DInstance _d ->
-          (* Instances are recorded for later use in instance resolution.
-             They don't add values to the environment directly. *)
-          state)
+      | DTypeScope d -> load_type_scope sig_file d state)
     state sig_file.sig_decls
 
 (** Load a type-scope block. Creates fresh type variables for the scope's
@@ -1249,12 +1178,6 @@ and load_scoped_decl (sig_file : signature)
   | DTypeScope nested ->
       (* Handle nested scopes recursively *)
       load_type_scope sig_file nested state
-  | DClass _d ->
-      (* Type classes in scopes are handled the same way - just recorded *)
-      state
-  | DInstance _d ->
-      (* Instances in scopes are handled the same way - just recorded *)
-      state
 
 (** {1 Signature Loading}
 

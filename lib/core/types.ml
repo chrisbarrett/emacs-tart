@@ -48,12 +48,6 @@ and param =
   | PRest of typ  (** Type should be the element type; desugars to (List a) *)
   | PKey of string * typ  (** :keyword name and type *)
 
-type type_constraint = string * typ
-(** Type class constraint: (class_name, type).
-
-    For example, (Eq a) is represented as ("Eq", TVar a_ref). Multiple
-    constraints like (Eq a, Ord a) => ... are stored as a list. *)
-
 (** Global counter for fresh type variable IDs *)
 let tvar_counter = ref 0
 
