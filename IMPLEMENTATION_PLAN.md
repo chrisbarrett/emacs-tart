@@ -659,18 +659,18 @@ Download prebuilt tart binaries from GitHub releases.
 
 ### 24.1 Version Configuration
 
-- [ ] [R1] Add `tart-version` defcustom (nil = latest, string = specific version)
-- [ ] Verify: `.dir-locals.el` with `((emacs-lisp-mode . ((tart-version . "0.2.0"))))` respected
+- [x] [R1] Add `tart-version` defcustom (nil = latest, string = specific version)
+- [x] Verify: `.dir-locals.el` with `((emacs-lisp-mode . ((tart-version . "0.2.0"))))` respected
 
 ### 24.2 Platform Detection
 
-- [ ] [R3] Implement `tart--platform-asset` using `system-type` and `system-configuration`
-- [ ] Handle darwin/arm64, darwin/x86_64, linux/arm64, linux/x86_64
-- [ ] Verify: `(tart--platform-asset)` returns correct asset name for current system
+- [x] [R3] Implement `tart--platform-asset` using `system-type` and `system-configuration`
+- [x] Handle darwin/arm64, darwin/x86_64, linux/arm64, linux/x86_64
+- [x] Verify: `(tart--platform-asset)` returns correct asset name for current system
 
 ### 24.3 Executable Resolution
 
-- [ ] [R5] Change `tart-executable` default to `'managed`
+- [x] [R5] Change `tart-executable` default to `'managed`
 - [ ] [R5] Implement `tart--resolve-executable` (managed → downloaded binary, string → direct)
 - [ ] Update existing callers to use `tart--resolve-executable`
 - [ ] Verify: Default `'managed` uses downloaded binary; string overrides

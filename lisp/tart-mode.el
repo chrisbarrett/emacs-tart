@@ -50,6 +50,7 @@
 (require 'comint)
 (require 'compile)
 (require 'eglot)
+(require 'url)
 
 ;;; Customization
 
@@ -58,11 +59,21 @@
   :group 'languages
   :prefix "tart-")
 
-(defcustom tart-executable "tart"
-  "Path to the tart executable.
-Can be an absolute path or a command name to be found on `exec-path'."
-  :type 'string
+(defcustom tart-executable 'managed
+  "Path to tart binary, or `managed' for automatic installation.
+When `managed', uses downloaded binary from `tart-install-binary'.
+When a string, use directly (absolute path or command on `exec-path')."
+  :type '(choice (const :tag "Managed by tart-mode" managed)
+                 (string :tag "Custom path"))
   :group 'tart)
+
+(defcustom tart-version nil
+  "Tart version to install. nil = latest release.
+This can be set in .dir-locals.el to pin a project to a specific version."
+  :type '(choice (const :tag "Latest" nil)
+                 (string :tag "Specific version"))
+  :group 'tart
+  :safe #'string-or-null-p)
 
 (defcustom tart-lsp-args nil
   "Additional arguments to pass to `tart lsp'.
@@ -351,6 +362,34 @@ Provides keybindings for REPL interaction and type inspection.
   :lighter " Tart"
   :keymap tart-mode-map
   :group 'tart)
+
+;;; Binary Management
+
+(defconst tart--github-repo "chrisbarrett/emacs-tart"
+  "GitHub repository for tart releases.")
+
+(defun tart--bin-directory ()
+  "Return the directory for managed tart binaries."
+  (expand-file-name "tart/bin/" user-emacs-directory))
+
+(defun tart--platform-asset ()
+  "Return the asset name for the current platform.
+Returns a string like \"tart-darwin-arm64\" or signals an error
+if the platform is not supported."
+  (let* ((os (pcase system-type
+               ('darwin "darwin")
+               ('gnu/linux "linux")
+               (_ nil)))
+         (arch (pcase (car (split-string system-configuration "-"))
+                 ((or "aarch64" "arm64") "arm64")
+                 ("x86_64" "x86_64")
+                 (_ nil))))
+    (unless os
+      (error "Unsupported operating system: %s (supported: darwin, gnu/linux)" system-type))
+    (unless arch
+      (error "Unsupported architecture: %s (supported: arm64, x86_64)"
+             (car (split-string system-configuration "-"))))
+    (format "tart-%s-%s" os arch)))
 
 ;;; Eglot Integration
 
