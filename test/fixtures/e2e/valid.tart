@@ -1,0 +1,7 @@
+;; Signatures for valid.el
+
+(defun greet (string) -> string)
+
+(defun add-numbers (int int) -> int)
+
+(defvar greeting-prefix string)

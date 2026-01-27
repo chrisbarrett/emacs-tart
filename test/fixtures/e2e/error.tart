@@ -1,0 +1,5 @@
+;; Signatures for error.el - intentionally wrong to produce errors
+
+(defun broken-upcase (any) -> string)
+
+(defun wrong-return () -> int)

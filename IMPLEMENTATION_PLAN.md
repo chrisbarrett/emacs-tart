@@ -240,6 +240,8 @@ Spec 07 (Signatures) ──┬─> Spec 15 (Forall Inference)
 
 Spec 08 (LSP) ─────────┬─> Spec 09 (CLI) ──> Spec 10 (Emacs)
                        └─> Spec 13 (Error Reporting)
+
+Spec 22 (CI Releases) ──> Spec 23 (Binary Installation)
 ```
 
 ## Phase 11: LSP Navigation Features (Spec 08 Phase 2)
@@ -623,6 +625,91 @@ Create comprehensive documentation using AsciiDoc, plus refresh the README.
 
 ---
 
+## Phase 21: Binary Installation (Spec 23)
+
+Download prebuilt tart binaries from GitHub releases.
+
+**Prerequisite:** Spec 22 (CI releases) must be implemented first to publish binaries.
+
+### 21.1 Version Configuration
+
+- [ ] [R1] Add `tart-version` defcustom (nil = latest, string = specific version)
+- [ ] Verify: `.dir-locals.el` with `((emacs-lisp-mode . ((tart-version . "0.2.0"))))` respected
+
+### 21.2 Platform Detection
+
+- [ ] [R3] Implement `tart--platform-asset` using `system-type` and `system-configuration`
+- [ ] Handle darwin/arm64, darwin/x86_64, linux/arm64, linux/x86_64
+- [ ] Verify: `(tart--platform-asset)` returns correct asset name for current system
+
+### 21.3 Executable Resolution
+
+- [ ] [R5] Change `tart-executable` default to `'managed`
+- [ ] [R5] Implement `tart--resolve-executable` (managed → downloaded binary, string → direct)
+- [ ] Update existing callers to use `tart--resolve-executable`
+- [ ] Verify: Default `'managed` uses downloaded binary; string overrides
+
+### 21.4 Binary Download
+
+- [ ] [R2] Implement `tart-install-binary` command
+- [ ] [R2] Query GitHub API for release (latest or `tart-version`)
+- [ ] [R2] Download to `~/.emacs.d/tart/bin/tart-VERSION`
+- [ ] [R6] Show progress in echo area during download
+- [ ] Verify: `M-x tart-install-binary` → binary in `~/.emacs.d/tart/bin/`, executable
+
+### 21.5 Hook-Friendly Eglot
+
+- [ ] [R4] Implement `tart--binary-available-p` predicate
+- [ ] [R4] Rename `tart-eglot-ensure` to `tart-eglot` with install prompt
+- [ ] [R4] Prompt to install if binary missing before starting eglot
+- [ ] Verify: Without binary, `tart-eglot` prompts; after install, eglot connects
+
+### 21.6 Error Handling
+
+- [ ] [R7] Handle no network with clear error message
+- [ ] [R7] Handle asset not found for platform with supported platforms list
+- [ ] [R7] Handle GitHub rate limit with suggestion to set `GITHUB_TOKEN`
+- [ ] Verify: Airplane mode → "Network error" message, not hang
+
+---
+
+## Phase 22: E2E Test Harness (Spec 21)
+
+ERT tests for Emacs integration against live tart processes.
+
+### 22.1 Test Infrastructure
+
+- [x] [R1] Create `scripts/run-emacs-tests.sh` test runner
+- [x] [R2] Create `lisp/tart-test-helpers.el` with test utilities
+- [x] [R14] Create `test/fixtures/e2e/valid.el` and `valid.tart`
+- [x] [R14] Create `test/fixtures/e2e/error.el` and `error.tart`
+- [x] Verify: `./scripts/run-emacs-tests.sh` runs all tests
+
+### 22.2 LSP Tests
+
+- [x] [R3] Test eglot connects to tart LSP server
+- [x] [R4] Test LSP diagnostics for type errors
+- [x] [R5] Test LSP hover shows type information
+- [x] Verify: All LSP tests pass
+
+### 22.3 REPL Tests
+
+- [x] [R6] Test REPL starts and shows prompt
+- [x] [R7] Test REPL evaluates expressions
+- [x] [R8] Test REPL ,type command
+- [x] Verify: All REPL tests pass
+
+### 22.4 Integration Tests
+
+- [x] [R9] Test send-defun to REPL
+- [x] [R10] Test type-at-point
+- [x] [R11] Test keybindings
+- [x] [R12] Test cleanup removes processes
+- [x] [R13] Test timeout behavior
+- [x] Verify: All integration tests pass
+
+---
+
 ## Future Work (Requires New Specs)
 
 The following areas are mentioned as future work in the specs:
@@ -653,6 +740,8 @@ The following areas are mentioned as future work in the specs:
 18. **Phase 18**: Remove Type Classes ✓
 19. **Phase 19**: Dogfood tart.el (DEFERRED - needs prerequisite stdlib)
 20. **Phase 20**: Documentation ✓
+21. **Phase 21**: Binary Installation (depends on Spec 22 CI releases)
+22. **Phase 22**: E2E Test Harness ✓
 
-All implementation plan phases are complete. Phase 19 is deferred pending additional
-stdlib signatures (comint, eglot, compile).
+Phase 19 is deferred pending additional stdlib signatures (comint, eglot, compile).
+Phase 21 requires Spec 22 (CI releases) to be implemented first.
