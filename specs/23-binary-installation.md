@@ -107,9 +107,9 @@ Use `url-retrieve` or `make-process` with curl. Show progress in echo area.
 
 ## Tasks
 
-- [ ] [R1] Add `tart-version` defcustom
-- [ ] [R5] Change `tart-executable` default to `'managed`, add `tart--resolve-executable`
-- [ ] [R3] Implement `tart--platform-asset`
-- [ ] [R2,R6] Implement `tart-install-binary` with download
-- [ ] [R4] Implement `tart-eglot` with install prompt
-- [ ] [R7] Error handling
+- [x] [R1] Add `tart-version` defcustom
+- [x] [R5] Change `tart-executable` default to `'managed`, add `tart--resolve-executable`
+- [x] [R3] Implement `tart--platform-asset`
+- [x] [R2,R6] Implement `tart-install-binary` with download
+- [x] [R4] Implement `tart-eglot` with install prompt
+- [x] [R7] Error handling

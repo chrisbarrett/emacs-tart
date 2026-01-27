@@ -673,7 +673,7 @@ Download prebuilt tart binaries from GitHub releases.
 - [x] [R5] Change `tart-executable` default to `'managed`
 - [x] [R5] Implement `tart--resolve-executable` (managed → downloaded binary, string → direct)
 - [x] Update existing callers to use `tart--resolve-executable`
-- [ ] Verify: Default `'managed` uses downloaded binary; string overrides
+- [x] Verify: Default `'managed` uses downloaded binary; string overrides
 
 ### 24.4 Binary Download
 
@@ -692,10 +692,10 @@ Download prebuilt tart binaries from GitHub releases.
 
 ### 24.6 Error Handling
 
-- [ ] [R7] Handle no network with clear error message
-- [ ] [R7] Handle asset not found for platform with supported platforms list
-- [ ] [R7] Handle GitHub rate limit with suggestion to set `GITHUB_TOKEN`
-- [ ] Verify: Airplane mode → "Network error" message, not hang
+- [x] [R7] Handle no network with clear error message
+- [x] [R7] Handle asset not found for platform with supported platforms list
+- [x] [R7] Handle GitHub rate limit with suggestion to set `GITHUB_TOKEN`
+- [x] Verify: Airplane mode → "Network error" message, not hang
 
 ---
 
@@ -769,7 +769,6 @@ The following areas are mentioned as future work in the specs:
 21. **Phase 21**: (renumbered to 24)
 22. **Phase 22**: E2E Test Harness ✓
 23. **Phase 23**: CI Release Builds ✓
-24. **Phase 24**: Binary Installation
+24. **Phase 24**: Binary Installation ✓
 
 Phase 19 is deferred pending additional stdlib signatures (comint, eglot, compile).
-Phase 24 depends on Phase 23 (CI releases must publish binaries first).
