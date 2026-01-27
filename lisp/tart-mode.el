@@ -189,7 +189,7 @@ If a REPL is already running, switch to it."
     (if (and proc (process-live-p proc))
         (pop-to-buffer buffer)
       ;; Start new process
-      (let ((program tart-executable)
+      (let ((program (tart--resolve-executable))
             (args (cons "repl" tart-repl-args)))
         (with-current-buffer (apply #'make-comint "tart" program nil args)
           (inferior-tart-mode)
@@ -391,12 +391,47 @@ if the platform is not supported."
              (car (split-string system-configuration "-"))))
     (format "tart-%s-%s" os arch)))
 
+(defun tart--installed-versions ()
+  "Return a list of installed tart versions, newest first.
+Each element is a version string like \"0.2.0\"."
+  (let ((bin-dir (tart--bin-directory)))
+    (when (file-directory-p bin-dir)
+      (let ((files (directory-files bin-dir nil "^tart-[0-9]")))
+        (sort (mapcar (lambda (f) (substring f 5)) files)
+              (lambda (a b) (version< b a)))))))
+
+(defun tart--managed-binary-path (&optional version)
+  "Return the path to the managed binary for VERSION.
+If VERSION is nil, uses `tart-version' or the latest installed version."
+  (let* ((ver (or version tart-version (car (tart--installed-versions))))
+         (bin-dir (tart--bin-directory)))
+    (when ver
+      (expand-file-name (concat "tart-" ver) bin-dir))))
+
+(defun tart--resolve-executable ()
+  "Resolve `tart-executable' to an actual binary path.
+When `tart-executable' is `managed', returns the path to the
+downloaded binary (per `tart-version' or latest installed).
+When a string, returns it directly for absolute paths, or
+searches `exec-path' for relative paths."
+  (pcase tart-executable
+    ('managed
+     (or (tart--managed-binary-path)
+         (error "No tart binary installed. Run M-x tart-install-binary")))
+    ((pred stringp)
+     (if (file-name-absolute-p tart-executable)
+         tart-executable
+       (or (executable-find tart-executable)
+           (error "Cannot find tart executable: %s" tart-executable))))
+    (_
+     (error "Invalid tart-executable value: %S" tart-executable))))
+
 ;;; Eglot Integration
 
 (defun tart--eglot-server-program (_interactive)
   "Return the tart LSP server command.
 INTERACTIVE is ignored but required by eglot's server program interface."
-  `(,tart-executable "lsp" ,@tart-lsp-args))
+  `(,(tart--resolve-executable) "lsp" ,@tart-lsp-args))
 
 (defun tart--has-sibling-tart-file-p ()
   "Return non-nil if current buffer's file has a sibling .tart file."

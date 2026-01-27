@@ -671,8 +671,8 @@ Download prebuilt tart binaries from GitHub releases.
 ### 24.3 Executable Resolution
 
 - [x] [R5] Change `tart-executable` default to `'managed`
-- [ ] [R5] Implement `tart--resolve-executable` (managed → downloaded binary, string → direct)
-- [ ] Update existing callers to use `tart--resolve-executable`
+- [x] [R5] Implement `tart--resolve-executable` (managed → downloaded binary, string → direct)
+- [x] Update existing callers to use `tart--resolve-executable`
 - [ ] Verify: Default `'managed` uses downloaded binary; string overrides
 
 ### 24.4 Binary Download
