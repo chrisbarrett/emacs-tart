@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: DeterminateSystems/determinate-nix-action@v3
+
+      - uses: DeterminateSystems/magic-nix-cache-action@v8
+
+      - name: Build
+        run: nix develop --command dune build
+
+      - name: Test
+        run: nix develop --command dune test
+
+      - name: Format check
+        run: nix develop --command dune fmt --preview 2>&1 | diff -q /dev/null - || (echo "Run 'dune fmt' to fix formatting" && exit 1)
