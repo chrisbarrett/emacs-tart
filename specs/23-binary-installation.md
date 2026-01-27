@@ -25,12 +25,14 @@ Changes to `lisp/tart-mode.el`.
 ### R1: Version variable
 
 ```elisp
-(defcustom tart-version nil
-  "Tart version to install. nil = latest release."
-  :type '(choice (const :tag "Latest" nil)
+(defcustom tart-version 'latest
+  "Tart version to install.
+When `latest', installs the most recent GitHub release.
+When a version string, installs that specific version."
+  :type '(choice (const :tag "Latest" latest)
                  (string :tag "Specific version"))
   :group 'tart
-  :safe #'string-or-null-p)  ; safe for dir-locals
+  :safe (lambda (v) (or (eq v 'latest) (stringp v))))
 ```
 
 **Verify:** `.dir-locals.el` with `((emacs-lisp-mode . ((tart-version . "0.2.0"))))` respected

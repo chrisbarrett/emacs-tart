@@ -101,7 +101,7 @@
   (let* ((temp-dir (make-temp-file "emacs-test" t))
          (user-emacs-directory temp-dir)
          (tart-executable 'managed)
-         (tart-version nil))
+         (tart-version 'latest))
     (unwind-protect
         (should-error (tart--resolve-executable) :type 'error)
       (delete-directory temp-dir t))))
@@ -138,7 +138,7 @@
          (bin-dir (expand-file-name "tart/bin/" temp-dir))
          (binary (expand-file-name "tart-0.1.0" bin-dir))
          (tart-executable 'managed)
-         (tart-version nil))
+         (tart-version 'latest))
     (unwind-protect
         (progn
           (make-directory bin-dir t)
@@ -152,7 +152,7 @@
   (let* ((temp-dir (make-temp-file "emacs-test" t))
          (user-emacs-directory temp-dir)
          (tart-executable 'managed)
-         (tart-version nil))
+         (tart-version 'latest))
     (unwind-protect
         (should-not (tart--binary-available-p))
       (delete-directory temp-dir t))))

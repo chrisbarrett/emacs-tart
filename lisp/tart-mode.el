@@ -67,13 +67,15 @@ When a string, use directly (absolute path or command on `exec-path')."
                  (string :tag "Custom path"))
   :group 'tart)
 
-(defcustom tart-version nil
-  "Tart version to install. nil = latest release.
+(defcustom tart-version 'latest
+  "Tart version to install.
+When `latest', installs the most recent GitHub release.
+When a version string (e.g., \"0.2.0\"), installs that specific version.
 This can be set in .dir-locals.el to pin a project to a specific version."
-  :type '(choice (const :tag "Latest" nil)
+  :type '(choice (const :tag "Latest" latest)
                  (string :tag "Specific version"))
   :group 'tart
-  :safe #'string-or-null-p)
+  :safe (lambda (v) (or (eq v 'latest) (stringp v))))
 
 (defcustom tart-lsp-args nil
   "Additional arguments to pass to `tart lsp'.
@@ -410,8 +412,12 @@ Each element is a version string like \"0.2.0\"."
 
 (defun tart--managed-binary-path (&optional version)
   "Return the path to the managed binary for VERSION.
-If VERSION is nil, uses `tart-version' or the latest installed version."
-  (let* ((ver (or version tart-version (car (tart--installed-versions))))
+If VERSION is nil or `latest', uses the latest installed version.
+If `tart-version' is a string, uses that specific version."
+  (let* ((requested (or version tart-version))
+         (ver (if (stringp requested)
+                  requested
+                (car (tart--installed-versions))))
          (bin-dir (tart--bin-directory)))
     (when ver
       (expand-file-name (concat "tart-" ver) bin-dir))))
@@ -506,8 +512,8 @@ CALLBACK receives two arguments: DEST path on success, or nil and error message.
 ;;;###autoload
 (defun tart-install-binary ()
   "Download and install the tart binary from GitHub releases.
-Uses `tart-version' to determine which version to install, or
-the latest release if nil.
+Uses `tart-version' to determine which version to install.
+When `latest', installs the most recent release.
 
 The binary is installed to ~/.emacs.d/tart/bin/tart-VERSION
 and will be used automatically when `tart-executable' is `managed'."
@@ -516,7 +522,7 @@ and will be used automatically when `tart-executable' is `managed'."
         (asset-name (tart--platform-asset)))
     (message "Fetching release information...")
     (tart--github-request
-     (if version
+     (if (stringp version)
          (format "releases/tags/v%s" version)
        "releases/latest")
      (lambda (release err)

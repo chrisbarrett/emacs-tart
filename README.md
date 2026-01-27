@@ -95,7 +95,7 @@ The first time you open an Emacs Lisp file with a sibling `.tart` file,
 | Variable                | Description                                      |
 |:------------------------|:-------------------------------------------------|
 | `tart-executable`       | `'managed` (default) or path to custom binary    |
-| `tart-version`          | Version to install (`nil` = latest)              |
+| `tart-version`          | `'latest` (default) or version string            |
 | `tart-install-directory`| Where managed binaries are stored                |
 
 ### Building from source
