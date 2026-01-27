@@ -138,10 +138,10 @@ Async waits fail with message after timeout, never hang.
 
 ## Tasks
 
-- [ ] [R1] `scripts/run-emacs-tests.sh`
-- [ ] [R2] `lisp/tart-test-helpers.el`
-- [ ] [R14] Fixture files
-- [ ] [R3-R5] LSP tests
-- [ ] [R6-R8] REPL tests
-- [ ] [R9-R11] Integration tests
-- [ ] [R12-R13] Cleanup + timeouts
+- [x] [R1] `scripts/run-emacs-tests.sh`
+- [x] [R2] `lisp/tart-test-helpers.el`
+- [x] [R14] Fixture files
+- [x] [R3-R5] LSP tests
+- [x] [R6-R8] REPL tests
+- [x] [R9-R11] Integration tests
+- [x] [R12-R13] Cleanup + timeouts

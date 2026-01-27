@@ -51,6 +51,6 @@ All 4 binaries attached: `tart-darwin-arm64`, `tart-darwin-x86_64`, `tart-linux-
 
 ## Tasks
 
-- [ ] Workflow with trigger + matrix
-- [ ] Nix build steps
-- [ ] Release job with prerelease logic
+- [x] Workflow with trigger + matrix
+- [x] Nix build steps
+- [x] Release job with prerelease logic

@@ -625,31 +625,57 @@ Create comprehensive documentation using AsciiDoc, plus refresh the README.
 
 ---
 
-## Phase 21: Binary Installation (Spec 23)
+## Phase 23: CI Release Builds (Spec 22)
+
+GitHub Actions workflow for building and releasing tart binaries.
+
+### 23.1 Workflow Setup
+
+- [x] Create `.github/workflows/release.yml`
+- [x] Configure v* tag trigger
+- [x] Set up build matrix (darwin arm64/x86_64, linux arm64/x86_64)
+
+### 23.2 Build Steps
+
+- [x] Install Nix with DeterminateSystems/determinate-nix-action@v3
+- [x] Configure Nix cache with DeterminateSystems/magic-nix-cache-action@v8
+- [x] Build with `nix build .#default`
+- [x] Rename to `tart-{os}-{arch}` format
+
+### 23.3 Release Job
+
+- [x] Collect artifacts from all matrix builds
+- [x] Detect prerelease tags (rc, alpha, beta)
+- [x] Create release with softprops/action-gh-release
+- [x] Attach all 4 binaries as assets
+
+---
+
+## Phase 24: Binary Installation (Spec 23)
 
 Download prebuilt tart binaries from GitHub releases.
 
-**Prerequisite:** Spec 22 (CI releases) must be implemented first to publish binaries.
+**Prerequisite:** Phase 23 (CI releases) must be complete to publish binaries.
 
-### 21.1 Version Configuration
+### 24.1 Version Configuration
 
 - [ ] [R1] Add `tart-version` defcustom (nil = latest, string = specific version)
 - [ ] Verify: `.dir-locals.el` with `((emacs-lisp-mode . ((tart-version . "0.2.0"))))` respected
 
-### 21.2 Platform Detection
+### 24.2 Platform Detection
 
 - [ ] [R3] Implement `tart--platform-asset` using `system-type` and `system-configuration`
 - [ ] Handle darwin/arm64, darwin/x86_64, linux/arm64, linux/x86_64
 - [ ] Verify: `(tart--platform-asset)` returns correct asset name for current system
 
-### 21.3 Executable Resolution
+### 24.3 Executable Resolution
 
 - [ ] [R5] Change `tart-executable` default to `'managed`
 - [ ] [R5] Implement `tart--resolve-executable` (managed → downloaded binary, string → direct)
 - [ ] Update existing callers to use `tart--resolve-executable`
 - [ ] Verify: Default `'managed` uses downloaded binary; string overrides
 
-### 21.4 Binary Download
+### 24.4 Binary Download
 
 - [ ] [R2] Implement `tart-install-binary` command
 - [ ] [R2] Query GitHub API for release (latest or `tart-version`)
@@ -657,14 +683,14 @@ Download prebuilt tart binaries from GitHub releases.
 - [ ] [R6] Show progress in echo area during download
 - [ ] Verify: `M-x tart-install-binary` → binary in `~/.emacs.d/tart/bin/`, executable
 
-### 21.5 Hook-Friendly Eglot
+### 24.5 Hook-Friendly Eglot
 
 - [ ] [R4] Implement `tart--binary-available-p` predicate
 - [ ] [R4] Rename `tart-eglot-ensure` to `tart-eglot` with install prompt
 - [ ] [R4] Prompt to install if binary missing before starting eglot
 - [ ] Verify: Without binary, `tart-eglot` prompts; after install, eglot connects
 
-### 21.6 Error Handling
+### 24.6 Error Handling
 
 - [ ] [R7] Handle no network with clear error message
 - [ ] [R7] Handle asset not found for platform with supported platforms list
@@ -740,8 +766,10 @@ The following areas are mentioned as future work in the specs:
 18. **Phase 18**: Remove Type Classes ✓
 19. **Phase 19**: Dogfood tart.el (DEFERRED - needs prerequisite stdlib)
 20. **Phase 20**: Documentation ✓
-21. **Phase 21**: Binary Installation (depends on Spec 22 CI releases)
+21. **Phase 21**: (renumbered to 24)
 22. **Phase 22**: E2E Test Harness ✓
+23. **Phase 23**: CI Release Builds ✓
+24. **Phase 24**: Binary Installation
 
 Phase 19 is deferred pending additional stdlib signatures (comint, eglot, compile).
-Phase 21 requires Spec 22 (CI releases) to be implemented first.
+Phase 24 depends on Phase 23 (CI releases must publish binaries first).
