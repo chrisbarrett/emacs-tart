@@ -95,6 +95,14 @@ Set to nil to disable history persistence."
                  (const :tag "No history file" nil))
   :group 'tart)
 
+(defcustom tart-install-directory
+  (locate-user-emacs-file "tart/bin/")
+  "Directory for managed tart binary installations.
+When `tart-executable' is `managed', binaries are downloaded to
+this directory as tart-VERSION (e.g., tart-0.2.0)."
+  :type 'directory
+  :group 'tart)
+
 ;;; Inferior Tart Mode (REPL)
 
 (defvar tart-error-regexp
@@ -370,7 +378,7 @@ Provides keybindings for REPL interaction and type inspection.
 
 (defun tart--bin-directory ()
   "Return the directory for managed tart binaries."
-  (expand-file-name "tart/bin/" user-emacs-directory))
+  (expand-file-name tart-install-directory))
 
 (defun tart--platform-asset ()
   "Return the asset name for the current platform.
