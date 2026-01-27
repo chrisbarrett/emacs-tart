@@ -129,5 +129,43 @@
   (let ((release '((assets . [((name . "tart-darwin-arm64"))]))))
     (should-not (tart--find-asset release "tart-windows-x86_64"))))
 
+;;; Binary Availability Tests (R4)
+
+(ert-deftest tart-mode-binary-available-p-with-installed ()
+  "Binary available returns t when binary exists."
+  (let* ((temp-dir (make-temp-file "emacs-test" t))
+         (user-emacs-directory temp-dir)
+         (bin-dir (expand-file-name "tart/bin/" temp-dir))
+         (binary (expand-file-name "tart-0.1.0" bin-dir))
+         (tart-executable 'managed)
+         (tart-version nil))
+    (unwind-protect
+        (progn
+          (make-directory bin-dir t)
+          (write-region "" nil binary)
+          (set-file-modes binary #o755)  ; Make executable
+          (should (tart--binary-available-p)))
+      (delete-directory temp-dir t))))
+
+(ert-deftest tart-mode-binary-available-p-when-missing ()
+  "Binary available returns nil when no binary installed."
+  (let* ((temp-dir (make-temp-file "emacs-test" t))
+         (user-emacs-directory temp-dir)
+         (tart-executable 'managed)
+         (tart-version nil))
+    (unwind-protect
+        (should-not (tart--binary-available-p))
+      (delete-directory temp-dir t))))
+
+(ert-deftest tart-mode-binary-available-p-with-string ()
+  "Binary available returns t for existing executable path."
+  (let ((tart-executable "/bin/sh"))  ; A file that exists
+    (should (tart--binary-available-p))))
+
+(ert-deftest tart-mode-binary-available-p-with-bad-string ()
+  "Binary available returns nil for non-existent path."
+  (let ((tart-executable "/nonexistent/path/to/tart"))
+    (should-not (tart--binary-available-p))))
+
 (provide 'tart-mode-tests)
 ;;; tart-mode-tests.el ends here

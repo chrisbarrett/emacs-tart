@@ -543,11 +543,46 @@ INTERACTIVE is ignored but required by eglot's server program interface."
   (when-let* ((file (buffer-file-name)))
     (file-exists-p (concat (file-name-sans-extension file) ".tart"))))
 
+(defun tart--binary-available-p ()
+  "Return non-nil if a tart binary is available.
+Checks based on `tart-executable' setting:
+- If `managed': checks for installed binary in bin directory
+- If string: checks file exists or is on exec-path"
+  (condition-case nil
+      (let ((path (tart--resolve-executable)))
+        (and path (file-executable-p path)))
+    (error nil)))
+
+;;;###autoload
+(defun tart-eglot ()
+  "Start eglot for tart, prompting to install if binary missing.
+When the current buffer has a sibling .tart file, starts eglot for
+type checking.  If no tart binary is available and `tart-executable'
+is `managed', prompts to install one first.
+
+Intended for use in `emacs-lisp-mode-hook' or interactively."
+  (interactive)
+  (when (tart--has-sibling-tart-file-p)
+    (unless (tart--binary-available-p)
+      (if (eq tart-executable 'managed)
+          (if (y-or-n-p "Tart binary not found. Install now? ")
+              (progn
+                (tart-install-binary)
+                ;; Wait briefly for async download to start, then let user know
+                (message "Download started. Run M-x tart-eglot again after installation completes."))
+            (user-error "Tart binary required for type checking"))
+        (user-error "Tart binary not found: %s" tart-executable)))
+    (when (tart--binary-available-p)
+      (eglot-ensure))))
+
 ;;;###autoload
 (defun tart-eglot-ensure ()
   "Start eglot if the current buffer has a sibling .tart file.
-Intended for use in `emacs-lisp-mode-hook'."
-  (when (tart--has-sibling-tart-file-p)
+This is a simpler version of `tart-eglot' that does not prompt for
+installation.  Intended for use in `emacs-lisp-mode-hook' when you
+have already installed the binary."
+  (when (and (tart--has-sibling-tart-file-p)
+             (tart--binary-available-p))
     (eglot-ensure)))
 
 ;; Register tart as an LSP server for emacs-lisp-mode

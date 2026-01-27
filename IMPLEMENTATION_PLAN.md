@@ -677,18 +677,18 @@ Download prebuilt tart binaries from GitHub releases.
 
 ### 24.4 Binary Download
 
-- [ ] [R2] Implement `tart-install-binary` command
-- [ ] [R2] Query GitHub API for release (latest or `tart-version`)
-- [ ] [R2] Download to `~/.emacs.d/tart/bin/tart-VERSION`
-- [ ] [R6] Show progress in echo area during download
-- [ ] Verify: `M-x tart-install-binary` → binary in `~/.emacs.d/tart/bin/`, executable
+- [x] [R2] Implement `tart-install-binary` command
+- [x] [R2] Query GitHub API for release (latest or `tart-version`)
+- [x] [R2] Download to `~/.emacs.d/tart/bin/tart-VERSION`
+- [x] [R6] Show progress in echo area during download
+- [x] Verify: `M-x tart-install-binary` → binary in `~/.emacs.d/tart/bin/`, executable
 
 ### 24.5 Hook-Friendly Eglot
 
-- [ ] [R4] Implement `tart--binary-available-p` predicate
-- [ ] [R4] Rename `tart-eglot-ensure` to `tart-eglot` with install prompt
-- [ ] [R4] Prompt to install if binary missing before starting eglot
-- [ ] Verify: Without binary, `tart-eglot` prompts; after install, eglot connects
+- [x] [R4] Implement `tart--binary-available-p` predicate
+- [x] [R4] Add `tart-eglot` with install prompt (kept `tart-eglot-ensure` for compatibility)
+- [x] [R4] Prompt to install if binary missing before starting eglot
+- [x] Verify: Without binary, `tart-eglot` prompts; after install, eglot connects
 
 ### 24.6 Error Handling
 
