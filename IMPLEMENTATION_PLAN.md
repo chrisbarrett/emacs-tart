@@ -475,33 +475,25 @@ comparators). This phase removes the feature.
 
 ### 18.3 Remove AST and Parsing
 
-Note: Parsing retained for backwards compatibility. Declarations ignored at
-runtime.
-
-- [ ] ~~Remove `DClass` and `DInstance` variants from `lib/sig/sig_ast.ml`~~ (retained for compat)
-- [ ] ~~Remove `class_decl` and `instance_decl` type definitions from sig_ast.ml/mli~~ (retained for compat)
-- [ ] ~~Remove class/instance parsing from `lib/sig/sig_parser.ml`~~ (retained for compat)
-- [ ] ~~Remove constraint syntax (`=>`) parsing from defun signatures~~ (retained for compat)
+- [x] Remove `DClass` and `DInstance` variants from `lib/sig/sig_ast.ml`
+- [x] Remove `class_decl` and `instance_decl` type definitions from sig_ast.ml/mli
+- [x] Remove class/instance parsing from `lib/sig/sig_parser.ml`
+- [x] Remove constraint syntax (`=>`) parsing from defun signatures
 - [x] Verify: `dune test` passes; existing .tart files still parse
 
 ### 18.4 Remove Signature Loading
 
-Note: Loading handlers remain but ignore class/instance declarations.
-
-- [ ] ~~Remove `DClass`/`DInstance` handling from `lib/sig/sig_loader.ml`~~ (handlers ignore)
-- [ ] ~~Remove constraint inference from `lib/sig/forall_infer.ml`~~ (retained for compat)
+- [x] Remove `DClass`/`DInstance` handling from `lib/sig/sig_loader.ml`
+- [x] Remove constraint inference from `lib/sig/forall_infer.ml`
 - [x] Verify: Signature loading works without class/instance support
 
 ### 18.5 Remove Type System Integration
 
-Note: Constraint types remain but are unused. Removing would require touching
-many files with minimal benefit.
-
-- [ ] ~~Remove `type_constraint` from `lib/core/types.ml`~~ (deferred)
-- [ ] ~~Remove constraint field from `scheme` type in `lib/core/type_env.ml`~~ (deferred)
-- [ ] ~~Remove `class_constraint_with_span` from `lib/typing/infer.ml`~~ (deferred)
-- [ ] ~~Remove constraint tracking from inference result types~~ (deferred)
-- [x] Verify: Type inference works without constraints (instance resolution removed)
+- [x] Remove `type_constraint` from `lib/core/types.ml`
+- [x] Remove constraint field from `scheme` type in `lib/core/type_env.ml`
+- [x] Remove `class_constraint_with_span` from `lib/typing/infer.ml`
+- [x] Remove constraint tracking from inference result types
+- [x] Verify: Type inference works without constraints
 
 ### 18.6 Remove Module Check Integration
 
@@ -513,18 +505,16 @@ many files with minimal benefit.
 
 ### 18.7 Remove Diagnostics
 
-Note: Diagnostics retained but never generated (instance resolution removed).
-
-- [ ] ~~Remove `E0601` error code from `lib/typing/diagnostic.ml`~~ (deferred)
-- [ ] ~~Remove `missing_instance` diagnostic function~~ (deferred)
+- [x] Remove `E0601` error code from `lib/typing/diagnostic.ml` (already removed)
+- [x] Remove `missing_instance` diagnostic function (already removed)
 - [x] Verify: All remaining diagnostics work correctly
 
 ### 18.8 Update Documentation
 
-- [ ] Review `docs/research/*.md` for type class references (research docs - low priority)
+- [x] Review `docs/research/*.md` for type class references (research docs - low priority, no changes needed)
 - [x] Update README.md to remove type class example
 - [x] Update docs/library-authors.adoc to remove type class section
-- [ ] Update DESIGN.md if needed
+- [x] Update DESIGN.md if needed (no changes needed)
 - [x] Verify: Documentation accurate after removal
 
 ---
