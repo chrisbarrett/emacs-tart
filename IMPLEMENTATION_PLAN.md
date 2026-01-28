@@ -1009,10 +1009,64 @@ Create fixtures exercising each C primitive category:
 25. **Phase 25**: LSP Signature File Synchronization
 26. **Phase 26**: Versioned Typings Distribution
 27. **Phase 27**: Typechecker Test Harness
+28. **Phase 28**: Coverage Report
 
 Phase 19 is deferred pending additional stdlib signatures (comint, eglot, compile).
 
 Phases 24-27 represent new work from Specs 24-27.
+
+---
+
+## Phase 28: Coverage Report (Spec 28)
+
+Command to measure type signature coverage for Emacs packages.
+
+**Prerequisite:** Phase 27 (test harness) for testing.
+
+### 28.1 Definition Extractor
+
+- [ ] [R4] Extract function definitions (defun, defsubst, cl-defun, defmacro, cl-defmacro)
+- [ ] [R5] Extract variable definitions (defvar, defcustom, defconst, defvar-local)
+- [ ] [R6] Extract struct definitions (cl-defstruct with generated accessors)
+- [ ] [R7] Extract EIEIO class definitions (defclass with slots)
+- [ ] [R8] Extract face definitions (defface)
+- [ ] Verify: Extractor captures all standard definition forms
+
+### 28.2 Private Identifier Detection
+
+- [ ] [R9] Detect private identifiers (containing `--`)
+- [ ] Mark private vs public for coverage calculation
+- [ ] Verify: `my-pkg--private` marked private, `my-pkg-public` marked public
+
+### 28.3 Directory Scanning
+
+- [ ] [R1] Default to scanning current directory recursively
+- [ ] [R2] Accept explicit file/directory path arguments
+- [ ] [R17] Support `--exclude` patterns for test files
+- [ ] Verify: `tart coverage src/` scans all `.el` files
+
+### 28.4 Coverage Calculation
+
+- [ ] [R10] Compare definitions against sibling `.tart` files
+- [ ] Match against signatures in search path
+- [ ] Calculate coverage percentage (public only)
+- [ ] Verify: Covered = has matching signature, uncovered = no match
+
+### 28.5 Report Generation
+
+- [ ] [R11] Summary format with counts and percentage
+- [ ] [R12] Uncovered list with file:line locations
+- [ ] [R13] Private list (excluded from percentage)
+- [ ] [R15] JSON output with `--format=json`
+- [ ] [R18] Verbose mode with `--verbose`
+- [ ] Verify: Both human and machine-readable outputs work
+
+### 28.6 CLI Integration
+
+- [ ] [R3] Add `tart coverage` and `tart cov` alias
+- [ ] [R14] Exit codes (0 success, 1 error, 2 usage)
+- [ ] [R16] `--fail-under=N` threshold flag
+- [ ] Verify: CLI matches existing tart conventions
 
 ---
 

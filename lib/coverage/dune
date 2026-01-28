@@ -1,0 +1,4 @@
+(library
+ (name coverage)
+ (public_name tart.coverage)
+ (libraries syntax str))

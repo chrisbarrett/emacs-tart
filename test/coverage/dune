@@ -1,0 +1,3 @@
+(test
+ (name definition_extractor_test)
+ (libraries coverage syntax alcotest))
