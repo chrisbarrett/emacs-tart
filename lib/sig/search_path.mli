@@ -124,3 +124,34 @@ val load_module_with_sig :
     @param env Base type environment to extend
     @param module_name The module name to load
     @return Extended type environment and signature AST, or None if not found *)
+
+(** {1 C-Core Loading} *)
+
+val list_c_core_files : string -> string list
+(** List all .tart files in a c-core directory.
+
+    @param c_core_dir Path to the c-core directory
+    @return Sorted list of full paths to .tart files *)
+
+val load_c_core_files :
+  c_core_dir:string -> env:Core.Type_env.t -> Core.Type_env.t
+(** Load all c-core signature files into a type environment.
+
+    Iterates through all .tart files in the c-core directory and loads their
+    signatures into the environment. Each file is treated as an independent
+    module. Duplicate function definitions across files will use the last loaded
+    value.
+
+    @param c_core_dir Path to the c-core directory containing .tart files
+    @param env Base type environment to extend
+    @return Extended type environment with all c-core signatures *)
+
+val load_c_core : search_path:t -> env:Core.Type_env.t -> Core.Type_env.t
+(** Load c-core signatures from versioned typings.
+
+    Uses the version fallback chain to find the c-core directory, then loads all
+    .tart files from it.
+
+    @param search_path The search path configuration
+    @param env Base type environment to extend
+    @return Extended type environment with c-core signatures *)

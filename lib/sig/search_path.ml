@@ -287,3 +287,63 @@ let load_module_with_sig ~(search_path : t) ?(el_path : string option)
         in
         Some (new_env, sig_file)
       else None
+
+(** List all .tart files in a c-core directory. *)
+let list_c_core_files (c_core_dir : string) : string list =
+  if dir_exists c_core_dir then
+    Sys.readdir c_core_dir |> Array.to_list
+    |> List.filter (fun f -> Filename.check_suffix f ".tart")
+    |> List.map (fun f -> Filename.concat c_core_dir f)
+    |> List.sort String.compare
+  else []
+
+(** Load all c-core signature files into a type environment.
+
+    Iterates through all .tart files in the c-core directory and loads their
+    signatures into the environment. Each file is treated as an independent
+    module. Duplicate function definitions across files will use the last loaded
+    value.
+
+    @param c_core_dir Path to the c-core directory containing .tart files
+    @param env Base type environment to extend
+    @return Extended type environment with all c-core signatures *)
+let load_c_core_files ~(c_core_dir : string) ~(env : Core.Type_env.t) :
+    Core.Type_env.t =
+  let files = list_c_core_files c_core_dir in
+  List.fold_left
+    (fun acc_env path ->
+      match parse_signature_file path with
+      | None -> acc_env (* Skip files that fail to parse *)
+      | Some sig_file ->
+          (* Validate standalone signatures *)
+          let valid =
+            if has_external_deps sig_file then true
+            else
+              match Sig_loader.validate_signature sig_file with
+              | Ok () -> true
+              | Error _ -> false
+          in
+          if valid then
+            (* Use empty resolver since c-core files shouldn't have deps *)
+            let resolver _ = None in
+            Sig_loader.load_signature_with_resolver ~resolver acc_env sig_file
+          else acc_env)
+    env files
+
+(** Load c-core signatures from versioned typings.
+
+    Uses the version fallback chain to find the c-core directory, then loads all
+    .tart files from it.
+
+    @param search_path The search path configuration
+    @param env Base type environment to extend
+    @return Extended type environment with c-core signatures *)
+let load_c_core ~(search_path : t) ~(env : Core.Type_env.t) : Core.Type_env.t =
+  match (search_path.typings_root, search_path.emacs_version) with
+  | Some typings_root, Some version -> (
+      match find_typings_dir ~typings_root ~version with
+      | Some typings_dir ->
+          let c_core_dir = Filename.concat typings_dir "c-core" in
+          load_c_core_files ~c_core_dir ~env
+      | None -> env)
+  | _ -> env

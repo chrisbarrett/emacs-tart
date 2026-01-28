@@ -1465,6 +1465,67 @@ let test_load_print_tart () =
       | None -> Alcotest.fail "format not found in env"
       | Some _ -> ())
 
+(** Test that list_c_core_files finds all c-core files *)
+let test_list_c_core_files () =
+  let c_core_dir = Filename.concat typings_dir "emacs/31.0/c-core" in
+  let files = Search_path.list_c_core_files c_core_dir in
+  (* Should have 16 c-core files *)
+  Alcotest.(check bool) "has at least 16 files" true (List.length files >= 16);
+  (* Should include data.tart *)
+  Alcotest.(check bool)
+    "includes data.tart" true
+    (List.exists (fun f -> Filename.basename f = "data.tart") files);
+  (* Should include print.tart *)
+  Alcotest.(check bool)
+    "includes print.tart" true
+    (List.exists (fun f -> Filename.basename f = "print.tart") files)
+
+(** Test that load_c_core_files loads all c-core signatures *)
+let test_load_c_core_files () =
+  let c_core_dir = Filename.concat typings_dir "emacs/31.0/c-core" in
+  let env = Search_path.load_c_core_files ~c_core_dir ~env:Type_env.empty in
+  (* Should have functions from data.tart *)
+  (match Type_env.lookup "car" env with
+  | None -> Alcotest.fail "car not found in merged env"
+  | Some _ -> ());
+  (* Should have functions from fns.tart *)
+  (match Type_env.lookup "mapcar" env with
+  | None -> Alcotest.fail "mapcar not found in merged env"
+  | Some _ -> ());
+  (* Should have functions from print.tart *)
+  (match Type_env.lookup "message" env with
+  | None -> Alcotest.fail "message not found in merged env"
+  | Some _ -> ());
+  (* Should have functions from buffer.tart *)
+  (match Type_env.lookup "current-buffer" env with
+  | None -> Alcotest.fail "current-buffer not found in merged env"
+  | Some _ -> ());
+  (* Should have functions from keymap.tart *)
+  match Type_env.lookup "define-key" env with
+  | None -> Alcotest.fail "define-key not found in merged env"
+  | Some _ -> ()
+
+(** Test that load_c_core works with search path config *)
+let test_load_c_core () =
+  let version =
+    match Emacs_version.parse_version "31.0" with
+    | Some v -> v
+    | None -> Alcotest.fail "Failed to parse version"
+  in
+  let sp =
+    Search_path.empty
+    |> Search_path.with_typings_root (Filename.concat typings_dir "emacs")
+    |> Search_path.with_emacs_version version
+  in
+  let env = Search_path.load_c_core ~search_path:sp ~env:Type_env.empty in
+  (* Should have functions from multiple c-core files *)
+  (match Type_env.lookup "car" env with
+  | None -> Alcotest.fail "car not found via load_c_core"
+  | Some _ -> ());
+  match Type_env.lookup "message" env with
+  | None -> Alcotest.fail "message not found via load_c_core"
+  | Some _ -> ()
+
 let () =
   Alcotest.run "search_path"
     [
@@ -1563,5 +1624,12 @@ let () =
           Alcotest.test_case "load textprop.tart" `Quick test_load_textprop_tart;
           Alcotest.test_case "parse print.tart" `Quick test_parse_print_tart;
           Alcotest.test_case "load print.tart" `Quick test_load_print_tart;
+        ] );
+      ( "c-core-loading",
+        [
+          Alcotest.test_case "list c-core files" `Quick test_list_c_core_files;
+          Alcotest.test_case "load c-core files" `Quick test_load_c_core_files;
+          Alcotest.test_case "load c-core via search path" `Quick
+            test_load_c_core;
         ] );
     ]
