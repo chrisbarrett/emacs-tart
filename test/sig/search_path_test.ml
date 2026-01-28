@@ -1141,6 +1141,74 @@ let test_load_process_tart () =
       | None -> Alcotest.fail "call-process not found in env"
       | Some _ -> ())
 
+(** Test that keyboard.tart parses successfully (Spec 24 R5) *)
+let test_parse_keyboard_tart () =
+  let path = Filename.concat typings_dir "emacs/31.0/c-core/keyboard.tart" in
+  if not (Sys.file_exists path) then
+    Alcotest.fail ("keyboard.tart not found at: " ^ path);
+  match Search_path.parse_signature_file path with
+  | None -> Alcotest.fail "keyboard.tart failed to parse"
+  | Some sig_file ->
+      Alcotest.(check string) "module name" "keyboard" sig_file.sig_module;
+      (* Should have declarations for keyboard operations *)
+      Alcotest.(check bool)
+        "has declarations" true
+        (List.length sig_file.sig_decls > 20);
+      (* Check specific required functions from keyboard.c *)
+      let has_defun name =
+        List.exists
+          (function Sig_ast.DDefun d -> d.defun_name = name | _ -> false)
+          sig_file.sig_decls
+      in
+      Alcotest.(check bool)
+        "has read-key-sequence" true
+        (has_defun "read-key-sequence");
+      Alcotest.(check bool) "has read-event" true (has_defun "read-event");
+      Alcotest.(check bool) "has read-char" true (has_defun "read-char");
+      Alcotest.(check bool)
+        "has this-command-keys" true
+        (has_defun "this-command-keys");
+      Alcotest.(check bool)
+        "has recursive-edit" true
+        (has_defun "recursive-edit");
+      Alcotest.(check bool)
+        "has input-pending-p" true
+        (has_defun "input-pending-p");
+      Alcotest.(check bool) "has sit-for" true (has_defun "sit-for")
+
+(** Test that keyboard.tart can be loaded into type environment *)
+let test_load_keyboard_tart () =
+  let c_core_dir = Filename.concat typings_dir "emacs/31.0/c-core" in
+  let sp = Search_path.of_dirs [ c_core_dir ] in
+  (* First check if the signature validates *)
+  let path = Filename.concat typings_dir "emacs/31.0/c-core/keyboard.tart" in
+  (match Search_path.parse_signature_file path with
+  | None -> Alcotest.fail "keyboard.tart failed to parse in load test"
+  | Some sig_file -> (
+      match Sig_loader.validate_signature sig_file with
+      | Ok () -> ()
+      | Error err ->
+          Alcotest.fail
+            ("keyboard.tart validation failed: " ^ err.message ^ " at "
+            ^ Syntax.Location.show_span err.span)));
+  match
+    Search_path.load_module ~search_path:sp ~env:Type_env.empty "keyboard"
+  with
+  | None -> Alcotest.fail "failed to load keyboard module"
+  | Some env -> (
+      (* Check that read-key-sequence is loaded *)
+      (match Type_env.lookup "read-key-sequence" env with
+      | None -> Alcotest.fail "read-key-sequence not found in env"
+      | Some _ -> ());
+      (* Check that read-event is loaded *)
+      (match Type_env.lookup "read-event" env with
+      | None -> Alcotest.fail "read-event not found in env"
+      | Some _ -> ());
+      (* Check that sit-for is loaded *)
+      match Type_env.lookup "sit-for" env with
+      | None -> Alcotest.fail "sit-for not found in env"
+      | Some _ -> ())
+
 let () =
   Alcotest.run "search_path"
     [
@@ -1227,5 +1295,8 @@ let () =
           Alcotest.test_case "load search.tart" `Quick test_load_search_tart;
           Alcotest.test_case "parse process.tart" `Quick test_parse_process_tart;
           Alcotest.test_case "load process.tart" `Quick test_load_process_tart;
+          Alcotest.test_case "parse keyboard.tart" `Quick
+            test_parse_keyboard_tart;
+          Alcotest.test_case "load keyboard.tart" `Quick test_load_keyboard_tart;
         ] );
     ]
