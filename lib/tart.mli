@@ -85,3 +85,10 @@ module Server = Lsp.Server
 
 module Dependency_graph = Graph.Dependency_graph
 module Graph_builder = Graph.Graph_builder
+
+(** {1 Coverage} *)
+
+module Definition_extractor = Coverage.Definition_extractor
+module File_scanner = Coverage.File_scanner
+module Coverage_report = Coverage.Coverage_report
+module Report_format = Coverage.Report_format

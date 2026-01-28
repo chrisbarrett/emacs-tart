@@ -355,6 +355,43 @@ let cmd_repl () =
         else repl_eval state input
   done
 
+(** Coverage subcommand: measure type signature coverage *)
+let cmd_coverage ~format ~verbose ~fail_under ~exclude paths =
+  let config = { Tart.File_scanner.exclude_patterns = exclude } in
+  let files = Tart.File_scanner.scan_paths ~config paths in
+  if files = [] then (
+    prerr_endline "tart coverage: no .el files found";
+    exit 1);
+
+  (* Build search path for signature lookup *)
+  let typings_root =
+    let exe_dir = Filename.dirname Sys.executable_name in
+    Filename.concat (Filename.dirname exe_dir) "share/tart/typings/emacs"
+  in
+  let version =
+    Tart.Emacs_version.detect_or_default ~default:Tart.Emacs_version.latest ()
+  in
+  let search_path =
+    Tart.Search_path.empty
+    |> Tart.Search_path.with_typings_root typings_root
+    |> Tart.Search_path.with_emacs_version version
+  in
+
+  (* Analyze files *)
+  let result = Tart.Coverage_report.analyze_files ~search_path files in
+  let summary = Tart.Coverage_report.summarize result in
+
+  (* Generate and print report *)
+  let output_config = { Tart.Report_format.format; verbose } in
+  print_endline (Tart.Report_format.format_report ~config:output_config result);
+
+  (* Check threshold if specified *)
+  match fail_under with
+  | Some threshold ->
+      let percentage = Tart.Coverage_report.coverage_percentage summary in
+      if percentage < float_of_int threshold then exit 1
+  | None -> ()
+
 (** LSP subcommand: start language server *)
 let cmd_lsp ~log_level port =
   match port with
@@ -400,6 +437,7 @@ Usage:
   tart expand FILE                 Print fully macro-expanded source
   tart repl                        Interactive REPL
   tart lsp [OPTIONS]               Start LSP server
+  tart coverage [OPTIONS] [PATH]   Measure type signature coverage
 
 Options:
   --version              Print version and exit
@@ -414,6 +452,12 @@ Expand options:
 
 LSP options:
   --port PORT  Listen on TCP port instead of stdio
+
+Coverage options:
+  --format=FORMAT  Output format: human (default), json
+  --verbose        Show additional details
+  --fail-under=N   Exit 1 if coverage below N percent
+  --exclude=PAT    Exclude files matching pattern (e.g., *-test.el)
 
 Exit codes:
   0  Success
@@ -546,6 +590,63 @@ let () =
           "  --log-level LEVEL  Set log level: debug, normal (default), quiet";
         exit 0)
       else cmd_lsp ~log_level:!log_level !port
+  | "coverage" :: rest | "cov" :: rest ->
+      let format = ref Tart.Report_format.Human in
+      let verbose = ref false in
+      let fail_under = ref None in
+      let exclude = ref [] in
+      let show_help = ref false in
+      let paths = ref [] in
+      let rec parse_coverage_args = function
+        | [] -> ()
+        | "--help" :: _ | "-h" :: _ -> show_help := true
+        | "--verbose" :: rest ->
+            verbose := true;
+            parse_coverage_args rest
+        | "--format=json" :: rest ->
+            format := Tart.Report_format.Json;
+            parse_coverage_args rest
+        | "--format=human" :: rest ->
+            format := Tart.Report_format.Human;
+            parse_coverage_args rest
+        | arg :: _rest when String.starts_with ~prefix:"--format=" arg ->
+            prerr_endline "tart coverage: --format must be 'human' or 'json'";
+            exit 2
+        | arg :: rest when String.starts_with ~prefix:"--fail-under=" arg -> (
+            let value = String.sub arg 13 (String.length arg - 13) in
+            match int_of_string_opt value with
+            | Some n when n >= 0 && n <= 100 ->
+                fail_under := Some n;
+                parse_coverage_args rest
+            | _ ->
+                prerr_endline "tart coverage: --fail-under requires 0-100";
+                exit 2)
+        | arg :: rest when String.starts_with ~prefix:"--exclude=" arg ->
+            let pattern = String.sub arg 10 (String.length arg - 10) in
+            exclude := !exclude @ [ pattern ];
+            parse_coverage_args rest
+        | arg :: _ when String.starts_with ~prefix:"-" arg ->
+            prerr_endline ("tart coverage: unknown option: " ^ arg);
+            exit 2
+        | path :: rest ->
+            paths := !paths @ [ path ];
+            parse_coverage_args rest
+      in
+      parse_coverage_args rest;
+      if !show_help then (
+        print_endline "Usage: tart coverage [OPTIONS] [PATH...]";
+        print_endline "";
+        print_endline "Measure type signature coverage for Elisp files.";
+        print_endline "";
+        print_endline "Options:";
+        print_endline "  --format=FORMAT  Output: human (default), json";
+        print_endline "  --verbose        Show covered identifiers";
+        print_endline "  --fail-under=N   Exit 1 if coverage below N%";
+        print_endline "  --exclude=PAT    Exclude files matching pattern";
+        exit 0)
+      else
+        cmd_coverage ~format:!format ~verbose:!verbose ~fail_under:!fail_under
+          ~exclude:!exclude !paths
   (* Default: type-check files *)
   | files ->
       (* Parse check command options *)

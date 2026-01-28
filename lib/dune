@@ -9,6 +9,7 @@
   tart.typing
   tart.sig
   tart.lsp
-  tart.graph)
+  tart.graph
+  tart.coverage)
  (preprocess
   (pps ppx_deriving.show ppx_deriving.eq)))

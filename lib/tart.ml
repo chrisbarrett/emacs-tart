@@ -55,3 +55,10 @@ module Dependency_graph = Graph.Dependency_graph
 (** Re-export graph modules *)
 
 module Graph_builder = Graph.Graph_builder
+
+module Definition_extractor = Coverage.Definition_extractor
+(** Re-export coverage modules *)
+
+module File_scanner = Coverage.File_scanner
+module Coverage_report = Coverage.Coverage_report
+module Report_format = Coverage.Report_format
