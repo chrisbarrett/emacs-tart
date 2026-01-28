@@ -9,3 +9,7 @@
 (test
  (name coverage_report_test)
  (libraries coverage core syntax alcotest))
+
+(test
+ (name report_format_test)
+ (libraries coverage syntax str alcotest))
