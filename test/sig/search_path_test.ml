@@ -1209,6 +1209,68 @@ let test_load_keyboard_tart () =
       | None -> Alcotest.fail "sit-for not found in env"
       | Some _ -> ())
 
+(** Test that keymap.tart parses successfully (Spec 24 R5) *)
+let test_parse_keymap_tart () =
+  let path = Filename.concat typings_dir "emacs/31.0/c-core/keymap.tart" in
+  if not (Sys.file_exists path) then
+    Alcotest.fail ("keymap.tart not found at: " ^ path);
+  match Search_path.parse_signature_file path with
+  | None -> Alcotest.fail "keymap.tart failed to parse"
+  | Some sig_file ->
+      Alcotest.(check string) "module name" "keymap" sig_file.sig_module;
+      (* Should have declarations for keymap operations *)
+      Alcotest.(check bool)
+        "has declarations" true
+        (List.length sig_file.sig_decls > 20);
+      (* Check specific required functions from keymap.c *)
+      let has_defun name =
+        List.exists
+          (function Sig_ast.DDefun d -> d.defun_name = name | _ -> false)
+          sig_file.sig_decls
+      in
+      Alcotest.(check bool) "has keymapp" true (has_defun "keymapp");
+      Alcotest.(check bool) "has make-keymap" true (has_defun "make-keymap");
+      Alcotest.(check bool)
+        "has make-sparse-keymap" true
+        (has_defun "make-sparse-keymap");
+      Alcotest.(check bool) "has define-key" true (has_defun "define-key");
+      Alcotest.(check bool) "has lookup-key" true (has_defun "lookup-key");
+      Alcotest.(check bool) "has key-binding" true (has_defun "key-binding");
+      Alcotest.(check bool) "has keymap-parent" true (has_defun "keymap-parent")
+
+(** Test that keymap.tart can be loaded into type environment *)
+let test_load_keymap_tart () =
+  let c_core_dir = Filename.concat typings_dir "emacs/31.0/c-core" in
+  let sp = Search_path.of_dirs [ c_core_dir ] in
+  (* First check if the signature validates *)
+  let path = Filename.concat typings_dir "emacs/31.0/c-core/keymap.tart" in
+  (match Search_path.parse_signature_file path with
+  | None -> Alcotest.fail "keymap.tart failed to parse in load test"
+  | Some sig_file -> (
+      match Sig_loader.validate_signature sig_file with
+      | Ok () -> ()
+      | Error err ->
+          Alcotest.fail
+            ("keymap.tart validation failed: " ^ err.message ^ " at "
+            ^ Syntax.Location.show_span err.span)));
+  match
+    Search_path.load_module ~search_path:sp ~env:Type_env.empty "keymap"
+  with
+  | None -> Alcotest.fail "failed to load keymap module"
+  | Some env -> (
+      (* Check that keymapp is loaded *)
+      (match Type_env.lookup "keymapp" env with
+      | None -> Alcotest.fail "keymapp not found in env"
+      | Some _ -> ());
+      (* Check that define-key is loaded *)
+      (match Type_env.lookup "define-key" env with
+      | None -> Alcotest.fail "define-key not found in env"
+      | Some _ -> ());
+      (* Check that lookup-key is loaded *)
+      match Type_env.lookup "lookup-key" env with
+      | None -> Alcotest.fail "lookup-key not found in env"
+      | Some _ -> ())
+
 let () =
   Alcotest.run "search_path"
     [
@@ -1298,5 +1360,7 @@ let () =
           Alcotest.test_case "parse keyboard.tart" `Quick
             test_parse_keyboard_tart;
           Alcotest.test_case "load keyboard.tart" `Quick test_load_keyboard_tart;
+          Alcotest.test_case "parse keymap.tart" `Quick test_parse_keymap_tart;
+          Alcotest.test_case "load keymap.tart" `Quick test_load_keymap_tart;
         ] );
     ]
