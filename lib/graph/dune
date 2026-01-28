@@ -1,3 +1,4 @@
 (library
  (name graph)
- (public_name tart.graph))
+ (public_name tart.graph)
+ (libraries syntax sig))

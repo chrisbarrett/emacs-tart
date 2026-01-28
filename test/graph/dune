@@ -1,3 +1,7 @@
 (test
  (name dependency_graph_test)
  (libraries tart alcotest))
+
+(test
+ (name graph_builder_test)
+ (libraries tart alcotest))

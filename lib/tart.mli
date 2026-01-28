@@ -83,3 +83,4 @@ module Server = Lsp.Server
 (** {1 Graph} *)
 
 module Dependency_graph = Graph.Dependency_graph
+module Graph_builder = Graph.Graph_builder
