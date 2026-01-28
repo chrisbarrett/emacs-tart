@@ -947,6 +947,69 @@ let test_load_fileio_tart () =
       | None -> Alcotest.fail "write-region not found in env"
       | Some _ -> ())
 
+(** Test that editfns.tart parses successfully (Spec 24 R5) *)
+let test_parse_editfns_tart () =
+  let path = Filename.concat typings_dir "emacs/31.0/c-core/editfns.tart" in
+  if not (Sys.file_exists path) then
+    Alcotest.fail ("editfns.tart not found at: " ^ path);
+  match Search_path.parse_signature_file path with
+  | None -> Alcotest.fail "editfns.tart failed to parse"
+  | Some sig_file ->
+      Alcotest.(check string) "module name" "editfns" sig_file.sig_module;
+      (* Should have declarations for editing operations *)
+      Alcotest.(check bool)
+        "has declarations" true
+        (List.length sig_file.sig_decls > 50);
+      (* Check specific required functions from editfns.c *)
+      let has_defun name =
+        List.exists
+          (function Sig_ast.DDefun d -> d.defun_name = name | _ -> false)
+          sig_file.sig_decls
+      in
+      Alcotest.(check bool) "has point" true (has_defun "point");
+      Alcotest.(check bool) "has point-min" true (has_defun "point-min");
+      Alcotest.(check bool) "has point-max" true (has_defun "point-max");
+      Alcotest.(check bool) "has goto-char" true (has_defun "goto-char");
+      Alcotest.(check bool) "has insert" true (has_defun "insert");
+      Alcotest.(check bool) "has delete-region" true (has_defun "delete-region");
+      Alcotest.(check bool)
+        "has buffer-substring" true
+        (has_defun "buffer-substring");
+      Alcotest.(check bool) "has format" true (has_defun "format")
+
+(** Test that editfns.tart can be loaded into type environment *)
+let test_load_editfns_tart () =
+  let c_core_dir = Filename.concat typings_dir "emacs/31.0/c-core" in
+  let sp = Search_path.of_dirs [ c_core_dir ] in
+  (* First check if the signature validates *)
+  let path = Filename.concat typings_dir "emacs/31.0/c-core/editfns.tart" in
+  (match Search_path.parse_signature_file path with
+  | None -> Alcotest.fail "editfns.tart failed to parse in load test"
+  | Some sig_file -> (
+      match Sig_loader.validate_signature sig_file with
+      | Ok () -> ()
+      | Error err ->
+          Alcotest.fail
+            ("editfns.tart validation failed: " ^ err.message ^ " at "
+            ^ Syntax.Location.show_span err.span)));
+  match
+    Search_path.load_module ~search_path:sp ~env:Type_env.empty "editfns"
+  with
+  | None -> Alcotest.fail "failed to load editfns module"
+  | Some env -> (
+      (* Check that point is loaded *)
+      (match Type_env.lookup "point" env with
+      | None -> Alcotest.fail "point not found in env"
+      | Some _ -> ());
+      (* Check that insert is loaded *)
+      (match Type_env.lookup "insert" env with
+      | None -> Alcotest.fail "insert not found in env"
+      | Some _ -> ());
+      (* Check that format is loaded *)
+      match Type_env.lookup "format" env with
+      | None -> Alcotest.fail "format not found in env"
+      | Some _ -> ())
+
 let () =
   Alcotest.run "search_path"
     [
@@ -1027,5 +1090,7 @@ let () =
           Alcotest.test_case "load frame.tart" `Quick test_load_frame_tart;
           Alcotest.test_case "parse fileio.tart" `Quick test_parse_fileio_tart;
           Alcotest.test_case "load fileio.tart" `Quick test_load_fileio_tart;
+          Alcotest.test_case "parse editfns.tart" `Quick test_parse_editfns_tart;
+          Alcotest.test_case "load editfns.tart" `Quick test_load_editfns_tart;
         ] );
     ]
