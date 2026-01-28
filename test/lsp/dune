@@ -17,3 +17,7 @@
 (test
  (name graph_tracker_test)
  (libraries tart alcotest))
+
+(test
+ (name signature_tracker_test)
+ (libraries tart alcotest))
