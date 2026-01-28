@@ -114,3 +114,50 @@ let dependent_uris (graph : Dep_graph.t) ~(module_id : Dep_graph.module_id)
 (** Get module ID from a URI *)
 let module_id_of_uri (uri : string) : Dep_graph.module_id =
   module_id_of_filename (filename_of_uri uri)
+
+(** {1 Cycle Detection} *)
+
+(** Check if a file is a .tart file *)
+let is_tart_file (uri : string) : bool =
+  Filename.check_suffix (filename_of_uri uri) ".tart"
+
+(** Create a cycle diagnostic for a given URI.
+
+    The diagnostic is placed at line 1, column 0 (start of file) since it's a
+    module-level issue rather than a specific location.
+
+    @param uri The document URI
+    @param cycle The cycle (list of module IDs)
+    @return A diagnostic describing the cycle *)
+let cycle_diagnostic (uri : string) (cycle : Dep_graph.cycle) :
+    Protocol.diagnostic =
+  let cycle_str = String.concat " → " cycle ^ " → " ^ List.hd cycle in
+  let severity =
+    if is_tart_file uri then Protocol.Error else Protocol.Warning
+  in
+  {
+    Protocol.range =
+      {
+        start = { line = 0; character = 0 };
+        end_ = { line = 0; character = 0 };
+      };
+    severity = Some severity;
+    code = Some "circular-dependency";
+    message = Printf.sprintf "Circular dependency detected: %s" cycle_str;
+    source = Some "tart";
+    related_information = [];
+  }
+
+(** Check for cycles involving a specific module.
+
+    Returns a list of diagnostics for cycles that include the given module ID.
+    This should be called after updating the graph to detect new cycles. *)
+let check_cycles_for_module (graph : Dep_graph.t) ~(uri : string) :
+    Protocol.diagnostic list =
+  let module_id = module_id_of_uri uri in
+  let cycles = Dep_graph.detect_cycles graph in
+  (* Filter to cycles that include this module *)
+  let relevant_cycles =
+    List.filter (fun cycle -> List.mem module_id cycle) cycles
+  in
+  List.map (cycle_diagnostic uri) relevant_cycles

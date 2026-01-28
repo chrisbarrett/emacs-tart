@@ -201,6 +201,86 @@ let test_module_id_of_uri () =
   Alcotest.(check string) "from uri" "foo" id
 
 (* =============================================================================
+   Cycle Detection Tests
+   ============================================================================= *)
+
+let severity_equal (a : Lsp.Protocol.diagnostic_severity option)
+    (b : Lsp.Protocol.diagnostic_severity option) =
+  match (a, b) with
+  | Some Lsp.Protocol.Error, Some Lsp.Protocol.Error -> true
+  | Some Lsp.Protocol.Warning, Some Lsp.Protocol.Warning -> true
+  | Some Lsp.Protocol.Information, Some Lsp.Protocol.Information -> true
+  | Some Lsp.Protocol.Hint, Some Lsp.Protocol.Hint -> true
+  | None, None -> true
+  | _ -> false
+
+let test_cycle_detection_simple () =
+  let server = make_test_server () in
+  let graph = Tart.Server.dependency_graph server in
+  (* Set up cycle: foo -> bar -> foo *)
+  Lsp.Graph_tracker.update_document graph ~uri:"file:///test/foo.el"
+    ~text:"(require 'bar)";
+  Lsp.Graph_tracker.update_document graph ~uri:"file:///test/bar.el"
+    ~text:"(require 'foo)";
+  (* Check for cycles in foo *)
+  let diags =
+    Lsp.Graph_tracker.check_cycles_for_module graph ~uri:"file:///test/foo.el"
+  in
+  Alcotest.(check int) "one cycle" 1 (List.length diags);
+  let diag = List.hd diags in
+  Alcotest.(check bool)
+    "severity is Warning for .el" true
+    (severity_equal diag.severity (Some Lsp.Protocol.Warning))
+
+let test_cycle_detection_tart_error () =
+  let server = make_test_server () in
+  let graph = Tart.Server.dependency_graph server in
+  (* Set up cycle with .tart file: foo.tart -> bar.tart -> foo.tart *)
+  Lsp.Graph_tracker.update_document graph ~uri:"file:///test/foo.tart"
+    ~text:"(open 'bar)";
+  Lsp.Graph_tracker.update_document graph ~uri:"file:///test/bar.tart"
+    ~text:"(open 'foo)";
+  (* Check for cycles in foo.tart *)
+  let diags =
+    Lsp.Graph_tracker.check_cycles_for_module graph ~uri:"file:///test/foo.tart"
+  in
+  Alcotest.(check int) "one cycle" 1 (List.length diags);
+  let diag = List.hd diags in
+  Alcotest.(check bool)
+    "severity is Error for .tart" true
+    (severity_equal diag.severity (Some Lsp.Protocol.Error))
+
+let test_cycle_detection_no_cycle () =
+  let server = make_test_server () in
+  let graph = Tart.Server.dependency_graph server in
+  (* Linear dependency: foo -> bar -> baz (no cycle) *)
+  Lsp.Graph_tracker.update_document graph ~uri:"file:///test/foo.el"
+    ~text:"(require 'bar)";
+  Lsp.Graph_tracker.update_document graph ~uri:"file:///test/bar.el"
+    ~text:"(require 'baz)";
+  Lsp.Graph_tracker.update_document graph ~uri:"file:///test/baz.el" ~text:"";
+  let diags =
+    Lsp.Graph_tracker.check_cycles_for_module graph ~uri:"file:///test/foo.el"
+  in
+  Alcotest.(check int) "no cycles" 0 (List.length diags)
+
+let test_cycle_message () =
+  let server = make_test_server () in
+  let graph = Tart.Server.dependency_graph server in
+  (* foo -> bar -> foo *)
+  Lsp.Graph_tracker.update_document graph ~uri:"file:///test/foo.el"
+    ~text:"(require 'bar)";
+  Lsp.Graph_tracker.update_document graph ~uri:"file:///test/bar.el"
+    ~text:"(require 'foo)";
+  let diags =
+    Lsp.Graph_tracker.check_cycles_for_module graph ~uri:"file:///test/foo.el"
+  in
+  let diag = List.hd diags in
+  Alcotest.(check bool)
+    "message mentions cycle" true
+    (String.sub diag.message 0 12 = "Circular dep")
+
+(* =============================================================================
    Test Suite
    ============================================================================= *)
 
@@ -237,5 +317,13 @@ let () =
             test_dependent_uris_transitive;
           Alcotest.test_case "only open uris" `Quick
             test_dependent_uris_only_open;
+        ] );
+      ( "cycle detection",
+        [
+          Alcotest.test_case "simple cycle" `Quick test_cycle_detection_simple;
+          Alcotest.test_case "tart error severity" `Quick
+            test_cycle_detection_tart_error;
+          Alcotest.test_case "no cycle" `Quick test_cycle_detection_no_cycle;
+          Alcotest.test_case "cycle message" `Quick test_cycle_message;
         ] );
     ]

@@ -54,3 +54,16 @@ val dependent_uris :
 val module_id_of_uri : string -> Graph.Dependency_graph.module_id
 (** Get module ID from a URI. Combines [filename_of_uri] and
     [module_id_of_filename]. *)
+
+(** {1 Cycle Detection} *)
+
+val check_cycles_for_module :
+  Graph.Dependency_graph.t -> uri:string -> Protocol.diagnostic list
+(** Check for cycles involving a specific module.
+
+    Returns a list of diagnostics for cycles that include the module at the
+    given URI. The severity depends on the file type:
+    - .tart files: Error severity
+    - .el files: Warning severity
+
+    This implements R7 of Spec 27 (cycle detection). *)

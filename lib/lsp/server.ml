@@ -251,8 +251,13 @@ let publish_diagnostics (server : t) (uri : string) (version : int option) :
       let diagnostics, stats =
         check_document ~cache:server.form_cache uri doc.text
       in
+      (* Check for dependency cycles *)
+      let cycle_diagnostics =
+        Graph_tracker.check_cycles_for_module server.dependency_graph ~uri
+      in
+      let all_diagnostics = diagnostics @ cycle_diagnostics in
       let params : Protocol.publish_diagnostics_params =
-        { uri; version; diagnostics }
+        { uri; version; diagnostics = all_diagnostics }
       in
       (* Log cache statistics at debug level *)
       (match stats with
@@ -264,7 +269,8 @@ let publish_diagnostics (server : t) (uri : string) (version : int option) :
       | None -> ());
       debug server
         (Printf.sprintf "Publishing %d diagnostics for %s"
-           (List.length diagnostics) uri);
+           (List.length all_diagnostics)
+           uri);
       Rpc.write_notification server.oc
         ~method_:"textDocument/publishDiagnostics"
         ~params:(Protocol.publish_diagnostics_params_to_json params)
