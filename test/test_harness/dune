@@ -1,3 +1,10 @@
 (test
  (name acceptance_test)
  (libraries test_harness alcotest))
+
+(test
+ (name fixture_test)
+ (libraries test_harness alcotest)
+ (deps
+  %{bin:tart}
+  (source_tree ../fixtures/typing)))

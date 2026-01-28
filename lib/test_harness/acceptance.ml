@@ -105,13 +105,16 @@ let discover_fixtures (dir : string) : string list =
 
 (** {1 Running Tart} *)
 
-(** Run `tart check` on a file and capture output. *)
+(** Run `tart` on a file and capture output.
+
+    Uses the default check mode (no subcommand needed). *)
 let run_tart_check ~(tart_bin : string) (el_path : string) : tart_output =
   (* Create temporary files for stdout/stderr *)
   let stdout_file = Filename.temp_file "tart_stdout" ".txt" in
   let stderr_file = Filename.temp_file "tart_stderr" ".txt" in
+  (* tart defaults to type-check mode, no need for 'check' subcommand *)
   let cmd =
-    Printf.sprintf "%s check %s > %s 2> %s" (Filename.quote tart_bin)
+    Printf.sprintf "%s %s > %s 2> %s" (Filename.quote tart_bin)
       (Filename.quote el_path)
       (Filename.quote stdout_file)
       (Filename.quote stderr_file)
