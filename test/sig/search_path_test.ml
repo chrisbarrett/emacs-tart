@@ -648,6 +648,54 @@ let test_load_eval_tart () =
       | None -> Alcotest.fail "signal not found in env"
       | Some _ -> ())
 
+(** Test that alloc.tart parses successfully (Spec 24 R5) *)
+let test_parse_alloc_tart () =
+  let path = Filename.concat typings_dir "emacs/31.0/c-core/alloc.tart" in
+  if not (Sys.file_exists path) then
+    Alcotest.fail ("alloc.tart not found at: " ^ path);
+  match Search_path.parse_signature_file path with
+  | None -> Alcotest.fail "alloc.tart failed to parse"
+  | Some sig_file ->
+      Alcotest.(check string) "module name" "alloc" sig_file.sig_module;
+      (* Should have declarations for construction and GC *)
+      Alcotest.(check bool)
+        "has declarations" true
+        (List.length sig_file.sig_decls > 10);
+      (* Check specific required functions from alloc.c *)
+      let has_defun name =
+        List.exists
+          (function Sig_ast.DDefun d -> d.defun_name = name | _ -> false)
+          sig_file.sig_decls
+      in
+      Alcotest.(check bool) "has cons" true (has_defun "cons");
+      Alcotest.(check bool) "has list" true (has_defun "list");
+      Alcotest.(check bool) "has vector" true (has_defun "vector");
+      Alcotest.(check bool) "has make-marker" true (has_defun "make-marker");
+      Alcotest.(check bool) "has make-symbol" true (has_defun "make-symbol");
+      Alcotest.(check bool)
+        "has garbage-collect" true
+        (has_defun "garbage-collect")
+
+(** Test that alloc.tart can be loaded into type environment *)
+let test_load_alloc_tart () =
+  let c_core_dir = Filename.concat typings_dir "emacs/31.0/c-core" in
+  let sp = Search_path.of_dirs [ c_core_dir ] in
+  match Search_path.load_module ~search_path:sp ~env:Type_env.empty "alloc" with
+  | None -> Alcotest.fail "failed to load alloc module"
+  | Some env -> (
+      (* Check that cons is loaded *)
+      (match Type_env.lookup "cons" env with
+      | None -> Alcotest.fail "cons not found in env"
+      | Some _ -> ());
+      (* Check that list is loaded *)
+      (match Type_env.lookup "list" env with
+      | None -> Alcotest.fail "list not found in env"
+      | Some _ -> ());
+      (* Check that garbage-collect is loaded *)
+      match Type_env.lookup "garbage-collect" env with
+      | None -> Alcotest.fail "garbage-collect not found in env"
+      | Some _ -> ())
+
 let () =
   Alcotest.run "search_path"
     [
@@ -718,5 +766,7 @@ let () =
           Alcotest.test_case "load fns.tart" `Quick test_load_fns_tart;
           Alcotest.test_case "parse eval.tart" `Quick test_parse_eval_tart;
           Alcotest.test_case "load eval.tart" `Quick test_load_eval_tart;
+          Alcotest.test_case "parse alloc.tart" `Quick test_parse_alloc_tart;
+          Alcotest.test_case "load alloc.tart" `Quick test_load_alloc_tart;
         ] );
     ]
