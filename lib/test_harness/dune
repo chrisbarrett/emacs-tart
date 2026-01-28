@@ -1,0 +1,4 @@
+(library
+ (name test_harness)
+ (public_name tart.test_harness)
+ (libraries str))

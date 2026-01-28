@@ -1,0 +1,3 @@
+(test
+ (name acceptance_test)
+ (libraries test_harness alcotest))
