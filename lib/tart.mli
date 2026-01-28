@@ -79,3 +79,7 @@ module Search_path = Sig.Search_path
 module Rpc = Lsp.Rpc
 module Protocol = Lsp.Protocol
 module Server = Lsp.Server
+
+(** {1 Graph} *)
+
+module Dependency_graph = Graph.Dependency_graph

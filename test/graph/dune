@@ -1,0 +1,3 @@
+(test
+ (name dependency_graph_test)
+ (libraries tart alcotest))

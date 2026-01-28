@@ -49,3 +49,6 @@ module Rpc = Lsp.Rpc
 
 module Protocol = Lsp.Protocol
 module Server = Lsp.Server
+
+module Dependency_graph = Graph.Dependency_graph
+(** Re-export graph modules *)

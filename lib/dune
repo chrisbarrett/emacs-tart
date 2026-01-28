@@ -8,6 +8,7 @@
   tart.core
   tart.typing
   tart.sig
-  tart.lsp)
+  tart.lsp
+  tart.graph)
  (preprocess
   (pps ppx_deriving.show ppx_deriving.eq)))
