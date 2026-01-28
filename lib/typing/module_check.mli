@@ -26,6 +26,9 @@ val with_search_dirs : string list -> config -> config
 val search_path : config -> Sig.Search_path.t
 (** Get the search path from a config *)
 
+val with_search_path : Sig.Search_path.t -> config -> config
+(** Set the search path in a config *)
+
 (** {1 Errors} *)
 
 type mismatch_error = {

@@ -34,6 +34,12 @@ val dependency_graph : t -> Graph.Dependency_graph.t
 val signature_tracker : t -> Signature_tracker.t
 (** Get the server's signature tracker (for testing) *)
 
+val emacs_version : t -> Sig.Emacs_version.version option
+(** Get the detected Emacs version (for testing).
+
+    Returns the Emacs version detected at server startup, or None if detection
+    failed. The version is used for loading version-specific typings. *)
+
 val run : t -> int
 (** Run the server's main loop.
 

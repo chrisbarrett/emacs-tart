@@ -17,12 +17,74 @@ type t = {
   form_cache : Form_cache.t;
   dependency_graph : Graph.Dependency_graph.t;
   signature_tracker : Signature_tracker.t;
+  module_config : Typing.Module_check.config;
+      (** Module check config, computed once at server creation *)
+  emacs_version : Sig.Emacs_version.version option;
+      (** Detected Emacs version, if any *)
 }
 
 and log_level = Quiet | Normal | Debug
 
+(** Detect Emacs version and build module config.
+
+    Detects Emacs version once at server startup and builds the module config
+    with appropriate versioned typings. *)
+let detect_emacs_and_build_config () :
+    Typing.Module_check.config * Sig.Emacs_version.version option =
+  (* Detect Emacs version *)
+  let version_result = Sig.Emacs_version.detect () in
+  let emacs_version =
+    match version_result with
+    | Sig.Emacs_version.Detected v -> Some v
+    | Sig.Emacs_version.NotFound | Sig.Emacs_version.ParseError _ -> None
+  in
+
+  (* Try to find stdlib/typings relative to the executable *)
+  let exe_dir = Filename.dirname Sys.executable_name in
+  let stdlib_candidates =
+    [
+      Filename.concat exe_dir "stdlib";
+      Filename.concat (Filename.dirname exe_dir) "stdlib";
+      Filename.concat exe_dir "../share/tart/stdlib";
+    ]
+  in
+  let stdlib_dir = List.find_opt Sys.file_exists stdlib_candidates in
+
+  (* Find typings root for versioned c-core *)
+  let typings_candidates =
+    [
+      Filename.concat exe_dir "typings/emacs";
+      Filename.concat (Filename.dirname exe_dir) "typings/emacs";
+      Filename.concat exe_dir "../share/tart/typings/emacs";
+    ]
+  in
+  let typings_root = List.find_opt Sys.file_exists typings_candidates in
+
+  (* Build config with all components *)
+  let config = Typing.Module_check.default_config () in
+  let config =
+    match stdlib_dir with
+    | Some dir -> Typing.Module_check.with_stdlib dir config
+    | None -> config
+  in
+  let search_path = Typing.Module_check.search_path config in
+  let search_path =
+    match typings_root with
+    | Some root -> Sig.Search_path.with_typings_root root search_path
+    | None -> search_path
+  in
+  let search_path =
+    match emacs_version with
+    | Some v -> Sig.Search_path.with_emacs_version v search_path
+    | None -> search_path
+  in
+  (* Rebuild config with updated search path *)
+  let config = Typing.Module_check.with_search_path search_path config in
+  (config, emacs_version)
+
 (** Create a new server on the given channels *)
 let create ?(log_level = Normal) ~ic ~oc () : t =
+  let module_config, emacs_version = detect_emacs_and_build_config () in
   {
     ic;
     oc;
@@ -32,6 +94,8 @@ let create ?(log_level = Normal) ~ic ~oc () : t =
     form_cache = Form_cache.create ();
     dependency_graph = Graph.Dependency_graph.create ();
     signature_tracker = Signature_tracker.create ();
+    module_config;
+    emacs_version;
   }
 
 (** Get the server's current state *)
@@ -47,6 +111,10 @@ let dependency_graph (server : t) : Graph.Dependency_graph.t =
 (** Get the server's signature tracker (for testing) *)
 let signature_tracker (server : t) : Signature_tracker.t =
   server.signature_tracker
+
+(** Get the detected Emacs version (for testing) *)
+let emacs_version (server : t) : Sig.Emacs_version.version option =
+  server.emacs_version
 
 (** Log a message to stderr *)
 let log (server : t) (level : log_level) (msg : string) : unit =
@@ -176,25 +244,6 @@ let lsp_diagnostic_of_parse_error (err : Syntax.Read.parse_error) :
     related_information = [];
   }
 
-(** Get the default module check configuration.
-
-    Uses the stdlib directory relative to the executable location. *)
-let default_module_config () : Typing.Module_check.config =
-  (* Try to find stdlib relative to the executable *)
-  let exe_dir = Filename.dirname Sys.executable_name in
-  let stdlib_candidates =
-    [
-      Filename.concat exe_dir "stdlib";
-      Filename.concat (Filename.dirname exe_dir) "stdlib";
-      Filename.concat exe_dir "../share/tart/stdlib";
-    ]
-  in
-  let stdlib_dir = List.find_opt Sys.file_exists stdlib_candidates in
-  let config = Typing.Module_check.default_config () in
-  match stdlib_dir with
-  | Some dir -> Typing.Module_check.with_stdlib dir config
-  | None -> config
-
 (** Try to read the content of a sibling .tart file for cache invalidation.
 
     Checks the signature tracker first (for open buffers), then falls back to
@@ -231,9 +280,9 @@ let read_sibling_sig_content ~(sig_tracker : Signature_tracker.t)
     - Load required modules from the search path
     - Verify implementations match signatures
     - Cache unchanged forms for incremental updates *)
-let check_document ~(cache : Form_cache.t) ~(sig_tracker : Signature_tracker.t)
-    (uri : string) (text : string) :
-    Protocol.diagnostic list * Form_cache.check_stats option =
+let check_document ~(config : Typing.Module_check.config)
+    ~(cache : Form_cache.t) ~(sig_tracker : Signature_tracker.t) (uri : string)
+    (text : string) : Protocol.diagnostic list * Form_cache.check_stats option =
   let filename = filename_of_uri uri in
   let parse_result = Syntax.Read.parse_string ~filename text in
   (* Collect parse errors *)
@@ -244,7 +293,6 @@ let check_document ~(cache : Form_cache.t) ~(sig_tracker : Signature_tracker.t)
   let type_diagnostics, stats =
     if parse_result.sexps = [] then ([], None)
     else
-      let config = default_module_config () in
       let sibling_sig_content =
         read_sibling_sig_content ~sig_tracker filename
       in
@@ -266,7 +314,7 @@ let publish_diagnostics (server : t) (uri : string) (version : int option) :
   | None -> ()
   | Some doc ->
       let diagnostics, stats =
-        check_document ~cache:server.form_cache
+        check_document ~config:server.module_config ~cache:server.form_cache
           ~sig_tracker:server.signature_tracker uri doc.text
       in
       (* Check for dependency cycles *)
@@ -318,6 +366,13 @@ let handle_initialize (server : t) (params : Yojson.Safe.t option) :
       info server
         (Printf.sprintf "Initializing (root: %s)"
            (Option.value init_params.root_uri ~default:"<none>"));
+      (* Log detected Emacs version at debug level (R7 of Spec 24) *)
+      (match server.emacs_version with
+      | Some v ->
+          debug server
+            (Printf.sprintf "Detected Emacs version: %s"
+               (Sig.Emacs_version.version_to_string v))
+      | None -> debug server "Emacs version not detected, using latest typings");
       server.state <- Initialized { root_uri = init_params.root_uri };
       let result : Protocol.initialize_result =
         { capabilities = capabilities () }
@@ -652,9 +707,8 @@ let find_definition_in_signature (name : string)
 
     Searches the sibling .tart file and any signatures from the search path.
     Returns the location if found. *)
-let find_definition_in_signatures ~(filename : string) (name : string) :
-    Syntax.Location.span option =
-  let config = default_module_config () in
+let find_definition_in_signatures ~(config : Typing.Module_check.config)
+    ~(filename : string) (name : string) : Syntax.Location.span option =
   let dir = Filename.dirname filename in
   let basename = Filename.basename filename in
   let module_name =
@@ -798,7 +852,10 @@ let handle_definition (server : t) (params : Yojson.Safe.t option) :
                              "Not found locally, trying signature lookup for: \
                               %s"
                              name);
-                        match find_definition_in_signatures ~filename name with
+                        match
+                          find_definition_in_signatures
+                            ~config:server.module_config ~filename name
+                        with
                         | Some span ->
                             debug server
                               (Printf.sprintf
@@ -1363,10 +1420,9 @@ let handle_code_action (server : t) (params : Yojson.Safe.t option) :
             Ok (Protocol.code_action_result_to_json (Some []))
           else
             (* Type-check to get missing signature warnings *)
-            let config = default_module_config () in
             let check_result =
-              Typing.Module_check.check_module ~config ~filename
-                parse_result.sexps
+              Typing.Module_check.check_module ~config:server.module_config
+                ~filename parse_result.sexps
             in
 
             (* Generate code actions for missing signatures *)
@@ -1802,10 +1858,9 @@ let handle_completion (server : t) (params : Yojson.Safe.t option) :
                (List.length local_items));
 
           (* Type-check to get environment with signatures *)
-          let config = default_module_config () in
           let check_result =
-            Typing.Module_check.check_module ~config ~filename
-              parse_result.sexps
+            Typing.Module_check.check_module ~config:server.module_config
+              ~filename parse_result.sexps
           in
 
           (* Collect items from loaded signatures *)
@@ -1994,10 +2049,9 @@ let handle_signature_help (server : t) (params : Yojson.Safe.t option) :
                   (Printf.sprintf "Found call to '%s' at arg position %d"
                      fn_name arg_index);
                 (* Type-check to get the environment with function types *)
-                let config = default_module_config () in
                 let check_result =
-                  Typing.Module_check.check_module ~config ~filename
-                    parse_result.sexps
+                  Typing.Module_check.check_module ~config:server.module_config
+                    ~filename parse_result.sexps
                 in
                 (* Look up the function's type in the environment *)
                 match Core.Type_env.lookup fn_name check_result.final_env with
