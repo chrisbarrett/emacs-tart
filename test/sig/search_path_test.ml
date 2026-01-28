@@ -696,6 +696,62 @@ let test_load_alloc_tart () =
       | None -> Alcotest.fail "garbage-collect not found in env"
       | Some _ -> ())
 
+(** Test that buffer.tart parses successfully (Spec 24 R5) *)
+let test_parse_buffer_tart () =
+  let path = Filename.concat typings_dir "emacs/31.0/c-core/buffer.tart" in
+  if not (Sys.file_exists path) then
+    Alcotest.fail ("buffer.tart not found at: " ^ path);
+  match Search_path.parse_signature_file path with
+  | None -> Alcotest.fail "buffer.tart failed to parse"
+  | Some sig_file ->
+      Alcotest.(check string) "module name" "buffer" sig_file.sig_module;
+      (* Should have declarations for buffer operations *)
+      Alcotest.(check bool)
+        "has declarations" true
+        (List.length sig_file.sig_decls > 30);
+      (* Check specific required functions from buffer.c *)
+      let has_defun name =
+        List.exists
+          (function Sig_ast.DDefun d -> d.defun_name = name | _ -> false)
+          sig_file.sig_decls
+      in
+      Alcotest.(check bool)
+        "has current-buffer" true
+        (has_defun "current-buffer");
+      Alcotest.(check bool) "has set-buffer" true (has_defun "set-buffer");
+      Alcotest.(check bool) "has get-buffer" true (has_defun "get-buffer");
+      Alcotest.(check bool) "has buffer-name" true (has_defun "buffer-name");
+      Alcotest.(check bool)
+        "has buffer-file-name" true
+        (has_defun "buffer-file-name");
+      Alcotest.(check bool)
+        "has buffer-modified-p" true
+        (has_defun "buffer-modified-p");
+      Alcotest.(check bool) "has kill-buffer" true (has_defun "kill-buffer");
+      Alcotest.(check bool) "has buffer-list" true (has_defun "buffer-list")
+
+(** Test that buffer.tart can be loaded into type environment *)
+let test_load_buffer_tart () =
+  let c_core_dir = Filename.concat typings_dir "emacs/31.0/c-core" in
+  let sp = Search_path.of_dirs [ c_core_dir ] in
+  match
+    Search_path.load_module ~search_path:sp ~env:Type_env.empty "buffer"
+  with
+  | None -> Alcotest.fail "failed to load buffer module"
+  | Some env -> (
+      (* Check that current-buffer is loaded *)
+      (match Type_env.lookup "current-buffer" env with
+      | None -> Alcotest.fail "current-buffer not found in env"
+      | Some _ -> ());
+      (* Check that set-buffer is loaded *)
+      (match Type_env.lookup "set-buffer" env with
+      | None -> Alcotest.fail "set-buffer not found in env"
+      | Some _ -> ());
+      (* Check that kill-buffer is loaded *)
+      match Type_env.lookup "kill-buffer" env with
+      | None -> Alcotest.fail "kill-buffer not found in env"
+      | Some _ -> ())
+
 let () =
   Alcotest.run "search_path"
     [
@@ -768,5 +824,7 @@ let () =
           Alcotest.test_case "load eval.tart" `Quick test_load_eval_tart;
           Alcotest.test_case "parse alloc.tart" `Quick test_parse_alloc_tart;
           Alcotest.test_case "load alloc.tart" `Quick test_load_alloc_tart;
+          Alcotest.test_case "parse buffer.tart" `Quick test_parse_buffer_tart;
+          Alcotest.test_case "load buffer.tart" `Quick test_load_buffer_tart;
         ] );
     ]
