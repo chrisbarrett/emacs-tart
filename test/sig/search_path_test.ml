@@ -1337,6 +1337,75 @@ let test_load_minibuf_tart () =
       | None -> Alcotest.fail "yes-or-no-p not found in env"
       | Some _ -> ())
 
+(** Test that textprop.tart parses successfully (Spec 24 R5) *)
+let test_parse_textprop_tart () =
+  let path = Filename.concat typings_dir "emacs/31.0/c-core/textprop.tart" in
+  if not (Sys.file_exists path) then
+    Alcotest.fail ("textprop.tart not found at: " ^ path);
+  match Search_path.parse_signature_file path with
+  | None -> Alcotest.fail "textprop.tart failed to parse"
+  | Some sig_file ->
+      Alcotest.(check string) "module name" "textprop" sig_file.sig_module;
+      (* Should have declarations for text property operations *)
+      Alcotest.(check bool)
+        "has declarations" true
+        (List.length sig_file.sig_decls > 20);
+      (* Check specific required functions from textprop.c *)
+      let has_defun name =
+        List.exists
+          (function Sig_ast.DDefun d -> d.defun_name = name | _ -> false)
+          sig_file.sig_decls
+      in
+      Alcotest.(check bool)
+        "has get-text-property" true
+        (has_defun "get-text-property");
+      Alcotest.(check bool)
+        "has put-text-property" true
+        (has_defun "put-text-property");
+      Alcotest.(check bool)
+        "has add-text-properties" true
+        (has_defun "add-text-properties");
+      Alcotest.(check bool)
+        "has remove-text-properties" true
+        (has_defun "remove-text-properties");
+      Alcotest.(check bool)
+        "has next-property-change" true
+        (has_defun "next-property-change");
+      Alcotest.(check bool) "has propertize" true (has_defun "propertize")
+
+(** Test that textprop.tart can be loaded into type environment *)
+let test_load_textprop_tart () =
+  let c_core_dir = Filename.concat typings_dir "emacs/31.0/c-core" in
+  let sp = Search_path.of_dirs [ c_core_dir ] in
+  (* First check if the signature validates *)
+  let path = Filename.concat typings_dir "emacs/31.0/c-core/textprop.tart" in
+  (match Search_path.parse_signature_file path with
+  | None -> Alcotest.fail "textprop.tart failed to parse in load test"
+  | Some sig_file -> (
+      match Sig_loader.validate_signature sig_file with
+      | Ok () -> ()
+      | Error err ->
+          Alcotest.fail
+            ("textprop.tart validation failed: " ^ err.message ^ " at "
+            ^ Syntax.Location.show_span err.span)));
+  match
+    Search_path.load_module ~search_path:sp ~env:Type_env.empty "textprop"
+  with
+  | None -> Alcotest.fail "failed to load textprop module"
+  | Some env -> (
+      (* Check that get-text-property is loaded *)
+      (match Type_env.lookup "get-text-property" env with
+      | None -> Alcotest.fail "get-text-property not found in env"
+      | Some _ -> ());
+      (* Check that put-text-property is loaded *)
+      (match Type_env.lookup "put-text-property" env with
+      | None -> Alcotest.fail "put-text-property not found in env"
+      | Some _ -> ());
+      (* Check that propertize is loaded *)
+      match Type_env.lookup "propertize" env with
+      | None -> Alcotest.fail "propertize not found in env"
+      | Some _ -> ())
+
 let () =
   Alcotest.run "search_path"
     [
@@ -1430,5 +1499,8 @@ let () =
           Alcotest.test_case "load keymap.tart" `Quick test_load_keymap_tart;
           Alcotest.test_case "parse minibuf.tart" `Quick test_parse_minibuf_tart;
           Alcotest.test_case "load minibuf.tart" `Quick test_load_minibuf_tart;
+          Alcotest.test_case "parse textprop.tart" `Quick
+            test_parse_textprop_tart;
+          Alcotest.test_case "load textprop.tart" `Quick test_load_textprop_tart;
         ] );
     ]
