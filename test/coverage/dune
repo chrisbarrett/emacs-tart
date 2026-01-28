@@ -5,3 +5,7 @@
 (test
  (name file_scanner_test)
  (libraries coverage alcotest))
+
+(test
+ (name coverage_report_test)
+ (libraries coverage core syntax alcotest))
