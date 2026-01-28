@@ -752,6 +752,69 @@ let test_load_buffer_tart () =
       | None -> Alcotest.fail "kill-buffer not found in env"
       | Some _ -> ())
 
+(** Test that window.tart parses successfully (Spec 24 R5) *)
+let test_parse_window_tart () =
+  let path = Filename.concat typings_dir "emacs/31.0/c-core/window.tart" in
+  if not (Sys.file_exists path) then
+    Alcotest.fail ("window.tart not found at: " ^ path);
+  match Search_path.parse_signature_file path with
+  | None -> Alcotest.fail "window.tart failed to parse"
+  | Some sig_file ->
+      Alcotest.(check string) "module name" "window" sig_file.sig_module;
+      (* Should have declarations for window operations *)
+      Alcotest.(check bool)
+        "has declarations" true
+        (List.length sig_file.sig_decls > 50);
+      (* Check specific required functions from window.c *)
+      let has_defun name =
+        List.exists
+          (function Sig_ast.DDefun d -> d.defun_name = name | _ -> false)
+          sig_file.sig_decls
+      in
+      Alcotest.(check bool)
+        "has selected-window" true
+        (has_defun "selected-window");
+      Alcotest.(check bool) "has select-window" true (has_defun "select-window");
+      Alcotest.(check bool) "has window-buffer" true (has_defun "window-buffer");
+      Alcotest.(check bool) "has window-point" true (has_defun "window-point");
+      Alcotest.(check bool) "has window-start" true (has_defun "window-start");
+      Alcotest.(check bool) "has delete-window" true (has_defun "delete-window");
+      Alcotest.(check bool) "has split-window" true (has_defun "split-window");
+      Alcotest.(check bool) "has next-window" true (has_defun "next-window")
+
+(** Test that window.tart can be loaded into type environment *)
+let test_load_window_tart () =
+  let c_core_dir = Filename.concat typings_dir "emacs/31.0/c-core" in
+  let sp = Search_path.of_dirs [ c_core_dir ] in
+  (* First check if the signature validates *)
+  let path = Filename.concat typings_dir "emacs/31.0/c-core/window.tart" in
+  (match Search_path.parse_signature_file path with
+  | None -> Alcotest.fail "window.tart failed to parse in load test"
+  | Some sig_file -> (
+      match Sig_loader.validate_signature sig_file with
+      | Ok () -> ()
+      | Error err ->
+          Alcotest.fail
+            ("window.tart validation failed: " ^ err.message ^ " at "
+            ^ Syntax.Location.show_span err.span)));
+  match
+    Search_path.load_module ~search_path:sp ~env:Type_env.empty "window"
+  with
+  | None -> Alcotest.fail "failed to load window module"
+  | Some env -> (
+      (* Check that selected-window is loaded *)
+      (match Type_env.lookup "selected-window" env with
+      | None -> Alcotest.fail "selected-window not found in env"
+      | Some _ -> ());
+      (* Check that window-buffer is loaded *)
+      (match Type_env.lookup "window-buffer" env with
+      | None -> Alcotest.fail "window-buffer not found in env"
+      | Some _ -> ());
+      (* Check that delete-window is loaded *)
+      match Type_env.lookup "delete-window" env with
+      | None -> Alcotest.fail "delete-window not found in env"
+      | Some _ -> ())
+
 let () =
   Alcotest.run "search_path"
     [
@@ -826,5 +889,7 @@ let () =
           Alcotest.test_case "load alloc.tart" `Quick test_load_alloc_tart;
           Alcotest.test_case "parse buffer.tart" `Quick test_parse_buffer_tart;
           Alcotest.test_case "load buffer.tart" `Quick test_load_buffer_tart;
+          Alcotest.test_case "parse window.tart" `Quick test_parse_window_tart;
+          Alcotest.test_case "load window.tart" `Quick test_load_window_tart;
         ] );
     ]
