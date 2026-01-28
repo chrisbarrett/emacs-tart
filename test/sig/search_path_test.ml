@@ -1076,6 +1076,71 @@ let test_load_search_tart () =
       | None -> Alcotest.fail "looking-at not found in env"
       | Some _ -> ())
 
+(** Test that process.tart parses successfully (Spec 24 R5) *)
+let test_parse_process_tart () =
+  let path = Filename.concat typings_dir "emacs/31.0/c-core/process.tart" in
+  if not (Sys.file_exists path) then
+    Alcotest.fail ("process.tart not found at: " ^ path);
+  match Search_path.parse_signature_file path with
+  | None -> Alcotest.fail "process.tart failed to parse"
+  | Some sig_file ->
+      Alcotest.(check string) "module name" "process" sig_file.sig_module;
+      (* Should have declarations for process operations *)
+      Alcotest.(check bool)
+        "has declarations" true
+        (List.length sig_file.sig_decls > 30);
+      (* Check specific required functions from process.c *)
+      let has_defun name =
+        List.exists
+          (function Sig_ast.DDefun d -> d.defun_name = name | _ -> false)
+          sig_file.sig_decls
+      in
+      Alcotest.(check bool) "has start-process" true (has_defun "start-process");
+      Alcotest.(check bool)
+        "has process-send-string" true
+        (has_defun "process-send-string");
+      Alcotest.(check bool) "has call-process" true (has_defun "call-process");
+      Alcotest.(check bool) "has process-list" true (has_defun "process-list");
+      Alcotest.(check bool)
+        "has delete-process" true
+        (has_defun "delete-process");
+      Alcotest.(check bool)
+        "has process-status" true
+        (has_defun "process-status")
+
+(** Test that process.tart can be loaded into type environment *)
+let test_load_process_tart () =
+  let c_core_dir = Filename.concat typings_dir "emacs/31.0/c-core" in
+  let sp = Search_path.of_dirs [ c_core_dir ] in
+  (* First check if the signature validates *)
+  let path = Filename.concat typings_dir "emacs/31.0/c-core/process.tart" in
+  (match Search_path.parse_signature_file path with
+  | None -> Alcotest.fail "process.tart failed to parse in load test"
+  | Some sig_file -> (
+      match Sig_loader.validate_signature sig_file with
+      | Ok () -> ()
+      | Error err ->
+          Alcotest.fail
+            ("process.tart validation failed: " ^ err.message ^ " at "
+            ^ Syntax.Location.show_span err.span)));
+  match
+    Search_path.load_module ~search_path:sp ~env:Type_env.empty "process"
+  with
+  | None -> Alcotest.fail "failed to load process module"
+  | Some env -> (
+      (* Check that start-process is loaded *)
+      (match Type_env.lookup "start-process" env with
+      | None -> Alcotest.fail "start-process not found in env"
+      | Some _ -> ());
+      (* Check that process-send-string is loaded *)
+      (match Type_env.lookup "process-send-string" env with
+      | None -> Alcotest.fail "process-send-string not found in env"
+      | Some _ -> ());
+      (* Check that call-process is loaded *)
+      match Type_env.lookup "call-process" env with
+      | None -> Alcotest.fail "call-process not found in env"
+      | Some _ -> ())
+
 let () =
   Alcotest.run "search_path"
     [
@@ -1160,5 +1225,7 @@ let () =
           Alcotest.test_case "load editfns.tart" `Quick test_load_editfns_tart;
           Alcotest.test_case "parse search.tart" `Quick test_parse_search_tart;
           Alcotest.test_case "load search.tart" `Quick test_load_search_tart;
+          Alcotest.test_case "parse process.tart" `Quick test_parse_process_tart;
+          Alcotest.test_case "load process.tart" `Quick test_load_process_tart;
         ] );
     ]
