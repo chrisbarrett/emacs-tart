@@ -250,11 +250,88 @@ let test_make_sibling_edge () =
   Alcotest.(check string) "target" "foo" edge.Graph.target;
   Alcotest.(check bool) "kind is Sibling" true (edge.Graph.kind = Graph.Sibling)
 
+(* Create a temporary directory for testing sibling edge detection *)
+let with_temp_dir f =
+  let dir = Filename.get_temp_dir_name () in
+  let test_dir =
+    Filename.concat dir
+      ("graph_builder_test_" ^ string_of_int (Random.int 100000))
+  in
+  Unix.mkdir test_dir 0o755;
+  Fun.protect
+    ~finally:(fun () ->
+      (* Clean up test files *)
+      Array.iter
+        (fun file -> Unix.unlink (Filename.concat test_dir file))
+        (Sys.readdir test_dir);
+      Unix.rmdir test_dir)
+    (fun () -> f test_dir)
+
+let test_sibling_edge_found () =
+  with_temp_dir (fun dir ->
+      (* Create foo.el and foo.tart *)
+      let el_path = Filename.concat dir "foo.el" in
+      let tart_path = Filename.concat dir "foo.tart" in
+      Out_channel.with_open_text el_path (fun oc ->
+          output_string oc "(provide 'foo)");
+      Out_channel.with_open_text tart_path (fun oc ->
+          output_string oc "(defun foo () -> nil)");
+
+      (* Check sibling edge is found *)
+      let edge = Builder.sibling_edge_for_el_file el_path in
+      match edge with
+      | Some e ->
+          Alcotest.(check string) "target" "foo" e.Graph.target;
+          Alcotest.(check bool) "kind" true (e.Graph.kind = Graph.Sibling)
+      | None -> Alcotest.fail "Expected sibling edge to be found")
+
+let test_sibling_edge_not_found () =
+  with_temp_dir (fun dir ->
+      (* Create only foo.el, no foo.tart *)
+      let el_path = Filename.concat dir "bar.el" in
+      Out_channel.with_open_text el_path (fun oc ->
+          output_string oc "(provide 'bar)");
+
+      (* Check no sibling edge *)
+      let edge = Builder.sibling_edge_for_el_file el_path in
+      Alcotest.(check bool) "no sibling" true (Option.is_none edge))
+
+let test_sibling_edge_non_el_file () =
+  (* Non-.el file should return None *)
+  let edge = Builder.sibling_edge_for_el_file "/some/path/foo.txt" in
+  Alcotest.(check bool) "not el file" true (Option.is_none edge)
+
+(* =============================================================================
+   Core Typings Pseudo-Module
+   ============================================================================= *)
+
+let test_core_typings_module_id () =
+  let id = Builder.core_typings_module_id in
+  (* Should be a special marker that won't conflict with real modules *)
+  Alcotest.(check bool)
+    "starts with @@" true
+    (String.length id > 2 && String.sub id 0 2 = "@@")
+
+let test_make_core_typings_edge () =
+  let edge = Builder.make_core_typings_edge () in
+  Alcotest.(check string)
+    "target" Builder.core_typings_module_id edge.Graph.target;
+  Alcotest.(check bool) "kind is Require" true (edge.Graph.kind = Graph.Require)
+
+let test_is_core_typings_module () =
+  Alcotest.(check bool)
+    "true for core module" true
+    (Builder.is_core_typings_module Builder.core_typings_module_id);
+  Alcotest.(check bool)
+    "false for regular module" false
+    (Builder.is_core_typings_module "cl-lib")
+
 (* =============================================================================
    Test Suite
    ============================================================================= *)
 
 let () =
+  Random.self_init ();
   Alcotest.run "graph_builder"
     [
       ( "el extraction",
@@ -286,6 +363,19 @@ let () =
           Alcotest.test_case "no deps" `Quick test_no_deps_tart;
         ] );
       ( "sibling edge",
-        [ Alcotest.test_case "make sibling edge" `Quick test_make_sibling_edge ]
-      );
+        [
+          Alcotest.test_case "make sibling edge" `Quick test_make_sibling_edge;
+          Alcotest.test_case "sibling edge found" `Quick test_sibling_edge_found;
+          Alcotest.test_case "sibling edge not found" `Quick
+            test_sibling_edge_not_found;
+          Alcotest.test_case "sibling edge non-el file" `Quick
+            test_sibling_edge_non_el_file;
+        ] );
+      ( "core typings",
+        [
+          Alcotest.test_case "module id" `Quick test_core_typings_module_id;
+          Alcotest.test_case "make edge" `Quick test_make_core_typings_edge;
+          Alcotest.test_case "is core typings" `Quick
+            test_is_core_typings_module;
+        ] );
     ]

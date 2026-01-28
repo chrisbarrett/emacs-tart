@@ -34,14 +34,31 @@ val extract_from_signature : Sig.Sig_ast.signature -> Dependency_graph.edge list
 
 (** {1 Sibling Edge} *)
 
-val sibling_edge : string -> Dependency_graph.edge option
-(** [sibling_edge module_id] returns a Sibling edge if a .tart file exists for
-    the given .el module. The module_id should be the basename without
-    extension. Returns [None] if no sibling signature file is found.
+val sibling_edge_for_el_file : string -> Dependency_graph.edge option
+(** [sibling_edge_for_el_file el_path] returns a Sibling edge if a .tart file
+    exists in the same directory as the .el file. The el_path should be the full
+    path to the .el file.
 
-    Note: This is a convenience function; the caller is responsible for
-    determining whether a sibling file exists on disk or in memory. *)
+    For example, if [el_path] is "/project/foo.el" and "/project/foo.tart"
+    exists, returns [Some { target = "foo"; kind = Sibling }].
+
+    Returns [None] if no sibling signature file is found. *)
 
 val make_sibling_edge : string -> Dependency_graph.edge
 (** [make_sibling_edge target] creates a Sibling edge to the given target
     module. Use this when you know the sibling file exists. *)
+
+(** {1 Core Typings Pseudo-Module} *)
+
+val core_typings_module_id : Dependency_graph.module_id
+(** The pseudo-module ID representing core typings. All .el files implicitly
+    depend on this module. When core typings change, all dependents should be
+    invalidated. *)
+
+val make_core_typings_edge : unit -> Dependency_graph.edge
+(** [make_core_typings_edge ()] creates a Require edge to the core typings
+    pseudo-module. Add this edge to every .el file's dependency list. *)
+
+val is_core_typings_module : Dependency_graph.module_id -> bool
+(** [is_core_typings_module module_id] returns true if the given module_id
+    represents the core typings pseudo-module. *)

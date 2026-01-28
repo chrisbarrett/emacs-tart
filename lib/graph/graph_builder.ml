@@ -93,6 +93,29 @@ let extract_from_signature (sig_ : Sig_ast.signature) : Graph.edge list =
 let make_sibling_edge (target : string) : Graph.edge =
   { Graph.target; kind = Graph.Sibling }
 
-let sibling_edge (_module_id : string) : Graph.edge option =
-  (* This is a placeholder - actual file existence check should be done by caller *)
-  None
+(** Check if a file exists. *)
+let file_exists path =
+  try
+    let _ = Unix.stat path in
+    true
+  with Unix.Unix_error _ -> false
+
+let sibling_edge_for_el_file (el_path : string) : Graph.edge option =
+  (* For foo.el, check if foo.tart exists in the same directory *)
+  let basename = Filename.basename el_path in
+  if Filename.check_suffix basename ".el" then
+    let module_name = Filename.chop_suffix basename ".el" in
+    let dir = Filename.dirname el_path in
+    let tart_path = Filename.concat dir (module_name ^ ".tart") in
+    if file_exists tart_path then Some (make_sibling_edge module_name) else None
+  else None
+
+(** {1 Core Typings Pseudo-Module} *)
+
+let core_typings_module_id : Graph.module_id = "@@core-typings"
+
+let make_core_typings_edge () : Graph.edge =
+  { Graph.target = core_typings_module_id; kind = Graph.Require }
+
+let is_core_typings_module (module_id : Graph.module_id) : bool =
+  module_id = core_typings_module_id
