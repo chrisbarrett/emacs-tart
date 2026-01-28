@@ -484,6 +484,77 @@ let test_search_dirs_take_precedence_over_typings () =
             result
       | _ -> Alcotest.fail "expected 2 dirs")
 
+(** {1 Bundled C-Core Typings Tests (Spec 24 R5)} *)
+
+(** Find the typings directory relative to test working directory *)
+let typings_dir =
+  let rec find_typings path =
+    let candidate = Filename.concat path "typings" in
+    if Sys.file_exists candidate && Sys.is_directory candidate then candidate
+    else
+      let parent = Filename.dirname path in
+      if parent = path then "../../../../typings" else find_typings parent
+  in
+  find_typings (Sys.getcwd ())
+
+(** Test that data.tart parses successfully (Spec 24 R5) *)
+let test_parse_data_tart () =
+  let path = Filename.concat typings_dir "emacs/31.0/c-core/data.tart" in
+  if not (Sys.file_exists path) then
+    Alcotest.fail ("data.tart not found at: " ^ path);
+  match Search_path.parse_signature_file path with
+  | None -> Alcotest.fail "data.tart failed to parse"
+  | Some sig_file ->
+      Alcotest.(check string) "module name" "data" sig_file.sig_module;
+      (* Should have many declarations: arithmetic, predicates, etc *)
+      Alcotest.(check bool)
+        "has declarations" true
+        (List.length sig_file.sig_decls > 50);
+      (* Check specific required functions from data.c *)
+      let has_defun name =
+        List.exists
+          (function Sig_ast.DDefun d -> d.defun_name = name | _ -> false)
+          sig_file.sig_decls
+      in
+      Alcotest.(check bool) "has +" true (has_defun "+");
+      Alcotest.(check bool) "has -" true (has_defun "-");
+      Alcotest.(check bool) "has car" true (has_defun "car");
+      Alcotest.(check bool) "has cdr" true (has_defun "cdr");
+      Alcotest.(check bool) "has eq" true (has_defun "eq");
+      Alcotest.(check bool) "has null" true (has_defun "null");
+      Alcotest.(check bool) "has symbolp" true (has_defun "symbolp");
+      Alcotest.(check bool) "has integerp" true (has_defun "integerp")
+
+(** Test that data.tart can be loaded into type environment *)
+let test_load_data_tart () =
+  let c_core_dir = Filename.concat typings_dir "emacs/31.0/c-core" in
+  let sp = Search_path.of_dirs [ c_core_dir ] in
+  match Search_path.load_module ~search_path:sp ~env:Type_env.empty "data" with
+  | None -> Alcotest.fail "failed to load data module"
+  | Some env ->
+      (* Check that + is loaded *)
+      (match Type_env.lookup "+" env with
+      | None -> Alcotest.fail "+ not found in env"
+      | Some _ -> ());
+      (* Check that car is loaded *)
+      (match Type_env.lookup "car" env with
+      | None -> Alcotest.fail "car not found in env"
+      | Some _ -> ());
+      (* Check that eq is loaded *)
+      (match Type_env.lookup "eq" env with
+      | None -> Alcotest.fail "eq not found in env"
+      | Some _ -> ());
+      (* Verify type checking works with a predicate (uses Any, avoids num/int subtyping) *)
+      let ty, errors = check_expr_str ~env "(null nil)" in
+      Alcotest.(check int) "null no errors" 0 (List.length errors);
+      let ty_str = Types.to_string ty in
+      Alcotest.(check bool)
+        "null returns bool" true
+        (try
+           let _ = Str.search_forward (Str.regexp_string "ool") ty_str 0 in
+           true
+         with Not_found -> false)
+
 let () =
   Alcotest.run "search_path"
     [
@@ -545,5 +616,10 @@ let () =
             test_search_path_with_versioned_typings;
           Alcotest.test_case "search dirs precedence" `Quick
             test_search_dirs_take_precedence_over_typings;
+        ] );
+      ( "bundled-c-core",
+        [
+          Alcotest.test_case "parse data.tart" `Quick test_parse_data_tart;
+          Alcotest.test_case "load data.tart" `Quick test_load_data_tart;
         ] );
     ]
