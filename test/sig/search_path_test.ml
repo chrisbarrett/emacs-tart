@@ -602,6 +602,52 @@ let test_load_fns_tart () =
       | None -> Alcotest.fail "gethash not found in env"
       | Some _ -> ())
 
+(** Test that eval.tart parses successfully (Spec 24 R5) *)
+let test_parse_eval_tart () =
+  let path = Filename.concat typings_dir "emacs/31.0/c-core/eval.tart" in
+  if not (Sys.file_exists path) then
+    Alcotest.fail ("eval.tart not found at: " ^ path);
+  match Search_path.parse_signature_file path with
+  | None -> Alcotest.fail "eval.tart failed to parse"
+  | Some sig_file ->
+      Alcotest.(check string) "module name" "eval" sig_file.sig_module;
+      (* Should have many declarations *)
+      Alcotest.(check bool)
+        "has declarations" true
+        (List.length sig_file.sig_decls > 20);
+      (* Check specific required functions from eval.c *)
+      let has_defun name =
+        List.exists
+          (function Sig_ast.DDefun d -> d.defun_name = name | _ -> false)
+          sig_file.sig_decls
+      in
+      Alcotest.(check bool) "has eval" true (has_defun "eval");
+      Alcotest.(check bool) "has funcall" true (has_defun "funcall");
+      Alcotest.(check bool) "has apply" true (has_defun "apply");
+      Alcotest.(check bool) "has throw" true (has_defun "throw");
+      Alcotest.(check bool) "has signal" true (has_defun "signal");
+      Alcotest.(check bool) "has macroexpand" true (has_defun "macroexpand")
+
+(** Test that eval.tart can be loaded into type environment *)
+let test_load_eval_tart () =
+  let c_core_dir = Filename.concat typings_dir "emacs/31.0/c-core" in
+  let sp = Search_path.of_dirs [ c_core_dir ] in
+  match Search_path.load_module ~search_path:sp ~env:Type_env.empty "eval" with
+  | None -> Alcotest.fail "failed to load eval module"
+  | Some env -> (
+      (* Check that eval is loaded *)
+      (match Type_env.lookup "eval" env with
+      | None -> Alcotest.fail "eval not found in env"
+      | Some _ -> ());
+      (* Check that funcall is loaded *)
+      (match Type_env.lookup "funcall" env with
+      | None -> Alcotest.fail "funcall not found in env"
+      | Some _ -> ());
+      (* Check that signal is loaded *)
+      match Type_env.lookup "signal" env with
+      | None -> Alcotest.fail "signal not found in env"
+      | Some _ -> ())
+
 let () =
   Alcotest.run "search_path"
     [
@@ -670,5 +716,7 @@ let () =
           Alcotest.test_case "load data.tart" `Quick test_load_data_tart;
           Alcotest.test_case "parse fns.tart" `Quick test_parse_fns_tart;
           Alcotest.test_case "load fns.tart" `Quick test_load_fns_tart;
+          Alcotest.test_case "parse eval.tart" `Quick test_parse_eval_tart;
+          Alcotest.test_case "load eval.tart" `Quick test_load_eval_tart;
         ] );
     ]
