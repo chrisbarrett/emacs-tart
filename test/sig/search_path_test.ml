@@ -555,6 +555,53 @@ let test_load_data_tart () =
            true
          with Not_found -> false)
 
+(** Test that fns.tart parses successfully (Spec 24 R5) *)
+let test_parse_fns_tart () =
+  let path = Filename.concat typings_dir "emacs/31.0/c-core/fns.tart" in
+  if not (Sys.file_exists path) then
+    Alcotest.fail ("fns.tart not found at: " ^ path);
+  match Search_path.parse_signature_file path with
+  | None -> Alcotest.fail "fns.tart failed to parse"
+  | Some sig_file ->
+      Alcotest.(check string) "module name" "fns" sig_file.sig_module;
+      (* Should have many declarations *)
+      Alcotest.(check bool)
+        "has declarations" true
+        (List.length sig_file.sig_decls > 50);
+      (* Check specific required functions from fns.c *)
+      let has_defun name =
+        List.exists
+          (function Sig_ast.DDefun d -> d.defun_name = name | _ -> false)
+          sig_file.sig_decls
+      in
+      Alcotest.(check bool) "has length" true (has_defun "length");
+      Alcotest.(check bool) "has concat" true (has_defun "concat");
+      Alcotest.(check bool) "has mapcar" true (has_defun "mapcar");
+      Alcotest.(check bool) "has assoc" true (has_defun "assoc");
+      Alcotest.(check bool) "has member" true (has_defun "member");
+      Alcotest.(check bool) "has gethash" true (has_defun "gethash");
+      Alcotest.(check bool) "has puthash" true (has_defun "puthash")
+
+(** Test that fns.tart can be loaded into type environment *)
+let test_load_fns_tart () =
+  let c_core_dir = Filename.concat typings_dir "emacs/31.0/c-core" in
+  let sp = Search_path.of_dirs [ c_core_dir ] in
+  match Search_path.load_module ~search_path:sp ~env:Type_env.empty "fns" with
+  | None -> Alcotest.fail "failed to load fns module"
+  | Some env -> (
+      (* Check that length is loaded *)
+      (match Type_env.lookup "length" env with
+      | None -> Alcotest.fail "length not found in env"
+      | Some _ -> ());
+      (* Check that mapcar is loaded *)
+      (match Type_env.lookup "mapcar" env with
+      | None -> Alcotest.fail "mapcar not found in env"
+      | Some _ -> ());
+      (* Check that gethash is loaded *)
+      match Type_env.lookup "gethash" env with
+      | None -> Alcotest.fail "gethash not found in env"
+      | Some _ -> ())
+
 let () =
   Alcotest.run "search_path"
     [
@@ -621,5 +668,7 @@ let () =
         [
           Alcotest.test_case "parse data.tart" `Quick test_parse_data_tart;
           Alcotest.test_case "load data.tart" `Quick test_load_data_tart;
+          Alcotest.test_case "parse fns.tart" `Quick test_parse_fns_tart;
+          Alcotest.test_case "load fns.tart" `Quick test_load_fns_tart;
         ] );
     ]
