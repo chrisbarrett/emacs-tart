@@ -747,47 +747,47 @@ signature file synchronization.
 
 ### 24.1 Graph Data Structures
 
-- [ ] Create `lib/graph/dependency_graph.ml` with forward/reverse index
-- [ ] Define `module_id` type and `edge_kind` enum
-- [ ] Implement `direct_dependents` and transitive `dependents` queries
-- [ ] Verify: `dune test`; graph construction and queries work
+- [x] Create `lib/graph/dependency_graph.ml` with forward/reverse index
+- [x] Define `module_id` type and `edge_kind` enum
+- [x] Implement `direct_dependents` and transitive `dependents` queries
+- [x] Verify: `dune test`; graph construction and queries work
 
 ### 24.2 Dependency Extraction from .el Files
 
-- [ ] [R1] Extract `(require 'foo)` → Require edge
-- [ ] [R1] Extract `(autoload 'fn "bar")` → Autoload edge
-- [ ] Verify: Parser extracts both require and autoload edges
+- [x] [R1] Extract `(require 'foo)` → Require edge
+- [x] [R1] Extract `(autoload 'fn "bar")` → Autoload edge
+- [x] Verify: Parser extracts both require and autoload edges
 
 ### 24.3 Dependency Extraction from .tart Files
 
-- [ ] [R2] Extract `(open 'seq)` → Open edge
-- [ ] [R2] Extract `(include 'dash)` → Include edge
-- [ ] Verify: Signature parser extracts both open and include edges
+- [x] [R2] Extract `(open 'seq)` → Open edge
+- [x] [R2] Extract `(include 'dash)` → Include edge
+- [x] Verify: Signature parser extracts both open and include edges
 
 ### 24.4 Sibling Edge and Core Typings
 
-- [ ] [R3] Add implicit sibling edge: `foo.el` → `foo.tart`
-- [ ] [R6] Add pseudo-module for core typings that all files depend on
-- [ ] Verify: Sibling and core typing edges present in graph
+- [x] [R3] Add implicit sibling edge: `foo.el` → `foo.tart`
+- [x] [R6] Add pseudo-module for core typings that all files depend on
+- [x] Verify: Sibling and core typing edges present in graph
 
 ### 24.5 Incremental Updates
 
-- [ ] [R4] Update graph on `didOpen` (parse, add edges)
-- [ ] [R4] Update graph on `didChange` (re-extract, diff edges)
-- [ ] [R4] Keep graph entry on `didClose` (file still exists on disk)
-- [ ] Verify: Graph updates correctly as documents open/change/close
+- [x] [R4] Update graph on `didOpen` (parse, add edges)
+- [x] [R4] Update graph on `didChange` (re-extract, diff edges)
+- [x] [R4] Keep graph entry on `didClose` (file still exists on disk)
+- [x] Verify: Graph updates correctly as documents open/change/close
 
 ### 24.6 Invalidation Cascade
 
-- [ ] [R5] Implement invalidation: module X changes → get dependents → invalidate caches
-- [ ] Wire to form_cache.ml for cache invalidation
-- [ ] Verify: Changing a module invalidates dependent module caches
+- [x] [R5] Implement invalidation: module X changes → get dependents → invalidate caches
+- [x] Wire to form_cache.ml for cache invalidation
+- [x] Verify: Changing a module invalidates dependent module caches
 
 ### 24.7 Cycle Detection
 
-- [ ] [R7] Detect cycles during graph construction
-- [ ] Report cycles as errors in `.tart` files, warnings in `.el` files
-- [ ] Verify: Circular requires produce appropriate diagnostics
+- [x] [R7] Detect cycles during graph construction
+- [x] Report cycles as errors in `.tart` files, warnings in `.el` files
+- [x] Verify: Circular requires produce appropriate diagnostics
 
 ---
 
@@ -799,50 +799,50 @@ Keep type checking in sync when editing `.tart` signature files alongside `.el` 
 
 ### 25.1 Signature Tracker Module
 
-- [ ] Create `lib/lsp/signature_tracker.ml` to track open `.tart` buffers
-- [ ] Store buffer contents keyed by URI
-- [ ] Verify: Module compiles and exports required functions
+- [x] Create `lib/lsp/signature_tracker.ml` to track open `.tart` buffers
+- [x] Store buffer contents keyed by URI
+- [x] Verify: Module compiles and exports required functions
 
 ### 25.2 Handle .tart in didOpen
 
-- [ ] [R1] Recognize `.tart` files in `textDocument/didOpen`
-- [ ] Store buffer contents in signature tracker
-- [ ] Associate with dependent `.el` files via filename convention
-- [ ] Verify: Opening `.tart` file registers it in tracker
+- [x] [R1] Recognize `.tart` files in `textDocument/didOpen`
+- [x] Store buffer contents in signature tracker
+- [x] Associate with dependent `.el` files via filename convention
+- [x] Verify: Opening `.tart` file registers it in tracker
 
 ### 25.3 Handle .tart in didChange
 
-- [ ] [R2] Update signature tracker on `textDocument/didChange` for `.tart` files
-- [ ] Query dependency graph for dependents
-- [ ] Re-publish diagnostics for each dependent `.el` file
-- [ ] Verify: Changing `.tart` triggers re-check of dependent `.el`
+- [x] [R2] Update signature tracker on `textDocument/didChange` for `.tart` files
+- [x] Query dependency graph for dependents
+- [x] Re-publish diagnostics for each dependent `.el` file
+- [x] Verify: Changing `.tart` triggers re-check of dependent `.el`
 
 ### 25.4 Handle .tart in didClose
 
-- [ ] [R4] Remove `.tart` from signature tracker on `didClose`
-- [ ] Re-check dependents (they'll now read from disk)
-- [ ] Verify: Closing `.tart` falls back to disk version
+- [x] [R4] Remove `.tart` from signature tracker on `didClose`
+- [x] Re-check dependents (they'll now read from disk)
+- [x] Verify: Closing `.tart` falls back to disk version
 
 ### 25.5 Signature Loading Integration
 
-- [ ] [R3] Modify sig_loader to check signature tracker first
-- [ ] If `.tart` is open in LSP → use buffer contents
-- [ ] Else → read from disk (existing behavior)
-- [ ] Verify: Open `.tart` buffer contents used for type checking
+- [x] [R3] Modify sig_loader to check signature tracker first
+- [x] If `.tart` is open in LSP → use buffer contents
+- [x] Else → read from disk (existing behavior)
+- [x] Verify: Open `.tart` buffer contents used for type checking
 
 ### 25.6 Form Cache Invalidation
 
-- [ ] [R5] When `.tart` changes, invalidate form cache for dependent `.el` files
-- [ ] Use existing `config_hash` mechanism
-- [ ] Verify: Cached forms invalidated on signature change
+- [x] [R5] When `.tart` changes, invalidate form cache for dependent `.el` files
+- [x] Use existing `config_hash` mechanism
+- [x] Verify: Cached forms invalidated on signature change
 
 ### 25.7 Edge Cases
 
-- [ ] Handle `.tart` open but dependent `.el` not open (no action needed)
-- [ ] Handle `.tart` saved but buffer differs from disk (use buffer)
-- [ ] Handle multiple `.el` files depending on one `.tart`
-- [ ] Handle `.tart` parse errors (keep last valid state, show parse error)
-- [ ] Verify: All edge cases handled gracefully
+- [x] Handle `.tart` open but dependent `.el` not open (no action needed)
+- [x] Handle `.tart` saved but buffer differs from disk (use buffer)
+- [x] Handle multiple `.el` files depending on one `.tart`
+- [x] Handle `.tart` parse errors (keep last valid state, show parse error)
+- [x] Verify: All edge cases handled gracefully
 
 ---
 
@@ -852,10 +852,10 @@ Versioned Emacs core typings with auto-detection.
 
 ### 26.1 Emacs Version Detection
 
-- [ ] Create `lib/sig/emacs_version.ml` module
-- [ ] Run `emacs --version` and parse major.minor
-- [ ] Handle missing Emacs gracefully (use `latest/` with warning)
-- [ ] Verify: Version detection works for Emacs 29, 30, 31
+- [x] Create `lib/sig/emacs_version.ml` module
+- [x] Run `emacs --version` and parse major.minor
+- [x] Handle missing Emacs gracefully (use `latest/` with warning)
+- [x] Verify: Version detection works for Emacs 29, 30, 31
 
 ### 26.2 CLI Override Flag
 

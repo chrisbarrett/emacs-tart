@@ -402,8 +402,9 @@ Usage:
   tart lsp [OPTIONS]               Start LSP server
 
 Options:
-  --version    Print version and exit
-  --help, -h   Print this help message
+  --version              Print version and exit
+  --help, -h             Print this help message
+  --emacs-version VER    Use typings for Emacs version VER (e.g., 31.0)
 
 Eval options:
   <EXPR>       S-expression to evaluate
@@ -547,14 +548,43 @@ let () =
       else cmd_lsp ~log_level:!log_level !port
   (* Default: type-check files *)
   | files ->
-      (* Filter out --version and --help that might appear with files *)
-      let files, opts =
-        List.partition (fun s -> not (String.starts_with ~prefix:"-" s)) files
+      (* Parse check command options *)
+      let emacs_version = ref None in
+      let show_help = ref false in
+      let show_version = ref false in
+      let file_list = ref [] in
+      let rec parse_check_args = function
+        | [] -> ()
+        | "--help" :: _ | "-h" :: _ -> show_help := true
+        | "--version" :: _ | "-v" :: _ -> show_version := true
+        | "--emacs-version" :: v :: rest ->
+            (match Tart.Emacs_version.parse_version v with
+            | Some ver -> emacs_version := Some ver
+            | None ->
+                prerr_endline
+                  (Printf.sprintf "tart: invalid Emacs version '%s'" v);
+                prerr_endline "Expected format: MAJOR.MINOR (e.g., 31.0)";
+                exit 2);
+            parse_check_args rest
+        | "--emacs-version" :: [] ->
+            prerr_endline "tart: --emacs-version requires a version argument";
+            exit 2
+        | arg :: _ when String.starts_with ~prefix:"-" arg ->
+            prerr_endline ("tart: unknown option: " ^ arg);
+            exit 2
+        | file :: rest ->
+            file_list := !file_list @ [ file ];
+            parse_check_args rest
       in
-      if List.mem "--help" opts || List.mem "-h" opts then print_help ()
-      else if List.mem "--version" opts || List.mem "-v" opts then
-        print_version ()
-      else if opts <> [] then (
-        prerr_endline ("tart: unknown option: " ^ List.hd opts);
-        exit 2)
-      else cmd_check files
+      parse_check_args files;
+      if !show_help then print_help ()
+      else if !show_version then print_version ()
+      else (
+        (* Log the Emacs version being used *)
+        (match !emacs_version with
+        | Some ver ->
+            prerr_endline
+              (Printf.sprintf "[tart] Using Emacs version: %s"
+                 (Tart.Emacs_version.version_to_string ver))
+        | None -> ());
+        cmd_check !file_list)

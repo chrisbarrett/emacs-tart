@@ -43,6 +43,7 @@ module Sig_ast = Sig.Sig_ast
 module Sig_parser = Sig.Sig_parser
 module Sig_loader = Sig.Sig_loader
 module Search_path = Sig.Search_path
+module Emacs_version = Sig.Emacs_version
 
 module Rpc = Lsp.Rpc
 (** Re-export LSP modules *)
