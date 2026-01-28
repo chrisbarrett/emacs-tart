@@ -1010,6 +1010,72 @@ let test_load_editfns_tart () =
       | None -> Alcotest.fail "format not found in env"
       | Some _ -> ())
 
+(** Test that search.tart parses successfully (Spec 24 R5) *)
+let test_parse_search_tart () =
+  let path = Filename.concat typings_dir "emacs/31.0/c-core/search.tart" in
+  if not (Sys.file_exists path) then
+    Alcotest.fail ("search.tart not found at: " ^ path);
+  match Search_path.parse_signature_file path with
+  | None -> Alcotest.fail "search.tart failed to parse"
+  | Some sig_file ->
+      Alcotest.(check string) "module name" "search" sig_file.sig_module;
+      (* Should have declarations for search operations *)
+      Alcotest.(check bool)
+        "has declarations" true
+        (List.length sig_file.sig_decls > 20);
+      (* Check specific required functions from search.c *)
+      let has_defun name =
+        List.exists
+          (function Sig_ast.DDefun d -> d.defun_name = name | _ -> false)
+          sig_file.sig_decls
+      in
+      Alcotest.(check bool)
+        "has re-search-forward" true
+        (has_defun "re-search-forward");
+      Alcotest.(check bool)
+        "has re-search-backward" true
+        (has_defun "re-search-backward");
+      Alcotest.(check bool) "has looking-at" true (has_defun "looking-at");
+      Alcotest.(check bool) "has string-match" true (has_defun "string-match");
+      Alcotest.(check bool) "has match-string" true (has_defun "match-string");
+      Alcotest.(check bool)
+        "has match-beginning" true
+        (has_defun "match-beginning");
+      Alcotest.(check bool) "has replace-match" true (has_defun "replace-match")
+
+(** Test that search.tart can be loaded into type environment *)
+let test_load_search_tart () =
+  let c_core_dir = Filename.concat typings_dir "emacs/31.0/c-core" in
+  let sp = Search_path.of_dirs [ c_core_dir ] in
+  (* First check if the signature validates *)
+  let path = Filename.concat typings_dir "emacs/31.0/c-core/search.tart" in
+  (match Search_path.parse_signature_file path with
+  | None -> Alcotest.fail "search.tart failed to parse in load test"
+  | Some sig_file -> (
+      match Sig_loader.validate_signature sig_file with
+      | Ok () -> ()
+      | Error err ->
+          Alcotest.fail
+            ("search.tart validation failed: " ^ err.message ^ " at "
+            ^ Syntax.Location.show_span err.span)));
+  match
+    Search_path.load_module ~search_path:sp ~env:Type_env.empty "search"
+  with
+  | None -> Alcotest.fail "failed to load search module"
+  | Some env -> (
+      (* Check that re-search-forward is loaded *)
+      (match Type_env.lookup "re-search-forward" env with
+      | None -> Alcotest.fail "re-search-forward not found in env"
+      | Some _ -> ());
+      (* Check that match-string is loaded *)
+      (match Type_env.lookup "match-string" env with
+      | None -> Alcotest.fail "match-string not found in env"
+      | Some _ -> ());
+      (* Check that looking-at is loaded *)
+      match Type_env.lookup "looking-at" env with
+      | None -> Alcotest.fail "looking-at not found in env"
+      | Some _ -> ())
+
 let () =
   Alcotest.run "search_path"
     [
@@ -1092,5 +1158,7 @@ let () =
           Alcotest.test_case "load fileio.tart" `Quick test_load_fileio_tart;
           Alcotest.test_case "parse editfns.tart" `Quick test_parse_editfns_tart;
           Alcotest.test_case "load editfns.tart" `Quick test_load_editfns_tart;
+          Alcotest.test_case "parse search.tart" `Quick test_parse_search_tart;
+          Alcotest.test_case "load search.tart" `Quick test_load_search_tart;
         ] );
     ]
