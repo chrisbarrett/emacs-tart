@@ -91,3 +91,26 @@ let close_document (_graph : Dep_graph.t) ~(uri : string) : unit =
   (* Intentionally do nothing - the graph entry is kept.
      The file still exists on disk and may be opened again later. *)
   ignore uri
+
+(** {1 Invalidation Cascade} *)
+
+(** Get dependent URIs from a list of open document URIs.
+
+    Given a module ID and a list of open URIs, returns the URIs whose
+    corresponding modules depend on the given module (directly or transitively).
+*)
+let dependent_uris (graph : Dep_graph.t) ~(module_id : Dep_graph.module_id)
+    ~(open_uris : string list) : string list =
+  (* Get all transitive dependents *)
+  let dependent_ids = Dep_graph.dependents graph module_id in
+  (* Filter open URIs to those whose module ID is in the dependents list *)
+  List.filter
+    (fun uri ->
+      let filename = filename_of_uri uri in
+      let uri_module_id = module_id_of_filename filename in
+      List.mem uri_module_id dependent_ids)
+    open_uris
+
+(** Get module ID from a URI *)
+let module_id_of_uri (uri : string) : Dep_graph.module_id =
+  module_id_of_filename (filename_of_uri uri)

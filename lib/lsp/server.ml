@@ -376,7 +376,29 @@ let handle_did_change (server : t) (params : Yojson.Safe.t option) : unit =
                 ~text:doc.text
           | None -> ());
           (* Publish diagnostics for the changed document *)
-          publish_diagnostics server uri (Some version)
+          publish_diagnostics server uri (Some version);
+          (* Invalidation cascade: invalidate caches and re-check dependents *)
+          let module_id = Graph_tracker.module_id_of_uri uri in
+          let open_uris = Document.list_uris server.documents in
+          let dependent_uris =
+            Graph_tracker.dependent_uris server.dependency_graph ~module_id
+              ~open_uris
+          in
+          if dependent_uris <> [] then (
+            debug server
+              (Printf.sprintf "Invalidating %d dependents of %s"
+                 (List.length dependent_uris)
+                 module_id);
+            List.iter
+              (fun dep_uri ->
+                (* Invalidate the cache for this dependent *)
+                Form_cache.invalidate_document server.form_cache dep_uri;
+                (* Re-publish diagnostics *)
+                match Document.get_doc server.documents dep_uri with
+                | Some dep_doc ->
+                    publish_diagnostics server dep_uri (Some dep_doc.version)
+                | None -> ())
+              dependent_uris)
       | Error e ->
           info server (Printf.sprintf "Error applying changes to %s: %s" uri e))
 

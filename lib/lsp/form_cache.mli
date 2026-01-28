@@ -41,6 +41,13 @@ val create : unit -> t
 val remove_document : t -> string -> unit
 (** Remove a document's cache (call on textDocument/didClose) *)
 
+val invalidate_document : t -> string -> unit
+(** Invalidate all cached forms for a document.
+
+    Use this when a dependency changes to force re-checking. Unlike
+    [remove_document], this keeps the document cache entry but clears all cached
+    form results. *)
+
 (** {1 Incremental Type Checking} *)
 
 val check_with_cache :

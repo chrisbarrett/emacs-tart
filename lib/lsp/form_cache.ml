@@ -105,6 +105,13 @@ let config_hash ~(sibling_sig : string option) : int =
 (** Clear all cached forms (used when config changes) *)
 let invalidate_all_forms (dc : document_cache) : unit = Hashtbl.clear dc.forms
 
+(** Invalidate cache for a specific document URI (used for dependent
+    invalidation) *)
+let invalidate_document (cache : t) (uri : string) : unit =
+  match Hashtbl.find_opt cache uri with
+  | Some dc -> invalidate_all_forms dc
+  | None -> ()
+
 (** {1 Incremental Type Checking} *)
 
 type check_stats = {

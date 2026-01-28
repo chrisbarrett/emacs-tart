@@ -36,3 +36,21 @@ val close_document : Graph.Dependency_graph.t -> uri:string -> unit
 
     Per spec: keeps the graph entry because the file still exists on disk and
     other modules may depend on it. This is intentionally a no-op. *)
+
+(** {1 Invalidation Cascade} *)
+
+val dependent_uris :
+  Graph.Dependency_graph.t ->
+  module_id:Graph.Dependency_graph.module_id ->
+  open_uris:string list ->
+  string list
+(** Get dependent URIs from a list of open document URIs.
+
+    Given a module ID and a list of open URIs, returns the URIs whose
+    corresponding modules depend on the given module (directly or transitively).
+    Use this to implement the invalidation cascade: when module X changes, find
+    all open documents that depend on X and invalidate their caches. *)
+
+val module_id_of_uri : string -> Graph.Dependency_graph.module_id
+(** Get module ID from a URI. Combines [filename_of_uri] and
+    [module_id_of_filename]. *)

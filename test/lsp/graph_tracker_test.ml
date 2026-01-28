@@ -137,6 +137,70 @@ let test_reverse_index () =
   Alcotest.(check bool) "baz depends on bar" true (List.mem "baz" dependents)
 
 (* =============================================================================
+   Invalidation Cascade Tests
+   ============================================================================= *)
+
+let test_dependent_uris () =
+  let server = make_test_server () in
+  let graph = Tart.Server.dependency_graph server in
+  (* Set up dependency: foo depends on bar *)
+  Lsp.Graph_tracker.update_document graph ~uri:"file:///test/foo.el"
+    ~text:"(require 'bar)";
+  Lsp.Graph_tracker.update_document graph ~uri:"file:///test/bar.el" ~text:"";
+  (* foo.el and bar.el are open *)
+  let open_uris = [ "file:///test/foo.el"; "file:///test/bar.el" ] in
+  (* When bar changes, foo should be a dependent *)
+  let deps =
+    Lsp.Graph_tracker.dependent_uris graph ~module_id:"bar" ~open_uris
+  in
+  Alcotest.(check bool)
+    "foo is dependent" true
+    (List.mem "file:///test/foo.el" deps);
+  Alcotest.(check bool)
+    "bar is not self-dependent" false
+    (List.mem "file:///test/bar.el" deps)
+
+let test_dependent_uris_transitive () =
+  let server = make_test_server () in
+  let graph = Tart.Server.dependency_graph server in
+  (* Set up transitive dependency: foo -> bar -> baz *)
+  Lsp.Graph_tracker.update_document graph ~uri:"file:///test/foo.el"
+    ~text:"(require 'bar)";
+  Lsp.Graph_tracker.update_document graph ~uri:"file:///test/bar.el"
+    ~text:"(require 'baz)";
+  Lsp.Graph_tracker.update_document graph ~uri:"file:///test/baz.el" ~text:"";
+  let open_uris =
+    [ "file:///test/foo.el"; "file:///test/bar.el"; "file:///test/baz.el" ]
+  in
+  (* When baz changes, both foo and bar should be dependents *)
+  let deps =
+    Lsp.Graph_tracker.dependent_uris graph ~module_id:"baz" ~open_uris
+  in
+  Alcotest.(check bool)
+    "bar is direct dependent" true
+    (List.mem "file:///test/bar.el" deps);
+  Alcotest.(check bool)
+    "foo is transitive dependent" true
+    (List.mem "file:///test/foo.el" deps)
+
+let test_dependent_uris_only_open () =
+  let server = make_test_server () in
+  let graph = Tart.Server.dependency_graph server in
+  (* foo depends on bar, but foo is not in open_uris *)
+  Lsp.Graph_tracker.update_document graph ~uri:"file:///test/foo.el"
+    ~text:"(require 'bar)";
+  Lsp.Graph_tracker.update_document graph ~uri:"file:///test/bar.el" ~text:"";
+  let open_uris = [ "file:///test/bar.el" ] in
+  let deps =
+    Lsp.Graph_tracker.dependent_uris graph ~module_id:"bar" ~open_uris
+  in
+  Alcotest.(check int) "no open dependents" 0 (List.length deps)
+
+let test_module_id_of_uri () =
+  let id = Lsp.Graph_tracker.module_id_of_uri "file:///test/foo.el" in
+  Alcotest.(check string) "from uri" "foo" id
+
+(* =============================================================================
    Test Suite
    ============================================================================= *)
 
@@ -151,6 +215,7 @@ let () =
           Alcotest.test_case "filename of uri" `Quick test_filename_of_uri;
           Alcotest.test_case "filename of non-file uri" `Quick
             test_filename_of_uri_non_file;
+          Alcotest.test_case "module id of uri" `Quick test_module_id_of_uri;
         ] );
       ( "graph updates",
         [
@@ -164,5 +229,13 @@ let () =
           Alcotest.test_case "autoload edges" `Quick test_autoload_edges;
           Alcotest.test_case "include edges" `Quick test_include_edges;
           Alcotest.test_case "reverse index" `Quick test_reverse_index;
+        ] );
+      ( "invalidation cascade",
+        [
+          Alcotest.test_case "dependent uris" `Quick test_dependent_uris;
+          Alcotest.test_case "transitive dependents" `Quick
+            test_dependent_uris_transitive;
+          Alcotest.test_case "only open uris" `Quick
+            test_dependent_uris_only_open;
         ] );
     ]
