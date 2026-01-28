@@ -1,0 +1,110 @@
+;;; process.tart --- Type signatures for Emacs process.c primitives
+
+;; Opaque types
+(type process)
+(type buffer)
+(type marker)
+
+;; Process predicates
+(defun processp (any) -> bool)
+(defun process-live-p (process) -> bool)
+
+;; Process list
+(defun process-list () -> (list process))
+(defun get-process ((string | process)) -> (process | nil))
+(defun get-buffer-process ((buffer | string)) -> (process | nil))
+
+;; Process creation - synchronous
+(defun call-process (string &optional (string | nil) any bool &rest string) -> int)
+(defun call-process-region (any any string &optional bool any bool &rest string) -> int)
+
+;; Process creation - asynchronous
+(defun start-process (string (buffer | string | nil) string &rest string) -> process)
+(defun make-process (&rest any) -> process)
+
+;; Process creation - pipes
+(defun make-pipe-process (&rest any) -> process)
+
+;; Process information
+(defun process-name (process) -> string)
+(defun process-command (process) -> (list string))
+(defun process-id (process) -> (int | nil))
+(defun process-status ((process | string)) -> symbol)
+(defun process-exit-status (process) -> int)
+(defun process-type (process) -> symbol)
+(defun process-contact (process &optional symbol) -> any)
+(defun process-plist (process) -> (list any))
+(defun set-process-plist (process (list any)) -> (list any))
+(defun process-get (process symbol) -> any)
+(defun process-put (process symbol any) -> any)
+
+;; Process buffer
+(defun process-buffer (process) -> (buffer | nil))
+(defun set-process-buffer (process (buffer | nil)) -> (buffer | nil))
+(defun process-mark (process) -> marker)
+
+;; Process control
+(defun delete-process (&optional (process | string)) -> nil)
+(defun interrupt-process (&optional (process | string) any) -> nil)
+(defun kill-process (&optional (process | string) any) -> nil)
+(defun quit-process (&optional (process | string) any) -> nil)
+(defun stop-process (&optional (process | string) any) -> nil)
+(defun continue-process (&optional (process | string) any) -> nil)
+(defun signal-process ((process | int) (int | symbol)) -> bool)
+
+;; Process input
+(defun process-send-string ((process | string) string) -> nil)
+(defun process-send-region ((process | string) (int | marker) (int | marker)) -> nil)
+(defun process-send-eof (&optional (process | string)) -> (process | nil))
+
+;; Process output
+(defun accept-process-output (&optional process (int | float | nil) (int | nil) bool) -> bool)
+(defun waiting-for-user-input-p () -> bool)
+
+;; Process filter and sentinel
+(defun process-filter (process) -> (any | nil))
+(defun set-process-filter (process (any | nil)) -> (any | nil))
+(defun process-sentinel (process) -> (any | nil))
+(defun set-process-sentinel (process (any | nil)) -> (any | nil))
+
+;; Process query on exit
+(defun process-query-on-exit-flag (process) -> bool)
+(defun set-process-query-on-exit-flag (process bool) -> bool)
+
+;; Process coding system
+(defun process-coding-system (process) -> (cons symbol symbol))
+(defun set-process-coding-system (process &optional symbol symbol) -> nil)
+
+;; Process filter multibyte
+(defun process-filter-multibyte-p (process) -> bool)
+(defun set-process-filter-multibyte (process bool) -> bool)
+
+;; Process datagram
+(defun process-datagram-address (process) -> (string | nil))
+(defun set-process-datagram-address (process string) -> nil)
+
+;; Network processes
+(defun make-network-process (&rest any) -> process)
+(defun network-interface-list (&optional bool bool) -> (list any))
+(defun network-interface-info (string) -> (list any))
+(defun format-network-address (any &optional bool) -> (string | nil))
+
+;; Process threads
+(defun process-thread (process) -> any)
+(defun set-process-thread (process any) -> any)
+
+;; Process window size
+(defun set-process-window-size (process int int) -> bool)
+
+;; Serial processes
+(defun make-serial-process (&rest any) -> process)
+(defun serial-process-configure (&rest any) -> nil)
+
+;; Misc
+(defun process-running-child-p (&optional process) -> (int | bool))
+(defun process-tty-name (process) -> (string | nil))
+(defun process-connection-type () -> bool)
+(defun list-system-processes () -> (list int))
+(defun process-attributes (int) -> (list any))
+(defun num-processors (&optional bool) -> int)
+(defun signal-names () -> (list (cons string int)))

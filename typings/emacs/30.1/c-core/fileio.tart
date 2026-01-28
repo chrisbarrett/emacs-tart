@@ -1,0 +1,123 @@
+;;; fileio.tart --- Type signatures for Emacs fileio.c primitives
+
+;; Opaque types
+(type buffer)
+
+;; File name components
+(defun file-name-directory (string) -> (string | nil))
+(defun file-name-nondirectory (string) -> string)
+(defun file-name-as-directory (string) -> string)
+(defun directory-file-name (string) -> string)
+(defun file-name-sans-versions (string &optional bool) -> string)
+(defun file-name-extension (string &optional bool) -> (string | nil))
+(defun file-name-sans-extension (string) -> string)
+(defun file-name-base (string) -> string)
+
+;; File name expansion
+(defun expand-file-name (string &optional string) -> string)
+(defun substitute-in-file-name (string) -> string)
+(defun file-name-absolute-p (string) -> bool)
+(defun file-relative-name (string &optional string) -> string)
+(defun file-name-concat (string &rest string) -> string)
+
+;; Temporary files
+(defun make-temp-name (string) -> string)
+(defun make-temp-file (string &optional bool string string) -> string)
+
+;; File existence and attributes
+(defun file-exists-p (string) -> bool)
+(defun file-readable-p (string) -> bool)
+(defun file-writable-p (string) -> bool)
+(defun file-executable-p (string) -> bool)
+(defun file-accessible-directory-p (string) -> bool)
+(defun file-regular-p (string) -> bool)
+(defun file-directory-p (string) -> bool)
+(defun file-symlink-p (string) -> (string | nil))
+(defun file-name-case-insensitive-p (string) -> bool)
+(defun file-locked-p (string) -> any)
+
+;; File attributes and info
+(defun file-attributes (string &optional symbol) -> (list any))
+(defun file-modes (string &optional bool) -> (int | nil))
+(defun file-nlinks (string) -> (int | nil))
+(defun file-newer-than-file-p (string string) -> bool)
+(defun file-equal-p (string string) -> bool)
+(defun file-in-directory-p (string string) -> bool)
+(defun file-acl (string) -> (string | nil))
+(defun file-selinux-context (string) -> (list any))
+
+;; Set file attributes
+(defun set-file-modes (string int &optional bool) -> nil)
+(defun set-file-acl (string (string | nil)) -> bool)
+(defun set-file-selinux-context (string (list any)) -> bool)
+(defun set-file-times (string &optional any bool) -> bool)
+
+;; Default file modes
+(defun default-file-modes () -> int)
+(defun set-default-file-modes (int) -> nil)
+
+;; File truename
+(defun file-truename (string &optional any) -> string)
+(defun file-chase-links (string &optional int) -> string)
+
+;; File operations
+(defun rename-file (string string &optional bool) -> nil)
+(defun copy-file (string string &optional bool bool bool bool) -> nil)
+(defun delete-file (string &optional bool) -> nil)
+(defun add-name-to-file (string string &optional bool) -> nil)
+(defun make-symbolic-link (string string &optional bool) -> nil)
+
+;; Directory operations
+(defun make-directory (string &optional bool) -> nil)
+(defun delete-directory (string &optional bool bool) -> nil)
+(defun directory-files (string &optional bool string bool bool) -> (list string))
+(defun directory-files-and-attributes (string &optional bool string bool symbol bool) -> (list any))
+
+;; Reading file contents
+(defun insert-file-contents (string &optional bool int int bool) -> (list any))
+(defun insert-file-contents-literally (string &optional bool int int bool) -> (list any))
+
+;; Writing file contents
+(defun write-region (any any string &optional any any any any) -> nil)
+(defun append-to-file (any any string) -> nil)
+(defun verify-visited-file-modtime (&optional buffer) -> bool)
+(defun set-visited-file-modtime (&optional any) -> nil)
+(defun visited-file-modtime () -> any)
+
+;; File visiting
+(defun find-file-noselect (string &optional bool bool string) -> buffer)
+(defun find-file-name-handler (string symbol) -> any)
+(defun file-local-copy (string) -> (string | nil))
+
+;; Locking
+(defun lock-buffer (&optional string) -> nil)
+(defun unlock-buffer () -> nil)
+
+;; File name completion
+(defun file-name-completion (string string &optional any) -> (string | bool | nil))
+(defun file-name-all-completions (string string) -> (list string))
+
+;; Unhandled file names
+(defun unhandled-file-name-directory (string) -> (string | nil))
+
+;; File system info
+(defun file-system-info (string) -> (list any))
+
+;; Car-less equivalents
+(defun car-less-than-car (any any) -> bool)
+
+;; Recent files / backup
+(defun recent-auto-save-p () -> bool)
+(defun set-buffer-auto-saved () -> nil)
+(defun clear-buffer-auto-save-failure () -> nil)
+(defun read-file-name-internal (string any any) -> any)
+
+;; Unix-specific
+(defun unix-sync () -> nil)
+(defun file-newer-than-file-p (string string) -> bool)
+
+;; DOS-specific file operations (included for completeness)
+(defun dos-8+3-filename (string) -> string)
+
+;; Network file checks
+(defun file-remote-p (string &optional symbol bool) -> (string | nil))

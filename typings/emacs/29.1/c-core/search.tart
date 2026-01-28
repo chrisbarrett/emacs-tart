@@ -1,0 +1,59 @@
+;;; search.tart --- Type signatures for Emacs search.c primitives
+
+;; String search functions
+(defun search-forward (string &optional (int | nil) any int) -> (int | nil))
+(defun search-backward (string &optional (int | nil) any int) -> (int | nil))
+(defun word-search-forward (string &optional (int | nil) any int) -> (int | nil))
+(defun word-search-backward (string &optional (int | nil) any int) -> (int | nil))
+(defun word-search-forward-lax (string &optional (int | nil) any int) -> (int | nil))
+(defun word-search-backward-lax (string &optional (int | nil) any int) -> (int | nil))
+
+;; Regular expression search functions
+(defun re-search-forward (string &optional (int | nil) any int) -> (int | nil))
+(defun re-search-backward (string &optional (int | nil) any int) -> (int | nil))
+(defun posix-search-forward (string &optional (int | nil) any int) -> (int | nil))
+(defun posix-search-backward (string &optional (int | nil) any int) -> (int | nil))
+
+;; Looking functions
+(defun looking-at (string) -> bool)
+(defun looking-at-p (string) -> bool)
+(defun looking-back (string &optional (int | nil) bool) -> bool)
+(defun posix-looking-at (string) -> bool)
+
+;; String matching
+(defun string-match (string string &optional int) -> (int | nil))
+(defun string-match-p (string string &optional int) -> (int | nil))
+(defun posix-string-match (string string &optional int) -> (int | nil))
+
+;; Match data access
+(defun match-beginning (int) -> (int | nil))
+(defun match-end (int) -> (int | nil))
+(defun match-string (int &optional string) -> (string | nil))
+(defun match-string-no-properties (int &optional string) -> (string | nil))
+(defun match-data (&optional bool bool) -> (list any))
+(defun set-match-data ((list any) &optional bool) -> nil)
+
+;; Replacement
+(defun replace-match (string &optional bool bool string int) -> nil)
+
+;; Regexp compilation
+(defun regexp-quote (string) -> string)
+(defun regexp-opt ((list string) &optional symbol) -> string)
+(defun regexp-opt-depth (string) -> int)
+
+;; Case folding
+(defun upcase-char (int) -> int)
+(defun downcase-char (int) -> int)
+
+;; Skip functions
+(defun skip-chars-forward (string &optional (int | nil)) -> int)
+(defun skip-chars-backward (string &optional (int | nil)) -> int)
+(defun skip-syntax-forward (string &optional (int | nil)) -> int)
+(defun skip-syntax-backward (string &optional (int | nil)) -> int)
+
+;; Syntax table matching
+(defun syntax-after (int) -> (list any))
+(defun syntax-class (any) -> int)
+
+;; Newline cache
+(defun newline-cache-check (any int int) -> any)

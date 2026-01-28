@@ -1,0 +1,39 @@
+;;; alloc.tart --- Type signatures for Emacs alloc.c primitives
+
+;; Opaque types for Emacs objects
+(type marker)
+(type finalizer)
+
+;; Cons cell and list construction
+(defun cons [a b] (a b) -> (pair a b))
+(defun list [a] (&rest a) -> (list a))
+
+;; Vector construction
+(defun vector (&rest any) -> (vector any))
+(defun bool-vector (&rest bool) -> any)
+
+;; Record construction (for cl-defstruct and similar)
+(defun record (symbol &rest any) -> any)
+(defun make-record (symbol int any) -> any)
+
+;; Byte-code function construction
+(defun make-byte-code (any string (vector any) int &optional string any &rest any) -> any)
+
+;; Symbol construction
+(defun make-symbol (string) -> symbol)
+
+;; Marker construction
+(defun make-marker () -> marker)
+(defun copy-marker (&optional (marker | int) any) -> marker)
+
+;; Finalizer construction
+(defun make-finalizer ((() -> any)) -> finalizer)
+
+;; Garbage collection
+(defun garbage-collect () -> (list any))
+(defun garbage-collect-maybe (int) -> nil)
+(defun memory-use-counts () -> (list int))
+(defun memory-info () -> (list int))
+
+;; Memory statistics
+(defun memory-full () -> bool)

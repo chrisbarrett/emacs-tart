@@ -1,0 +1,114 @@
+;;; frame.tart --- Type signatures for Emacs frame.c primitives
+
+;; Opaque types
+(type frame)
+(type window)
+(type buffer)
+
+;; Type predicates
+(defun framep (any) -> (symbol | nil))
+(defun frame-live-p (any) -> bool)
+
+;; Frame list
+(defun frame-list () -> (list frame))
+(defun visible-frame-list () -> (list frame))
+
+;; Selected frame
+(defun selected-frame () -> frame)
+(defun select-frame (frame &optional bool) -> frame)
+
+;; Frame navigation
+(defun next-frame (&optional frame any) -> frame)
+(defun previous-frame (&optional frame any) -> frame)
+
+;; Frame creation and deletion
+(defun make-frame (&optional (list (cons symbol any))) -> frame)
+(defun make-terminal-frame ((list (cons symbol any))) -> frame)
+(defun delete-frame (&optional frame bool) -> nil)
+
+;; Frame parameters
+(defun frame-parameters (&optional frame) -> (list (cons symbol any)))
+(defun frame-parameter (frame symbol) -> any)
+(defun modify-frame-parameters (frame (list (cons symbol any))) -> nil)
+(defun set-frame-parameter (frame symbol any) -> nil)
+
+;; Frame dimensions (character units)
+(defun frame-height (&optional frame) -> int)
+(defun frame-width (&optional frame) -> int)
+(defun set-frame-height (frame int &optional bool bool) -> nil)
+(defun set-frame-width (frame int &optional bool bool) -> nil)
+(defun set-frame-size (frame int int &optional bool) -> nil)
+
+;; Frame dimensions (pixel units)
+(defun frame-pixel-height (&optional frame) -> int)
+(defun frame-pixel-width (&optional frame) -> int)
+(defun frame-text-height (&optional frame) -> int)
+(defun frame-text-width (&optional frame) -> int)
+(defun frame-inner-width (&optional frame) -> int)
+(defun frame-inner-height (&optional frame) -> int)
+(defun frame-native-width (&optional frame) -> int)
+(defun frame-native-height (&optional frame) -> int)
+
+;; Frame character dimensions
+(defun frame-char-height (&optional frame) -> int)
+(defun frame-char-width (&optional frame) -> int)
+
+;; Frame position
+(defun frame-position (&optional frame) -> (cons int int))
+(defun set-frame-position (frame int int) -> nil)
+
+;; Frame border widths
+(defun frame-internal-border-width (&optional frame) -> int)
+(defun frame-child-frame-border-width (&optional frame) -> (int | nil))
+(defun frame-fringe-width (&optional frame) -> int)
+(defun frame-scroll-bar-width (&optional frame) -> int)
+(defun frame-scroll-bar-height (&optional frame) -> int)
+
+;; Frame visibility
+(defun frame-visible-p (frame) -> (bool | symbol))
+(defun make-frame-visible (&optional frame) -> frame)
+(defun make-frame-invisible (&optional frame bool) -> nil)
+(defun iconify-frame (&optional frame) -> nil)
+
+;; Frame stacking
+(defun raise-frame (&optional frame) -> nil)
+(defun lower-frame (&optional frame) -> nil)
+
+;; Parent/child frames
+(defun frame-parent (&optional frame) -> (frame | nil))
+(defun frame-ancestor-p (frame frame) -> bool)
+
+;; Focus and input
+(defun redirect-frame-focus (frame &optional (frame | nil)) -> nil)
+(defun frame-focus (frame) -> (frame | nil))
+
+;; Window system
+(defun window-system (&optional frame) -> (symbol | nil))
+(defun frame-terminal (&optional frame) -> any)
+
+;; Frame configuration
+(defun current-frame-configuration () -> any)
+(defun set-frame-configuration (any &optional bool) -> nil)
+
+;; Mouse position
+(defun mouse-position () -> (cons frame (cons (int | nil) (int | nil))))
+(defun mouse-pixel-position () -> (cons frame (cons (int | nil) (int | nil))))
+(defun set-mouse-position (frame int int) -> nil)
+(defun set-mouse-pixel-position (frame int int) -> nil)
+
+;; Frame windows
+(defun frame-first-window (&optional (frame | window)) -> window)
+(defun frame-root-window (&optional (frame | window)) -> window)
+(defun frame-selected-window (&optional (frame | window)) -> window)
+(defun set-frame-selected-window ((frame | window) window &optional bool) -> window)
+
+;; Minibuffer
+(defun minibuffer-window (&optional (frame | window)) -> window)
+
+;; Display and terminal info
+(defun frame-display (&optional frame) -> string)
+
+;; Miscellaneous
+(defun frame-pointer-visible-p (&optional frame) -> bool)
+(defun frame-windows-min-size (&optional frame bool bool bool) -> int)
+(defun frame-id (frame) -> (int | nil))

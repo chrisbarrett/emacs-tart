@@ -1,0 +1,47 @@
+;;; print.tart --- Type signatures for Emacs print.c primitives
+
+;; Opaque types
+(type buffer)
+(type marker)
+
+;; Basic printing
+(defun prin1 (any &optional any bool) -> any)
+(defun princ (any &optional any) -> any)
+(defun print (any &optional any bool) -> any)
+(defun terpri (&optional any bool) -> bool)
+
+;; Print to string
+(defun prin1-to-string (any &optional bool bool) -> string)
+(defun format (string &rest any) -> string)
+(defun format-message (string &rest any) -> string)
+
+;; Message output
+(defun message (string &rest any) -> string)
+(defun message-box (string &rest any) -> string)
+(defun message-or-box (string &rest any) -> string)
+(defun current-message () -> (string | nil))
+
+;; Output stream control
+(defun external-debugging-output (int) -> nil)
+(defun redirect-debugging-output (string &optional any) -> nil)
+
+;; Print readably
+(defun prin1-char (int &optional any) -> nil)
+
+;; Write char
+(defun write-char (int &optional any) -> int)
+
+;; Error message helpers
+(defun error-message-string (any) -> string)
+
+;; Backquote printing
+(defun backtrace-string (any) -> string)
+
+;; Print circle
+(defun with-output-to-temp-buffer (string any &rest any) -> any)
+
+;; Object address (debugging)
+(defun object-address (any) -> int)
+
+;; Hash notation
+(defun hash-to-list (any) -> (list any))

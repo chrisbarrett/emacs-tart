@@ -1,0 +1,49 @@
+;;; eval.tart --- Type signatures for Emacs eval.c primitives
+
+;; Core evaluation functions
+(defun eval (any &optional any) -> any)
+(defun funcall (any &rest any) -> any)
+(defun apply (any &rest any) -> any)
+(defun run-hooks (&rest symbol) -> nil)
+(defun run-hook-with-args (symbol &rest any) -> any)
+(defun run-hook-with-args-until-failure (symbol &rest any) -> any)
+(defun run-hook-with-args-until-success (symbol &rest any) -> any)
+
+;; Function predicates
+(defun functionp (any) -> bool)
+(defun commandp (any &optional bool) -> bool)
+(defun autoload (symbol string &optional any any any) -> any)
+
+;; Macro expansion
+(defun macroexpand (any &optional any) -> any)
+(defun macroexpand-1 (any &optional any) -> any)
+
+;; Catch and throw - catch is a special form, but throw is a function
+(defun throw (any any) -> nil)
+
+;; Error signaling
+(defun signal (symbol any) -> nil)
+(defun error (string &rest any) -> nil)
+(defun user-error (string &rest any) -> nil)
+
+;; Dynamic scope
+(defun special-variable-p (symbol) -> bool)
+
+;; Backtrace and debugging
+(defun backtrace () -> nil)
+(defun backtrace-debug (int bool) -> nil)
+(defun backtrace-frame (int &optional any) -> any)
+(defun backtrace-frames (&optional any) -> (list any))
+(defun mapbacktrace (((any any any any) -> any) &optional any) -> nil)
+
+;; Variable binding
+(defun defvaralias (symbol symbol &optional string) -> symbol)
+(defun default-toplevel-value (symbol) -> any)
+(defun set-default-toplevel-value (symbol any) -> nil)
+
+;; Delayed messages
+(defun funcall-with-delayed-message (num string any &rest any) -> any)
+
+;; Interactive specification
+(defun interactive-form (any) -> any)
+(defun fetch-bytecode (any) -> any)

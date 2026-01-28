@@ -1,0 +1,74 @@
+;;; buffer.tart --- Type signatures for Emacs buffer.c primitives
+
+;; Buffer type (opaque)
+(type buffer)
+
+;; Current buffer operations
+(defun current-buffer () -> buffer)
+(defun set-buffer ((buffer | string)) -> buffer)
+
+;; Buffer queries
+(defun buffer-live-p (any) -> bool)
+(defun bufferp (any) -> bool)
+(defun get-buffer ((buffer | string)) -> (buffer | nil))
+(defun get-buffer-create ((buffer | string) &optional bool) -> buffer)
+(defun get-file-buffer (string) -> (buffer | nil))
+
+;; Buffer properties
+(defun buffer-name (&optional buffer) -> (string | nil))
+(defun buffer-file-name (&optional buffer) -> (string | nil))
+(defun buffer-base-buffer (&optional buffer) -> (buffer | nil))
+(defun buffer-size (&optional buffer) -> int)
+
+;; Buffer list
+(defun buffer-list (&optional any) -> (list buffer))
+(defun other-buffer (&optional buffer bool any) -> buffer)
+
+;; Buffer modification tracking
+(defun buffer-modified-p (&optional buffer) -> bool)
+(defun set-buffer-modified-p (bool) -> bool)
+(defun restore-buffer-modified-p (bool) -> nil)
+(defun buffer-modified-tick (&optional buffer) -> int)
+(defun buffer-chars-modified-tick (&optional buffer) -> int)
+
+;; Buffer local variables
+(defun buffer-local-value (symbol buffer) -> any)
+(defun buffer-local-variables (&optional buffer) -> (list any))
+(defun local-variable-p (symbol &optional buffer) -> bool)
+(defun local-variable-if-set-p (symbol &optional buffer) -> bool)
+
+;; Make buffer local
+(defun make-local-variable (symbol) -> symbol)
+(defun make-variable-buffer-local (symbol) -> symbol)
+(defun kill-local-variable (symbol) -> symbol)
+(defun kill-all-local-variables (&optional bool) -> nil)
+
+;; Buffer creation and naming
+(defun generate-new-buffer-name (string &optional string) -> string)
+(defun rename-buffer (string &optional bool) -> string)
+(defun make-indirect-buffer (buffer string &optional bool any) -> buffer)
+
+;; Buffer management
+(defun kill-buffer (&optional (buffer | string)) -> bool)
+(defun bury-buffer (&optional (buffer | string)) -> nil)
+(defun unbury-buffer () -> buffer)
+(defun buffer-enable-undo (&optional buffer) -> nil)
+(defun buffer-disable-undo (&optional buffer) -> buffer)
+
+;; Buffer read-only
+(defun barf-if-buffer-read-only (&optional int) -> nil)
+
+;; Buffer comparisons
+(defun buffer-hash (&optional buffer) -> string)
+(defun buffer-swap-text (buffer) -> nil)
+
+;; Mode line
+(defun force-mode-line-update (&optional bool) -> bool)
+
+;; Overlay support
+(defun overlay-buffer (any) -> (buffer | nil))
+
+;; Narrowing
+(defun narrow-to-region (int int) -> nil)
+(defun widen () -> nil)
+(defun buffer-narrowed-p (&optional buffer) -> bool)
