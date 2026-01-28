@@ -815,6 +815,69 @@ let test_load_window_tart () =
       | None -> Alcotest.fail "delete-window not found in env"
       | Some _ -> ())
 
+(** Test that frame.tart parses successfully (Spec 24 R5) *)
+let test_parse_frame_tart () =
+  let path = Filename.concat typings_dir "emacs/31.0/c-core/frame.tart" in
+  if not (Sys.file_exists path) then
+    Alcotest.fail ("frame.tart not found at: " ^ path);
+  match Search_path.parse_signature_file path with
+  | None -> Alcotest.fail "frame.tart failed to parse"
+  | Some sig_file ->
+      Alcotest.(check string) "module name" "frame" sig_file.sig_module;
+      (* Should have declarations for frame operations *)
+      Alcotest.(check bool)
+        "has declarations" true
+        (List.length sig_file.sig_decls > 30);
+      (* Check specific required functions from frame.c *)
+      let has_defun name =
+        List.exists
+          (function Sig_ast.DDefun d -> d.defun_name = name | _ -> false)
+          sig_file.sig_decls
+      in
+      Alcotest.(check bool)
+        "has selected-frame" true
+        (has_defun "selected-frame");
+      Alcotest.(check bool) "has select-frame" true (has_defun "select-frame");
+      Alcotest.(check bool) "has make-frame" true (has_defun "make-frame");
+      Alcotest.(check bool) "has delete-frame" true (has_defun "delete-frame");
+      Alcotest.(check bool) "has frame-list" true (has_defun "frame-list");
+      Alcotest.(check bool)
+        "has frame-parameters" true
+        (has_defun "frame-parameters");
+      Alcotest.(check bool) "has raise-frame" true (has_defun "raise-frame");
+      Alcotest.(check bool) "has frame-parent" true (has_defun "frame-parent")
+
+(** Test that frame.tart can be loaded into type environment *)
+let test_load_frame_tart () =
+  let c_core_dir = Filename.concat typings_dir "emacs/31.0/c-core" in
+  let sp = Search_path.of_dirs [ c_core_dir ] in
+  (* First check if the signature validates *)
+  let path = Filename.concat typings_dir "emacs/31.0/c-core/frame.tart" in
+  (match Search_path.parse_signature_file path with
+  | None -> Alcotest.fail "frame.tart failed to parse in load test"
+  | Some sig_file -> (
+      match Sig_loader.validate_signature sig_file with
+      | Ok () -> ()
+      | Error err ->
+          Alcotest.fail
+            ("frame.tart validation failed: " ^ err.message ^ " at "
+            ^ Syntax.Location.show_span err.span)));
+  match Search_path.load_module ~search_path:sp ~env:Type_env.empty "frame" with
+  | None -> Alcotest.fail "failed to load frame module"
+  | Some env -> (
+      (* Check that selected-frame is loaded *)
+      (match Type_env.lookup "selected-frame" env with
+      | None -> Alcotest.fail "selected-frame not found in env"
+      | Some _ -> ());
+      (* Check that make-frame is loaded *)
+      (match Type_env.lookup "make-frame" env with
+      | None -> Alcotest.fail "make-frame not found in env"
+      | Some _ -> ());
+      (* Check that delete-frame is loaded *)
+      match Type_env.lookup "delete-frame" env with
+      | None -> Alcotest.fail "delete-frame not found in env"
+      | Some _ -> ())
+
 let () =
   Alcotest.run "search_path"
     [
@@ -891,5 +954,7 @@ let () =
           Alcotest.test_case "load buffer.tart" `Quick test_load_buffer_tart;
           Alcotest.test_case "parse window.tart" `Quick test_parse_window_tart;
           Alcotest.test_case "load window.tart" `Quick test_load_window_tart;
+          Alcotest.test_case "parse frame.tart" `Quick test_parse_frame_tart;
+          Alcotest.test_case "load frame.tart" `Quick test_load_frame_tart;
         ] );
     ]
