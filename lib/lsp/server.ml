@@ -196,8 +196,11 @@ let default_module_config () : Typing.Module_check.config =
   | None -> config
 
 (** Try to read the content of a sibling .tart file for cache invalidation.
-    Returns None if the file doesn't exist. *)
-let read_sibling_sig_content (filename : string) : string option =
+
+    Checks the signature tracker first (for open buffers), then falls back to
+    disk. Returns None if the file doesn't exist in either place. *)
+let read_sibling_sig_content ~(sig_tracker : Signature_tracker.t)
+    (filename : string) : string option =
   let dir = Filename.dirname filename in
   let basename = Filename.basename filename in
   let module_name =
@@ -206,14 +209,19 @@ let read_sibling_sig_content (filename : string) : string option =
     else basename
   in
   let tart_path = Filename.concat dir (module_name ^ ".tart") in
-  if Sys.file_exists tart_path then
-    try
-      let ic = In_channel.open_text tart_path in
-      let content = In_channel.input_all ic in
-      In_channel.close ic;
-      Some content
-    with _ -> None
-  else None
+  (* Check signature tracker first (R3: prefer buffer over disk) *)
+  match Signature_tracker.get_by_path sig_tracker tart_path with
+  | Some content -> Some content
+  | None ->
+      (* Fall back to disk *)
+      if Sys.file_exists tart_path then
+        try
+          let ic = In_channel.open_text tart_path in
+          let content = In_channel.input_all ic in
+          In_channel.close ic;
+          Some content
+        with _ -> None
+      else None
 
 (** Type-check a document and return LSP diagnostics. Returns parse errors if
     parsing fails, otherwise type errors.
@@ -223,7 +231,8 @@ let read_sibling_sig_content (filename : string) : string option =
     - Load required modules from the search path
     - Verify implementations match signatures
     - Cache unchanged forms for incremental updates *)
-let check_document ~(cache : Form_cache.t) (uri : string) (text : string) :
+let check_document ~(cache : Form_cache.t) ~(sig_tracker : Signature_tracker.t)
+    (uri : string) (text : string) :
     Protocol.diagnostic list * Form_cache.check_stats option =
   let filename = filename_of_uri uri in
   let parse_result = Syntax.Read.parse_string ~filename text in
@@ -236,7 +245,9 @@ let check_document ~(cache : Form_cache.t) (uri : string) (text : string) :
     if parse_result.sexps = [] then ([], None)
     else
       let config = default_module_config () in
-      let sibling_sig_content = read_sibling_sig_content filename in
+      let sibling_sig_content =
+        read_sibling_sig_content ~sig_tracker filename
+      in
       let check_result, stats =
         Form_cache.check_with_cache ~cache ~config ~filename ~uri
           ~sibling_sig_content parse_result.sexps
@@ -255,7 +266,8 @@ let publish_diagnostics (server : t) (uri : string) (version : int option) :
   | None -> ()
   | Some doc ->
       let diagnostics, stats =
-        check_document ~cache:server.form_cache uri doc.text
+        check_document ~cache:server.form_cache
+          ~sig_tracker:server.signature_tracker uri doc.text
       in
       (* Check for dependency cycles *)
       let cycle_diagnostics =
