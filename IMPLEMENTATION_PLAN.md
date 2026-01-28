@@ -1,6 +1,6 @@
 # Implementation Plan
 
-Based on specs 07-15, this plan prioritizes tasks by dependencies and impact.
+Based on specs 07-27, this plan prioritizes tasks by dependencies and impact.
 
 ## Phase 1: Complete Signature System (Spec 07)
 
@@ -242,6 +242,10 @@ Spec 08 (LSP) ─────────┬─> Spec 09 (CLI) ──> Spec 10 (
                        └─> Spec 13 (Error Reporting)
 
 Spec 22 (CI Releases) ──> Spec 23 (Binary Installation)
+
+Spec 27 (Dependency Graph) ──> Spec 26 (LSP Signature Sync)
+
+Spec 24 (Versioned Typings) ──> Spec 25 (Typechecker Test Harness)
 ```
 
 ## Phase 11: LSP Navigation Features (Spec 08 Phase 2)
@@ -625,85 +629,11 @@ Create comprehensive documentation using AsciiDoc, plus refresh the README.
 
 ---
 
-## Phase 23: CI Release Builds (Spec 22)
-
-GitHub Actions workflow for building and releasing tart binaries.
-
-### 23.1 Workflow Setup
-
-- [x] Create `.github/workflows/release.yml`
-- [x] Configure v* tag trigger
-- [x] Set up build matrix (darwin arm64/x86_64, linux arm64/x86_64)
-
-### 23.2 Build Steps
-
-- [x] Install Nix with DeterminateSystems/determinate-nix-action@v3
-- [x] Configure Nix cache with DeterminateSystems/magic-nix-cache-action@v8
-- [x] Build with `nix build .#default`
-- [x] Rename to `tart-{os}-{arch}` format
-
-### 23.3 Release Job
-
-- [x] Collect artifacts from all matrix builds
-- [x] Detect prerelease tags (rc, alpha, beta)
-- [x] Create release with softprops/action-gh-release
-- [x] Attach all 4 binaries as assets
-
----
-
-## Phase 24: Binary Installation (Spec 23)
-
-Download prebuilt tart binaries from GitHub releases.
-
-**Prerequisite:** Phase 23 (CI releases) must be complete to publish binaries.
-
-### 24.1 Version Configuration
-
-- [x] [R1] Add `tart-version` defcustom (nil = latest, string = specific version)
-- [x] Verify: `.dir-locals.el` with `((emacs-lisp-mode . ((tart-version . "0.2.0"))))` respected
-
-### 24.2 Platform Detection
-
-- [x] [R3] Implement `tart--platform-asset` using `system-type` and `system-configuration`
-- [x] Handle darwin/arm64, darwin/x86_64, linux/arm64, linux/x86_64
-- [x] Verify: `(tart--platform-asset)` returns correct asset name for current system
-
-### 24.3 Executable Resolution
-
-- [x] [R5] Change `tart-executable` default to `'managed`
-- [x] [R5] Implement `tart--resolve-executable` (managed → downloaded binary, string → direct)
-- [x] Update existing callers to use `tart--resolve-executable`
-- [x] Verify: Default `'managed` uses downloaded binary; string overrides
-
-### 24.4 Binary Download
-
-- [x] [R2] Implement `tart-install-binary` command
-- [x] [R2] Query GitHub API for release (latest or `tart-version`)
-- [x] [R2] Download to `~/.emacs.d/tart/bin/tart-VERSION`
-- [x] [R6] Show progress in echo area during download
-- [x] Verify: `M-x tart-install-binary` → binary in `~/.emacs.d/tart/bin/`, executable
-
-### 24.5 Hook-Friendly Eglot
-
-- [x] [R4] Implement `tart--binary-available-p` predicate
-- [x] [R4] Add `tart-eglot` with install prompt (kept `tart-eglot-ensure` for compatibility)
-- [x] [R4] Prompt to install if binary missing before starting eglot
-- [x] Verify: Without binary, `tart-eglot` prompts; after install, eglot connects
-
-### 24.6 Error Handling
-
-- [x] [R7] Handle no network with clear error message
-- [x] [R7] Handle asset not found for platform with supported platforms list
-- [x] [R7] Handle GitHub rate limit with suggestion to set `GITHUB_TOKEN`
-- [x] Verify: Airplane mode → "Network error" message, not hang
-
----
-
-## Phase 22: E2E Test Harness (Spec 21)
+## Phase 21: E2E Test Harness (Spec 21)
 
 ERT tests for Emacs integration against live tart processes.
 
-### 22.1 Test Infrastructure
+### 21.1 Test Infrastructure
 
 - [x] [R1] Create `scripts/run-emacs-tests.sh` test runner
 - [x] [R2] Create `lisp/tart-test-helpers.el` with test utilities
@@ -711,21 +641,21 @@ ERT tests for Emacs integration against live tart processes.
 - [x] [R14] Create `test/fixtures/e2e/error.el` and `error.tart`
 - [x] Verify: `./scripts/run-emacs-tests.sh` runs all tests
 
-### 22.2 LSP Tests
+### 21.2 LSP Tests
 
 - [x] [R3] Test eglot connects to tart LSP server
 - [x] [R4] Test LSP diagnostics for type errors
 - [x] [R5] Test LSP hover shows type information
 - [x] Verify: All LSP tests pass
 
-### 22.3 REPL Tests
+### 21.3 REPL Tests
 
 - [x] [R6] Test REPL starts and shows prompt
 - [x] [R7] Test REPL evaluates expressions
 - [x] [R8] Test REPL ,type command
 - [x] Verify: All REPL tests pass
 
-### 22.4 Integration Tests
+### 21.4 Integration Tests
 
 - [x] [R9] Test send-defun to REPL
 - [x] [R10] Test type-at-point
@@ -736,13 +666,319 @@ ERT tests for Emacs integration against live tart processes.
 
 ---
 
-## Future Work (Requires New Specs)
+## Phase 22: CI Release Builds (Spec 22)
 
-The following areas are mentioned as future work in the specs:
+GitHub Actions workflow for building and releasing tart binaries.
 
-1. **Additional Stdlib Coverage**
-   - More Emacs packages (org-mode, magit, etc.)
-   - Additional third-party package signatures
+### 22.1 Workflow Setup
+
+- [x] Create `.github/workflows/release.yml`
+- [x] Configure v* tag trigger
+- [x] Set up build matrix (darwin arm64/x86_64, linux arm64/x86_64)
+
+### 22.2 Build Steps
+
+- [x] Install Nix with DeterminateSystems/determinate-nix-action@v3
+- [x] Configure Nix cache with DeterminateSystems/magic-nix-cache-action@v8
+- [x] Build with `nix build .#default`
+- [x] Rename to `tart-{os}-{arch}` format
+
+### 22.3 Release Job
+
+- [x] Collect artifacts from all matrix builds
+- [x] Detect prerelease tags (rc, alpha, beta)
+- [x] Create release with softprops/action-gh-release
+- [x] Attach all 4 binaries as assets
+
+---
+
+## Phase 23: Binary Installation (Spec 23)
+
+Download prebuilt tart binaries from GitHub releases.
+
+**Prerequisite:** Phase 22 (CI releases) must be complete to publish binaries.
+
+### 23.1 Version Configuration
+
+- [x] [R1] Add `tart-version` defcustom (nil = latest, string = specific version)
+- [x] Verify: `.dir-locals.el` with `((emacs-lisp-mode . ((tart-version . "0.2.0"))))` respected
+
+### 23.2 Platform Detection
+
+- [x] [R3] Implement `tart--platform-asset` using `system-type` and `system-configuration`
+- [x] Handle darwin/arm64, darwin/x86_64, linux/arm64, linux/x86_64
+- [x] Verify: `(tart--platform-asset)` returns correct asset name for current system
+
+### 23.3 Executable Resolution
+
+- [x] [R5] Change `tart-executable` default to `'managed`
+- [x] [R5] Implement `tart--resolve-executable` (managed → downloaded binary, string → direct)
+- [x] Update existing callers to use `tart--resolve-executable`
+- [x] Verify: Default `'managed` uses downloaded binary; string overrides
+
+### 23.4 Binary Download
+
+- [x] [R2] Implement `tart-install-binary` command
+- [x] [R2] Query GitHub API for release (latest or `tart-version`)
+- [x] [R2] Download to `~/.emacs.d/tart/bin/tart-VERSION`
+- [x] [R6] Show progress in echo area during download
+- [x] Verify: `M-x tart-install-binary` → binary in `~/.emacs.d/tart/bin/`, executable
+
+### 23.5 Hook-Friendly Eglot
+
+- [x] [R4] Implement `tart--binary-available-p` predicate
+- [x] [R4] Add `tart-eglot` with install prompt (kept `tart-eglot-ensure` for compatibility)
+- [x] [R4] Prompt to install if binary missing before starting eglot
+- [x] Verify: Without binary, `tart-eglot` prompts; after install, eglot connects
+
+### 23.6 Error Handling
+
+- [x] [R7] Handle no network with clear error message
+- [x] [R7] Handle asset not found for platform with supported platforms list
+- [x] [R7] Handle GitHub rate limit with suggestion to set `GITHUB_TOKEN`
+- [x] Verify: Airplane mode → "Network error" message, not hang
+
+---
+
+## Phase 24: Module Dependency Graph (Spec 27)
+
+Track module dependencies for incremental re-checking. Foundation for LSP
+signature file synchronization.
+
+### 24.1 Graph Data Structures
+
+- [ ] Create `lib/graph/dependency_graph.ml` with forward/reverse index
+- [ ] Define `module_id` type and `edge_kind` enum
+- [ ] Implement `direct_dependents` and transitive `dependents` queries
+- [ ] Verify: `dune test`; graph construction and queries work
+
+### 24.2 Dependency Extraction from .el Files
+
+- [ ] [R1] Extract `(require 'foo)` → Require edge
+- [ ] [R1] Extract `(autoload 'fn "bar")` → Autoload edge
+- [ ] Verify: Parser extracts both require and autoload edges
+
+### 24.3 Dependency Extraction from .tart Files
+
+- [ ] [R2] Extract `(open 'seq)` → Open edge
+- [ ] [R2] Extract `(include 'dash)` → Include edge
+- [ ] Verify: Signature parser extracts both open and include edges
+
+### 24.4 Sibling Edge and Core Typings
+
+- [ ] [R3] Add implicit sibling edge: `foo.el` → `foo.tart`
+- [ ] [R6] Add pseudo-module for core typings that all files depend on
+- [ ] Verify: Sibling and core typing edges present in graph
+
+### 24.5 Incremental Updates
+
+- [ ] [R4] Update graph on `didOpen` (parse, add edges)
+- [ ] [R4] Update graph on `didChange` (re-extract, diff edges)
+- [ ] [R4] Keep graph entry on `didClose` (file still exists on disk)
+- [ ] Verify: Graph updates correctly as documents open/change/close
+
+### 24.6 Invalidation Cascade
+
+- [ ] [R5] Implement invalidation: module X changes → get dependents → invalidate caches
+- [ ] Wire to form_cache.ml for cache invalidation
+- [ ] Verify: Changing a module invalidates dependent module caches
+
+### 24.7 Cycle Detection
+
+- [ ] [R7] Detect cycles during graph construction
+- [ ] Report cycles as errors in `.tart` files, warnings in `.el` files
+- [ ] Verify: Circular requires produce appropriate diagnostics
+
+---
+
+## Phase 25: LSP Signature File Synchronization (Spec 26)
+
+Keep type checking in sync when editing `.tart` signature files alongside `.el` files.
+
+**Prerequisite:** Phase 24 (dependency graph) provides the dependents lookup.
+
+### 25.1 Signature Tracker Module
+
+- [ ] Create `lib/lsp/signature_tracker.ml` to track open `.tart` buffers
+- [ ] Store buffer contents keyed by URI
+- [ ] Verify: Module compiles and exports required functions
+
+### 25.2 Handle .tart in didOpen
+
+- [ ] [R1] Recognize `.tart` files in `textDocument/didOpen`
+- [ ] Store buffer contents in signature tracker
+- [ ] Associate with dependent `.el` files via filename convention
+- [ ] Verify: Opening `.tart` file registers it in tracker
+
+### 25.3 Handle .tart in didChange
+
+- [ ] [R2] Update signature tracker on `textDocument/didChange` for `.tart` files
+- [ ] Query dependency graph for dependents
+- [ ] Re-publish diagnostics for each dependent `.el` file
+- [ ] Verify: Changing `.tart` triggers re-check of dependent `.el`
+
+### 25.4 Handle .tart in didClose
+
+- [ ] [R4] Remove `.tart` from signature tracker on `didClose`
+- [ ] Re-check dependents (they'll now read from disk)
+- [ ] Verify: Closing `.tart` falls back to disk version
+
+### 25.5 Signature Loading Integration
+
+- [ ] [R3] Modify sig_loader to check signature tracker first
+- [ ] If `.tart` is open in LSP → use buffer contents
+- [ ] Else → read from disk (existing behavior)
+- [ ] Verify: Open `.tart` buffer contents used for type checking
+
+### 25.6 Form Cache Invalidation
+
+- [ ] [R5] When `.tart` changes, invalidate form cache for dependent `.el` files
+- [ ] Use existing `config_hash` mechanism
+- [ ] Verify: Cached forms invalidated on signature change
+
+### 25.7 Edge Cases
+
+- [ ] Handle `.tart` open but dependent `.el` not open (no action needed)
+- [ ] Handle `.tart` saved but buffer differs from disk (use buffer)
+- [ ] Handle multiple `.el` files depending on one `.tart`
+- [ ] Handle `.tart` parse errors (keep last valid state, show parse error)
+- [ ] Verify: All edge cases handled gracefully
+
+---
+
+## Phase 26: Versioned Typings Distribution (Spec 24)
+
+Versioned Emacs core typings with auto-detection.
+
+### 26.1 Emacs Version Detection
+
+- [ ] Create `lib/sig/emacs_version.ml` module
+- [ ] Run `emacs --version` and parse major.minor
+- [ ] Handle missing Emacs gracefully (use `latest/` with warning)
+- [ ] Verify: Version detection works for Emacs 29, 30, 31
+
+### 26.2 CLI Override Flag
+
+- [ ] [R2] Add `--emacs-version VERSION` flag to CLI
+- [ ] Error if specified directory doesn't exist
+- [ ] Verify: Override flag takes precedence over detection
+
+### 26.3 Version Fallback in Search Path
+
+- [ ] [R3] Implement fallback chain: exact → minor → major → latest
+- [ ] Example: `31.0.50` → `31.0` → `31` → `latest`
+- [ ] Verify: Fallback chain finds closest available version
+
+### 26.4 Directory Structure Migration
+
+- [ ] Delete `stdlib/` directory entirely
+- [ ] Create `typings/emacs/31.0/c-core/` directory
+- [ ] Create `typings/emacs/latest` symlink to `31.0`
+- [ ] Verify: Search path resolves to new typings location
+
+### 26.5 C-Core Typings for Emacs 31.0
+
+Create signature files mapping 1:1 to Emacs source:
+
+- [ ] [R5] Create `typings/emacs/31.0/c-core/data.tart` (eq, null, +, -, car, cdr, predicates)
+- [ ] [R5] Create `typings/emacs/31.0/c-core/fns.tart` (length, concat, mapcar, assoc)
+- [ ] [R5] Create `typings/emacs/31.0/c-core/eval.tart` (funcall, apply, signal, catch)
+- [ ] [R5] Create `typings/emacs/31.0/c-core/alloc.tart` (cons, list, make-vector)
+- [ ] [R5] Create `typings/emacs/31.0/c-core/buffer.tart` (current-buffer, set-buffer)
+- [ ] [R5] Create `typings/emacs/31.0/c-core/window.tart` (selected-window, window-buffer)
+- [ ] [R5] Create `typings/emacs/31.0/c-core/frame.tart` (selected-frame, frame-parameters)
+- [ ] [R5] Create `typings/emacs/31.0/c-core/fileio.tart` (find-file-noselect, write-region)
+- [ ] [R5] Create `typings/emacs/31.0/c-core/editfns.tart` (point, goto-char, insert)
+- [ ] [R5] Create `typings/emacs/31.0/c-core/search.tart` (re-search-forward, match-string)
+- [ ] [R5] Create `typings/emacs/31.0/c-core/process.tart` (start-process, process-send-string)
+- [ ] [R5] Create `typings/emacs/31.0/c-core/keyboard.tart` (read-key-sequence)
+- [ ] [R5] Create `typings/emacs/31.0/c-core/keymap.tart` (define-key, lookup-key)
+- [ ] [R5] Create `typings/emacs/31.0/c-core/minibuf.tart` (read-string, completing-read)
+- [ ] [R5] Create `typings/emacs/31.0/c-core/textprop.tart` (get-text-property, put-text-property)
+- [ ] [R5] Create `typings/emacs/31.0/c-core/print.tart` (prin1, princ, message)
+- [ ] Verify: All c-core files parse and load without conflicts
+
+### 26.6 Multi-File C-Core Loading
+
+- [ ] Update search_path.ml to load all `.tart` files in c-core directory
+- [ ] Merge signatures; error on conflicts at load time
+- [ ] Verify: Type checking works with split c-core files
+
+### 26.7 LSP Version Detection
+
+- [ ] [R7] Detect Emacs version once at LSP startup
+- [ ] Use detected version for entire session
+- [ ] Log detected version at debug level
+- [ ] Verify: LSP logs which typings version is being used
+
+### 26.8 Backfill Older Versions
+
+- [ ] Copy `31.0/` to `30.1/` and `29.1/`
+- [ ] Diff against Emacs source for version-specific changes
+- [ ] Add JSON, tree-sitter, SQLite, etc. signatures where appropriate
+- [ ] Verify: Typings work for Emacs 29.1 and 30.1
+
+---
+
+## Phase 27: Typechecker Test Harness (Spec 25)
+
+Fixture-based acceptance tests for type checker output.
+
+**Prerequisite:** Phase 26 (versioned typings) provides version-aware type loading.
+
+### 27.1 Expected File Parser
+
+- [ ] Define `.expected` file format (PASS/FAIL on line 1, diagnostics following)
+- [ ] Implement parser in `lib/test_harness/acceptance.ml`
+- [ ] Verify: Parser handles both PASS and FAIL expectations
+
+### 27.2 Acceptance Harness Core
+
+- [ ] Implement `check_fixture : path:string -> Fixture_result.t`
+- [ ] Implement `run_all : dir:string -> Summary.t`
+- [ ] Support parallel execution for speed
+- [ ] Verify: Single fixture and batch execution work
+
+### 27.3 Core Typings Fixtures
+
+Create fixtures exercising each C primitive category:
+
+- [ ] [R5] Create `test/fixtures/typing/core/arithmetic.el` (+, -, *, /, mod)
+- [ ] [R5] Create `test/fixtures/typing/core/lists.el` (car, cdr, cons, nth, mapcar)
+- [ ] [R5] Create `test/fixtures/typing/core/strings.el` (concat, substring, upcase)
+- [ ] [R5] Create `test/fixtures/typing/core/predicates.el` (null, listp, stringp)
+- [ ] [R5] Create `test/fixtures/typing/core/control.el` (funcall, apply, signal)
+- [ ] Include both passing and failing cases in each fixture
+- [ ] Verify: All core fixtures have matching `.expected` files
+
+### 27.4 Diagnostic Assertions
+
+- [ ] [R2] Support `test: expect-error "substring"` comment syntax
+- [ ] [R3] Support `test: expect-error-at 6:1` location assertions
+- [ ] Verify: Diagnostic content and location assertions work
+
+### 27.5 Version-Specific Tests
+
+- [ ] [R4] Support `test: emacs-version 31.0` directive
+- [ ] Create `test/fixtures/typing/version/` directory
+- [ ] Add version-specific fixtures (e.g., treesit-available-p in 31+)
+- [ ] Verify: Version-specific fixtures run with correct typings
+
+### 27.6 Regression Fixtures
+
+- [ ] [R6] Create `test/fixtures/typing/regression/` directory
+- [ ] Add fixtures named after issues/bugs as found
+- [ ] Verify: Regression fixtures document expected behavior
+
+### 27.7 Integration with dune test
+
+- [ ] [R8] Wire harness into `dune test` as acceptance_test.ml
+- [ ] Show diff between expected and actual on failures
+- [ ] [R9] Run fixtures in parallel for speed
+- [ ] Target: Full suite <30s
+- [ ] Verify: `dune test` includes acceptance tests
+
+---
 
 ## Priority Order
 
@@ -766,9 +1002,38 @@ The following areas are mentioned as future work in the specs:
 18. **Phase 18**: Remove Type Classes ✓
 19. **Phase 19**: Dogfood tart.el (DEFERRED - needs prerequisite stdlib)
 20. **Phase 20**: Documentation ✓
-21. **Phase 21**: (renumbered to 24)
-22. **Phase 22**: E2E Test Harness ✓
-23. **Phase 23**: CI Release Builds ✓
-24. **Phase 24**: Binary Installation ✓
+21. **Phase 21**: E2E Test Harness ✓
+22. **Phase 22**: CI Release Builds ✓
+23. **Phase 23**: Binary Installation ✓
+24. **Phase 24**: Module Dependency Graph
+25. **Phase 25**: LSP Signature File Synchronization
+26. **Phase 26**: Versioned Typings Distribution
+27. **Phase 27**: Typechecker Test Harness
 
 Phase 19 is deferred pending additional stdlib signatures (comint, eglot, compile).
+
+Phases 24-27 represent new work from Specs 24-27.
+
+---
+
+## Future Work (Requires New Specs)
+
+The following areas are mentioned as future work in the specs:
+
+1. **Additional Stdlib Coverage**
+   - More Emacs packages (org-mode, magit, etc.)
+   - Additional third-party package signatures
+
+2. **Feature Availability Detection**
+   - Detect optional Emacs features (JSON, tree-sitter, SQLite, etc.)
+   - Conditional typing based on available features
+
+3. **Separate Typings Repository**
+   - Move typings to separate repo for independent versioning
+   - Community contributions for third-party packages
+
+4. **GUI Backend Typings**
+   - ns.c, w32.c, pgtk.c, x11.c platform-specific functions
+
+5. **Lisp-Core Typings**
+   - subr.el, simple.el after C coverage is solid
