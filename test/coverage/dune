@@ -1,3 +1,7 @@
 (test
  (name definition_extractor_test)
  (libraries coverage syntax alcotest))
+
+(test
+ (name file_scanner_test)
+ (libraries coverage alcotest))
