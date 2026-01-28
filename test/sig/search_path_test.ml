@@ -1406,6 +1406,65 @@ let test_load_textprop_tart () =
       | None -> Alcotest.fail "propertize not found in env"
       | Some _ -> ())
 
+(** Test that print.tart parses successfully (Spec 24 R5) *)
+let test_parse_print_tart () =
+  let path = Filename.concat typings_dir "emacs/31.0/c-core/print.tart" in
+  if not (Sys.file_exists path) then
+    Alcotest.fail ("print.tart not found at: " ^ path);
+  match Search_path.parse_signature_file path with
+  | None -> Alcotest.fail "print.tart failed to parse"
+  | Some sig_file ->
+      Alcotest.(check string) "module name" "print" sig_file.sig_module;
+      (* Should have declarations for print operations *)
+      Alcotest.(check bool)
+        "has declarations" true
+        (List.length sig_file.sig_decls > 10);
+      (* Check specific required functions from print.c *)
+      let has_defun name =
+        List.exists
+          (function Sig_ast.DDefun d -> d.defun_name = name | _ -> false)
+          sig_file.sig_decls
+      in
+      Alcotest.(check bool) "has prin1" true (has_defun "prin1");
+      Alcotest.(check bool) "has princ" true (has_defun "princ");
+      Alcotest.(check bool) "has print" true (has_defun "print");
+      Alcotest.(check bool) "has message" true (has_defun "message");
+      Alcotest.(check bool) "has format" true (has_defun "format");
+      Alcotest.(check bool)
+        "has prin1-to-string" true
+        (has_defun "prin1-to-string")
+
+(** Test that print.tart can be loaded into type environment *)
+let test_load_print_tart () =
+  let c_core_dir = Filename.concat typings_dir "emacs/31.0/c-core" in
+  let sp = Search_path.of_dirs [ c_core_dir ] in
+  (* First check if the signature validates *)
+  let path = Filename.concat typings_dir "emacs/31.0/c-core/print.tart" in
+  (match Search_path.parse_signature_file path with
+  | None -> Alcotest.fail "print.tart failed to parse in load test"
+  | Some sig_file -> (
+      match Sig_loader.validate_signature sig_file with
+      | Ok () -> ()
+      | Error err ->
+          Alcotest.fail
+            ("print.tart validation failed: " ^ err.message ^ " at "
+            ^ Syntax.Location.show_span err.span)));
+  match Search_path.load_module ~search_path:sp ~env:Type_env.empty "print" with
+  | None -> Alcotest.fail "failed to load print module"
+  | Some env -> (
+      (* Check that prin1 is loaded *)
+      (match Type_env.lookup "prin1" env with
+      | None -> Alcotest.fail "prin1 not found in env"
+      | Some _ -> ());
+      (* Check that message is loaded *)
+      (match Type_env.lookup "message" env with
+      | None -> Alcotest.fail "message not found in env"
+      | Some _ -> ());
+      (* Check that format is loaded *)
+      match Type_env.lookup "format" env with
+      | None -> Alcotest.fail "format not found in env"
+      | Some _ -> ())
+
 let () =
   Alcotest.run "search_path"
     [
@@ -1502,5 +1561,7 @@ let () =
           Alcotest.test_case "parse textprop.tart" `Quick
             test_parse_textprop_tart;
           Alcotest.test_case "load textprop.tart" `Quick test_load_textprop_tart;
+          Alcotest.test_case "parse print.tart" `Quick test_parse_print_tart;
+          Alcotest.test_case "load print.tart" `Quick test_load_print_tart;
         ] );
     ]
