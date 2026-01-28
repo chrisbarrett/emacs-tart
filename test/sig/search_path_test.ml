@@ -878,6 +878,75 @@ let test_load_frame_tart () =
       | None -> Alcotest.fail "delete-frame not found in env"
       | Some _ -> ())
 
+(** Test that fileio.tart parses successfully (Spec 24 R5) *)
+let test_parse_fileio_tart () =
+  let path = Filename.concat typings_dir "emacs/31.0/c-core/fileio.tart" in
+  if not (Sys.file_exists path) then
+    Alcotest.fail ("fileio.tart not found at: " ^ path);
+  match Search_path.parse_signature_file path with
+  | None -> Alcotest.fail "fileio.tart failed to parse"
+  | Some sig_file ->
+      Alcotest.(check string) "module name" "fileio" sig_file.sig_module;
+      (* Should have declarations for file operations *)
+      Alcotest.(check bool)
+        "has declarations" true
+        (List.length sig_file.sig_decls > 40);
+      (* Check specific required functions from fileio.c *)
+      let has_defun name =
+        List.exists
+          (function Sig_ast.DDefun d -> d.defun_name = name | _ -> false)
+          sig_file.sig_decls
+      in
+      Alcotest.(check bool)
+        "has expand-file-name" true
+        (has_defun "expand-file-name");
+      Alcotest.(check bool) "has file-exists-p" true (has_defun "file-exists-p");
+      Alcotest.(check bool)
+        "has file-name-directory" true
+        (has_defun "file-name-directory");
+      Alcotest.(check bool) "has write-region" true (has_defun "write-region");
+      Alcotest.(check bool)
+        "has insert-file-contents" true
+        (has_defun "insert-file-contents");
+      Alcotest.(check bool)
+        "has find-file-noselect" true
+        (has_defun "find-file-noselect");
+      Alcotest.(check bool) "has rename-file" true (has_defun "rename-file");
+      Alcotest.(check bool) "has delete-file" true (has_defun "delete-file")
+
+(** Test that fileio.tart can be loaded into type environment *)
+let test_load_fileio_tart () =
+  let c_core_dir = Filename.concat typings_dir "emacs/31.0/c-core" in
+  let sp = Search_path.of_dirs [ c_core_dir ] in
+  (* First check if the signature validates *)
+  let path = Filename.concat typings_dir "emacs/31.0/c-core/fileio.tart" in
+  (match Search_path.parse_signature_file path with
+  | None -> Alcotest.fail "fileio.tart failed to parse in load test"
+  | Some sig_file -> (
+      match Sig_loader.validate_signature sig_file with
+      | Ok () -> ()
+      | Error err ->
+          Alcotest.fail
+            ("fileio.tart validation failed: " ^ err.message ^ " at "
+            ^ Syntax.Location.show_span err.span)));
+  match
+    Search_path.load_module ~search_path:sp ~env:Type_env.empty "fileio"
+  with
+  | None -> Alcotest.fail "failed to load fileio module"
+  | Some env -> (
+      (* Check that expand-file-name is loaded *)
+      (match Type_env.lookup "expand-file-name" env with
+      | None -> Alcotest.fail "expand-file-name not found in env"
+      | Some _ -> ());
+      (* Check that file-exists-p is loaded *)
+      (match Type_env.lookup "file-exists-p" env with
+      | None -> Alcotest.fail "file-exists-p not found in env"
+      | Some _ -> ());
+      (* Check that write-region is loaded *)
+      match Type_env.lookup "write-region" env with
+      | None -> Alcotest.fail "write-region not found in env"
+      | Some _ -> ())
+
 let () =
   Alcotest.run "search_path"
     [
@@ -956,5 +1025,7 @@ let () =
           Alcotest.test_case "load window.tart" `Quick test_load_window_tart;
           Alcotest.test_case "parse frame.tart" `Quick test_parse_frame_tart;
           Alcotest.test_case "load frame.tart" `Quick test_load_frame_tart;
+          Alcotest.test_case "parse fileio.tart" `Quick test_parse_fileio_tart;
+          Alcotest.test_case "load fileio.tart" `Quick test_load_fileio_tart;
         ] );
     ]
