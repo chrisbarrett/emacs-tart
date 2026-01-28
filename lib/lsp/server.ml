@@ -16,6 +16,7 @@ type t = {
   documents : Document.t;
   form_cache : Form_cache.t;
   dependency_graph : Graph.Dependency_graph.t;
+  signature_tracker : Signature_tracker.t;
 }
 
 and log_level = Quiet | Normal | Debug
@@ -30,6 +31,7 @@ let create ?(log_level = Normal) ~ic ~oc () : t =
     documents = Document.create ();
     form_cache = Form_cache.create ();
     dependency_graph = Graph.Dependency_graph.create ();
+    signature_tracker = Signature_tracker.create ();
   }
 
 (** Get the server's current state *)
@@ -41,6 +43,10 @@ let documents (server : t) : Document.t = server.documents
 (** Get the server's dependency graph (for testing) *)
 let dependency_graph (server : t) : Graph.Dependency_graph.t =
   server.dependency_graph
+
+(** Get the server's signature tracker (for testing) *)
+let signature_tracker (server : t) : Signature_tracker.t =
+  server.signature_tracker
 
 (** Log a message to stderr *)
 let log (server : t) (level : log_level) (msg : string) : unit =
@@ -352,6 +358,9 @@ let handle_did_open (server : t) (params : Yojson.Safe.t option) : unit =
       Document.open_doc server.documents ~uri ~version ~text;
       (* Update dependency graph *)
       Graph_tracker.update_document server.dependency_graph ~uri ~text;
+      (* Track .tart files in signature tracker *)
+      if Signature_tracker.is_tart_file uri then
+        Signature_tracker.set server.signature_tracker ~uri ~text;
       debug server
         (Printf.sprintf "Opened document: %s (version %d)" uri version);
       (* Publish diagnostics for the newly opened document *)
@@ -379,7 +388,11 @@ let handle_did_change (server : t) (params : Yojson.Safe.t option) : unit =
           (match Document.get_doc server.documents uri with
           | Some doc ->
               Graph_tracker.update_document server.dependency_graph ~uri
-                ~text:doc.text
+                ~text:doc.text;
+              (* Update signature tracker for .tart files *)
+              if Signature_tracker.is_tart_file uri then
+                Signature_tracker.set server.signature_tracker ~uri
+                  ~text:doc.text
           | None -> ());
           (* Publish diagnostics for the changed document *)
           publish_diagnostics server uri (Some version);
@@ -416,6 +429,25 @@ let handle_did_close (server : t) (params : Yojson.Safe.t option) : unit =
       let open Yojson.Safe.Util in
       let text_document = json |> member "textDocument" in
       let uri = Document.text_document_identifier_of_json text_document in
+      (* If it's a .tart file, remove from signature tracker and re-check dependents *)
+      let is_tart = Signature_tracker.is_tart_file uri in
+      if is_tart then (
+        Signature_tracker.remove server.signature_tracker uri;
+        (* Re-check dependents since they'll now read from disk *)
+        let module_id = Graph_tracker.module_id_of_uri uri in
+        let open_uris = Document.list_uris server.documents in
+        let dependent_uris =
+          Graph_tracker.dependent_uris server.dependency_graph ~module_id
+            ~open_uris
+        in
+        List.iter
+          (fun dep_uri ->
+            Form_cache.invalidate_document server.form_cache dep_uri;
+            match Document.get_doc server.documents dep_uri with
+            | Some dep_doc ->
+                publish_diagnostics server dep_uri (Some dep_doc.version)
+            | None -> ())
+          dependent_uris);
       Document.close_doc server.documents ~uri;
       (* Also clear the form cache for this document *)
       Form_cache.remove_document server.form_cache uri;

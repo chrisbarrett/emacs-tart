@@ -31,6 +31,9 @@ val documents : t -> Document.t
 val dependency_graph : t -> Graph.Dependency_graph.t
 (** Get the server's dependency graph (for testing) *)
 
+val signature_tracker : t -> Signature_tracker.t
+(** Get the server's signature tracker (for testing) *)
+
 val run : t -> int
 (** Run the server's main loop.
 
