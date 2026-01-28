@@ -10,6 +10,7 @@
     The first match wins, allowing project-local overrides. *)
 
 module Loc = Syntax.Location
+module V = Emacs_version
 
 (** {1 Search Path Configuration} *)
 
@@ -17,18 +18,39 @@ type t = {
   search_dirs : string list;
       (** Directories to search, in order of precedence *)
   stdlib_dir : string option;  (** Path to bundled stdlib directory, if any *)
+  emacs_version : V.version option;  (** Emacs version for typings lookup *)
+  typings_root : string option;
+      (** Root directory for versioned typings (typings/emacs/) *)
 }
 (** Search path configuration. Contains a list of directories to search for
     `.tart` files. *)
 
 (** Empty search path (no directories). *)
-let empty = { search_dirs = []; stdlib_dir = None }
+let empty =
+  {
+    search_dirs = [];
+    stdlib_dir = None;
+    emacs_version = None;
+    typings_root = None;
+  }
 
 (** Create a search path from a list of directories. *)
-let of_dirs dirs = { search_dirs = dirs; stdlib_dir = None }
+let of_dirs dirs =
+  {
+    search_dirs = dirs;
+    stdlib_dir = None;
+    emacs_version = None;
+    typings_root = None;
+  }
 
 (** Create a search path with stdlib. *)
 let with_stdlib stdlib_dir t = { t with stdlib_dir = Some stdlib_dir }
+
+(** Set Emacs version for typings lookup. *)
+let with_emacs_version version t = { t with emacs_version = Some version }
+
+(** Set the typings root directory (e.g., /path/to/typings/emacs). *)
+let with_typings_root root t = { t with typings_root = Some root }
 
 (** Add a directory to the front of the search path. *)
 let prepend_dir dir t = { t with search_dirs = dir :: t.search_dirs }
@@ -45,13 +67,75 @@ let file_exists path =
     true
   with Unix.Unix_error _ -> false
 
+(** Check if a directory exists. *)
+let dir_exists path =
+  try
+    let st = Unix.stat path in
+    st.Unix.st_kind = Unix.S_DIR
+  with Unix.Unix_error _ -> false
+
+(** {2 Version Fallback Chain}
+
+    Implements R3 of Spec 24: search order is exact → minor → major → latest.
+    For version 31.0.50: try 31.0.50/ then 31.0/ then 31/ then latest/ *)
+
+(** Generate version fallback candidates for a given version.
+
+    For 31.0.50 returns ["31.0.50"; "31.0"; "31"; "latest"] For 31.0 returns
+    ["31.0"; "31"; "latest"] For 31 returns ["31"; "latest"] *)
+let version_fallback_candidates (v : V.version) : string list =
+  let full = V.version_to_string v in
+  let minor_only = V.version_to_dir v in
+  let major_only = string_of_int v.major in
+  (* Build list, removing duplicates while preserving order *)
+  let candidates =
+    [ full; minor_only; major_only; "latest" ]
+    |> List.fold_left (fun acc x -> if List.mem x acc then acc else x :: acc) []
+    |> List.rev
+  in
+  candidates
+
+(** Find a file in versioned typings directory.
+
+    Searches the fallback chain: exact → minor → major → latest.
+    For each version candidate, looks in {typings_root}/{candidate}/c-core/{module}.tart *)
+let find_in_versioned_typings ~(typings_root : string) ~(version : V.version)
+    (module_name : string) : string option =
+  let candidates = version_fallback_candidates version in
+  let rec try_candidates = function
+    | [] -> None
+    | ver_str :: rest ->
+        let path =
+          Filename.concat typings_root ver_str |> fun dir ->
+          Filename.concat dir "c-core" |> fun dir ->
+          Filename.concat dir (module_name ^ ".tart")
+        in
+        if file_exists path then Some path else try_candidates rest
+  in
+  try_candidates candidates
+
+(** Find a typings directory for a version using fallback chain.
+
+    Returns the first existing directory in the fallback chain, or None if no
+    version directory exists. *)
+let find_typings_dir ~(typings_root : string) ~(version : V.version) :
+    string option =
+  let candidates = version_fallback_candidates version in
+  let rec try_candidates = function
+    | [] -> None
+    | ver_str :: rest ->
+        let dir = Filename.concat typings_root ver_str in
+        if dir_exists dir then Some dir else try_candidates rest
+  in
+  try_candidates candidates
+
 (** Try to find a `.tart` file for a module in a directory. *)
 let find_in_dir (module_name : string) (dir : string) : string option =
   let path = Filename.concat dir (module_name ^ ".tart") in
   if file_exists path then Some path else None
 
 (** Find a `.tart` file using the search path. Searches in order: each
-    search_dir, then stdlib_dir.
+    search_dir, then versioned typings (with fallback), then stdlib_dir.
 
     @param module_name The module name (e.g., "cl-lib")
     @return The path to the `.tart` file, if found *)
@@ -59,10 +143,23 @@ let find_signature (t : t) (module_name : string) : string option =
   (* Search each directory in order *)
   let rec search = function
     | [] -> (
-        (* Finally, check stdlib if configured *)
-        match t.stdlib_dir with
-        | Some stdlib_dir -> find_in_dir module_name stdlib_dir
-        | None -> None)
+        (* Try versioned typings if configured *)
+        match (t.typings_root, t.emacs_version) with
+        | Some root, Some version -> (
+            match
+              find_in_versioned_typings ~typings_root:root ~version module_name
+            with
+            | Some path -> Some path
+            | None -> (
+                (* Fall back to stdlib if configured *)
+                match t.stdlib_dir with
+                | Some stdlib_dir -> find_in_dir module_name stdlib_dir
+                | None -> None))
+        | _ -> (
+            (* No versioned typings, check stdlib if configured *)
+            match t.stdlib_dir with
+            | Some stdlib_dir -> find_in_dir module_name stdlib_dir
+            | None -> None))
     | dir :: rest -> (
         match find_in_dir module_name dir with
         | Some path -> Some path

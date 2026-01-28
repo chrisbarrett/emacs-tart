@@ -24,6 +24,16 @@ val of_dirs : string list -> t
 val with_stdlib : string -> t -> t
 (** Create a search path with stdlib directory. *)
 
+val with_emacs_version : Emacs_version.version -> t -> t
+(** Set Emacs version for typings lookup. Used for version-specific c-core
+    typings with fallback chain. *)
+
+val with_typings_root : string -> t -> t
+(** Set the typings root directory (e.g., /path/to/typings/emacs).
+
+    When combined with [with_emacs_version], enables version-specific typings
+    lookup with fallback chain: exact → minor → major → latest. *)
+
 val prepend_dir : string -> t -> t
 (** Add a directory to the front of the search path (higher precedence). *)
 
@@ -34,11 +44,28 @@ val append_dir : string -> t -> t
 
 val find_signature : t -> string -> string option
 (** Find a `.tart` file using the search path. Searches in order: each
-    search_dir, then stdlib_dir.
+    search_dir, then versioned typings (with fallback), then stdlib_dir.
 
     @param t The search path configuration
     @param module_name The module name (e.g., "cl-lib")
     @return The path to the `.tart` file, if found *)
+
+(** {2 Version Fallback} *)
+
+val version_fallback_candidates : Emacs_version.version -> string list
+(** Generate version fallback candidates for a given version.
+
+    Implements R3 of Spec 24: search order is exact → minor → major → latest.
+
+    For 31.0.50 returns ["31.0.50"; "31.0"; "31"; "latest"] For 31.0 returns
+    ["31.0"; "31"; "latest"] For 31 returns ["31"; "latest"] *)
+
+val find_typings_dir :
+  typings_root:string -> version:Emacs_version.version -> string option
+(** Find a typings directory for a version using fallback chain.
+
+    Returns the first existing directory in the fallback chain, or None if no
+    version directory exists. *)
 
 val find_sibling : string -> string -> string option
 (** Find a sibling `.tart` file for an `.el` file.

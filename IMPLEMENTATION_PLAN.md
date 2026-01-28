@@ -859,15 +859,15 @@ Versioned Emacs core typings with auto-detection.
 
 ### 26.2 CLI Override Flag
 
-- [ ] [R2] Add `--emacs-version VERSION` flag to CLI
-- [ ] Error if specified directory doesn't exist
-- [ ] Verify: Override flag takes precedence over detection
+- [x] [R2] Add `--emacs-version VERSION` flag to CLI
+- [x] Error if specified directory doesn't exist
+- [x] Verify: Override flag takes precedence over detection
 
 ### 26.3 Version Fallback in Search Path
 
-- [ ] [R3] Implement fallback chain: exact → minor → major → latest
-- [ ] Example: `31.0.50` → `31.0` → `31` → `latest`
-- [ ] Verify: Fallback chain finds closest available version
+- [x] [R3] Implement fallback chain: exact → minor → major → latest
+- [x] Example: `31.0.50` → `31.0` → `31` → `latest`
+- [x] Verify: Fallback chain finds closest available version
 
 ### 26.4 Directory Structure Migration
 

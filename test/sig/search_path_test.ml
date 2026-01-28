@@ -1599,6 +1599,139 @@ let test_load_process () =
            true
          with Not_found -> false)
 
+(** {1 Version Fallback Tests (R3 of Spec 24)} *)
+
+module V = Sig.Emacs_version
+
+(** Test version fallback candidate generation *)
+let test_version_fallback_candidates_full () =
+  let v = { V.major = 31; minor = 0; patch = Some 50 } in
+  let candidates = Search_path.version_fallback_candidates v in
+  Alcotest.(check (list string))
+    "full version candidates"
+    [ "31.0.50"; "31.0"; "31"; "latest" ]
+    candidates
+
+let test_version_fallback_candidates_minor () =
+  let v = { V.major = 31; minor = 0; patch = None } in
+  let candidates = Search_path.version_fallback_candidates v in
+  Alcotest.(check (list string))
+    "minor version candidates" [ "31.0"; "31"; "latest" ] candidates
+
+let test_version_fallback_candidates_dedup () =
+  (* When major = 31 and minor = 0, "31.0" and "31" are different but "31" is deduped *)
+  let v = { V.major = 30; minor = 1; patch = None } in
+  let candidates = Search_path.version_fallback_candidates v in
+  Alcotest.(check (list string))
+    "deduplicates candidates" [ "30.1"; "30"; "latest" ] candidates
+
+(** Test versioned typings lookup with fallback *)
+let test_find_typings_dir_exact () =
+  with_temp_dirs 1 (fun dirs ->
+      match dirs with
+      | [ typings_root ] ->
+          (* Create exact version directory *)
+          let version_dir = Filename.concat typings_root "31.0" in
+          Unix.mkdir version_dir 0o755;
+          let v = { V.major = 31; minor = 0; patch = None } in
+          let result = Search_path.find_typings_dir ~typings_root ~version:v in
+          Alcotest.(check (option string))
+            "finds exact version" (Some version_dir) result
+      | _ -> Alcotest.fail "expected 1 dir")
+
+let test_find_typings_dir_fallback_to_latest () =
+  with_temp_dirs 1 (fun dirs ->
+      match dirs with
+      | [ typings_root ] ->
+          (* Create only latest directory, not specific version *)
+          let latest_dir = Filename.concat typings_root "latest" in
+          Unix.mkdir latest_dir 0o755;
+          let v = { V.major = 31; minor = 0; patch = Some 50 } in
+          let result = Search_path.find_typings_dir ~typings_root ~version:v in
+          Alcotest.(check (option string))
+            "falls back to latest" (Some latest_dir) result
+      | _ -> Alcotest.fail "expected 1 dir")
+
+let test_find_typings_dir_fallback_chain () =
+  with_temp_dirs 1 (fun dirs ->
+      match dirs with
+      | [ typings_root ] ->
+          (* Create only major version directory *)
+          let major_dir = Filename.concat typings_root "31" in
+          Unix.mkdir major_dir 0o755;
+          let v = { V.major = 31; minor = 0; patch = Some 50 } in
+          let result = Search_path.find_typings_dir ~typings_root ~version:v in
+          Alcotest.(check (option string))
+            "falls back to major version" (Some major_dir) result
+      | _ -> Alcotest.fail "expected 1 dir")
+
+let test_find_typings_dir_not_found () =
+  with_temp_dirs 1 (fun dirs ->
+      match dirs with
+      | [ typings_root ] ->
+          (* Don't create any version directories *)
+          let v = { V.major = 31; minor = 0; patch = None } in
+          let result = Search_path.find_typings_dir ~typings_root ~version:v in
+          Alcotest.(check (option string))
+            "returns None when not found" None result
+      | _ -> Alcotest.fail "expected 1 dir")
+
+(** Test versioned typings integration with search path *)
+let test_search_path_with_versioned_typings () =
+  with_temp_dirs 1 (fun dirs ->
+      match dirs with
+      | [ typings_root ] ->
+          (* Create versioned typings structure *)
+          let version_dir = Filename.concat typings_root "31.0" in
+          Unix.mkdir version_dir 0o755;
+          let c_core_dir = Filename.concat version_dir "c-core" in
+          Unix.mkdir c_core_dir 0o755;
+          write_file
+            (Filename.concat c_core_dir "data.tart")
+            "(defun test-func (int) -> int)";
+          let v = { V.major = 31; minor = 0; patch = None } in
+          let sp =
+            Search_path.empty
+            |> Search_path.with_typings_root typings_root
+            |> Search_path.with_emacs_version v
+          in
+          let result = Search_path.find_signature sp "data" in
+          Alcotest.(check (option string))
+            "finds in versioned typings"
+            (Some (Filename.concat c_core_dir "data.tart"))
+            result
+      | _ -> Alcotest.fail "expected 1 dir")
+
+let test_search_dirs_take_precedence_over_typings () =
+  with_temp_dirs 2 (fun dirs ->
+      match dirs with
+      | [ search_dir; typings_root ] ->
+          (* Create in search dir *)
+          write_file
+            (Filename.concat search_dir "data.tart")
+            "(defvar search-version int)";
+          (* Create versioned typings *)
+          let version_dir = Filename.concat typings_root "31.0" in
+          Unix.mkdir version_dir 0o755;
+          let c_core_dir = Filename.concat version_dir "c-core" in
+          Unix.mkdir c_core_dir 0o755;
+          write_file
+            (Filename.concat c_core_dir "data.tart")
+            "(defvar typings-version int)";
+          let v = { V.major = 31; minor = 0; patch = None } in
+          let sp =
+            Search_path.of_dirs [ search_dir ]
+            |> Search_path.with_typings_root typings_root
+            |> Search_path.with_emacs_version v
+          in
+          let result = Search_path.find_signature sp "data" in
+          (* Search dirs should win *)
+          Alcotest.(check (option string))
+            "search dirs take precedence"
+            (Some (Filename.concat search_dir "data.tart"))
+            result
+      | _ -> Alcotest.fail "expected 2 dirs")
+
 let () =
   Alcotest.run "search_path"
     [
@@ -1678,5 +1811,25 @@ let () =
           Alcotest.test_case "load rx into env" `Quick test_load_rx;
           Alcotest.test_case "parse process.tart" `Quick test_parse_process;
           Alcotest.test_case "load process into env" `Quick test_load_process;
+        ] );
+      ( "version-fallback",
+        [
+          Alcotest.test_case "candidates full version" `Quick
+            test_version_fallback_candidates_full;
+          Alcotest.test_case "candidates minor version" `Quick
+            test_version_fallback_candidates_minor;
+          Alcotest.test_case "candidates dedup" `Quick
+            test_version_fallback_candidates_dedup;
+          Alcotest.test_case "find exact version" `Quick
+            test_find_typings_dir_exact;
+          Alcotest.test_case "fallback to latest" `Quick
+            test_find_typings_dir_fallback_to_latest;
+          Alcotest.test_case "fallback chain" `Quick
+            test_find_typings_dir_fallback_chain;
+          Alcotest.test_case "not found" `Quick test_find_typings_dir_not_found;
+          Alcotest.test_case "versioned typings in search" `Quick
+            test_search_path_with_versioned_typings;
+          Alcotest.test_case "search dirs precedence" `Quick
+            test_search_dirs_take_precedence_over_typings;
         ] );
     ]
