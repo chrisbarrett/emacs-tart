@@ -15,6 +15,7 @@ type t = {
   mutable log_level : log_level;
   documents : Document.t;
   form_cache : Form_cache.t;
+  dependency_graph : Graph.Dependency_graph.t;
 }
 
 and log_level = Quiet | Normal | Debug
@@ -28,6 +29,7 @@ let create ?(log_level = Normal) ~ic ~oc () : t =
     log_level;
     documents = Document.create ();
     form_cache = Form_cache.create ();
+    dependency_graph = Graph.Dependency_graph.create ();
   }
 
 (** Get the server's current state *)
@@ -35,6 +37,10 @@ let state (server : t) : state = server.state
 
 (** Get the server's document store (for testing) *)
 let documents (server : t) : Document.t = server.documents
+
+(** Get the server's dependency graph (for testing) *)
+let dependency_graph (server : t) : Graph.Dependency_graph.t =
+  server.dependency_graph
 
 (** Log a message to stderr *)
 let log (server : t) (level : log_level) (msg : string) : unit =
@@ -338,6 +344,8 @@ let handle_did_open (server : t) (params : Yojson.Safe.t option) : unit =
         Document.text_document_item_of_json text_document
       in
       Document.open_doc server.documents ~uri ~version ~text;
+      (* Update dependency graph *)
+      Graph_tracker.update_document server.dependency_graph ~uri ~text;
       debug server
         (Printf.sprintf "Opened document: %s (version %d)" uri version);
       (* Publish diagnostics for the newly opened document *)
@@ -361,6 +369,12 @@ let handle_did_change (server : t) (params : Yojson.Safe.t option) : unit =
       | Ok () ->
           debug server
             (Printf.sprintf "Changed document: %s (version %d)" uri version);
+          (* Update dependency graph with new document content *)
+          (match Document.get_doc server.documents uri with
+          | Some doc ->
+              Graph_tracker.update_document server.dependency_graph ~uri
+                ~text:doc.text
+          | None -> ());
           (* Publish diagnostics for the changed document *)
           publish_diagnostics server uri (Some version)
       | Error e ->
@@ -377,6 +391,8 @@ let handle_did_close (server : t) (params : Yojson.Safe.t option) : unit =
       Document.close_doc server.documents ~uri;
       (* Also clear the form cache for this document *)
       Form_cache.remove_document server.form_cache uri;
+      (* Keep graph entry on close - file still exists on disk (R4) *)
+      Graph_tracker.close_document server.dependency_graph ~uri;
       debug server (Printf.sprintf "Closed document: %s" uri);
       (* Clear diagnostics for the closed document *)
       let params : Protocol.publish_diagnostics_params =

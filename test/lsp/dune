@@ -13,3 +13,7 @@
 (test
  (name form_cache_test)
  (libraries tart alcotest))
+
+(test
+ (name graph_tracker_test)
+ (libraries tart alcotest))

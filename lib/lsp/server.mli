@@ -28,6 +28,9 @@ val state : t -> state
 val documents : t -> Document.t
 (** Get the server's document store (for testing) *)
 
+val dependency_graph : t -> Graph.Dependency_graph.t
+(** Get the server's dependency graph (for testing) *)
+
 val run : t -> int
 (** Run the server's main loop.
 
