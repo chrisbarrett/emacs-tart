@@ -1271,6 +1271,72 @@ let test_load_keymap_tart () =
       | None -> Alcotest.fail "lookup-key not found in env"
       | Some _ -> ())
 
+(** Test that minibuf.tart parses successfully (Spec 24 R5) *)
+let test_parse_minibuf_tart () =
+  let path = Filename.concat typings_dir "emacs/31.0/c-core/minibuf.tart" in
+  if not (Sys.file_exists path) then
+    Alcotest.fail ("minibuf.tart not found at: " ^ path);
+  match Search_path.parse_signature_file path with
+  | None -> Alcotest.fail "minibuf.tart failed to parse"
+  | Some sig_file ->
+      Alcotest.(check string) "module name" "minibuf" sig_file.sig_module;
+      (* Should have declarations for minibuffer operations *)
+      Alcotest.(check bool)
+        "has declarations" true
+        (List.length sig_file.sig_decls > 20);
+      (* Check specific required functions from minibuf.c *)
+      let has_defun name =
+        List.exists
+          (function Sig_ast.DDefun d -> d.defun_name = name | _ -> false)
+          sig_file.sig_decls
+      in
+      Alcotest.(check bool)
+        "has read-from-minibuffer" true
+        (has_defun "read-from-minibuffer");
+      Alcotest.(check bool) "has read-string" true (has_defun "read-string");
+      Alcotest.(check bool)
+        "has completing-read" true
+        (has_defun "completing-read");
+      Alcotest.(check bool) "has yes-or-no-p" true (has_defun "yes-or-no-p");
+      Alcotest.(check bool) "has y-or-n-p" true (has_defun "y-or-n-p");
+      Alcotest.(check bool) "has minibufferp" true (has_defun "minibufferp");
+      Alcotest.(check bool)
+        "has minibuffer-window" true
+        (has_defun "minibuffer-window")
+
+(** Test that minibuf.tart can be loaded into type environment *)
+let test_load_minibuf_tart () =
+  let c_core_dir = Filename.concat typings_dir "emacs/31.0/c-core" in
+  let sp = Search_path.of_dirs [ c_core_dir ] in
+  (* First check if the signature validates *)
+  let path = Filename.concat typings_dir "emacs/31.0/c-core/minibuf.tart" in
+  (match Search_path.parse_signature_file path with
+  | None -> Alcotest.fail "minibuf.tart failed to parse in load test"
+  | Some sig_file -> (
+      match Sig_loader.validate_signature sig_file with
+      | Ok () -> ()
+      | Error err ->
+          Alcotest.fail
+            ("minibuf.tart validation failed: " ^ err.message ^ " at "
+            ^ Syntax.Location.show_span err.span)));
+  match
+    Search_path.load_module ~search_path:sp ~env:Type_env.empty "minibuf"
+  with
+  | None -> Alcotest.fail "failed to load minibuf module"
+  | Some env -> (
+      (* Check that read-string is loaded *)
+      (match Type_env.lookup "read-string" env with
+      | None -> Alcotest.fail "read-string not found in env"
+      | Some _ -> ());
+      (* Check that completing-read is loaded *)
+      (match Type_env.lookup "completing-read" env with
+      | None -> Alcotest.fail "completing-read not found in env"
+      | Some _ -> ());
+      (* Check that yes-or-no-p is loaded *)
+      match Type_env.lookup "yes-or-no-p" env with
+      | None -> Alcotest.fail "yes-or-no-p not found in env"
+      | Some _ -> ())
+
 let () =
   Alcotest.run "search_path"
     [
@@ -1362,5 +1428,7 @@ let () =
           Alcotest.test_case "load keyboard.tart" `Quick test_load_keyboard_tart;
           Alcotest.test_case "parse keymap.tart" `Quick test_parse_keymap_tart;
           Alcotest.test_case "load keymap.tart" `Quick test_load_keymap_tart;
+          Alcotest.test_case "parse minibuf.tart" `Quick test_parse_minibuf_tart;
+          Alcotest.test_case "load minibuf.tart" `Quick test_load_minibuf_tart;
         ] );
     ]
