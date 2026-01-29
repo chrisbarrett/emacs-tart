@@ -152,6 +152,9 @@ let rec infer (env : Env.t) (sexp : Syntax.Sexp.t) : result =
   (* === Explicit type instantiation: (@type [T1 T2 ...] fn args...) === *)
   | List (Symbol ("@type", _) :: Vector (type_args, _) :: fn :: args, span) ->
       infer_explicit_instantiation env type_args fn args span
+  (* === Funcall: (funcall f arg1 arg2 ...) === *)
+  | List (Symbol ("funcall", _) :: fn_expr :: args, span) ->
+      infer_funcall env fn_expr args span
   (* === Function application (catch-all for lists) === *)
   | List (fn :: args, span) -> infer_application env fn args span
   | List ([], _span) ->
@@ -885,6 +888,93 @@ and get_expr_source (expr : Syntax.Sexp.t) : string option =
   | Symbol (name, _) -> Some name
   | List (Symbol (name, _) :: _, _) -> Some name
   | _ -> None
+
+(** Infer the type of a funcall expression.
+
+    (funcall f arg1 arg2 ...) applies the function f to the arguments.
+    We infer f's type, constrain it to be a function type, and check
+    the arguments against the function's parameter types.
+
+    This provides better type checking than the generic builtin signature
+    because we can track the actual function type and argument positions. *)
+and infer_funcall env fn_expr args span =
+  let fn_result = infer env fn_expr in
+  let arg_results = List.map (infer env) args in
+
+  (* Try to extract a name for error context *)
+  let fn_name =
+    let open Syntax.Sexp in
+    match fn_expr with
+    | Symbol (name, _) -> Some name
+    | List ([ Symbol ("function", _); Symbol (name, _) ], _) -> Some name
+    | _ -> None
+  in
+
+  (* Fresh type variable for the result *)
+  let result_ty = fresh_tvar (Env.current_level env) in
+
+  (* Build expected function type - one constraint per argument for better
+     error messages *)
+  let arg_constraints_with_context =
+    List.mapi
+      (fun i arg_result ->
+        let expected_param_ty = fresh_tvar (Env.current_level env) in
+        let arg_expr = List.nth args i in
+        let arg_expr_source = get_expr_source arg_expr in
+        let context =
+          match fn_name with
+          | Some name ->
+              C.FunctionArg
+                {
+                  fn_name = name;
+                  fn_type = fn_result.ty;
+                  arg_index = i;
+                  arg_expr_source;
+                }
+          | None ->
+              (* For anonymous functions, use "funcall" as context *)
+              C.FunctionArg
+                {
+                  fn_name = "funcall";
+                  fn_type = fn_result.ty;
+                  arg_index = i;
+                  arg_expr_source;
+                }
+        in
+        ( expected_param_ty,
+          C.equal ~context expected_param_ty arg_result.ty
+            (Syntax.Sexp.span_of arg_expr) ))
+      arg_results
+  in
+
+  (* Build the expected function type using the fresh param types *)
+  let param_types =
+    List.map (fun (ty, _) -> PPositional ty) arg_constraints_with_context
+  in
+  let expected_fn_type = TArrow (param_types, result_ty) in
+
+  (* Constraint: actual function type = expected function type *)
+  let fn_constraint = C.equal fn_result.ty expected_fn_type span in
+
+  (* Collect all argument constraints *)
+  let arg_type_constraints =
+    List.fold_left
+      (fun acc (_, c) -> C.add c acc)
+      C.empty arg_constraints_with_context
+  in
+
+  (* Combine all constraints.
+     Order matters for error context: fn_constraint must come BEFORE
+     arg_type_constraints so that the function signature determines the
+     expected type before we compare with actual argument types. *)
+  let arg_constraints = combine_results arg_results in
+  let all_constraints =
+    C.combine fn_result.constraints
+      (C.combine arg_constraints (C.add fn_constraint arg_type_constraints))
+  in
+  let all_undefineds = fn_result.undefineds @ combine_undefineds arg_results in
+
+  { ty = result_ty; constraints = all_constraints; undefineds = all_undefineds }
 
 (** Infer the type of a function application.
 
