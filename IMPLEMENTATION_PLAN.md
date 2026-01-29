@@ -197,6 +197,231 @@ Note: 30.1 and 29.1 directories are backfills from 31.0; version-specific differ
 
 ---
 
+## Phase 0.7: Typing Test Fixtures (Spec 33)
+
+**Status:** Not started
+**Priority:** High - documents type checker behavior, enables systematic testing
+**Depends on:** Phase 27 (test harness), Spec 25 completed
+
+Comprehensive fixture suite covering pass/fail cases for all error categories.
+
+### 0.7.1 Create Error Category Directories
+
+- [ ] Create `test/fixtures/typing/errors/type-mismatch/`
+- [ ] Create `test/fixtures/typing/errors/arity/`
+- [ ] Create `test/fixtures/typing/errors/unbound/`
+- [ ] Create `test/fixtures/typing/errors/occurs-check/`
+- [ ] Create `test/fixtures/typing/errors/kind/`
+- [ ] Create `test/fixtures/typing/errors/exhaustiveness/`
+
+**Files:** 6 new directories under `test/fixtures/typing/errors/`
+
+**Verification:**
+```bash
+ls -la test/fixtures/typing/errors/
+# Should show all 6 directories
+```
+
+### 0.7.2 Type Mismatch Fixtures (R1)
+
+- [ ] Create `errors/type-mismatch/int-for-string.el` - passing int where string expected
+- [ ] Create `errors/type-mismatch/string-for-int.el` - passing string where int expected
+- [ ] Create `errors/type-mismatch/list-for-atom.el` - passing list where atom expected
+- [ ] Create `errors/type-mismatch/function-arity.el` - function type with wrong arity
+- [ ] Create `errors/type-mismatch/polymorphic.el` - incompatible instantiations of type variable
+- [ ] Generate matching `.expected` files via `./tart check`
+
+**Files:**
+- `test/fixtures/typing/errors/type-mismatch/int-for-string.el` + `.expected`
+- `test/fixtures/typing/errors/type-mismatch/string-for-int.el` + `.expected`
+- `test/fixtures/typing/errors/type-mismatch/list-for-atom.el` + `.expected`
+- `test/fixtures/typing/errors/type-mismatch/function-arity.el` + `.expected`
+- `test/fixtures/typing/errors/type-mismatch/polymorphic.el` + `.expected`
+
+**Verification:**
+```bash
+dune test
+# All type-mismatch fixtures should pass
+./tart check test/fixtures/typing/errors/type-mismatch/int-for-string.el
+# Should output type mismatch diagnostic
+```
+
+### 0.7.3 Arity Error Fixtures (R2)
+
+- [ ] Create `errors/arity/too-few-args.el` - missing required arguments
+- [ ] Create `errors/arity/too-many-args.el` - excess arguments to fixed-arity function
+- [ ] Create `errors/arity/optional-required.el` - omitting required arg when optional exists
+- [ ] Generate matching `.expected` files
+
+**Files:**
+- `test/fixtures/typing/errors/arity/too-few-args.el` + `.expected`
+- `test/fixtures/typing/errors/arity/too-many-args.el` + `.expected`
+- `test/fixtures/typing/errors/arity/optional-required.el` + `.expected`
+
+**Verification:**
+```bash
+dune test
+# All arity fixtures should pass
+./tart check test/fixtures/typing/errors/arity/too-few-args.el
+# Should output arity diagnostic
+```
+
+### 0.7.4 Unbound Identifier Fixtures (R3)
+
+- [ ] Create `errors/unbound/unbound-var.el` - reference to undefined variable
+- [ ] Create `errors/unbound/unbound-fn.el` - call to undefined function
+- [ ] Create `errors/unbound/typo.el` - realistic typo in common function name
+- [ ] Create `errors/unbound/scoping.el` - variable used outside its let scope
+- [ ] Generate matching `.expected` files
+
+**Files:**
+- `test/fixtures/typing/errors/unbound/unbound-var.el` + `.expected`
+- `test/fixtures/typing/errors/unbound/unbound-fn.el` + `.expected`
+- `test/fixtures/typing/errors/unbound/typo.el` + `.expected`
+- `test/fixtures/typing/errors/unbound/scoping.el` + `.expected`
+
+**Verification:**
+```bash
+dune test
+./tart check test/fixtures/typing/errors/unbound/unbound-var.el
+# Should output unbound variable diagnostic
+```
+
+### 0.7.5 Occurs Check Fixtures (R4)
+
+- [ ] Create `errors/occurs-check/self-reference.el` - `(setq x (cons x nil))`
+- [ ] Create `errors/occurs-check/mutual-recursion.el` - mutually recursive definitions creating cycle
+- [ ] Generate matching `.expected` files
+
+**Files:**
+- `test/fixtures/typing/errors/occurs-check/self-reference.el` + `.expected`
+- `test/fixtures/typing/errors/occurs-check/mutual-recursion.el` + `.expected`
+
+**Verification:**
+```bash
+dune test
+./tart check test/fixtures/typing/errors/occurs-check/self-reference.el
+# Should output infinite type / occurs check diagnostic
+```
+
+### 0.7.6 Kind Error Fixtures (R5)
+
+- [ ] Create `errors/kind/type-as-value.el` - using type constructor as value
+- [ ] Create `errors/kind/value-as-type.el` - using value where type expected (in annotations)
+- [ ] Create `errors/kind/wrong-arity-tycon.el` - type constructor with wrong number of args
+- [ ] Generate matching `.expected` files
+
+**Files:**
+- `test/fixtures/typing/errors/kind/type-as-value.el` + `.expected`
+- `test/fixtures/typing/errors/kind/value-as-type.el` + `.expected`
+- `test/fixtures/typing/errors/kind/wrong-arity-tycon.el` + `.expected`
+
+**Verification:**
+```bash
+dune test
+./tart check test/fixtures/typing/errors/kind/wrong-arity-tycon.el
+# Should output kind mismatch diagnostic
+```
+
+### 0.7.7 Exhaustiveness Fixtures (R6)
+
+- [ ] Create `errors/exhaustiveness/missing-case.el` - pcase missing constructor
+- [ ] Create `errors/exhaustiveness/missing-nil.el` - list match missing nil case
+- [ ] Create `errors/exhaustiveness/missing-default.el` - cond without catch-all
+- [ ] Generate matching `.expected` files
+
+**Files:**
+- `test/fixtures/typing/errors/exhaustiveness/missing-case.el` + `.expected`
+- `test/fixtures/typing/errors/exhaustiveness/missing-nil.el` + `.expected`
+- `test/fixtures/typing/errors/exhaustiveness/missing-default.el` + `.expected`
+
+**Verification:**
+```bash
+dune test
+./tart check test/fixtures/typing/errors/exhaustiveness/missing-case.el
+# Should output exhaustiveness warning
+```
+
+### 0.7.8 Regression Fixtures (R7)
+
+- [ ] Ensure `test/fixtures/typing/regression/` directory exists
+- [ ] Create template header for regression fixtures
+- [ ] Add initial regression fixtures as bugs are discovered
+
+**Fixture template:**
+```elisp
+;; Regression: [brief description of the bug]
+;; Fixed: [date or commit]
+;; test: expect-error "relevant error substring"
+
+;; Code that triggered the bug
+```
+
+**Files:**
+- `test/fixtures/typing/regression/` (directory already exists)
+- Fixtures added as bugs are found and fixed
+
+**Verification:**
+```bash
+ls test/fixtures/typing/regression/
+# Directory should exist, may be empty initially
+```
+
+### 0.7.9 Realistic User Scenario Fixtures (R8)
+
+- [ ] Create `errors/type-mismatch/user-config.el` - wrong type in defcustom
+- [ ] Create `errors/arity/hook-function.el` - hook function with wrong signature
+- [ ] Create `errors/unbound/require-missing.el` - using function without require
+- [ ] Generate matching `.expected` files
+
+**Files:**
+- `test/fixtures/typing/errors/type-mismatch/user-config.el` + `.expected`
+- `test/fixtures/typing/errors/arity/hook-function.el` + `.expected`
+- `test/fixtures/typing/errors/unbound/require-missing.el` + `.expected`
+
+**Verification:**
+```bash
+# Review fixtures manually - should read as plausible user code
+cat test/fixtures/typing/errors/type-mismatch/user-config.el
+# Should look like realistic init.el snippet, not synthetic test case
+```
+
+### 0.7.10 Update Test Harness Discovery (R9)
+
+- [ ] Verify `fixture_test.ml` discovers `errors/` subdirectories automatically
+- [ ] No code changes expected - harness already discovers recursively
+- [ ] Verify test count increases with new fixtures
+
+**Files:** No changes expected to `test/test_harness/fixture_test.ml`
+
+**Verification:**
+```bash
+# Before adding fixtures
+dune test 2>&1 | grep -E "test|fixture"
+
+# After adding fixtures - count should increase
+dune test 2>&1 | grep -E "test|fixture"
+```
+
+### 0.7.11 Generate and Review Expected Files
+
+- [ ] Run `./tart check` on each fixture to generate actual output
+- [ ] Create `.expected` files with PASS/FAIL status and diagnostic substrings
+- [ ] Review all `.expected` files for correctness
+- [ ] Ensure diagnostic messages are user-friendly and accurate
+
+**Verification:**
+```bash
+# All tests pass
+dune test
+
+# Review a sample expected file
+cat test/fixtures/typing/errors/type-mismatch/int-for-string.expected
+# Should show FAIL with type mismatch diagnostic substring
+```
+
+---
+
 ## Task Summary (New Priority Work)
 
 | Task | Spec | Priority | Complexity | Status |
@@ -212,6 +437,17 @@ Note: 30.1 and 29.1 directories are backfills from 31.0; version-specific differ
 | Add `-v` short form | 30 | 2 | Low | **Done** |
 | Create BUGS.md structure | 32 | 3 | Low | **Done** |
 | Version-specific test directive | 25 | 3 | Medium | **Done** |
+| Create error category directories | 33 | 4 | Low | Not started |
+| Type mismatch fixtures | 33 | 4 | Medium | Not started |
+| Arity error fixtures | 33 | 4 | Medium | Not started |
+| Unbound identifier fixtures | 33 | 4 | Medium | Not started |
+| Occurs check fixtures | 33 | 4 | Medium | Not started |
+| Kind error fixtures | 33 | 4 | Medium | Not started |
+| Exhaustiveness fixtures | 33 | 4 | Medium | Not started |
+| Regression fixtures | 33 | 4 | Low | Not started |
+| Realistic user scenarios | 33 | 4 | Medium | Not started |
+| Update test harness discovery | 33 | 4 | Low | Verify only |
+| Generate/review expected files | 33 | 4 | Medium | Not started |
 | Validate data.tart | 32 | 3 | Medium | Not started |
 | Validate fns.tart | 32 | 3 | Medium | Not started |
 | Validate eval.tart | 32 | 3 | Medium | Not started |
@@ -225,6 +461,7 @@ Note: 30.1 and 29.1 directories are backfills from 31.0; version-specific differ
 
 **Remaining work:**
 - Phase 0.6.2-0.6.4 (Spec 32) - C-core typings validation workflow (iterative human/agent work)
+- Phase 0.7 (Spec 33) - Typing test fixtures (this plan)
 
 ---
 
@@ -475,7 +712,7 @@ Spec 22 (CI Releases) ──> Spec 23 (Binary Installation)
 
 Spec 27 (Dependency Graph) ──> Spec 26 (LSP Signature Sync)
 
-Spec 24 (Versioned Typings) ──> Spec 25 (Typechecker Test Harness)
+Spec 24 (Versioned Typings) ──> Spec 25 (Typechecker Test Harness) ──> Spec 33 (Typing Fixtures)
 ```
 
 ## Phase 11: LSP Navigation Features (Spec 08 Phase 2)
@@ -1246,30 +1483,35 @@ Create fixtures exercising each C primitive category:
 28. **Phase 28**: Coverage Report ✓
 29. **Phase 29**: Emacs Coverage ✓
 
-### Current Priority (Specs 30-32)
+### Current Priority (Specs 30-33)
 
 **Active development focus:**
 
 1. **Phase 0** (Spec 31): Fast Feedback - `./tart` wrapper script
-   - **Status:** Not started
+   - **Status:** Complete ✅
    - **Priority:** Highest - unblocks all subsequent work
    - **Complexity:** Low (single bash script)
 
 2. **Phase 0.5** (Spec 30): Verbose Coverage Output
-   - **Status:** Partial (`--verbose` exists but limited)
+   - **Status:** Complete ✅
    - **Priority:** High - enables debugging
    - **Complexity:** Medium (threading verbose flag through multiple modules)
 
 3. **Phase 0.6** (Spec 32): Emacs Core Typings Workflow
-   - **Status:** Not started
+   - **Status:** Partial (BUGS.md structure complete)
    - **Priority:** High - systematic type coverage expansion
    - **Complexity:** Medium (validation work, gap documentation)
    - **Depends on:** Phase 0, Phase 0.5
 
+4. **Phase 0.7** (Spec 33): Typing Test Fixtures
+   - **Status:** Not started
+   - **Priority:** High - documents type checker behavior
+   - **Complexity:** Medium (fixture creation, expected file generation)
+   - **Depends on:** Phase 27 (test harness)
+
 ### Deferred Work
 
 - **Phase 19**: Dogfood tart.el - needs comint, eglot, compile signatures
-- **Phase 27.5-27.6**: Version-specific and regression test fixtures
 
 ---
 
