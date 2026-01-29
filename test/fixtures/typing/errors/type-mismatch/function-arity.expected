@@ -1,0 +1,3 @@
+FAIL
+type mismatch
+expected: (-> (Int) String), found: Int
