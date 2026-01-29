@@ -645,6 +645,31 @@ let cmd_emacs_coverage ~verbose ~emacs_source ~emacs_version_opt =
       let summary = Tart.Emacs_coverage.summarize result in
       let percentage = Tart.Emacs_coverage.coverage_percentage summary in
 
+      (* Log verbose match summary *)
+      if verbose then (
+        verbose_log verbose "Matching symbols against typings...";
+        verbose_log verbose "Sample matches:";
+        (* Show first 5 covered *)
+        let covered = Tart.Emacs_coverage.covered_public result in
+        List.iteri
+          (fun i item ->
+            if i < 5 then
+              verbose_log verbose "  %s: COVERED (%s:%d)"
+                item.Tart.Emacs_coverage.definition.name
+                item.Tart.Emacs_coverage.definition.file
+                item.Tart.Emacs_coverage.definition.line)
+          covered;
+        (* Show first 5 uncovered *)
+        let uncovered = Tart.Emacs_coverage.uncovered_public result in
+        List.iteri
+          (fun i item ->
+            if i < 5 then
+              verbose_log verbose "  %s: UNCOVERED"
+                item.Tart.Emacs_coverage.definition.name)
+          uncovered;
+        verbose_log verbose "Match complete: %d/%d DEFUNs covered (%.1f%%)"
+          summary.covered_public summary.total_public percentage);
+
       (* Print report *)
       print_endline "=== C Layer Coverage ===";
       Printf.printf "Emacs source: %s\n" source_dir;
