@@ -18,9 +18,17 @@ type scheme = Mono of Types.typ | Poly of string list * Types.typ
 
 type t = {
   bindings : (string * scheme) list;
+      (** Variable namespace: let, setq, defvar, lambda params *)
+  fn_bindings : (string * scheme) list;
+      (** Function namespace: defun, defalias, flet *)
   level : int;  (** Current scope level for generalization *)
 }
-(** Type environment: maps names to type schemes. *)
+(** Type environment with dual namespaces for Elisp's Lisp-2 semantics.
+
+    Elisp has separate namespaces for variables and functions. A symbol can have
+    both a value and a function definition. This environment tracks both:
+    - [bindings] for variables (accessed via symbol evaluation)
+    - [fn_bindings] for functions (accessed via function position or #'name) *)
 
 (** {1 Creation} *)
 
@@ -44,24 +52,44 @@ val exit_level : t -> t
 (** {1 Lookup} *)
 
 val lookup : string -> t -> scheme option
-(** Look up a name in the environment. *)
+(** Look up a name, checking variable namespace first, then function namespace.
+
+    This provides backward compatibility while supporting Lisp-2 semantics. Use
+    [lookup_fn] to look up only in function namespace. *)
+
+val lookup_fn : string -> t -> scheme option
+(** Look up a name in the function namespace only. *)
 
 val names : t -> string list
-(** Get all names bound in the environment. *)
+(** Get all names bound in the variable namespace. *)
 
-(** {1 Extension} *)
+val fn_names : t -> string list
+(** Get all names bound in the function namespace. *)
+
+(** {1 Extension (Variable Namespace)} *)
 
 val extend : string -> scheme -> t -> t
-(** Extend the environment with a new binding. *)
+(** Extend the variable namespace with a new binding. *)
 
 val extend_mono : string -> Types.typ -> t -> t
-(** Extend with a monomorphic binding. *)
+(** Extend variable namespace with a monomorphic binding. *)
 
 val extend_monos : (string * Types.typ) list -> t -> t
-(** Extend with multiple monomorphic bindings. *)
+(** Extend variable namespace with multiple monomorphic bindings. *)
 
 val extend_poly : string -> string list -> Types.typ -> t -> t
-(** Extend with a polymorphic binding. *)
+(** Extend variable namespace with a polymorphic binding. *)
+
+(** {1 Extension (Function Namespace)} *)
+
+val extend_fn : string -> scheme -> t -> t
+(** Extend the function namespace with a new binding. *)
+
+val extend_fn_mono : string -> Types.typ -> t -> t
+(** Extend function namespace with a monomorphic binding. *)
+
+val extend_fn_poly : string -> string list -> Types.typ -> t -> t
+(** Extend function namespace with a polymorphic binding. *)
 
 (** {1 Instantiation} *)
 

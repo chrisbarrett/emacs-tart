@@ -790,9 +790,13 @@ let add_opaque_to_state name opaque state =
   let opaques = add_opaque name opaque state.ls_type_ctx.tc_opaques in
   { state with ls_type_ctx = { state.ls_type_ctx with tc_opaques = opaques } }
 
-(** Add a value binding to the load state *)
+(** Add a value binding to the load state (variable namespace) *)
 let add_value_to_state name scheme state =
   { state with ls_env = Type_env.extend name scheme state.ls_env }
+
+(** Add a function binding to the load state (function namespace) *)
+let add_fn_to_state name scheme state =
+  { state with ls_env = Type_env.extend_fn name scheme state.ls_env }
 
 (** {1 Import-Struct Processing}
 
@@ -1105,7 +1109,8 @@ and load_decls_into_state (sig_file : signature) (state : load_state) :
           let known_types = get_known_types_from_state state in
           let d = Forall_infer.infer_defun ~known_types d in
           let scheme = load_defun_with_ctx state.ls_type_ctx d in
-          add_value_to_state d.defun_name scheme state
+          (* Add to function namespace for Lisp-2 semantics *)
+          add_fn_to_state d.defun_name scheme state
       | DDefvar d ->
           let scheme = load_defvar_with_ctx state.ls_type_ctx d in
           add_value_to_state d.defvar_name scheme state
@@ -1169,7 +1174,8 @@ and load_scoped_decl (sig_file : signature)
       let known_types = get_known_types_from_state state in
       let d = Forall_infer.infer_defun ~known_types d in
       let scheme = load_defun_with_scope state.ls_type_ctx scope_tvars d in
-      add_value_to_state d.defun_name scheme state
+      (* Add to function namespace for Lisp-2 semantics *)
+      add_fn_to_state d.defun_name scheme state
   | DDefvar d ->
       let scheme = load_defvar_with_ctx state.ls_type_ctx d in
       add_value_to_state d.defvar_name scheme state

@@ -16,15 +16,18 @@ type scheme = Mono of typ | Poly of string list * typ
 
 type t = {
   bindings : (string * scheme) list;
+      (** Variable namespace: let, setq, defvar, lambda params *)
+  fn_bindings : (string * scheme) list;
+      (** Function namespace: defun, defalias, flet *)
   level : int;  (** Current scope level for generalization *)
 }
-(** Type environment: maps names to type schemes *)
+(** Type environment with dual namespaces for Elisp's Lisp-2 semantics *)
 
 (** Empty environment at level 0 *)
-let empty = { bindings = []; level = 0 }
+let empty = { bindings = []; fn_bindings = []; level = 0 }
 
-(** Create an environment with initial bindings *)
-let of_list bindings = { bindings; level = 0 }
+(** Create an environment with initial bindings (in variable namespace) *)
+let of_list bindings = { bindings; fn_bindings = []; level = 0 }
 
 (** Get the current level *)
 let current_level env = env.level
@@ -35,22 +38,41 @@ let enter_level env = { env with level = env.level + 1 }
 (** Exit a scope (decrement level) *)
 let exit_level env = { env with level = max 0 (env.level - 1) }
 
-(** Look up a name in the environment *)
-let lookup name env = List.assoc_opt name env.bindings
+(** Look up a name in the variable namespace.
 
-(** Extend the environment with a new binding *)
+    Falls back to function namespace if not found in variable namespace. This
+    provides backward compatibility while supporting Lisp-2 semantics. *)
+let lookup name env =
+  match List.assoc_opt name env.bindings with
+  | Some _ as result -> result
+  | None -> List.assoc_opt name env.fn_bindings
+
+(** Look up a name in the function namespace only *)
+let lookup_fn name env = List.assoc_opt name env.fn_bindings
+
+(** Extend the variable namespace with a new binding *)
 let extend name scheme env =
   { env with bindings = (name, scheme) :: env.bindings }
 
-(** Extend with a monomorphic binding *)
+(** Extend variable namespace with a monomorphic binding *)
 let extend_mono name ty env = extend name (Mono ty) env
 
-(** Extend with multiple monomorphic bindings *)
+(** Extend variable namespace with multiple monomorphic bindings *)
 let extend_monos bindings env =
   List.fold_left (fun env (name, ty) -> extend_mono name ty env) env bindings
 
-(** Extend with a polymorphic binding *)
+(** Extend variable namespace with a polymorphic binding *)
 let extend_poly name vars ty env = extend name (Poly (vars, ty)) env
+
+(** Extend the function namespace with a new binding *)
+let extend_fn name scheme env =
+  { env with fn_bindings = (name, scheme) :: env.fn_bindings }
+
+(** Extend function namespace with a monomorphic binding *)
+let extend_fn_mono name ty env = extend_fn name (Mono ty) env
+
+(** Extend function namespace with a polymorphic binding *)
+let extend_fn_poly name vars ty env = extend_fn name (Poly (vars, ty)) env
 
 (** Instantiate a type scheme at the current level.
 
@@ -101,16 +123,27 @@ let scheme_to_string = function
   | Poly (vars, ty) ->
       Printf.sprintf "(forall (%s) %s)" (String.concat " " vars) (to_string ty)
 
-(** Get all names bound in the environment *)
+(** Get all names bound in the variable namespace *)
 let names env = List.map fst env.bindings
+
+(** Get all names bound in the function namespace *)
+let fn_names env = List.map fst env.fn_bindings
 
 (** Pretty-print the environment for debugging *)
 let to_string env =
-  let bindings_str =
+  let var_str =
     String.concat "\n"
       (List.map
          (fun (name, scheme) ->
            Printf.sprintf "  %s : %s" name (scheme_to_string scheme))
          env.bindings)
   in
-  Printf.sprintf "TypeEnv (level=%d):\n%s" env.level bindings_str
+  let fn_str =
+    String.concat "\n"
+      (List.map
+         (fun (name, scheme) ->
+           Printf.sprintf "  %s : %s" name (scheme_to_string scheme))
+         env.fn_bindings)
+  in
+  Printf.sprintf "TypeEnv (level=%d):\n  Variables:\n%s\n  Functions:\n%s"
+    env.level var_str fn_str

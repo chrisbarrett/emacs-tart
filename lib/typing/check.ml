@@ -380,12 +380,12 @@ let check_form_with_state (state : check_state) (sexp : Syntax.Sexp.t) :
               (* Try to handle it as a defun *)
               match Infer.infer_defun env sexp with
               | Some defun_result ->
-                  (* Bind the function name in the environment *)
+                  (* Bind the function name in the function namespace *)
                   let scheme =
                     Generalize.generalize (Env.current_level env)
                       defun_result.Infer.fn_type
                   in
-                  let env' = Env.extend defun_result.Infer.name scheme env in
+                  let env' = Env.extend_fn defun_result.Infer.name scheme env in
                   (* Solve constraints and collect errors *)
                   let errors =
                     Unify.solve_all defun_result.Infer.defun_constraints
