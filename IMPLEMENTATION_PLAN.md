@@ -133,6 +133,70 @@ tart emacs-coverage -v > report.txt 2> debug.txt
 
 ---
 
+## Phase 0.6: Emacs Core Typings Workflow (Spec 32)
+
+**Status:** Not started
+**Priority:** High - systematic expansion of type coverage
+**Depends on:** Phase 0 (./tart script), Phase 0.5 (verbose coverage)
+
+This phase establishes the workflow for systematically creating complete, verified type signatures for Emacs C core primitives.
+
+### 0.6.1 Create BUGS.md Structure
+
+- [ ] [R5] Create `typings/emacs/BUGS.md` for cross-version issues
+- [ ] [R6] Create `typings/emacs/31.0/BUGS.md` for version-specific issues
+- [ ] [R7,R8] Document format: function name, source location, category, description
+
+Categories:
+- **type-system-gap**: Needs features tart doesn't have (dependent types, row polymorphism)
+- **untypeable**: Behavior can't be captured soundly (dynamic dispatch, eval-based)
+- **ergonomic**: Typeable but awkward (excessive annotations at call sites)
+- **version-specific**: Signature changed between Emacs versions
+
+### 0.6.2 Workflow for Each C Source File
+
+For each C file (data.c, fns.c, eval.c, alloc.c, etc.):
+
+1. **Extract symbols** - Run `./tart emacs-coverage -v` to list DEFUNs/DEFVARs
+2. **Write signatures** - Create/update corresponding `.tart` file
+3. **Validate** - Run `./tart check` against Emacs lisp/ directory
+4. **Debug** - Use `./tart emacs-coverage -v` to confirm signatures loaded
+5. **Document gaps** - Log untypeable items to appropriate BUGS.md
+6. **Iterate** - Fix type errors until 95%+ pass rate
+
+### 0.6.3 Acceptance Criteria Per File
+
+- [ ] 100% symbol coverage (every public DEFUN/DEFVAR has a type signature)
+- [ ] 95%+ validation success against Emacs lisp/ usages
+- [ ] All untypeable items documented in BUGS.md with category
+
+### 0.6.4 Current C-Core Files Status
+
+The following files exist in `typings/emacs/31.0/c-core/`:
+
+| File | Source | Status | Needs Work |
+|------|--------|--------|------------|
+| data.tart | data.c | Exists | Validate against lisp/, document gaps |
+| fns.tart | fns.c | Exists | Validate against lisp/, document gaps |
+| eval.tart | eval.c | Exists | Validate against lisp/, document gaps |
+| alloc.tart | alloc.c | Exists | Validate against lisp/, document gaps |
+| buffer.tart | buffer.c | Exists | Validate against lisp/, document gaps |
+| window.tart | window.c | Exists | Validate against lisp/, document gaps |
+| frame.tart | frame.c | Exists | Validate against lisp/, document gaps |
+| fileio.tart | fileio.c | Exists | Validate against lisp/, document gaps |
+| editfns.tart | editfns.c | Exists | Validate against lisp/, document gaps |
+| search.tart | search.c | Exists | Validate against lisp/, document gaps |
+| process.tart | process.c | Exists | Validate against lisp/, document gaps |
+| keyboard.tart | keyboard.c | Exists | Validate against lisp/, document gaps |
+| keymap.tart | keymap.c | Exists | Validate against lisp/, document gaps |
+| minibuf.tart | minibuf.c | Exists | Validate against lisp/, document gaps |
+| textprop.tart | textprop.c | Exists | Validate against lisp/, document gaps |
+| print.tart | print.c | Exists | Validate against lisp/, document gaps |
+
+Note: 30.1 and 29.1 directories are backfills from 31.0; version-specific differences need to be audited.
+
+---
+
 ## Task Summary (New Priority Work)
 
 | Task | Spec | Priority | Complexity | Status |
@@ -146,10 +210,16 @@ tart emacs-coverage -v > report.txt 2> debug.txt
 | Add verbose match summary | 30 | 2 | Medium | Not started |
 | Thread verbose through functions | 30 | 2 | Medium | Not started |
 | Add `-v` short form | 30 | 2 | Low | Not started |
+| Create BUGS.md structure | 32 | 3 | Low | Not started |
+| Validate data.tart | 32 | 3 | Medium | Not started |
+| Validate fns.tart | 32 | 3 | Medium | Not started |
+| Validate eval.tart | 32 | 3 | Medium | Not started |
+| Validate remaining c-core files | 32 | 3 | Medium | Not started |
 
 **Implementation order:**
 1. Phase 0 (Spec 31) - One small script, immediate benefit for all subsequent work
 2. Phase 0.5 (Spec 30) - Verbose output for debugging coverage issues
+3. Phase 0.6 (Spec 32) - Systematic typings validation and gap documentation
 
 ---
 
@@ -1026,52 +1096,54 @@ Versioned Emacs core typings with auto-detection.
 
 ### 26.4 Directory Structure Migration
 
-- [ ] Delete `stdlib/` directory entirely
-- [ ] Create `typings/emacs/31.0/c-core/` directory
-- [ ] Create `typings/emacs/latest` symlink to `31.0`
-- [ ] Verify: Search path resolves to new typings location
+- [x] Delete `stdlib/` directory entirely
+- [x] Create `typings/emacs/31.0/c-core/` directory
+- [x] Create `typings/emacs/latest` symlink to `31.0`
+- [x] Verify: Search path resolves to new typings location
 
 ### 26.5 C-Core Typings for Emacs 31.0
 
 Create signature files mapping 1:1 to Emacs source:
 
-- [ ] [R5] Create `typings/emacs/31.0/c-core/data.tart` (eq, null, +, -, car, cdr, predicates)
-- [ ] [R5] Create `typings/emacs/31.0/c-core/fns.tart` (length, concat, mapcar, assoc)
-- [ ] [R5] Create `typings/emacs/31.0/c-core/eval.tart` (funcall, apply, signal, catch)
-- [ ] [R5] Create `typings/emacs/31.0/c-core/alloc.tart` (cons, list, make-vector)
-- [ ] [R5] Create `typings/emacs/31.0/c-core/buffer.tart` (current-buffer, set-buffer)
-- [ ] [R5] Create `typings/emacs/31.0/c-core/window.tart` (selected-window, window-buffer)
-- [ ] [R5] Create `typings/emacs/31.0/c-core/frame.tart` (selected-frame, frame-parameters)
-- [ ] [R5] Create `typings/emacs/31.0/c-core/fileio.tart` (find-file-noselect, write-region)
-- [ ] [R5] Create `typings/emacs/31.0/c-core/editfns.tart` (point, goto-char, insert)
-- [ ] [R5] Create `typings/emacs/31.0/c-core/search.tart` (re-search-forward, match-string)
-- [ ] [R5] Create `typings/emacs/31.0/c-core/process.tart` (start-process, process-send-string)
-- [ ] [R5] Create `typings/emacs/31.0/c-core/keyboard.tart` (read-key-sequence)
-- [ ] [R5] Create `typings/emacs/31.0/c-core/keymap.tart` (define-key, lookup-key)
-- [ ] [R5] Create `typings/emacs/31.0/c-core/minibuf.tart` (read-string, completing-read)
-- [ ] [R5] Create `typings/emacs/31.0/c-core/textprop.tart` (get-text-property, put-text-property)
-- [ ] [R5] Create `typings/emacs/31.0/c-core/print.tart` (prin1, princ, message)
-- [ ] Verify: All c-core files parse and load without conflicts
+- [x] [R5] Create `typings/emacs/31.0/c-core/data.tart` (eq, null, +, -, car, cdr, predicates)
+- [x] [R5] Create `typings/emacs/31.0/c-core/fns.tart` (length, concat, mapcar, assoc)
+- [x] [R5] Create `typings/emacs/31.0/c-core/eval.tart` (funcall, apply, signal, catch)
+- [x] [R5] Create `typings/emacs/31.0/c-core/alloc.tart` (cons, list, make-vector)
+- [x] [R5] Create `typings/emacs/31.0/c-core/buffer.tart` (current-buffer, set-buffer)
+- [x] [R5] Create `typings/emacs/31.0/c-core/window.tart` (selected-window, window-buffer)
+- [x] [R5] Create `typings/emacs/31.0/c-core/frame.tart` (selected-frame, frame-parameters)
+- [x] [R5] Create `typings/emacs/31.0/c-core/fileio.tart` (find-file-noselect, write-region)
+- [x] [R5] Create `typings/emacs/31.0/c-core/editfns.tart` (point, goto-char, insert)
+- [x] [R5] Create `typings/emacs/31.0/c-core/search.tart` (re-search-forward, match-string)
+- [x] [R5] Create `typings/emacs/31.0/c-core/process.tart` (start-process, process-send-string)
+- [x] [R5] Create `typings/emacs/31.0/c-core/keyboard.tart` (read-key-sequence)
+- [x] [R5] Create `typings/emacs/31.0/c-core/keymap.tart` (define-key, lookup-key)
+- [x] [R5] Create `typings/emacs/31.0/c-core/minibuf.tart` (read-string, completing-read)
+- [x] [R5] Create `typings/emacs/31.0/c-core/textprop.tart` (get-text-property, put-text-property)
+- [x] [R5] Create `typings/emacs/31.0/c-core/print.tart` (prin1, princ, message)
+- [x] Verify: All c-core files parse and load without conflicts
 
 ### 26.6 Multi-File C-Core Loading
 
-- [ ] Update search_path.ml to load all `.tart` files in c-core directory
-- [ ] Merge signatures; error on conflicts at load time
-- [ ] Verify: Type checking works with split c-core files
+- [x] Update search_path.ml to load all `.tart` files in c-core directory
+- [x] Merge signatures; error on conflicts at load time
+- [x] Verify: Type checking works with split c-core files
 
 ### 26.7 LSP Version Detection
 
-- [ ] [R7] Detect Emacs version once at LSP startup
-- [ ] Use detected version for entire session
-- [ ] Log detected version at debug level
-- [ ] Verify: LSP logs which typings version is being used
+- [x] [R7] Detect Emacs version once at LSP startup
+- [x] Use detected version for entire session
+- [x] Log detected version at debug level
+- [x] Verify: LSP logs which typings version is being used
 
 ### 26.8 Backfill Older Versions
 
-- [ ] Copy `31.0/` to `30.1/` and `29.1/`
-- [ ] Diff against Emacs source for version-specific changes
-- [ ] Add JSON, tree-sitter, SQLite, etc. signatures where appropriate
-- [ ] Verify: Typings work for Emacs 29.1 and 30.1
+- [x] Copy `31.0/` to `30.1/` and `29.1/`
+- [ ] Diff against Emacs source for version-specific changes (future work)
+- [ ] Add JSON, tree-sitter, SQLite, etc. signatures where appropriate (future work)
+- [x] Verify: Typings work for Emacs 29.1 and 30.1
+
+Note: Version-specific differences between 29.1, 30.1, and 31.0 are tracked in Phase 0.6 (Spec 32)
 
 ---
 
@@ -1083,34 +1155,34 @@ Fixture-based acceptance tests for type checker output.
 
 ### 27.1 Expected File Parser
 
-- [ ] Define `.expected` file format (PASS/FAIL on line 1, diagnostics following)
-- [ ] Implement parser in `lib/test_harness/acceptance.ml`
-- [ ] Verify: Parser handles both PASS and FAIL expectations
+- [x] Define `.expected` file format (PASS/FAIL on line 1, diagnostics following)
+- [x] Implement parser in `lib/test_harness/acceptance.ml`
+- [x] Verify: Parser handles both PASS and FAIL expectations
 
 ### 27.2 Acceptance Harness Core
 
-- [ ] Implement `check_fixture : path:string -> Fixture_result.t`
-- [ ] Implement `run_all : dir:string -> Summary.t`
-- [ ] Support parallel execution for speed
-- [ ] Verify: Single fixture and batch execution work
+- [x] Implement `check_fixture : path:string -> Fixture_result.t`
+- [x] Implement `run_all : dir:string -> Summary.t`
+- [x] Support parallel execution for speed
+- [x] Verify: Single fixture and batch execution work
 
 ### 27.3 Core Typings Fixtures
 
 Create fixtures exercising each C primitive category:
 
-- [ ] [R5] Create `test/fixtures/typing/core/arithmetic.el` (+, -, *, /, mod)
-- [ ] [R5] Create `test/fixtures/typing/core/lists.el` (car, cdr, cons, nth, mapcar)
-- [ ] [R5] Create `test/fixtures/typing/core/strings.el` (concat, substring, upcase)
-- [ ] [R5] Create `test/fixtures/typing/core/predicates.el` (null, listp, stringp)
-- [ ] [R5] Create `test/fixtures/typing/core/control.el` (funcall, apply, signal)
-- [ ] Include both passing and failing cases in each fixture
-- [ ] Verify: All core fixtures have matching `.expected` files
+- [x] [R5] Create `test/fixtures/typing/core/arithmetic.el` (+, -, *, /, mod)
+- [x] [R5] Create `test/fixtures/typing/core/lists.el` (car, cdr, cons, nth, mapcar)
+- [x] [R5] Create `test/fixtures/typing/core/strings.el` (concat, substring, upcase)
+- [x] [R5] Create `test/fixtures/typing/core/predicates.el` (null, listp, stringp)
+- [x] [R5] Create `test/fixtures/typing/core/control.el` (funcall, apply, signal)
+- [x] Include both passing and failing cases in each fixture
+- [x] Verify: All core fixtures have matching `.expected` files
 
 ### 27.4 Diagnostic Assertions
 
-- [ ] [R2] Support `test: expect-error "substring"` comment syntax
-- [ ] [R3] Support `test: expect-error-at 6:1` location assertions
-- [ ] Verify: Diagnostic content and location assertions work
+- [x] [R2] Support `test: expect-error "substring"` comment syntax
+- [x] [R3] Support `test: expect-error-at 6:1` location assertions
+- [x] Verify: Diagnostic content and location assertions work
 
 ### 27.5 Version-Specific Tests
 
@@ -1127,15 +1199,17 @@ Create fixtures exercising each C primitive category:
 
 ### 27.7 Integration with dune test
 
-- [ ] [R8] Wire harness into `dune test` as acceptance_test.ml
-- [ ] Show diff between expected and actual on failures
-- [ ] [R9] Run fixtures in parallel for speed
-- [ ] Target: Full suite <30s
-- [ ] Verify: `dune test` includes acceptance tests
+- [x] [R8] Wire harness into `dune test` as acceptance_test.ml
+- [x] Show diff between expected and actual on failures
+- [x] [R9] Run fixtures in parallel for speed
+- [x] Target: Full suite <30s
+- [x] Verify: `dune test` includes acceptance tests
 
 ---
 
 ## Priority Order
+
+### Completed Phases (Specs 07-29)
 
 1. **Phase 1**: Signature system ✓
 2. **Phase 2**: Prek migration ✓
@@ -1163,12 +1237,34 @@ Create fixtures exercising each C primitive category:
 24. **Phase 24**: Module Dependency Graph ✓
 25. **Phase 25**: LSP Signature File Synchronization ✓
 26. **Phase 26**: Versioned Typings Distribution ✓
-27. **Phase 27**: Typechecker Test Harness ✓
+27. **Phase 27**: Typechecker Test Harness (partial - version-specific tests pending)
 28. **Phase 28**: Coverage Report ✓
+29. **Phase 29**: Emacs Coverage ✓
 
-Phase 19 is deferred pending additional stdlib signatures (comint, eglot, compile).
+### Current Priority (Specs 30-32)
 
-Phases 24-28 represent new work from Specs 24-28.
+**Active development focus:**
+
+1. **Phase 0** (Spec 31): Fast Feedback - `./tart` wrapper script
+   - **Status:** Not started
+   - **Priority:** Highest - unblocks all subsequent work
+   - **Complexity:** Low (single bash script)
+
+2. **Phase 0.5** (Spec 30): Verbose Coverage Output
+   - **Status:** Partial (`--verbose` exists but limited)
+   - **Priority:** High - enables debugging
+   - **Complexity:** Medium (threading verbose flag through multiple modules)
+
+3. **Phase 0.6** (Spec 32): Emacs Core Typings Workflow
+   - **Status:** Not started
+   - **Priority:** High - systematic type coverage expansion
+   - **Complexity:** Medium (validation work, gap documentation)
+   - **Depends on:** Phase 0, Phase 0.5
+
+### Deferred Work
+
+- **Phase 19**: Dogfood tart.el - needs comint, eglot, compile signatures
+- **Phase 27.5-27.6**: Version-specific and regression test fixtures
 
 ---
 
