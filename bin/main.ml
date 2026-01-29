@@ -367,10 +367,17 @@ let find_typings_root ~verbose : string =
   verbose_log verbose "Executable: %s" exe_path;
   verbose_log verbose "Typings root candidates:";
 
-  (* List of candidate paths relative to executable directory *)
+  (* List of candidate paths relative to executable directory.
+     Order matters: first found wins. *)
   let candidates =
     [
-      (* Development: typings/emacs in repo root *)
+      (* Development via dune exec: _build/install/default/bin -> repo/typings *)
+      (* Go up 4 levels from _build/install/default/bin to repo root *)
+      Filename.concat
+        (Filename.dirname
+           (Filename.dirname (Filename.dirname (Filename.dirname exe_dir))))
+        "typings/emacs";
+      (* Development: typings/emacs in repo root (for direct bin execution) *)
       Filename.concat (Filename.dirname exe_dir) "typings/emacs";
       (* Installed: ../share/tart/typings/emacs relative to bin *)
       Filename.concat (Filename.dirname exe_dir) "share/tart/typings/emacs";
@@ -453,6 +460,35 @@ let detect_emacs_version ~verbose ~typings_root : Tart.Emacs_version.version =
 
   version
 
+(** Log typings files being loaded.
+
+    Lists all .tart files in the c-core directory and reports signature counts.
+*)
+let log_typings_loading ~verbose ~typings_root ~version =
+  let open Tart.Verbose_log in
+  match Tart.Search_path.find_typings_dir ~typings_root ~version with
+  | None -> ()
+  | Some typings_dir ->
+      let c_core_dir = Filename.concat typings_dir "c-core" in
+      let files = Tart.Search_path.list_c_core_files c_core_dir in
+      if files = [] then verbose_log verbose "No c-core typings files found"
+      else (
+        verbose_log verbose "Loading c-core typings from %s" c_core_dir;
+        let total_sigs = ref 0 in
+        List.iter
+          (fun path ->
+            match Tart.Search_path.parse_signature_file path with
+            | None ->
+                verbose_log verbose "  %s: (parse error)"
+                  (Filename.basename path)
+            | Some sig_file ->
+                let count = List.length sig_file.Tart.Sig_ast.sig_decls in
+                total_sigs := !total_sigs + count;
+                verbose_log verbose "  %s: %d signatures"
+                  (Filename.basename path) count)
+          files;
+        verbose_log verbose "Total signatures loaded: %d" !total_sigs)
+
 (** Coverage subcommand: measure type signature coverage *)
 let cmd_coverage ~format ~verbose ~fail_under ~exclude paths =
   let config = { Tart.File_scanner.exclude_patterns = exclude } in
@@ -464,6 +500,7 @@ let cmd_coverage ~format ~verbose ~fail_under ~exclude paths =
   (* Build search path for signature lookup *)
   let typings_root = find_typings_root ~verbose in
   let version = detect_emacs_version ~verbose ~typings_root in
+  log_typings_loading ~verbose ~typings_root ~version;
   let search_path =
     Tart.Search_path.empty
     |> Tart.Search_path.with_typings_root typings_root
@@ -534,6 +571,9 @@ let cmd_emacs_coverage ~verbose ~emacs_source ~emacs_version_opt =
           let selected_version = Filename.basename dir in
           verbose_log verbose "Using typings version: %s" selected_version
       | None -> verbose_log verbose "No typings directory found");
+
+      (* Log typings files being loaded *)
+      log_typings_loading ~verbose ~typings_root ~version;
 
       (* Scan C source files *)
       let src_dir = Filename.concat source_dir "src" in
