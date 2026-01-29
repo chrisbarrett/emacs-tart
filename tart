@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Find repo root (where dune-project lives)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+if [[ -n "${IN_NIX_SHELL:-}" ]]; then
+    # Already in nix shell, run directly
+    exec dune exec tart -- "$@"
+else
+    # Outside nix shell, wrap with nix develop
+    exec nix develop --command dune exec tart -- "$@"
+fi
