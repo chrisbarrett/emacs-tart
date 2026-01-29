@@ -392,6 +392,79 @@ let cmd_coverage ~format ~verbose ~fail_under ~exclude paths =
       if percentage < float_of_int threshold then exit 1
   | None -> ()
 
+(** Emacs coverage subcommand: measure C layer type coverage *)
+let cmd_emacs_coverage ~emacs_source ~emacs_version_opt =
+  (* Discover Emacs source directory *)
+  let source_result = Tart.Emacs_source.discover ~explicit_path:emacs_source in
+  match source_result with
+  | Tart.Emacs_source.NotFound _ | Tart.Emacs_source.InvalidPath _ ->
+      prerr_endline (Tart.Emacs_source.format_error source_result);
+      exit 1
+  | Tart.Emacs_source.Found { source_dir; version = detected_version } ->
+      (* Use specified version or detected version *)
+      let version_str =
+        match emacs_version_opt with
+        | Some v -> Tart.Emacs_version.version_to_string v
+        | None -> detected_version
+      in
+      let version =
+        match emacs_version_opt with
+        | Some v -> v
+        | None -> (
+            match Tart.Emacs_version.parse_version detected_version with
+            | Some v -> v
+            | None -> Tart.Emacs_version.latest)
+      in
+
+      (* Scan C source files *)
+      let src_dir = Filename.concat source_dir "src" in
+      let definitions = Tart.C_scanner.scan_dir src_dir in
+
+      (* Get typings root *)
+      let typings_root =
+        let exe_dir = Filename.dirname Sys.executable_name in
+        Filename.concat (Filename.dirname exe_dir) "share/tart/typings/emacs"
+      in
+
+      (* Calculate coverage *)
+      let result =
+        Tart.Emacs_coverage.calculate_coverage ~source_dir
+          ~emacs_version:version_str ~typings_root ~version definitions
+      in
+      let summary = Tart.Emacs_coverage.summarize result in
+      let percentage = Tart.Emacs_coverage.coverage_percentage summary in
+
+      (* Print report *)
+      print_endline "=== C Layer Coverage ===";
+      Printf.printf "Emacs source: %s\n" source_dir;
+      Printf.printf "Emacs version: %s\n" version_str;
+      Printf.printf "Files scanned: %d\n" result.files_scanned;
+      Printf.printf "Total public symbols: %d\n" summary.total_public;
+      Printf.printf "Covered: %d (%.1f%%)\n" summary.covered_public percentage;
+      Printf.printf "Uncovered: %d\n" summary.uncovered_public;
+      print_newline ();
+
+      (* Print private symbols *)
+      let private_defs = Tart.Emacs_coverage.private_definitions result in
+      if private_defs <> [] then (
+        Printf.printf "Private symbols excluded: %d\n" summary.total_private;
+        List.iter
+          (fun item ->
+            Printf.printf "  %s\n" item.Tart.Emacs_coverage.definition.name)
+          (List.filteri (fun i _ -> i < 10) private_defs);
+        if List.length private_defs > 10 then
+          Printf.printf "  ... and %d more\n" (List.length private_defs - 10);
+        print_newline ());
+
+      (* Print uncovered public symbols *)
+      let uncovered = Tart.Emacs_coverage.uncovered_public result in
+      if uncovered <> [] then (
+        print_endline "Uncovered public:";
+        List.iter
+          (fun item ->
+            Printf.printf "  %s\n" item.Tart.Emacs_coverage.definition.name)
+          uncovered)
+
 (** LSP subcommand: start language server *)
 let cmd_lsp ~log_level port =
   match port with
@@ -438,6 +511,7 @@ Usage:
   tart repl                        Interactive REPL
   tart lsp [OPTIONS]               Start LSP server
   tart coverage [OPTIONS] [PATH]   Measure type signature coverage
+  tart emacs-coverage [OPTIONS]    Measure Emacs C layer type coverage
 
 Options:
   --version              Print version and exit
@@ -458,6 +532,10 @@ Coverage options:
   --verbose        Show additional details
   --fail-under=N   Exit 1 if coverage below N percent
   --exclude=PAT    Exclude files matching pattern (e.g., *-test.el)
+
+Emacs coverage options:
+  --emacs-source PATH  Path to Emacs source directory
+  --emacs-version VER  Use typings for Emacs version VER (e.g., 31.0)
 
 Exit codes:
   0  Success
@@ -647,6 +725,49 @@ let () =
       else
         cmd_coverage ~format:!format ~verbose:!verbose ~fail_under:!fail_under
           ~exclude:!exclude !paths
+  | "emacs-coverage" :: rest ->
+      let emacs_source = ref None in
+      let emacs_version = ref None in
+      let show_help = ref false in
+      let rec parse_emacs_coverage_args = function
+        | [] -> ()
+        | "--help" :: _ | "-h" :: _ -> show_help := true
+        | "--emacs-source" :: path :: rest ->
+            emacs_source := Some path;
+            parse_emacs_coverage_args rest
+        | "--emacs-source" :: [] ->
+            prerr_endline "tart emacs-coverage: --emacs-source requires a path";
+            exit 2
+        | "--emacs-version" :: v :: rest ->
+            (match Tart.Emacs_version.parse_version v with
+            | Some ver -> emacs_version := Some ver
+            | None ->
+                prerr_endline
+                  (Printf.sprintf "tart emacs-coverage: invalid version '%s'" v);
+                prerr_endline "Expected format: MAJOR.MINOR (e.g., 31.0)";
+                exit 2);
+            parse_emacs_coverage_args rest
+        | "--emacs-version" :: [] ->
+            prerr_endline
+              "tart emacs-coverage: --emacs-version requires a version";
+            exit 2
+        | arg :: _ ->
+            prerr_endline ("tart emacs-coverage: unknown option: " ^ arg);
+            exit 2
+      in
+      parse_emacs_coverage_args rest;
+      if !show_help then (
+        print_endline "Usage: tart emacs-coverage [OPTIONS]";
+        print_endline "";
+        print_endline "Measure type coverage for Emacs C layer primitives.";
+        print_endline "";
+        print_endline "Options:";
+        print_endline "  --emacs-source PATH  Path to Emacs source directory";
+        print_endline "  --emacs-version VER  Use typings for Emacs version VER";
+        exit 0)
+      else
+        cmd_emacs_coverage ~emacs_source:!emacs_source
+          ~emacs_version_opt:!emacs_version
   (* Default: type-check files *)
   | files ->
       (* Parse check command options *)
