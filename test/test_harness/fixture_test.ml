@@ -84,9 +84,23 @@ let () =
   | Some tart_bin, Some fixtures_dir ->
       (* Run all fixture tests *)
       let core_dir = Filename.concat fixtures_dir "core" in
+      let version_dir = Filename.concat fixtures_dir "version" in
+      let regression_dir = Filename.concat fixtures_dir "regression" in
       let tests =
-        if Sys.is_directory core_dir then
-          [ ("core-typings", fixture_tests_for_dir ~tart_bin ~dir:core_dir) ]
-        else []
+        (if Sys.file_exists core_dir && Sys.is_directory core_dir then
+           [ ("core-typings", fixture_tests_for_dir ~tart_bin ~dir:core_dir) ]
+         else [])
+        @ (if Sys.file_exists version_dir && Sys.is_directory version_dir then
+             [
+               ( "version-specific",
+                 fixture_tests_for_dir ~tart_bin ~dir:version_dir );
+             ]
+           else [])
+        @ (if Sys.file_exists regression_dir && Sys.is_directory regression_dir
+           then
+             [
+               ("regression", fixture_tests_for_dir ~tart_bin ~dir:regression_dir);
+             ]
+           else [])
       in
       Alcotest.run "fixtures" tests

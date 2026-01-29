@@ -17,6 +17,12 @@ type expected_file = {
 }
 (** Parsed contents of a `.expected` file. *)
 
+type fixture_directives = {
+  emacs_version : string option;
+      (** Override Emacs version for typings lookup *)
+}
+(** Directives parsed from fixture file comments. *)
+
 type tart_output = { exit_code : int; stdout : string; stderr : string }
 (** Result of running `tart check`. *)
 
@@ -36,6 +42,35 @@ type summary = {
   results : fixture_result list;
 }
 (** Summary of running all fixtures. *)
+
+(** {1 Directive Parser} *)
+
+(** Parse test directives from fixture file comments.
+
+    Supported directives:
+    - `test: emacs-version X.Y` - Use specific Emacs version for typings *)
+let parse_fixture_directives (el_path : string) : fixture_directives =
+  let emacs_version = ref None in
+  (try
+     let ic = In_channel.open_text el_path in
+     (try
+        while true do
+          let line = input_line ic in
+          let line = String.trim line in
+          (* Look for ;; test: emacs-version X.Y *)
+          if String.length line > 0 && line.[0] = ';' then
+            try
+              let re =
+                Str.regexp {|;+[ \t]*test:[ \t]*emacs-version[ \t]+\([0-9.]+\)|}
+              in
+              if Str.string_match re line 0 then
+                emacs_version := Some (Str.matched_group 1 line)
+            with _ -> ()
+        done
+      with End_of_file -> ());
+     In_channel.close ic
+   with _ -> ());
+  { emacs_version = !emacs_version }
 
 (** {1 Expected File Parser} *)
 
@@ -107,14 +142,23 @@ let discover_fixtures (dir : string) : string list =
 
 (** Run `tart` on a file and capture output.
 
-    Uses the default check mode (no subcommand needed). *)
-let run_tart_check ~(tart_bin : string) (el_path : string) : tart_output =
+    Uses the default check mode (no subcommand needed). If directives specify an
+    Emacs version, passes --emacs-version flag. *)
+let run_tart_check ~(tart_bin : string)
+    ?(directives : fixture_directives option) (el_path : string) : tart_output =
   (* Create temporary files for stdout/stderr *)
   let stdout_file = Filename.temp_file "tart_stdout" ".txt" in
   let stderr_file = Filename.temp_file "tart_stderr" ".txt" in
+  (* Build command with optional version flag *)
+  let version_flag =
+    match directives with
+    | Some { emacs_version = Some v } ->
+        Printf.sprintf "--emacs-version %s " (Filename.quote v)
+    | _ -> ""
+  in
   (* tart defaults to type-check mode, no need for 'check' subcommand *)
   let cmd =
-    Printf.sprintf "%s %s > %s 2> %s" (Filename.quote tart_bin)
+    Printf.sprintf "%s %s%s > %s 2> %s" (Filename.quote tart_bin) version_flag
       (Filename.quote el_path)
       (Filename.quote stdout_file)
       (Filename.quote stderr_file)
@@ -220,7 +264,8 @@ let check_fixture ~(tart_bin : string) ~(path : string) : fixture_result =
           Some (Printf.sprintf "No valid .expected file at %s" expected_path);
       }
   | Some expected ->
-      let actual = run_tart_check ~tart_bin path in
+      let directives = parse_fixture_directives path in
+      let actual = run_tart_check ~tart_bin ~directives path in
       let passed = verify_fixture ~expected ~actual in
       let diff =
         if passed then None else Some (generate_diff ~expected ~actual)

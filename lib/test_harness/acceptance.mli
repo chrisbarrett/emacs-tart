@@ -17,6 +17,12 @@ type expected_file = {
 }
 (** Parsed contents of a `.expected` file. *)
 
+type fixture_directives = {
+  emacs_version : string option;
+      (** Override Emacs version for typings lookup *)
+}
+(** Directives parsed from fixture file comments. *)
+
 type tart_output = { exit_code : int; stdout : string; stderr : string }
 (** Result of running `tart check`. *)
 
@@ -36,6 +42,14 @@ type summary = {
   results : fixture_result list;
 }
 (** Summary of running all fixtures. *)
+
+(** {1 Directive Parser} *)
+
+val parse_fixture_directives : string -> fixture_directives
+(** Parse test directives from fixture file comments.
+
+    Supported directives:
+    - `test: emacs-version X.Y` - Use specific Emacs version for typings *)
 
 (** {1 Expected File Parser} *)
 
@@ -63,10 +77,12 @@ val discover_fixtures : string -> string list
 
 (** {1 Running Tart} *)
 
-val run_tart_check : tart_bin:string -> string -> tart_output
+val run_tart_check :
+  tart_bin:string -> ?directives:fixture_directives -> string -> tart_output
 (** Run `tart check` on a file and capture output.
 
     @param tart_bin Path to tart executable
+    @param directives Optional fixture directives (e.g., emacs-version)
     @param path Path to the `.el` file to check *)
 
 (** {1 Main API} *)
