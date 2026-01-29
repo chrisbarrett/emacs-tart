@@ -21,3 +21,7 @@
 (test
  (name c_scanner_test)
  (libraries coverage unix alcotest))
+
+(test
+ (name emacs_coverage_test)
+ (libraries coverage sig core unix alcotest))
