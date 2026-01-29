@@ -355,6 +355,53 @@ let cmd_repl () =
         else repl_eval state input
   done
 
+(** Find typings root directory with verbose logging.
+
+    Tries multiple candidate paths and logs each attempt when verbose mode is
+    enabled. Returns the first path that exists, or the last candidate if none
+    exist (let downstream code handle the error). *)
+let find_typings_root ~verbose : string =
+  let open Tart.Verbose_log in
+  let exe_path = Sys.executable_name in
+  let exe_dir = Filename.dirname exe_path in
+  verbose_log verbose "Executable: %s" exe_path;
+  verbose_log verbose "Typings root candidates:";
+
+  (* List of candidate paths relative to executable directory *)
+  let candidates =
+    [
+      (* Development: typings/emacs in repo root *)
+      Filename.concat (Filename.dirname exe_dir) "typings/emacs";
+      (* Installed: ../share/tart/typings/emacs relative to bin *)
+      Filename.concat (Filename.dirname exe_dir) "share/tart/typings/emacs";
+    ]
+  in
+
+  let dir_exists path =
+    try (Unix.stat path).Unix.st_kind = Unix.S_DIR
+    with Unix.Unix_error _ -> false
+  in
+
+  let rec try_candidates found_path = function
+    | [] -> found_path
+    | path :: rest ->
+        let exists = dir_exists path in
+        verbose_log verbose "  %s (%s)" path
+          (if exists then "found" else "not found");
+        if exists then try_candidates (Some path) rest
+        else try_candidates found_path rest
+  in
+
+  match try_candidates None candidates with
+  | Some path ->
+      verbose_log verbose "Using typings root: %s" path;
+      path
+  | None ->
+      (* Fall back to installed location even if not found *)
+      let fallback = List.hd (List.rev candidates) in
+      verbose_log verbose "Using typings root: %s (may not exist)" fallback;
+      fallback
+
 (** Coverage subcommand: measure type signature coverage *)
 let cmd_coverage ~format ~verbose ~fail_under ~exclude paths =
   let config = { Tart.File_scanner.exclude_patterns = exclude } in
@@ -364,10 +411,7 @@ let cmd_coverage ~format ~verbose ~fail_under ~exclude paths =
     exit 1);
 
   (* Build search path for signature lookup *)
-  let typings_root =
-    let exe_dir = Filename.dirname Sys.executable_name in
-    Filename.concat (Filename.dirname exe_dir) "share/tart/typings/emacs"
-  in
+  let typings_root = find_typings_root ~verbose in
   let version =
     Tart.Emacs_version.detect_or_default ~default:Tart.Emacs_version.latest ()
   in
@@ -393,7 +437,7 @@ let cmd_coverage ~format ~verbose ~fail_under ~exclude paths =
   | None -> ()
 
 (** Emacs coverage subcommand: measure C layer type coverage *)
-let cmd_emacs_coverage ~emacs_source ~emacs_version_opt =
+let cmd_emacs_coverage ~verbose ~emacs_source ~emacs_version_opt =
   (* Discover Emacs source directory *)
   let source_result = Tart.Emacs_source.discover ~explicit_path:emacs_source in
   match source_result with
@@ -421,10 +465,7 @@ let cmd_emacs_coverage ~emacs_source ~emacs_version_opt =
       let definitions = Tart.C_scanner.scan_dir src_dir in
 
       (* Get typings root *)
-      let typings_root =
-        let exe_dir = Filename.dirname Sys.executable_name in
-        Filename.concat (Filename.dirname exe_dir) "share/tart/typings/emacs"
-      in
+      let typings_root = find_typings_root ~verbose in
 
       (* Calculate coverage *)
       let result =
@@ -678,7 +719,7 @@ let () =
       let rec parse_coverage_args = function
         | [] -> ()
         | "--help" :: _ | "-h" :: _ -> show_help := true
-        | "--verbose" :: rest ->
+        | "--verbose" :: rest | "-v" :: rest ->
             verbose := true;
             parse_coverage_args rest
         | "--format=json" :: rest ->
@@ -718,7 +759,7 @@ let () =
         print_endline "";
         print_endline "Options:";
         print_endline "  --format=FORMAT  Output: human (default), json";
-        print_endline "  --verbose        Show covered identifiers";
+        print_endline "  --verbose, -v    Show diagnostic output";
         print_endline "  --fail-under=N   Exit 1 if coverage below N%";
         print_endline "  --exclude=PAT    Exclude files matching pattern";
         exit 0)
@@ -728,10 +769,14 @@ let () =
   | "emacs-coverage" :: rest ->
       let emacs_source = ref None in
       let emacs_version = ref None in
+      let verbose = ref false in
       let show_help = ref false in
       let rec parse_emacs_coverage_args = function
         | [] -> ()
         | "--help" :: _ | "-h" :: _ -> show_help := true
+        | "--verbose" :: rest | "-v" :: rest ->
+            verbose := true;
+            parse_emacs_coverage_args rest
         | "--emacs-source" :: path :: rest ->
             emacs_source := Some path;
             parse_emacs_coverage_args rest
@@ -764,9 +809,10 @@ let () =
         print_endline "Options:";
         print_endline "  --emacs-source PATH  Path to Emacs source directory";
         print_endline "  --emacs-version VER  Use typings for Emacs version VER";
+        print_endline "  --verbose, -v        Show diagnostic output";
         exit 0)
       else
-        cmd_emacs_coverage ~emacs_source:!emacs_source
+        cmd_emacs_coverage ~verbose:!verbose ~emacs_source:!emacs_source
           ~emacs_version_opt:!emacs_version
   (* Default: type-check files *)
   | files ->
