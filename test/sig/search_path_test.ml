@@ -1512,9 +1512,10 @@ let test_load_c_core () =
     | Some v -> v
     | None -> Alcotest.fail "Failed to parse version"
   in
+  let emacs_typings = Filename.concat typings_dir "emacs" in
   let sp =
     Search_path.empty
-    |> Search_path.with_typings_root (Filename.concat typings_dir "emacs")
+    |> Search_path.with_typings_root emacs_typings
     |> Search_path.with_emacs_version version
   in
   let env = Search_path.load_c_core ~search_path:sp ~env:Type_env.empty in
@@ -1522,8 +1523,12 @@ let test_load_c_core () =
   (match Type_env.lookup "car" env with
   | None -> Alcotest.fail "car not found via load_c_core"
   | Some _ -> ());
-  match Type_env.lookup "message" env with
+  (match Type_env.lookup "message" env with
   | None -> Alcotest.fail "message not found via load_c_core"
+  | Some _ -> ());
+  (* Should have floatfns functions from floatfns.tart *)
+  match Type_env.lookup "sin" env with
+  | None -> Alcotest.fail "sin not found via load_c_core (from floatfns.tart)"
   | Some _ -> ()
 
 let () =
