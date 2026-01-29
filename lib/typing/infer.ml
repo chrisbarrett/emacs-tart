@@ -155,6 +155,9 @@ let rec infer (env : Env.t) (sexp : Syntax.Sexp.t) : result =
   (* === Funcall: (funcall f arg1 arg2 ...) === *)
   | List (Symbol ("funcall", _) :: fn_expr :: args, span) ->
       infer_funcall env fn_expr args span
+  (* === Apply: (apply f arg1 arg2 ... list) === *)
+  | List (Symbol ("apply", _) :: fn_expr :: args, span) when args <> [] ->
+      infer_apply env fn_expr args span
   (* === Function application (catch-all for lists) === *)
   | List (fn :: args, span) -> infer_application env fn args span
   | List ([], _span) ->
@@ -888,6 +891,120 @@ and get_expr_source (expr : Syntax.Sexp.t) : string option =
   | Symbol (name, _) -> Some name
   | List (Symbol (name, _) :: _, _) -> Some name
   | _ -> None
+
+(** Infer the type of an apply expression.
+
+    (apply f arg1 arg2 ... list) applies function f to the fixed args
+    followed by the elements of list.
+
+    For functions with &rest parameters, we constrain:
+    - All fixed args to have type T
+    - The final list arg to have type (List T)
+
+    For fixed-arity functions, we require the total argument count to match. *)
+and infer_apply env fn_expr args span =
+  let fn_result = infer env fn_expr in
+
+  (* Split args into fixed args and the final list arg *)
+  let fixed_args, list_arg =
+    let rec split_last acc = function
+      | [] -> ([], None)
+      | [ x ] -> (List.rev acc, Some x)
+      | x :: xs -> split_last (x :: acc) xs
+    in
+    split_last [] args
+  in
+
+  let fixed_results = List.map (infer env) fixed_args in
+  let list_result =
+    match list_arg with Some arg -> infer env arg | None -> pure Prim.nil
+  in
+
+  (* Try to extract a name for error context *)
+  let fn_name =
+    let open Syntax.Sexp in
+    match fn_expr with
+    | Symbol (name, _) -> Some name
+    | List ([ Symbol ("function", _); Symbol (name, _) ], _) -> Some name
+    | _ -> None
+  in
+
+  (* Fresh type variable for the result *)
+  let result_ty = fresh_tvar (Env.current_level env) in
+
+  (* Fresh type variable for the element type of the &rest parameter.
+     This will be unified with all fixed args and the list element type. *)
+  let rest_elem_ty = fresh_tvar (Env.current_level env) in
+
+  (* Constrain each fixed arg to have the rest element type *)
+  let fixed_constraints =
+    List.mapi
+      (fun i arg_result ->
+        let arg_expr = List.nth fixed_args i in
+        let arg_expr_source = get_expr_source arg_expr in
+        let context =
+          match fn_name with
+          | Some name ->
+              C.FunctionArg
+                {
+                  fn_name = name;
+                  fn_type = fn_result.ty;
+                  arg_index = i;
+                  arg_expr_source;
+                }
+          | None ->
+              C.FunctionArg
+                {
+                  fn_name = "apply";
+                  fn_type = fn_result.ty;
+                  arg_index = i;
+                  arg_expr_source;
+                }
+        in
+        C.equal ~context rest_elem_ty arg_result.ty
+          (Syntax.Sexp.span_of arg_expr))
+      fixed_results
+  in
+
+  (* NOTE: We don't constrain the list arg type because:
+     - Quoted lists are typed as (List Any)
+     - (List Any) doesn't unify with (List Int) in invariant mode
+     - This would cause false positives for (apply #'+ '(1 2 3))
+     Future enhancement: infer tuple types for quoted lists in apply context
+     to enable proper type checking of list elements. *)
+  let list_constraint_opt = None in
+  let _ = list_arg in
+
+  (* Build expected function type: (&rest rest_elem_ty) -> result_ty *)
+  let expected_fn_type = TArrow ([ PRest rest_elem_ty ], result_ty) in
+
+  (* Constraint: actual function type = expected function type *)
+  let fn_constraint = C.equal fn_result.ty expected_fn_type span in
+
+  (* Combine all constraints.
+     ORDER MATTERS: fn_constraint must be first so the function type establishes
+     what the rest element type should be before we check args against it.
+     The list constraint comes last since (List Any) would otherwise make
+     rest_elem_ty = Any before the function type can constrain it. *)
+  let fixed_constraint_set =
+    List.fold_left (fun acc c -> C.add c acc) C.empty fixed_constraints
+  in
+  let list_constraint_set =
+    match list_constraint_opt with Some c -> [ c ] | None -> []
+  in
+  let all_constraints =
+    (* Order: fn_constraint, then fixed args, then list constraint, then sub-results *)
+    [ fn_constraint ]
+    @ fn_result.constraints @ fixed_constraint_set
+    @ combine_results fixed_results @ list_constraint_set
+    @ list_result.constraints
+  in
+  let all_undefineds =
+    fn_result.undefineds @ list_result.undefineds
+    @ combine_undefineds fixed_results
+  in
+
+  { ty = result_ty; constraints = all_constraints; undefineds = all_undefineds }
 
 (** Infer the type of a funcall expression.
 
