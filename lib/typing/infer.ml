@@ -88,6 +88,25 @@ let rec infer (env : Env.t) (sexp : Syntax.Sexp.t) : result =
           with_undefined (fresh_tvar (Env.current_level env)) name span)
   (* === Quoted expressions === *)
   | List ([ Symbol ("quote", _); quoted ], _) -> infer_quoted quoted
+  (* === Function reference: #'name or (function name) === *)
+  | List ([ Symbol ("function", _); Symbol (name, span) ], _) -> (
+      match Env.lookup_fn name env with
+      | Some scheme ->
+          (* Look up in function namespace and instantiate *)
+          let ty = Env.instantiate scheme env in
+          pure ty
+      | None -> (
+          (* Fall back to variable namespace for backward compatibility *)
+          match Env.lookup name env with
+          | Some scheme ->
+              let ty = Env.instantiate scheme env in
+              pure ty
+          | None ->
+              (* Unbound function - track as undefined *)
+              with_undefined (fresh_tvar (Env.current_level env)) name span))
+  (* === Function reference with lambda: #'(lambda ...) === *)
+  | List ([ Symbol ("function", _); (List (Symbol ("lambda", _) :: _, _) as lam) ], _) ->
+      infer env lam
   (* === Lambda expressions === *)
   | List (Symbol ("lambda", _) :: List (params, _) :: body, span) ->
       infer_lambda env params body span
@@ -427,9 +446,10 @@ and infer_setq env pairs span =
         { ty = Prim.nil; constraints; undefineds }
     | Symbol (name, _) :: value :: rest ->
         let result = infer env value in
-        (* Check if variable exists in env *)
+        (* Check if variable exists in variable namespace only.
+           Use lookup_var to avoid matching functions with the same name. *)
         let constraint_set =
-          match Env.lookup name env with
+          match Env.lookup_var name env with
           | Some scheme ->
               (* Generate constraint: value type = variable type *)
               let var_ty = Env.instantiate scheme env in

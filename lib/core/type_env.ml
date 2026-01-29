@@ -50,6 +50,12 @@ let lookup name env =
 (** Look up a name in the function namespace only *)
 let lookup_fn name env = List.assoc_opt name env.fn_bindings
 
+(** Look up a name in the variable namespace only (no fallback to functions).
+
+    Use this for setq/assignment checking where we only want to check if a
+    variable binding already exists, not if a function with that name exists. *)
+let lookup_var name env = List.assoc_opt name env.bindings
+
 (** Extend the variable namespace with a new binding *)
 let extend name scheme env =
   { env with bindings = (name, scheme) :: env.bindings }

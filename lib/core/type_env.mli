@@ -60,6 +60,12 @@ val lookup : string -> t -> scheme option
 val lookup_fn : string -> t -> scheme option
 (** Look up a name in the function namespace only. *)
 
+val lookup_var : string -> t -> scheme option
+(** Look up a name in the variable namespace only (no fallback to functions).
+
+    Use this for setq/assignment checking where we only want to check if a
+    variable binding already exists, not if a function with that name exists. *)
+
 val names : t -> string list
 (** Get all names bound in the variable namespace. *)
 
