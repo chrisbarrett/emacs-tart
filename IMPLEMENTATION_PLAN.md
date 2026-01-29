@@ -1,6 +1,161 @@
 # Implementation Plan
 
-Based on specs 07-27, this plan prioritizes tasks by dependencies and impact.
+Priority: Agent-focused development - fast feedback loops and debugging.
+
+---
+
+## Phase 0: Fast Feedback (Spec 31)
+
+**Status:** Not started
+**Priority:** Highest - enables rapid agent iteration
+
+The `./tart` wrapper script enables rapid iteration for agents and developers by skipping redundant nix shell invocations and using incremental builds.
+
+### 0.1 Create `./tart` Script
+
+- [ ] [R1-R8] Create executable `./tart` script at repo root
+  - Bash script with `set -euo pipefail`
+  - Find repo root via `SCRIPT_DIR`
+  - Detect nix shell via `IN_NIX_SHELL` environment variable
+  - Run `dune exec tart -- "$@"` directly when in nix shell
+  - Wrap with `nix develop --command` when outside
+  - Make executable with `chmod +x`
+
+**Files:** `./tart` (new)
+
+**Verification:**
+```bash
+# Script exists and is executable
+test -x ./tart
+
+# Works inside nix shell (fast path)
+nix develop --command ./tart --version
+
+# Works outside nix shell (wrapped path)
+env -u IN_NIX_SHELL ./tart --version
+
+# Passes arguments correctly
+./tart eval '(+ 1 2)'
+
+# Works from subdirectories
+cd lib && ../tart --version
+
+# Propagates exit codes
+./tart check nonexistent.el; echo $?  # Should be 1
+```
+
+---
+
+## Phase 0.5: Verbose Coverage Output (Spec 30)
+
+**Status:** Partial - `--verbose` flag exists but only shows covered identifiers
+**Priority:** High - enables debugging coverage issues
+
+The current `--verbose` implementation just shows covered identifiers. Spec 30 requires detailed diagnostic output about path resolution, version detection, typings loading, and match details.
+
+### 0.5.1 Add Verbose Logging Utility
+
+- [ ] Create `lib/coverage/verbose_log.ml` and `.mli`
+- [ ] Implement `verbose_log : bool -> ('a, unit, string, unit) format4 -> 'a`
+- [ ] Output to stderr with `[verbose]` prefix
+
+### 0.5.2 Add Verbose Path Resolution Logging
+
+- [ ] Log executable location
+- [ ] Log typings root candidates with found/not found status
+- [ ] Log final selected typings path
+
+### 0.5.3 Add Verbose Version Detection Logging
+
+- [ ] Log Emacs binary location
+- [ ] Log detected version string
+- [ ] Log version fallback chain
+- [ ] Log selected typings version
+
+### 0.5.4 Add Verbose Typings Loading Logging
+
+- [ ] Log each `.tart` file loaded
+- [ ] Log signature count per file
+- [ ] Log total signatures loaded
+
+### 0.5.5 Add Verbose C Source Scanning Logging (emacs-coverage)
+
+- [ ] Log source directory being scanned
+- [ ] Log per-file DEFUN/DEFVAR/DEFSYM counts
+- [ ] Log totals by category
+
+### 0.5.6 Add Verbose Match Summary Logging
+
+- [ ] Log sample covered symbols (first 5) with source file location
+- [ ] Log sample uncovered symbols (first 5)
+- [ ] Log final match statistics
+
+### 0.5.7 Thread Verbose Flag Through Functions
+
+- [ ] Add `~verbose:bool` parameter to `Emacs_coverage.calculate_coverage`
+- [ ] Add `~verbose:bool` parameter to `Coverage_report.analyze_files`
+- [ ] Add `~verbose:bool` parameter to `Search_path.load_c_core` (or use callback)
+
+### 0.5.8 Add `-v` Short Form to emacs-coverage Command
+
+- [ ] Parse `-v` as alias for `--verbose`
+- [ ] Update help text
+
+**Files:**
+- `lib/coverage/verbose_log.ml` (new)
+- `lib/coverage/verbose_log.mli` (new)
+- `lib/coverage/emacs_coverage.ml`
+- `lib/coverage/emacs_coverage.mli`
+- `lib/coverage/coverage_report.ml`
+- `lib/coverage/coverage_report.mli`
+- `lib/sig/search_path.ml`
+- `lib/sig/search_path.mli`
+- `bin/main.ml`
+
+**Verification:**
+```bash
+# Verbose output appears on stderr
+tart coverage -v . 2>&1 | grep "\[verbose\]"
+tart emacs-coverage -v 2>&1 | grep "\[verbose\]"
+
+# Shows path resolution
+tart emacs-coverage -v 2>&1 | grep "Typings root"
+
+# Shows version detection
+tart emacs-coverage -v 2>&1 | grep "Detected version"
+
+# Shows typings loading
+tart emacs-coverage -v 2>&1 | grep ".tart:"
+
+# Report goes to stdout, verbose to stderr
+tart emacs-coverage -v > report.txt 2> debug.txt
+```
+
+---
+
+## Task Summary (New Priority Work)
+
+| Task | Spec | Priority | Complexity | Status |
+|------|------|----------|------------|--------|
+| Create `./tart` script | 31 | 1 | Low | Not started |
+| Add verbose logging utility | 30 | 2 | Low | Not started |
+| Add verbose path resolution | 30 | 2 | Medium | Not started |
+| Add verbose version detection | 30 | 2 | Medium | Not started |
+| Add verbose typings loading | 30 | 2 | Medium | Not started |
+| Add verbose C scanning | 30 | 2 | Medium | Not started |
+| Add verbose match summary | 30 | 2 | Medium | Not started |
+| Thread verbose through functions | 30 | 2 | Medium | Not started |
+| Add `-v` short form | 30 | 2 | Low | Not started |
+
+**Implementation order:**
+1. Phase 0 (Spec 31) - One small script, immediate benefit for all subsequent work
+2. Phase 0.5 (Spec 30) - Verbose output for debugging coverage issues
+
+---
+
+## Completed Phases (Historical)
+
+The following phases document completed work from specs 07-29.
 
 ## Phase 1: Complete Signature System (Spec 07)
 
