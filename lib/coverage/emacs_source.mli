@@ -19,7 +19,9 @@ type discovery_result =
 val is_valid_emacs_source : string -> bool
 (** Check if a directory looks like valid Emacs source.
 
-    A valid source directory contains src/*.c files. *)
+    A valid source directory either:
+    - Contains src/*.c files (traditional layout)
+    - Contains *.c files directly (e.g., find-function-C-source-directory) *)
 
 (** {1 Discovery} *)
 

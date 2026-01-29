@@ -14,15 +14,20 @@ type discovery_result =
 
 (** {1 Path Validation} *)
 
+(** Check if a directory contains *.c files. *)
+let has_c_files (dir : string) : bool =
+  if Sys.file_exists dir && Sys.is_directory dir then
+    let entries = Sys.readdir dir |> Array.to_list in
+    List.exists (fun f -> Filename.check_suffix f ".c") entries
+  else false
+
 (** Check if a directory looks like valid Emacs source.
 
-    A valid source directory contains src/*.c files. *)
+    A valid source directory either:
+    - Contains src/*.c files (traditional layout)
+    - Contains *.c files directly (e.g., find-function-C-source-directory) *)
 let is_valid_emacs_source (path : string) : bool =
-  let src_dir = Filename.concat path "src" in
-  if not (Sys.file_exists src_dir && Sys.is_directory src_dir) then false
-  else
-    let entries = Sys.readdir src_dir |> Array.to_list in
-    List.exists (fun f -> Filename.check_suffix f ".c") entries
+  has_c_files (Filename.concat path "src") || has_c_files path
 
 (** {1 Auto-Detection} *)
 
@@ -30,14 +35,14 @@ let is_valid_emacs_source (path : string) : bool =
 
     Runs:
     {v
-    emacs --batch --eval '(message "%S" (list :source-directory find-function-C-source-directory :version emacs-version))'
+    emacs --batch --eval '(princ (prin1-to-string (list :source-directory find-function-C-source-directory :version emacs-version)))'
     v}
 
     Returns (source_dir option, version option). *)
 let query_emacs () : (string option * string option) option =
   let cmd =
-    "emacs --batch --eval '(message \"%S\" (list :source-directory \
-     find-function-C-source-directory :version emacs-version))' 2>&1"
+    "emacs --batch --eval '(princ (prin1-to-string (list :source-directory \
+     find-function-C-source-directory :version emacs-version)))'"
   in
   try
     let ic = Unix.open_process_in cmd in
@@ -61,9 +66,10 @@ let query_emacs () : (string option * string option) option =
         let source_re = Str.regexp {|:source-directory \("\([^"]+\)"\|nil\)|} in
         let version_re = Str.regexp {|:version "\([^"]+\)"|} in
         let source_dir =
-          if Str.string_match source_re output 0 then
+          try
+            let _ = Str.search_forward source_re output 0 in
             try Some (Str.matched_group 2 output) with Not_found -> None
-          else None
+          with Not_found -> None
         in
         let version =
           try
@@ -76,6 +82,16 @@ let query_emacs () : (string option * string option) option =
   with
   | Unix.Unix_error (Unix.ENOENT, _, _) -> None
   | _ -> None
+
+(** Normalize a path that might be the src/ directory itself.
+
+    If the path contains *.c files directly and ends with /src, return the
+    parent directory. Otherwise return the path unchanged. *)
+let normalize_source_path (path : string) : string =
+  if has_c_files path then
+    let basename = Filename.basename path in
+    if basename = "src" then Filename.dirname path else path
+  else path
 
 (** Detect Emacs source directory automatically.
 
@@ -91,9 +107,10 @@ let detect () : discovery_result =
         "Emacs source directory not available. Install Emacs source or use \
          --emacs-source"
   | Some (Some path, version_opt) ->
-      if is_valid_emacs_source path then
+      let normalized = normalize_source_path path in
+      if is_valid_emacs_source normalized then
         let version = Option.value ~default:"unknown" version_opt in
-        Found { source_dir = path; version }
+        Found { source_dir = normalized; version }
       else
         InvalidPath
           (Printf.sprintf "Detected path %s does not contain src/*.c files" path)
