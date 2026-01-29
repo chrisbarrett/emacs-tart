@@ -1,3 +1,4 @@
 FAIL
 type mismatch
-expected: Int, found: String
+expected: Int
+found: String

@@ -1,3 +1,4 @@
 FAIL
 type mismatch
-expected: Symbol, found: (List Any)
+expected: Symbol
+found: (List Any)
