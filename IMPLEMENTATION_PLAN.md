@@ -1509,6 +1509,12 @@ Create fixtures exercising each C primitive category:
    - **Complexity:** Medium (fixture creation, expected file generation)
    - **Depends on:** Phase 27 (test harness)
 
+5. **Phase 29** (Spec 34): Funcall and Apply Typing
+   - **Status:** Not started
+   - **Priority:** High - type-safe dynamic dispatch
+   - **Complexity:** High (dual namespace, apply/funcall special forms, tuple subtyping)
+   - **Depends on:** Spec 15 (forall inference) ✓, Spec 17 (HKT) ✓
+
 ### Deferred Work
 
 - **Phase 19**: Dogfood tart.el - needs comint, eglot, compile signatures
@@ -1565,6 +1571,169 @@ Command to measure type signature coverage for Emacs packages.
 - [x] [R14] Exit codes (0 success, 1 error, 2 usage)
 - [x] [R16] `--fail-under=N` threshold flag
 - [x] Verify: CLI matches existing tart conventions
+
+---
+
+## Phase 29: Funcall and Apply Typing (Spec 34)
+
+Type `funcall` and `apply` accurately using tracked function types, dual namespaces, and tuple/list subtyping.
+
+**Dependencies:** Spec 15 (forall inference) ✓, Spec 17 (HKT) ✓
+
+### Current State
+
+- `funcall` and `apply` typed as `(forall (r) (-> (Any &rest Any) r))` in `builtin_types.ml`
+- No special handling in inference engine — treated as regular built-in functions
+- Single namespace environment (`Type_env.t` has unified `bindings`)
+- No tuple-list subtyping in unification
+- No occurrence typing for type predicates
+
+### 29.1 Dual Namespace Environment (Priority 1 — Foundation)
+
+- [ ] [R1] Add `fn_bindings` field to `lib/core/type_env.ml` alongside `bindings`
+- [ ] [R1] Add `lookup_fn` function to look up in function namespace
+- [ ] [R1] Update `add_binding` or add `add_fn_binding` for function namespace
+- [ ] [R1] Wire through `Env` module in `lib/typing/env.ml`
+- [ ] Update `defun` to add bindings to function namespace
+- [ ] Update `defalias` to add bindings to function namespace
+- [ ] Keep `let`, `setq`, `defvar` in variable namespace (existing behavior)
+
+**Files:** `lib/core/type_env.ml`, `lib/core/type_env.mli`, `lib/typing/env.ml`, `lib/typing/env.mli`, `lib/typing/infer.ml`
+
+**Verify:** `dune test`; same name can have different types in each namespace
+
+### 29.2 Sharp-Quote Function Lookup (Priority 1 — Foundation)
+
+- [ ] [R2] Pattern match `(function name)` special form in `infer.ml`
+- [ ] [R2] Look up `name` in function namespace
+- [ ] [R2] Return function type directly
+- [ ] [R3] Verify variable refs (symbols not in function position) use variable namespace
+
+**Files:** `lib/typing/infer.ml`
+
+**Verify:** `dune test`; `#'name` returns function type from function env
+
+### 29.3 Funcall Type Checking (Priority 2 — Core)
+
+- [ ] [R4] Detect `(funcall f arg1 arg2 ...)` form in `infer.ml`
+- [ ] [R4] Infer type of `f`, constrain to be function type `(-> (T1 T2 ...) R)`
+- [ ] [R4] Constrain each arg against corresponding param type
+- [ ] [R4] Return result type `R`
+- [ ] [R5] When `f` is `#'name`, use function namespace lookup (automatic via R2)
+
+**Files:** `lib/typing/infer.ml`
+
+**Verify:** `dune test`; funcall checks function type against arguments
+
+### 29.4 Funcall Error Messages (Priority 2 — Core)
+
+- [ ] [R6] Add funcall-specific context to `lib/typing/constraint.ml`
+- [ ] [R6] Add "expected function type, got X" error message
+- [ ] [R6] Add "in funcall argument N" context for arg mismatches
+
+**Files:** `lib/typing/constraint.ml`, `lib/typing/diagnostic.ml`
+
+**Verify:** `dune test`; funcall type errors are descriptive
+
+### 29.5 Apply with Rest-Arg Functions (Priority 2 — Core)
+
+- [ ] [R7] Detect `(apply f args... list)` form in `infer.ml`
+- [ ] [R7] When `f` has `&rest T` parameter type:
+  - Constrain all fixed args to `T`
+  - Constrain final list arg to `(List T)`
+- [ ] [R7] Return result type
+
+**Files:** `lib/typing/infer.ml`
+
+**Verify:** `dune test`; apply with &rest functions checks element types
+
+### 29.6 Apply with Fixed-Arity Functions (Priority 2 — Core)
+
+- [ ] [R8] When `f` has fixed arity N and apply has M fixed args + tuple:
+  - Infer tuple type for final argument
+  - Tuple must have exactly (N - M) elements
+  - Each tuple element type matches corresponding param
+
+**Files:** `lib/typing/infer.ml`
+
+**Verify:** `dune test`; apply with tuples checks arity and positional types
+
+### 29.7 Tuple-List Subtyping (Priority 2 — Core)
+
+- [ ] [R9] Add tuple-to-list subtyping in `lib/typing/unify.ml`
+- [ ] [R9] `(Tuple T1 T2 ... Tn)` unifies with `(List T)` when all Ti unify with T
+- [ ] [R9] One-directional: tuple → list, not list → tuple
+
+**Files:** `lib/typing/unify.ml`
+
+**Verify:** `dune test`; tuples unify with compatible list types
+
+### 29.8 Context-Sensitive Tuple Inference (Priority 2 — Core)
+
+- [ ] [R10] In apply position, infer quoted list literals as tuple types
+- [ ] [R10] `'(1 "x")` → `(Tuple Int String)` instead of `(List (Or Int String))`
+
+**Files:** `lib/typing/infer.ml`
+
+**Verify:** `dune test`; list literals infer as tuples in apply context
+
+### 29.9 Union Function Types (Priority 3 — Enhancement)
+
+- [ ] [R11] Handle `f : (Or (-> A1 R1) (-> A2 R2))` in funcall
+- [ ] [R11] Args must satisfy intersection of param types
+- [ ] [R11] Result is union of return types
+- [ ] May require constraint system extension
+
+**Files:** `lib/typing/infer.ml`, possibly `lib/typing/constraint.ml`
+
+**Verify:** `dune test`; union function types check all variants
+
+### 29.10 Occurrence Typing for Predicates (Priority 3 — Enhancement)
+
+- [ ] [R12] Track predicate tests in `if` condition
+- [ ] [R12] Narrow variable types in consequent branch
+- [ ] [R12] Implement for type predicates: `stringp`, `listp`, `functionp`, `numberp`, etc.
+- [ ] [R13] Thread narrowed types through funcall
+
+**Files:** `lib/typing/infer.ml`
+
+**Verify:** `dune test`; type predicates narrow types in branches
+
+### 29.11 Never Unify to Any (Priority 3 — Enhancement)
+
+- [ ] [R14] Audit unification for implicit `Any` widening paths
+- [ ] [R14] Ensure incompatible types produce errors, not `Any`
+
+**Files:** `lib/typing/unify.ml`
+
+**Verify:** `dune test`; type mismatches produce errors, not Any
+
+### 29.12 Cleanup and Testing
+
+- [ ] Remove weak `funcall`/`apply` signatures from `builtin_types.ml`
+- [ ] Add test fixtures for R1-R3 (dual namespace)
+- [ ] Add test fixtures for R4-R6 (funcall success/error)
+- [ ] Add test fixtures for R7-R8 (apply with rest/fixed-arity)
+- [ ] Add test fixtures for R9-R10 (tuple-list subtyping)
+- [ ] Add test fixtures for R11-R14 (union types, occurrence typing)
+
+**Files:** `lib/typing/builtin_types.ml`, `test/fixtures/typing/`
+
+**Verify:** `dune test`; all new fixtures pass
+
+### Discovered Issues
+
+- **Dual namespace is pervasive** — updating `Type_env.t` touches many files; expect ~10 files to update
+- **Occurrence typing (R12, R13) is significant** — may warrant its own spec or defer
+- **Union function types (R11)** — requires careful thought about constraint solving; may defer
+
+### Suggested Implementation Order
+
+1. **R1 → R2 → R3** (namespace foundation) — enables all subsequent work
+2. **R4 → R5** (basic funcall) — immediate value for users
+3. **R7 → R8 → R9 → R10** (apply and tuples) — completes core functionality
+4. **R6 → R14** (error handling) — polish
+5. **R11 → R12 → R13** (advanced) — consider deferring if complexity is high
 
 ---
 
