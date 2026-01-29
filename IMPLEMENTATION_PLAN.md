@@ -6,7 +6,7 @@ Priority: Agent-focused development - fast feedback loops and debugging.
 
 ## Phase 0: Fast Feedback (Spec 31)
 
-**Status:** Not started
+**Status:** ✅ Complete
 **Priority:** Highest - enables rapid agent iteration
 
 The `./tart` wrapper script enables rapid iteration for agents and developers by skipping redundant nix shell invocations and using incremental builds.
@@ -48,7 +48,7 @@ cd lib && ../tart --version
 
 ## Phase 0.5: Verbose Coverage Output (Spec 30)
 
-**Status:** Partial - `--verbose` flag exists but only shows covered identifiers
+**Status:** ✅ Complete
 **Priority:** High - enables debugging coverage issues
 
 The current `--verbose` implementation just shows covered identifiers. Spec 30 requires detailed diagnostic output about path resolution, version detection, typings loading, and match details.
@@ -135,7 +135,7 @@ tart emacs-coverage -v > report.txt 2> debug.txt
 
 ## Phase 0.6: Emacs Core Typings Workflow (Spec 32)
 
-**Status:** Not started
+**Status:** Partial - BUGS.md structure complete, validation workflow pending
 **Priority:** High - systematic expansion of type coverage
 **Depends on:** Phase 0 (./tart script), Phase 0.5 (verbose coverage)
 
@@ -201,25 +201,30 @@ Note: 30.1 and 29.1 directories are backfills from 31.0; version-specific differ
 
 | Task | Spec | Priority | Complexity | Status |
 |------|------|----------|------------|--------|
-| Create `./tart` script | 31 | 1 | Low | Not started |
-| Add verbose logging utility | 30 | 2 | Low | Not started |
-| Add verbose path resolution | 30 | 2 | Medium | Not started |
-| Add verbose version detection | 30 | 2 | Medium | Not started |
-| Add verbose typings loading | 30 | 2 | Medium | Not started |
-| Add verbose C scanning | 30 | 2 | Medium | Not started |
-| Add verbose match summary | 30 | 2 | Medium | Not started |
-| Thread verbose through functions | 30 | 2 | Medium | Not started |
-| Add `-v` short form | 30 | 2 | Low | Not started |
-| Create BUGS.md structure | 32 | 3 | Low | Not started |
+| Create `./tart` script | 31 | 1 | Low | **Done** |
+| Add verbose logging utility | 30 | 2 | Low | **Done** |
+| Add verbose path resolution | 30 | 2 | Medium | **Done** |
+| Add verbose version detection | 30 | 2 | Medium | **Done** |
+| Add verbose typings loading | 30 | 2 | Medium | **Done** |
+| Add verbose C scanning | 30 | 2 | Medium | **Done** |
+| Add verbose match summary | 30 | 2 | Medium | **Done** |
+| Thread verbose through functions | 30 | 2 | Medium | **Done** (via main.ml) |
+| Add `-v` short form | 30 | 2 | Low | **Done** |
+| Create BUGS.md structure | 32 | 3 | Low | **Done** |
+| Version-specific test directive | 25 | 3 | Medium | **Done** |
 | Validate data.tart | 32 | 3 | Medium | Not started |
 | Validate fns.tart | 32 | 3 | Medium | Not started |
 | Validate eval.tart | 32 | 3 | Medium | Not started |
 | Validate remaining c-core files | 32 | 3 | Medium | Not started |
 
-**Implementation order:**
-1. Phase 0 (Spec 31) - One small script, immediate benefit for all subsequent work
-2. Phase 0.5 (Spec 30) - Verbose output for debugging coverage issues
-3. Phase 0.6 (Spec 32) - Systematic typings validation and gap documentation
+**Implementation complete:**
+- Phase 0 (Spec 31) - `./tart` wrapper script for fast iteration ✅
+- Phase 0.5 (Spec 30) - Verbose output for coverage debugging ✅
+- Phase 0.6.1 (Spec 32) - BUGS.md structure for gap documentation ✅
+- Phase 27.5 (Spec 25) - Version-specific test directive ✅
+
+**Remaining work:**
+- Phase 0.6.2-0.6.4 (Spec 32) - C-core typings validation workflow (iterative human/agent work)
 
 ---
 
