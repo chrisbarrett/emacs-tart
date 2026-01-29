@@ -28,8 +28,23 @@ let check_file env filename : Tart.Type_env.t * int =
   else
     let check_result = Tart.Check.check_program ~env parse_result.sexps in
 
-    (* Convert unify errors to diagnostics and print them *)
-    let diagnostics = Tart.Diagnostic.of_unify_errors check_result.errors in
+    (* Convert unify errors to diagnostics *)
+    let type_diagnostics =
+      Tart.Diagnostic.of_unify_errors check_result.errors
+    in
+
+    (* Convert undefined variable errors to diagnostics *)
+    let candidates = Tart.Type_env.names check_result.env in
+    let undefined_diagnostics =
+      List.map
+        (fun (undef : Tart.Infer.undefined_var) ->
+          Tart.Diagnostic.undefined_variable ~span:undef.span ~name:undef.name
+            ~candidates ())
+        check_result.undefineds
+    in
+
+    (* Combine all diagnostics *)
+    let diagnostics = type_diagnostics @ undefined_diagnostics in
     List.iter
       (fun d -> prerr_endline (Tart.Diagnostic.to_string_compact d))
       diagnostics;

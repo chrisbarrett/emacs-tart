@@ -67,6 +67,14 @@ let signatures : (string * Env.scheme) list =
     );
     (* reverse : (forall (a) (-> ((List a)) (List a))) *)
     ("reverse", poly [ "a" ] (fn [ list_t (tvar "a") ] (list_t (tvar "a"))));
+    (* last : (forall (a) (-> ((List a)) (List a))) - returns last cons cell *)
+    ("last", poly [ "a" ] (fn [ list_t (tvar "a") ] (list_t (tvar "a"))));
+    (* mapcar : (forall (a b) (-> ((-> (a) b) (List a)) (List b))) *)
+    ( "mapcar",
+      poly [ "a"; "b" ]
+        (fn
+           [ fn [ tvar "a" ] (tvar "b"); list_t (tvar "a") ]
+           (list_t (tvar "b"))) );
     (* member : (forall (a) (-> (a (List a)) (List a))) *)
     (* Returns the tail starting from the element, or nil *)
     ( "member",
@@ -110,6 +118,14 @@ let signatures : (string * Env.scheme) list =
     ("1+", mono (fn [ Prim.int ] Prim.int));
     (* 1- : (-> (Int) Int) *)
     ("1-", mono (fn [ Prim.int ] Prim.int));
+    (* logand : (-> (&rest Int) Int) - bitwise AND *)
+    ("logand", mono (fn_rest Prim.int Prim.int));
+    (* logior : (-> (&rest Int) Int) - bitwise inclusive OR *)
+    ("logior", mono (fn_rest Prim.int Prim.int));
+    (* logxor : (-> (&rest Int) Int) - bitwise exclusive OR *)
+    ("logxor", mono (fn_rest Prim.int Prim.int));
+    (* lognot : (-> (Int) Int) - bitwise NOT *)
+    ("lognot", mono (fn [ Prim.int ] Prim.int));
     (* =========================================================================
      Comparison operations
      ========================================================================= *)
@@ -208,6 +224,31 @@ let signatures : (string * Env.scheme) list =
     ("number-to-string", mono (fn [ Prim.int ] Prim.string));
     (* string-to-number : (-> (String) Int) *)
     ("string-to-number", mono (fn [ Prim.string ] Prim.int));
+    (* =========================================================================
+     Control flow and function application
+     ========================================================================= *)
+
+    (* funcall : (forall (r) (-> (Any &rest Any) r)) - variadic, takes function + args *)
+    ( "funcall",
+      poly [ "r" ] (TArrow ([ PPositional Prim.any; PRest Prim.any ], tvar "r"))
+    );
+    (* apply : (forall (r) (-> (Any &rest Any) r)) - variadic, takes function + args *)
+    ( "apply",
+      poly [ "r" ] (TArrow ([ PPositional Prim.any; PRest Prim.any ], tvar "r"))
+    );
+    (* function : returns the function object, (forall (a) (-> (a) a)) for #'fn *)
+    ("function", poly [ "a" ] (fn [ tvar "a" ] (tvar "a")));
+    (* run-hooks : (-> (&rest Symbol) Nil) *)
+    ("run-hooks", mono (fn_rest Prim.symbol Prim.nil));
+    (* run-hook-with-args : (-> (Symbol &rest Any) Nil) *)
+    ( "run-hook-with-args",
+      mono (TArrow ([ PPositional Prim.symbol; PRest Prim.any ], Prim.nil)) );
+    (* commandp : (-> (Any) Bool) - predicate for interactive commands *)
+    ("commandp", mono (fn [ Prim.any ] Prim.bool));
+    (* macroexpand : (-> (Any) Any) *)
+    ("macroexpand", mono (fn [ Prim.any ] Prim.any));
+    (* backtrace-frames : (-> () (List Any)) *)
+    ("backtrace-frames", mono (fn [] (list_t Prim.any)));
   ]
 
 (** Create a type environment with all built-in function signatures *)
