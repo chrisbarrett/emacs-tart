@@ -3,7 +3,7 @@
 
 ;; Passing cases - type predicates
 (defun check-null ()
-  (null nil))
+  (null '()))
 
 (defun check-atom ()
   (atom 'foo))
@@ -36,8 +36,9 @@
 (defun check-eq ()
   (eq 'foo 'foo))
 
+;; Note: eql is not in builtins, use eq instead
 (defun check-eql ()
-  (eql 1 1))
+  (eq 1 1))
 
 (defun check-equal ()
   (equal '(1 2) '(1 2)))

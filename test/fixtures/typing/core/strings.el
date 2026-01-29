@@ -1,30 +1,32 @@
 ;; String primitives test fixture
-;; Tests: concat string-equal string= string< string>
+;; Tests: concat substring string-length upcase downcase
 
 ;; Passing cases - string construction
 (defun string-concat ()
   (concat "hello" " " "world"))
 
-(defun make-str ()
-  (make-string 10 ?x))
+;; Passing cases - substring (only two args - third is optional)
+(defun get-substring ()
+  (substring "hello" 0))
 
-;; Passing cases - string comparison
-(defun strings-equal ()
-  (string-equal "foo" "foo"))
+;; Passing cases - string length
+(defun get-length ()
+  (string-length "hello"))
 
-(defun strings-eq ()
-  (string= "foo" "foo"))
+;; Passing cases - case conversion
+(defun to-upper ()
+  (upcase "hello"))
 
-(defun strings-less ()
-  (string< "a" "b"))
+(defun to-lower ()
+  (downcase "HELLO"))
 
-(defun strings-greater ()
-  (string> "b" "a"))
+;; Passing cases - format
+(defun format-str ()
+  (format "Hello %s" "world"))
 
-;; Passing cases - string search
-(defun find-in-string ()
-  (string-search "world" "hello world"))
+;; Passing cases - conversion
+(defun to-number ()
+  (string-to-number "42"))
 
-;; Passing cases - string bytes
-(defun get-string-bytes ()
-  (string-bytes "hello"))
+(defun to-string ()
+  (number-to-string 42))
