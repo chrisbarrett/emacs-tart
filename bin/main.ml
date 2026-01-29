@@ -402,6 +402,57 @@ let find_typings_root ~verbose : string =
       verbose_log verbose "Using typings root: %s (may not exist)" fallback;
       fallback
 
+(** Detect Emacs version with verbose logging.
+
+    Logs the detection process and fallback chain when verbose mode is enabled.
+*)
+let detect_emacs_version ~verbose ~typings_root : Tart.Emacs_version.version =
+  let open Tart.Verbose_log in
+  verbose_log verbose "Detecting Emacs version...";
+
+  (* Try to find emacs binary location *)
+  let emacs_path =
+    try
+      let ic = Unix.open_process_in "which emacs 2>/dev/null" in
+      let path =
+        try String.trim (input_line ic) with End_of_file -> "not found"
+      in
+      ignore (Unix.close_process_in ic);
+      path
+    with _ -> "not found"
+  in
+  verbose_log verbose "Emacs binary: %s" emacs_path;
+
+  (* Detect version *)
+  let detection_result = Tart.Emacs_version.detect () in
+  let version =
+    match detection_result with
+    | Tart.Emacs_version.Detected v ->
+        verbose_log verbose "Detected version: %s"
+          (Tart.Emacs_version.version_to_string v);
+        v
+    | Tart.Emacs_version.NotFound ->
+        verbose_log verbose "Emacs not found, using default";
+        Tart.Emacs_version.latest
+    | Tart.Emacs_version.ParseError msg ->
+        verbose_log verbose "Version parse error: %s, using default" msg;
+        Tart.Emacs_version.latest
+  in
+
+  (* Log the fallback chain *)
+  let fallback_chain = Tart.Search_path.version_fallback_candidates version in
+  verbose_log verbose "Version fallback chain: %s"
+    (String.concat " -> " fallback_chain);
+
+  (* Log the selected typings version *)
+  (match Tart.Search_path.find_typings_dir ~typings_root ~version with
+  | Some dir ->
+      let selected_version = Filename.basename dir in
+      verbose_log verbose "Using typings version: %s" selected_version
+  | None -> verbose_log verbose "No typings directory found");
+
+  version
+
 (** Coverage subcommand: measure type signature coverage *)
 let cmd_coverage ~format ~verbose ~fail_under ~exclude paths =
   let config = { Tart.File_scanner.exclude_patterns = exclude } in
@@ -412,9 +463,7 @@ let cmd_coverage ~format ~verbose ~fail_under ~exclude paths =
 
   (* Build search path for signature lookup *)
   let typings_root = find_typings_root ~verbose in
-  let version =
-    Tart.Emacs_version.detect_or_default ~default:Tart.Emacs_version.latest ()
-  in
+  let version = detect_emacs_version ~verbose ~typings_root in
   let search_path =
     Tart.Search_path.empty
     |> Tart.Search_path.with_typings_root typings_root
@@ -438,6 +487,7 @@ let cmd_coverage ~format ~verbose ~fail_under ~exclude paths =
 
 (** Emacs coverage subcommand: measure C layer type coverage *)
 let cmd_emacs_coverage ~verbose ~emacs_source ~emacs_version_opt =
+  let open Tart.Verbose_log in
   (* Discover Emacs source directory *)
   let source_result = Tart.Emacs_source.discover ~explicit_path:emacs_source in
   match source_result with
@@ -445,27 +495,49 @@ let cmd_emacs_coverage ~verbose ~emacs_source ~emacs_version_opt =
       prerr_endline (Tart.Emacs_source.format_error source_result);
       exit 1
   | Tart.Emacs_source.Found { source_dir; version = detected_version } ->
+      (* Get typings root first (needed for fallback logging) *)
+      let typings_root = find_typings_root ~verbose in
+
+      (* Log version detection *)
+      verbose_log verbose "Detecting Emacs version...";
+      verbose_log verbose "Emacs source: %s" source_dir;
+      verbose_log verbose "Detected version (from source): %s" detected_version;
+
       (* Use specified version or detected version *)
-      let version_str =
+      let version_str, version =
         match emacs_version_opt with
-        | Some v -> Tart.Emacs_version.version_to_string v
-        | None -> detected_version
-      in
-      let version =
-        match emacs_version_opt with
-        | Some v -> v
+        | Some v ->
+            verbose_log verbose "Using override version: %s"
+              (Tart.Emacs_version.version_to_string v);
+            (Tart.Emacs_version.version_to_string v, v)
         | None -> (
             match Tart.Emacs_version.parse_version detected_version with
-            | Some v -> v
-            | None -> Tart.Emacs_version.latest)
+            | Some v -> (detected_version, v)
+            | None ->
+                verbose_log verbose "Could not parse version, using default: %s"
+                  (Tart.Emacs_version.version_to_string
+                     Tart.Emacs_version.latest);
+                ( Tart.Emacs_version.version_to_string Tart.Emacs_version.latest,
+                  Tart.Emacs_version.latest ))
       in
+
+      (* Log the fallback chain *)
+      let fallback_chain =
+        Tart.Search_path.version_fallback_candidates version
+      in
+      verbose_log verbose "Version fallback chain: %s"
+        (String.concat " -> " fallback_chain);
+
+      (* Log the selected typings version *)
+      (match Tart.Search_path.find_typings_dir ~typings_root ~version with
+      | Some dir ->
+          let selected_version = Filename.basename dir in
+          verbose_log verbose "Using typings version: %s" selected_version
+      | None -> verbose_log verbose "No typings directory found");
 
       (* Scan C source files *)
       let src_dir = Filename.concat source_dir "src" in
       let definitions = Tart.C_scanner.scan_dir src_dir in
-
-      (* Get typings root *)
-      let typings_root = find_typings_root ~verbose in
 
       (* Calculate coverage *)
       let result =
