@@ -13,3 +13,11 @@
 (test
  (name report_format_test)
  (libraries coverage syntax str alcotest))
+
+(test
+ (name emacs_source_test)
+ (libraries coverage str alcotest))
+
+(test
+ (name c_scanner_test)
+ (libraries coverage unix alcotest))
