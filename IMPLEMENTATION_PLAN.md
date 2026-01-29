@@ -199,7 +199,7 @@ Note: 30.1 and 29.1 directories are backfills from 31.0; version-specific differ
 
 ## Phase 0.7: Typing Test Fixtures (Spec 33)
 
-**Status:** Not started
+**Status:** ✅ Complete
 **Priority:** High - documents type checker behavior, enables systematic testing
 **Depends on:** Phase 27 (test harness), Spec 25 completed
 
@@ -437,17 +437,17 @@ cat test/fixtures/typing/errors/type-mismatch/int-for-string.expected
 | Add `-v` short form | 30 | 2 | Low | **Done** |
 | Create BUGS.md structure | 32 | 3 | Low | **Done** |
 | Version-specific test directive | 25 | 3 | Medium | **Done** |
-| Create error category directories | 33 | 4 | Low | Not started |
-| Type mismatch fixtures | 33 | 4 | Medium | Not started |
-| Arity error fixtures | 33 | 4 | Medium | Not started |
-| Unbound identifier fixtures | 33 | 4 | Medium | Not started |
-| Occurs check fixtures | 33 | 4 | Medium | Not started |
-| Kind error fixtures | 33 | 4 | Medium | Not started |
-| Exhaustiveness fixtures | 33 | 4 | Medium | Not started |
-| Regression fixtures | 33 | 4 | Low | Not started |
-| Realistic user scenarios | 33 | 4 | Medium | Not started |
-| Update test harness discovery | 33 | 4 | Low | Verify only |
-| Generate/review expected files | 33 | 4 | Medium | Not started |
+| Create error category directories | 33 | 4 | Low | **Done** |
+| Type mismatch fixtures | 33 | 4 | Medium | **Done** |
+| Arity error fixtures | 33 | 4 | Medium | **Done** |
+| Unbound identifier fixtures | 33 | 4 | Medium | **Done** |
+| Occurs check fixtures | 33 | 4 | Medium | **Done** |
+| Kind error fixtures | 33 | 4 | Medium | **Done** |
+| Exhaustiveness fixtures | 33 | 4 | Medium | **Done** |
+| Regression fixtures | 33 | 4 | Low | **Done** |
+| Realistic user scenarios | 33 | 4 | Medium | **Done** |
+| Update test harness discovery | 33 | 4 | Low | **Done** |
+| Generate/review expected files | 33 | 4 | Medium | **Done** |
 | Validate data.tart | 32 | 3 | Medium | Not started |
 | Validate fns.tart | 32 | 3 | Medium | Not started |
 | Validate eval.tart | 32 | 3 | Medium | Not started |
@@ -458,10 +458,11 @@ cat test/fixtures/typing/errors/type-mismatch/int-for-string.expected
 - Phase 0.5 (Spec 30) - Verbose output for coverage debugging ✅
 - Phase 0.6.1 (Spec 32) - BUGS.md structure for gap documentation ✅
 - Phase 27.5 (Spec 25) - Version-specific test directive ✅
+- Phase 0.7 (Spec 33) - Typing test fixtures ✅ (29 fixtures across 6 error categories)
 
 **Remaining work:**
 - Phase 0.6.2-0.6.4 (Spec 32) - C-core typings validation workflow (iterative human/agent work)
-- Phase 0.7 (Spec 33) - Typing test fixtures (this plan)
+- Phase 29 (Spec 34) - Funcall and Apply Typing
 
 ---
 
