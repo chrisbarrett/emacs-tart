@@ -489,6 +489,64 @@ let log_typings_loading ~verbose ~typings_root ~version =
           files;
         verbose_log verbose "Total signatures loaded: %d" !total_sigs)
 
+(** Scan C source files with verbose logging.
+
+    For emacs-coverage: logs scanning progress and per-file counts. *)
+let scan_c_source_verbose ~verbose ~src_dir : Tart.C_scanner.c_definition list =
+  let open Tart.Verbose_log in
+  verbose_log verbose "Scanning C source: %s" src_dir;
+
+  (* Read directory and get C files *)
+  let entries =
+    if Sys.file_exists src_dir && Sys.is_directory src_dir then
+      Sys.readdir src_dir |> Array.to_list
+    else []
+  in
+  let c_files =
+    entries
+    |> List.filter (fun f -> Filename.check_suffix f ".c")
+    |> List.sort String.compare
+  in
+
+  (* Scan each file and accumulate totals *)
+  let total_defuns = ref 0 in
+  let total_defvars = ref 0 in
+  let total_defsyms = ref 0 in
+  let all_defs = ref [] in
+
+  List.iter
+    (fun filename ->
+      let path = Filename.concat src_dir filename in
+      let defs = Tart.C_scanner.scan_file path in
+      let defuns =
+        List.filter (fun d -> d.Tart.C_scanner.kind = Tart.C_scanner.Defun) defs
+        |> List.length
+      in
+      let defvars =
+        List.filter
+          (fun d -> d.Tart.C_scanner.kind = Tart.C_scanner.Defvar)
+          defs
+        |> List.length
+      in
+      let defsyms =
+        List.filter
+          (fun d -> d.Tart.C_scanner.kind = Tart.C_scanner.Defsym)
+          defs
+        |> List.length
+      in
+      if defuns > 0 || defvars > 0 || defsyms > 0 then
+        verbose_log verbose "  %s: %d DEFUNs, %d DEFVARs, %d DEFSYMs" filename
+          defuns defvars defsyms;
+      total_defuns := !total_defuns + defuns;
+      total_defvars := !total_defvars + defvars;
+      total_defsyms := !total_defsyms + defsyms;
+      all_defs := !all_defs @ defs)
+    c_files;
+
+  verbose_log verbose "Total: %d DEFUNs, %d DEFVARs, %d DEFSYMs" !total_defuns
+    !total_defvars !total_defsyms;
+  !all_defs
+
 (** Coverage subcommand: measure type signature coverage *)
 let cmd_coverage ~format ~verbose ~fail_under ~exclude paths =
   let config = { Tart.File_scanner.exclude_patterns = exclude } in
@@ -577,7 +635,7 @@ let cmd_emacs_coverage ~verbose ~emacs_source ~emacs_version_opt =
 
       (* Scan C source files *)
       let src_dir = Filename.concat source_dir "src" in
-      let definitions = Tart.C_scanner.scan_dir src_dir in
+      let definitions = scan_c_source_verbose ~verbose ~src_dir in
 
       (* Calculate coverage *)
       let result =
