@@ -1191,14 +1191,14 @@ Create fixtures exercising each C primitive category:
 
 ### 27.5 Version-Specific Tests
 
-- [ ] [R4] Support `test: emacs-version 31.0` directive
-- [ ] Create `test/fixtures/typing/version/` directory
-- [ ] Add version-specific fixtures (e.g., treesit-available-p in 31+)
-- [ ] Verify: Version-specific fixtures run with correct typings
+- [x] [R4] Support `test: emacs-version 31.0` directive
+- [x] Create `test/fixtures/typing/version/` directory
+- [x] Add version-specific fixtures (e.g., version-30.el example)
+- [x] Verify: Version-specific fixtures run with correct typings
 
 ### 27.6 Regression Fixtures
 
-- [ ] [R6] Create `test/fixtures/typing/regression/` directory
+- [x] [R6] Create `test/fixtures/typing/regression/` directory
 - [ ] Add fixtures named after issues/bugs as found
 - [ ] Verify: Regression fixtures document expected behavior
 
