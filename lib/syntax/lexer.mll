@@ -255,8 +255,6 @@ rule token = parse
   | "#|"           { block_comment 1 lexbuf }
 
   (* Reader macros *)
-  | "\\,@"         { Parser.COMMA_AT }  (* Escaped unquote-splicing *)
-  | "\\,"          { Parser.COMMA }     (* Escaped unquote *)
   | ",@"           { Parser.COMMA_AT }
   | ","            { Parser.COMMA }
   | "'"            { Parser.QUOTE }
@@ -307,7 +305,8 @@ rule token = parse
   | "?" [^ ' ' '\t' '\n' '\r' '\\'] as s
                    { Parser.CHAR (parse_char_literal (String.sub s 1 (String.length s - 1))) }
   (* Escaped characters with modifiers like ?\C-x, ?\M-x, ?\s-x (super) etc. *)
-  | "?" ("\\" ['C' 'M' 'S' 'H' 'A' 's'] '-')+ ("\\" _? | [^ ' ' '\t' '\n' '\r']) as s
+  (* Note: ?\C- (space) is valid - control-space *)
+  | "?" ("\\" ['C' 'M' 'S' 'H' 'A' 's'] '-')+ (' ' | "\\" _? | [^ ' ' '\t' '\n' '\r']) as s
                    { Parser.CHAR (parse_char_literal (String.sub s 1 (String.length s - 1))) }
   (* \s (space) - match 3 chars and check if next is dash *)
   | "?\\s"         { (* Check if followed by dash (super modifier) vs standalone (space) *)
@@ -390,6 +389,11 @@ rule token = parse
   (* Dot-prefixed symbols like .foo (used with let-alist) *)
   | '.' symbol_start symbol_cont* as s
                    { Parser.SYMBOL (unescape_symbol s) }
+
+  (* Backslash-prefixed symbols like \n, \t, \(, \), \, used in skeleton-mode *)
+  (* These are NOT escape sequences - they are literal symbols *)
+  | '\\' (['a'-'z' 'A'-'Z' '_' '0'-'9' '(' ')' '[' ']' ',' '@'] symbol_cont*) as s
+                   { Parser.SYMBOL s }
 
   (* Ellipsis symbol ... *)
   | "..."          { Parser.SYMBOL "..." }
