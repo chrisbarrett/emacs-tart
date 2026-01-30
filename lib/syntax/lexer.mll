@@ -202,21 +202,30 @@ let rec parse_char_literal s =
 
 }
 
-let whitespace = [' ' '\t' '\r']
+let whitespace = [' ' '\t' '\r' '\012']  (* includes form-feed *)
 let newline = '\n'
 let digit = ['0'-'9']
 let hex_digit = ['0'-'9' 'a'-'f' 'A'-'F']
 let octal_digit = ['0'-'7']
 
 (* Elisp symbols can contain many special characters *)
-let symbol_start = ['a'-'z' 'A'-'Z' '_' '+' '-' '*' '/' '<' '>' '=' '!' '&' '%' '^' '~' '@' '$' '|' ':' '\\']
+(* UTF-8 multi-byte sequences: 2-byte starts with 110xxxxx, 3-byte with 1110xxxx, 4-byte with 11110xxx *)
+(* Continuation bytes are 10xxxxxx (0x80-0xBF) *)
+let utf8_2byte = ['\xC0'-'\xDF'] ['\x80'-'\xBF']
+let utf8_3byte = ['\xE0'-'\xEF'] ['\x80'-'\xBF'] ['\x80'-'\xBF']
+let utf8_4byte = ['\xF0'-'\xF7'] ['\x80'-'\xBF'] ['\x80'-'\xBF'] ['\x80'-'\xBF']
+let utf8_char = utf8_2byte | utf8_3byte | utf8_4byte
+
+let symbol_start = ['a'-'z' 'A'-'Z' '_' '+' '-' '*' '/' '<' '>' '=' '!' '&' '%' '^' '~' '@' '$' '|' ':' '\\'] | utf8_char
 let symbol_cont = symbol_start | digit | ['?' '.']
 
 (* Numbers *)
 let int_literal = '-'? digit+
-let float_literal = '-'? digit+ '.' digit* (['e' 'E'] ['+' '-']? digit+)?
-let hex_literal = "0x" hex_digit+
-let octal_literal = "0o" octal_digit+
+(* Float literals can have optional leading digits (e.g., .5 or 0.5) *)
+let float_literal = '-'? (digit+ '.' digit* | '.' digit+) (['e' 'E'] ['+' '-']? digit+)?
+let hex_literal = ("0x" | "#x") hex_digit+
+let octal_literal = ("0o" | "#o") octal_digit+
+let binary_literal = "#b" ['0' '1']+
 
 rule token = parse
   (* Whitespace *)
@@ -235,6 +244,9 @@ rule token = parse
   | "#'"           { Parser.HASH_QUOTE }
   | "#("           { Parser.HASH_LPAREN }
 
+  (* Bool-vector literal #&length"string" - parse as opaque value *)
+  | "#&" digit+    { bool_vector_string lexbuf }
+
   (* Delimiters *)
   | "("            { Parser.LPAREN }
   | ")"            { Parser.RPAREN }
@@ -242,20 +254,79 @@ rule token = parse
   | "]"            { Parser.RBRACKET }
 
   (* Character literals *)
-  | "?" ("\\" ['C' 'M' 'S' 'H' 'A' 's'] '-')* ("\\" _? | [^ ' ' '\t' '\n' '\r' '(' ')' '[' ']' '"' '\'' '`' ',' ';']) as s
+  (* Space character literal ? (question mark followed by space) *)
+  | "? "           { Parser.CHAR 32 }
+  (* UTF-8 character literals like ?', ?«, etc. - decode the Unicode codepoint *)
+  | "?" utf8_char as s
+                   { (* Decode UTF-8 to get codepoint *)
+                     let bytes = String.sub s 1 (String.length s - 1) in
+                     let len = String.length bytes in
+                     let code =
+                       if len = 2 then
+                         ((Char.code bytes.[0] land 0x1F) lsl 6) lor
+                         (Char.code bytes.[1] land 0x3F)
+                       else if len = 3 then
+                         ((Char.code bytes.[0] land 0x0F) lsl 12) lor
+                         ((Char.code bytes.[1] land 0x3F) lsl 6) lor
+                         (Char.code bytes.[2] land 0x3F)
+                       else if len = 4 then
+                         ((Char.code bytes.[0] land 0x07) lsl 18) lor
+                         ((Char.code bytes.[1] land 0x3F) lsl 12) lor
+                         ((Char.code bytes.[2] land 0x3F) lsl 6) lor
+                         (Char.code bytes.[3] land 0x3F)
+                       else
+                         Char.code bytes.[0]
+                     in
+                     Parser.CHAR code }
+  (* Simple characters like ?a, ?A, ?0, ?, etc. - most common case *)
+  | "?" [^ ' ' '\t' '\n' '\r' '\\'] as s
                    { Parser.CHAR (parse_char_literal (String.sub s 1 (String.length s - 1))) }
+  (* Escaped characters with modifiers like ?\C-x, ?\M-x, ?\s-x (super) etc. *)
+  | "?" ("\\" ['C' 'M' 'S' 'H' 'A' 's'] '-')+ ("\\" _? | [^ ' ' '\t' '\n' '\r']) as s
+                   { Parser.CHAR (parse_char_literal (String.sub s 1 (String.length s - 1))) }
+  (* \s (space) - match 3 chars and check if next is dash *)
+  | "?\\s"         { (* Check if followed by dash (super modifier) vs standalone (space) *)
+                     (* We only consumed "?\s" - peek at next char if any *)
+                     let c = try Bytes.get lexbuf.lex_buffer lexbuf.lex_curr_pos with _ -> '\000' in
+                     if c = '-' then begin
+                       (* It's the start of super modifier like ?\s-x, need more *)
+                       (* Back up and let the modifier rule match *)
+                       lexbuf.lex_curr_pos <- lexbuf.lex_start_pos;
+                       lexbuf.lex_curr_p <- lexbuf.lex_start_p;
+                       raise (Lexer_error ("incomplete super modifier", span_of_lexbuf lexbuf))
+                     end else
+                       Parser.CHAR 32 (* space *) }
+  (* Simple escapes like ?\n, ?\t, ?\\ etc. (excluding modifiers C M S H A s and hex/unicode) *)
+  | "?\\" [^ 'x' '0'-'7' 'C' 'M' 'S' 'H' 'A' 's' 'u' 'U'] as s
+                   { Parser.CHAR (parse_char_literal (String.sub s 1 (String.length s - 1))) }
+  (* Octal escapes like ?\012 *)
   | "?\\" (octal_digit octal_digit? octal_digit?) as s
                    { Parser.CHAR (parse_char_literal (String.sub s 1 (String.length s - 1))) }
+  (* Hex escapes like ?\x1b *)
   | "?\\x" hex_digit+ as s
+                   { Parser.CHAR (parse_char_literal (String.sub s 1 (String.length s - 1))) }
+  (* Unicode escapes like ?\u0041, ?\U00000041 *)
+  | "?\\u" hex_digit hex_digit hex_digit hex_digit as s
+                   { Parser.CHAR (parse_char_literal (String.sub s 1 (String.length s - 1))) }
+  | "?\\U" hex_digit hex_digit hex_digit hex_digit hex_digit hex_digit hex_digit hex_digit as s
                    { Parser.CHAR (parse_char_literal (String.sub s 1 (String.length s - 1))) }
 
   (* Numbers - try float first since it's more specific *)
   | float_literal as s
                    { Parser.FLOAT (float_of_string s) }
   | hex_literal as s
-                   { Parser.INT (int_of_string s) }
+                   { (* Handle both 0x and #x formats *)
+                     let s' = if s.[0] = '#' then "0" ^ String.sub s 1 (String.length s - 1) else s in
+                     Parser.INT (int_of_string s') }
   | octal_literal as s
-                   { Parser.INT (int_of_string s) }
+                   { (* Handle both 0o and #o formats *)
+                     let s' = if s.[0] = '#' then "0" ^ String.sub s 1 (String.length s - 1) else s in
+                     Parser.INT (int_of_string s') }
+  | binary_literal as s
+                   { (* #bNNN binary literal - parse manually *)
+                     let digits = String.sub s 2 (String.length s - 2) in
+                     let value = String.fold_left (fun acc c -> acc * 2 + (if c = '1' then 1 else 0)) 0 digits in
+                     Parser.INT value }
   | int_literal as s
                    { Parser.INT (int_of_string s) }
 
@@ -291,6 +362,13 @@ rule token = parse
   | digit+ symbol_start symbol_cont* as s
                    { Parser.SYMBOL s }
 
+  (* Dot-prefixed symbols like .foo (used with let-alist) *)
+  | '.' symbol_start symbol_cont* as s
+                   { Parser.SYMBOL s }
+
+  (* Ellipsis symbol ... *)
+  | "..."          { Parser.SYMBOL "..." }
+
   | eof            { Parser.EOF }
 
   | _ as c         {
@@ -319,4 +397,21 @@ and block_comment depth = parse
   | eof            {
       let span = span_of_lexbuf lexbuf in
       raise (Lexer_error ("unterminated block comment", span))
+    }
+
+(* Bool-vector literal: expects a string following #&N *)
+and bool_vector_string = parse
+  | '"'            { bool_vector_string_body (Buffer.create 16) lexbuf }
+  | _              {
+      let span = span_of_lexbuf lexbuf in
+      raise (Lexer_error ("expected string after bool-vector length", span))
+    }
+
+and bool_vector_string_body buf = parse
+  | '"'            { Parser.BOOL_VECTOR }  (* Ignore contents, just parse as opaque type *)
+  | '\\' _         { Buffer.add_string buf (Lexing.lexeme lexbuf); bool_vector_string_body buf lexbuf }
+  | [^ '"' '\\']   { Buffer.add_string buf (Lexing.lexeme lexbuf); bool_vector_string_body buf lexbuf }
+  | eof            {
+      let span = span_of_lexbuf lexbuf in
+      raise (Lexer_error ("unterminated bool-vector literal", span))
     }

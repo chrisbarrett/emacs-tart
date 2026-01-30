@@ -974,6 +974,52 @@ let () =
       else
         cmd_coverage ~format:!format ~verbose:!verbose ~fail_under:!fail_under
           ~exclude:!exclude !paths
+  | "check" :: rest ->
+      (* Explicit check subcommand - same as default behavior *)
+      let emacs_version = ref None in
+      let show_help = ref false in
+      let file_list = ref [] in
+      let rec parse_check_args = function
+        | [] -> ()
+        | "--help" :: _ | "-h" :: _ -> show_help := true
+        | "--emacs-version" :: v :: rest ->
+            (match Tart.Emacs_version.parse_version v with
+            | Some ver -> emacs_version := Some ver
+            | None ->
+                prerr_endline
+                  (Printf.sprintf "tart check: invalid Emacs version '%s'" v);
+                prerr_endline "Expected format: MAJOR.MINOR (e.g., 31.0)";
+                exit 2);
+            parse_check_args rest
+        | "--emacs-version" :: [] ->
+            prerr_endline
+              "tart check: --emacs-version requires a version argument";
+            exit 2
+        | arg :: _ when String.starts_with ~prefix:"-" arg ->
+            prerr_endline ("tart check: unknown option: " ^ arg);
+            exit 2
+        | file :: rest ->
+            file_list := !file_list @ [ file ];
+            parse_check_args rest
+      in
+      parse_check_args rest;
+      if !show_help then (
+        print_endline "Usage: tart check [OPTIONS] FILE [FILES...]";
+        print_endline "";
+        print_endline "Type-check Elisp files.";
+        print_endline "";
+        print_endline "Options:";
+        print_endline "  --emacs-version VER  Use typings for Emacs version VER";
+        exit 0)
+      else (
+        (* Log the Emacs version being used *)
+        (match !emacs_version with
+        | Some ver ->
+            prerr_endline
+              (Printf.sprintf "[tart] Using Emacs version: %s"
+                 (Tart.Emacs_version.version_to_string ver))
+        | None -> ());
+        cmd_check !file_list)
   | "emacs-coverage" :: rest ->
       let emacs_source = ref None in
       let emacs_version = ref None in

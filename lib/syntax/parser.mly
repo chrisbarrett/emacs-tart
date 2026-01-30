@@ -23,6 +23,7 @@ let list_span ~lparen ~rparen =
 %token DOT
 %token QUOTE BACKQUOTE COMMA COMMA_AT
 %token HASH_QUOTE HASH_LPAREN
+%token BOOL_VECTOR
 %token EOF
 
 (* Entry point returns a list of S-expressions *)
@@ -45,6 +46,7 @@ sexp:
   | s = located(SYMBOL) { Symbol (fst s, snd s) }
   | k = located(KEYWORD) { Keyword (fst k, snd k) }
   | c = located(CHAR) { Char (fst c, snd c) }
+  | BOOL_VECTOR { Symbol ("bool-vector", span_of_loc $loc) }  (* opaque type *)
   | l = list_sexp { l }
   | v = vector { v }
   | q = quoted { q }
