@@ -1,0 +1,4 @@
+(library
+ (name errors)
+ (public_name tart.errors)
+ (libraries syntax typing unix yojson))

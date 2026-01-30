@@ -223,6 +223,11 @@ let check_file env filename : Tart.Type_env.t * Tart.Error.t list =
     let type_errors = Tart.Error.of_diagnostics diagnostics in
     (check_result.env, parse_errors @ type_errors)
 
+(** Validate a file exists and is readable, returning structured error on
+    failure. *)
+let validate_file path : (unit, Tart.File_error.t) result =
+  Tart.File_error.check_file path
+
 (** Check subcommand: type-check files *)
 let run_check format _emacs_version files =
   if files = [] then (
@@ -232,14 +237,27 @@ let run_check format _emacs_version files =
     in
     prerr_endline (Tart.Error.to_string err);
     exit 2);
+  (* Validate all files exist first, collecting file errors *)
+  let file_errors, valid_files =
+    List.fold_left
+      (fun (errors, valid) path ->
+        match validate_file path with
+        | Ok () -> (errors, path :: valid)
+        | Error file_err -> (Tart.Error.of_file_error file_err :: errors, valid))
+      ([], []) files
+  in
+  let valid_files = List.rev valid_files in
+  let file_errors = List.rev file_errors in
+  (* Type-check valid files *)
   let initial_env = Tart.Check.default_env () in
-  let _, all_errors =
+  let _, type_errors =
     List.fold_left
       (fun (env, acc_errors) file ->
-        let env', file_errors = check_file env file in
-        (env', acc_errors @ file_errors))
-      (initial_env, []) files
+        let env', errs = check_file env file in
+        (env', acc_errors @ errs))
+      (initial_env, []) valid_files
   in
+  let all_errors = file_errors @ type_errors in
   (match format with
   | Human -> Tart.Error.report all_errors
   | Json -> Tart.Error.report_json all_errors);
@@ -287,16 +305,29 @@ let run_eval expr =
 let run_expand load_files file =
   let global = Tart.Eval.make_interpreter () in
 
+  (* Validate --load files first *)
   List.iter
     (fun load_file ->
-      let parse_result = Tart.Read.parse_file load_file in
-      if parse_result.errors <> [] then (
-        List.iter
-          (fun err -> prerr_endline (format_parse_error err))
-          parse_result.errors;
-        exit 1)
-      else Tart.Expand.load_macros global parse_result.sexps)
+      match validate_file load_file with
+      | Error file_err ->
+          prerr_endline (Tart.File_error.to_string file_err);
+          exit 1
+      | Ok () ->
+          let parse_result = Tart.Read.parse_file load_file in
+          if parse_result.errors <> [] then (
+            List.iter
+              (fun err -> prerr_endline (format_parse_error err))
+              parse_result.errors;
+            exit 1)
+          else Tart.Expand.load_macros global parse_result.sexps)
     load_files;
+
+  (* Validate target file *)
+  (match validate_file file with
+  | Error file_err ->
+      prerr_endline (Tart.File_error.to_string file_err);
+      exit 1
+  | Ok () -> ());
 
   let parse_result = Tart.Read.parse_file file in
   if parse_result.errors <> [] then (
@@ -699,7 +730,8 @@ let emacs_version_arg =
 (* Check subcommand *)
 let check_files_arg =
   let doc = "Elisp files to type-check." in
-  Arg.(value & pos_all file [] & info [] ~docv:"FILE" ~doc)
+  (* Use string instead of file to handle errors with structured File_error *)
+  Arg.(value & pos_all string [] & info [] ~docv:"FILE" ~doc)
 
 let check_cmd =
   let doc = "Type-check Elisp files" in
@@ -734,11 +766,13 @@ let eval_cmd =
 (* Expand subcommand *)
 let expand_load_arg =
   let doc = "Load macros from $(docv) before expanding (repeatable)." in
-  Arg.(value & opt_all file [] & info [ "load" ] ~docv:"FILE" ~doc)
+  (* Use string instead of file to handle errors with structured File_error *)
+  Arg.(value & opt_all string [] & info [ "load" ] ~docv:"FILE" ~doc)
 
 let expand_file_arg =
   let doc = "File to macro-expand." in
-  Arg.(required & pos 0 (some file) None & info [] ~docv:"FILE" ~doc)
+  (* Use string instead of file to handle errors with structured File_error *)
+  Arg.(required & pos 0 (some string) None & info [] ~docv:"FILE" ~doc)
 
 let expand_cmd =
   let doc = "Macro-expand a file and print the result" in

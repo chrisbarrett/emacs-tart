@@ -13,7 +13,9 @@ type t =
       (** Parse error with location *)
   | Eval of { message : string; span : Syntax.Location.span }
       (** Evaluation error with location *)
-  | Io of { path : string; message : string }  (** File I/O error *)
+  | Io of { path : string; message : string }  (** Generic file I/O error *)
+  | File of Errors.File_error.t
+      (** Structured file I/O error with suggestions *)
   | Cli of { message : string; hint : string option }  (** CLI usage error *)
 
 (** {1 Recoverability} *)
@@ -21,8 +23,8 @@ type t =
 val is_fatal : t -> bool
 (** [is_fatal err] returns [true] if processing should stop immediately.
 
-    Fatal errors (Io, Cli) prevent further processing. Recoverable errors (Type,
-    Parse, Eval) allow collecting more errors. *)
+    Fatal errors (Io, File, Cli) prevent further processing. Recoverable errors
+    (Type, Parse, Eval) allow collecting more errors. *)
 
 (** {1 Location Access} *)
 
@@ -52,6 +54,9 @@ val of_diagnostic : Typing.Diagnostic.t -> t
 
 val of_diagnostics : Typing.Diagnostic.t list -> t list
 (** Wrap multiple type diagnostics as errors. *)
+
+val of_file_error : Errors.File_error.t -> t
+(** Convert a structured file error to a unified error. *)
 
 (** {1 Formatting} *)
 

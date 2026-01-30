@@ -91,6 +91,10 @@ module Server = Lsp.Server
 module Dependency_graph = Graph.Dependency_graph
 module Graph_builder = Graph.Graph_builder
 
+(** {1 File Errors} *)
+
+module File_error = Errors.File_error
+
 (** {1 Coverage} *)
 
 module Definition_extractor = Coverage.Definition_extractor

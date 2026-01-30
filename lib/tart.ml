@@ -59,6 +59,9 @@ module Dependency_graph = Graph.Dependency_graph
 
 module Graph_builder = Graph.Graph_builder
 
+module File_error = Errors.File_error
+(** Re-export file error module *)
+
 module Definition_extractor = Coverage.Definition_extractor
 (** Re-export coverage modules *)
 

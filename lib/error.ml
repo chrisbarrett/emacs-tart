@@ -8,6 +8,7 @@ type t =
   | Parse of { message : string; span : Loc.span }
   | Eval of { message : string; span : Loc.span }
   | Io of { path : string; message : string }
+  | File of Errors.File_error.t  (** Structured file I/O error *)
   | Cli of { message : string; hint : string option }
 
 let is_fatal = function
@@ -15,6 +16,7 @@ let is_fatal = function
   | Parse _ -> false (* Recoverable: continue parsing next form *)
   | Eval _ -> false (* Recoverable: report and continue *)
   | Io _ -> true (* Fatal: cannot proceed without file *)
+  | File _ -> true (* Fatal: cannot proceed without file *)
   | Cli _ -> true (* Fatal: invalid invocation *)
 
 let location = function
@@ -22,6 +24,7 @@ let location = function
   | Parse { span; _ } -> Some span
   | Eval { span; _ } -> Some span
   | Io _ -> None
+  | File _ -> None (* File errors don't have code spans *)
   | Cli _ -> None
 
 let parse_error ~message ~span = Parse { message; span }
@@ -39,6 +42,7 @@ let io_error ~path ~exn =
 let cli_error ~message ?hint () = Cli { message; hint }
 let of_diagnostic d = Type d
 let of_diagnostics ds = List.map of_diagnostic ds
+let of_file_error (err : Errors.File_error.t) = File err
 
 (** Format a source span for display *)
 let format_span (span : Loc.span) : string = Diagnostic.format_span span
@@ -53,6 +57,7 @@ let to_string = function
       Printf.sprintf "error: evaluation error: %s\n  --> %s" message
         (format_span span)
   | Io { path; message } -> Printf.sprintf "error: %s: %s" path message
+  | File file_err -> Errors.File_error.to_string file_err
   | Cli { message; hint } -> (
       match hint with
       | Some h -> Printf.sprintf "error: %s\nhint: %s" message h
@@ -96,6 +101,7 @@ let to_json = function
           ("path", `String path);
           ("message", `String message);
         ]
+  | File file_err -> Errors.File_error.to_json file_err
   | Cli { message; hint } ->
       let base =
         [
