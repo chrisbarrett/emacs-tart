@@ -45,9 +45,7 @@ let check_file env filename : Tart.Type_env.t * int =
 
     (* Combine all diagnostics *)
     let diagnostics = type_diagnostics @ undefined_diagnostics in
-    List.iter
-      (fun d -> prerr_endline (Tart.Diagnostic.to_string d))
-      diagnostics;
+    List.iter (fun d -> prerr_endline (Tart.Diagnostic.to_string d)) diagnostics;
 
     let error_count =
       parse_error_count + Tart.Diagnostic.count_errors diagnostics

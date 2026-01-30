@@ -105,7 +105,9 @@ let rec infer (env : Env.t) (sexp : Syntax.Sexp.t) : result =
               (* Unbound function - track as undefined *)
               with_undefined (fresh_tvar (Env.current_level env)) name span))
   (* === Function reference with lambda: #'(lambda ...) === *)
-  | List ([ Symbol ("function", _); (List (Symbol ("lambda", _) :: _, _) as lam) ], _) ->
+  | List
+      ( [ Symbol ("function", _); (List (Symbol ("lambda", _) :: _, _) as lam) ],
+        _ ) ->
       infer env lam
   (* === Lambda expressions === *)
   | List (Symbol ("lambda", _) :: List (params, _) :: body, span) ->
@@ -894,8 +896,8 @@ and get_expr_source (expr : Syntax.Sexp.t) : string option =
 
 (** Infer the type of an apply expression.
 
-    (apply f arg1 arg2 ... list) applies function f to the fixed args
-    followed by the elements of list.
+    (apply f arg1 arg2 ... list) applies function f to the fixed args followed
+    by the elements of list.
 
     For functions with &rest parameters, we constrain:
     - All fixed args to have type T
@@ -994,10 +996,9 @@ and infer_apply env fn_expr args span =
   in
   let all_constraints =
     (* Order: fn_constraint, then fixed args, then list constraint, then sub-results *)
-    [ fn_constraint ]
-    @ fn_result.constraints @ fixed_constraint_set
-    @ combine_results fixed_results @ list_constraint_set
-    @ list_result.constraints
+    [ fn_constraint ] @ fn_result.constraints @ fixed_constraint_set
+    @ combine_results fixed_results
+    @ list_constraint_set @ list_result.constraints
   in
   let all_undefineds =
     fn_result.undefineds @ list_result.undefineds
@@ -1008,9 +1009,9 @@ and infer_apply env fn_expr args span =
 
 (** Infer the type of a funcall expression.
 
-    (funcall f arg1 arg2 ...) applies the function f to the arguments.
-    We infer f's type, constrain it to be a function type, and check
-    the arguments against the function's parameter types.
+    (funcall f arg1 arg2 ...) applies the function f to the arguments. We infer
+    f's type, constrain it to be a function type, and check the arguments
+    against the function's parameter types.
 
     This provides better type checking than the generic builtin signature
     because we can track the actual function type and argument positions. *)
