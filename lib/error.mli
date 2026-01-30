@@ -100,3 +100,46 @@ val to_json : t -> Yojson.Safe.t
     - Parse/Eval: message + location
     - Io: path + message
     - Cli: message + optional hint *)
+
+(** {1 Error Accumulator} *)
+
+type error = t
+(** Alias for the error type to use within submodules. *)
+
+module Acc : sig
+  type 'a t
+  (** Accumulator for collecting multiple errors. *)
+
+  val empty : 'a t
+  (** Create an empty accumulator. *)
+
+  val add : error -> 'a t -> 'a t
+  (** Add an error to the accumulator. *)
+
+  val add_list : error list -> 'a t -> 'a t
+  (** Add multiple errors to the accumulator. *)
+
+  val to_list : 'a t -> error list
+  (** Get accumulated errors in the order they were added. *)
+
+  val has_errors : 'a t -> bool
+  (** Check if any errors have been accumulated. *)
+end
+
+(** {1 Reporting} *)
+
+val report : t list -> unit
+(** Report errors to stderr with summary count.
+
+    Prints each error followed by a summary line showing the count. Example:
+    {v
+      error[E0308]: type mismatch
+        --> init.el:42:10
+        ...
+
+      error[E0425]: variable `strng` is not defined
+        --> init.el:50:5
+        ...
+
+      Found 2 errors
+    v} *)

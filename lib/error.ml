@@ -108,3 +108,38 @@ let to_json = function
         match hint with Some h -> ("hint", `String h) :: base | None -> base
       in
       `Assoc with_hint
+
+type error = t
+(** Alias for the error type to use within submodules. *)
+
+(** Error accumulator for collecting multiple errors. *)
+module Acc = struct
+  type 'a t = { errors : error list; value : 'a option }
+
+  let empty = { errors = []; value = None }
+  let add err acc = { acc with errors = err :: acc.errors }
+  let add_list errs acc = { acc with errors = List.rev_append errs acc.errors }
+  let to_list acc = List.rev acc.errors
+  let has_errors acc = acc.errors <> []
+end
+
+(** Report errors to stderr with summary count.
+
+    Prints each error followed by a summary line showing the count. Example:
+    {v
+      error[E0308]: type mismatch
+        --> init.el:42:10
+        ...
+
+      error[E0425]: variable `strng` is not defined
+        --> init.el:50:5
+        ...
+
+      Found 2 errors
+    v} *)
+let report (errors : t list) : unit =
+  let count = List.length errors in
+  List.iter (fun err -> prerr_endline (to_string err)) errors;
+  if count > 0 then
+    let plural = if count = 1 then "error" else "errors" in
+    prerr_endline (Printf.sprintf "\nFound %d %s" count plural)
