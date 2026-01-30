@@ -87,41 +87,41 @@ Migrate manual argument parsing to Cmdliner for declarative CLI.
 
 ### Phase 32: File I/O Errors (Spec 37)
 
-**Status:** Not started
+**Status:** Mostly complete
 **Priority:** High - clear, actionable file error messages
 **Depends on:** Phase 30 (structured errors)
 
 Structured file error handling with suggestions.
 
-#### 32.1 Error Type
+#### 32.1 Error Type ✓
 
-- [ ] [R9] Create `lib/errors/file_error.ml` with:
+- [x] [R9] Create `lib/errors/file_error.ml` with:
   - `File_not_found of { path; suggestions }`
   - `Permission_denied of { path }`
   - `Is_directory of { path }`
   - `Read_error of { path; message }`
   - `Signature_not_found of { module_name; search_paths; span option }`
-- [ ] [R10] Error code mapping (E0001-E0005)
+- [x] [R10] Error code mapping (E0001-E0005)
 
-#### 32.2 Suggestions
+#### 32.2 Suggestions ✓
 
-- [ ] [R7] Levenshtein filename suggestions (distance <= 2)
-- [ ] [R8] Missing `.el` extension suggestion
-- [ ] [R1] File not found with similar file suggestions
-- [ ] [R3] Directory detection with `*.el` glob suggestion
+- [x] [R7] Levenshtein filename suggestions (distance <= 2)
+- [x] [R8] Missing `.el` extension suggestion
+- [x] [R1] File not found with similar file suggestions
+- [x] [R3] Directory detection with `*.el` glob suggestion
 
-#### 32.3 Error Handling
+#### 32.3 Error Handling (Partial)
 
-- [ ] [R2] Permission denied formatting
+- [x] [R2] Permission denied formatting
 - [ ] [R6] Read error wrapping with context
 - [ ] [R4] Signature not found with search paths tried
-- [ ] [R5] `--load` file not found in expand command
+- [x] [R5] `--load` file not found in expand command
 
-#### 32.4 Integration
+#### 32.4 Integration (Partial)
 
 - [ ] Update `Search_path` to return structured errors
 - [ ] Update `lib/syntax/read.ml` to wrap I/O exceptions
-- [ ] Update `bin/main.ml` expand command
+- [x] Update `bin/main.ml` expand command
 
 **Files:** `lib/errors/file_error.ml`, `lib/errors/file_error.mli`, `lib/sig/search_path.ml`, `lib/syntax/read.ml`, `bin/main.ml`
 
