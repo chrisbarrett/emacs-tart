@@ -3,6 +3,7 @@
  (public_name tart)
  (libraries
   yojson
+  unix
   tart.syntax
   tart.interp
   tart.core

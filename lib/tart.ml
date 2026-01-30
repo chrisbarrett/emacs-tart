@@ -2,6 +2,9 @@
 
 let version = "0.1.0"
 
+module Error = Error
+(** Re-export unified error module *)
+
 module Location = Syntax.Location
 (** Re-export syntax modules *)
 
