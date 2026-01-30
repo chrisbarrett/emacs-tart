@@ -70,34 +70,37 @@ help: convert the integer to a string first:
 
 **Verify:** `dune test`; error pinpoints argument; suggests conversion
 
-### R2: Branch type mismatch
+### R2: Branch violates declared return type
 
 **Given**:
 ```elisp
-(if (> n 0)
-    n
-    "negative")
+;; (-> (Int) Int)
+(defun describe-n (n)
+  (if (> n 0)
+      n
+      "negative"))
 ```
 **When** type-checked
 **Then** error:
 ```
-error[E0317]: if branches have incompatible types
-  --> utils.el:28:3
+error[E0308]: branch type incompatible with return type
+  --> utils.el:5:7
    |
-28 |   (if (> n 0)
-29 |       n
-   |       ^ this branch has type: Int
-30 |       "negative")
+ 5 |       "negative"
    |       ^^^^^^^^^^ this branch has type: String
    |
-note: both branches of `if` must have the same type
-
-help: return a string in both cases:
+note: function declared to return Int
+  --> utils.el:1:1
    |
-29 |       (number-to-string n)
+ 1 | ;; ((Int) -> Int)
+   |              ^^^ expected return type
 ```
 
-**Verify:** `dune test`; both branches shown; help suggests fix
+Note: Branches with different types form a union (see Spec 46). Errors occur
+only when the inferred union violates a constraint like the declared return
+type.
+
+**Verify:** `dune test`; error points to offending branch and declaration
 
 ### R3: Possible nil errors
 
@@ -120,7 +123,7 @@ note: `get-name` may return nil
 
 help: check for nil first:
    |
-18 |   (when-let ((name (get-name user)))
+18 |   (when-let* ((name (get-name user)))
 19 |     (upcase name))
 
 help: or provide a default:
@@ -231,7 +234,7 @@ error[E0308]: implementation does not match signature
 ## Tasks
 
 - [x] [R1] Implement type mismatch formatting
-- [x] [R2] Implement branch mismatch formatting
+- [ ] [R2] Branch violates return type error (see Spec 46)
 - [x] [R3] Implement Option/nil error formatting
 - [x] [R4] Implement typo suggestions (Levenshtein)
 - [x] [R5] Implement arity error formatting
