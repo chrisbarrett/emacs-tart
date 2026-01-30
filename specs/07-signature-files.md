@@ -24,9 +24,8 @@ tart/
 │   └── sig/
 │       ├── sig_ast.ml     ; Signature file AST
 │       ├── sig_parser.ml  ; Parse .tart to AST
-│       ├── sig_loader.ml  ; Load signatures into type env
-│       └── stdlib.ml      ; Access bundled signatures
-├── stdlib/
+│       └── sig_loader.ml  ; Load signatures into type env
+├── typings/
 │   ├── builtins.tart       ; Emacs primitives
 │   ├── cl-lib.tart         ; cl-lib signatures
 │   └── seq.tart            ; seq.el signatures
@@ -51,7 +50,7 @@ tart/
 
 The module name is derived from the filename: `foo.tart` provides types for `foo`.
 
-**Verify:** `dune test`; parse all files in `stdlib/`
+**Verify:** `dune test`; parse all files in `typings/`
 
 ### R2: Type syntax parsing
 
@@ -223,26 +222,11 @@ go at the start of arrow types for values, or after the name in `defun`.
 **Then** the loader searches for `.tart` files in order:
 1. Sibling `module.tart` next to `module.el` (project-local)
 2. Each directory in `tart-type-path` (user/community types)
-3. Bundled `stdlib/module.tart` (shipped with tart)
+3. Bundled `typings/**/*.tart` (shipped with tart)
 
 The first match wins, allowing project-local overrides.
 
-**Verify:** `(require 'cl-lib)` loads `cl-lib.tart` signatures from stdlib
-
-### R17: Bundled stdlib signatures
-
-**Given** tart is installed
-**When** builtins are referenced
-**Then** types are loaded from bundled `builtins.tart`
-
-Minimum coverage:
-- Arithmetic: `+`, `-`, `*`, `/`, comparison ops
-- Lists: `car`, `cdr`, `cons`, `list`, `nth`, `length`, `mapcar`
-- Strings: `concat`, `substring`, `upcase`, `downcase`
-- Predicates: `stringp`, `integerp`, `listp`, `null`
-- Error: `error`, `signal` (return `never`)
-
-**Verify:** Built-in calls type-check; coverage test for all listed functions
+**Verify:** `(require 'cl-lib)` loads `cl-lib.tart` signatures from typings
 
 ## Tasks
 
@@ -262,7 +246,6 @@ Minimum coverage:
 - [x] [R14] Parse union types with `|` syntax
 - [x] [R15] Implement signature search path
 - [x] [R16] Implement module discovery with search order
-- [x] [R17] Write bundled stdlib signatures
 
 Run review agent after `builtins.tart` covers basic list/string functions before
 proceeding to Spec 08.
