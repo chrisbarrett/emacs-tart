@@ -66,29 +66,33 @@ let test_extract_requires_none () =
    ============================================================================= *)
 
 let test_check_module_no_signature () =
-  let config = Module_check.default_config () in
-  let sexps = parse "(defun foo () 42)" in
-  let result =
-    Module_check.check_module ~config ~filename:"/tmp/test.el" sexps
-  in
-  Alcotest.(check int) "no type errors" 0 (List.length result.type_errors);
-  Alcotest.(check int)
-    "no mismatch errors" 0
-    (List.length result.mismatch_errors);
-  Alcotest.(check bool)
-    "no signature loaded" false
-    (Option.is_some result.signature_env)
+  (* Use temp directory to ensure no stray .tart file interferes *)
+  let files = [ ("test.el", "(defun foo () 42)") ] in
+  with_temp_dir files (fun dir ->
+      let config = Module_check.default_config () in
+      let el_path = Filename.concat dir "test.el" in
+      let sexps = parse "(defun foo () 42)" in
+      let result = Module_check.check_module ~config ~filename:el_path sexps in
+      Alcotest.(check int) "no type errors" 0 (List.length result.type_errors);
+      Alcotest.(check int)
+        "no mismatch errors" 0
+        (List.length result.mismatch_errors);
+      Alcotest.(check bool)
+        "no signature loaded" false
+        (Option.is_some result.signature_env))
 
 let test_check_module_type_error () =
-  let config = Module_check.default_config () in
-  (* Plus with wrong types should error *)
-  let sexps = parse "(+ 1 \"hello\")" in
-  let result =
-    Module_check.check_module ~config ~filename:"/tmp/test.el" sexps
-  in
-  Alcotest.(check bool)
-    "has type error" true
-    (List.length result.type_errors > 0)
+  (* Use temp directory to ensure no stray .tart file interferes *)
+  let files = [ ("test.el", "(+ 1 \"hello\")") ] in
+  with_temp_dir files (fun dir ->
+      let config = Module_check.default_config () in
+      let el_path = Filename.concat dir "test.el" in
+      (* Plus with wrong types should error *)
+      let sexps = parse "(+ 1 \"hello\")" in
+      let result = Module_check.check_module ~config ~filename:el_path sexps in
+      Alcotest.(check bool)
+        "has type error" true
+        (List.length result.type_errors > 0))
 
 (* =============================================================================
    check_module Tests - Signature Loading
@@ -265,14 +269,16 @@ let test_all_functions_in_signature () =
 
 (** No warnings when no signature file exists *)
 let test_no_signature_no_warning () =
-  let config = Module_check.default_config () in
-  let sexps = parse "(defun foo-missing (x) (+ x 1))" in
-  let result =
-    Module_check.check_module ~config ~filename:"/tmp/test.el" sexps
-  in
-  Alcotest.(check int)
-    "no warnings without signature file" 0
-    (List.length result.missing_signature_warnings)
+  (* Use temp directory to ensure no stray .tart file interferes *)
+  let files = [ ("test.el", "(defun foo-missing (x) (+ x 1))") ] in
+  with_temp_dir files (fun dir ->
+      let config = Module_check.default_config () in
+      let el_path = Filename.concat dir "test.el" in
+      let sexps = parse "(defun foo-missing (x) (+ x 1))" in
+      let result = Module_check.check_module ~config ~filename:el_path sexps in
+      Alcotest.(check int)
+        "no warnings without signature file" 0
+        (List.length result.missing_signature_warnings))
 
 (** Mixed internal and public missing functions *)
 let test_mixed_internal_public () =
