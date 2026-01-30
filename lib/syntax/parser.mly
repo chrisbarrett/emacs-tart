@@ -22,7 +22,7 @@ let list_span ~lparen ~rparen =
 %token LBRACKET RBRACKET
 %token DOT
 %token QUOTE BACKQUOTE COMMA COMMA_AT
-%token HASH_QUOTE HASH_LPAREN
+%token HASH_QUOTE HASH_LPAREN HASH_S_LPAREN
 %token BOOL_VECTOR
 %token EOF
 
@@ -84,6 +84,15 @@ vector:
       let lp_span = $loc($1) in
       let rp_span = $loc($3) in
       Vector (elts, list_span ~lparen:lp_span ~rparen:rp_span)
+    }
+  (* Record/hash-table literal #s(type ...) - parse as list with special marker *)
+  | HASH_S_LPAREN; elts = list(sexp); RPAREN
+    {
+      let lp_span = $loc($1) in
+      let rp_span = $loc($3) in
+      let span = list_span ~lparen:lp_span ~rparen:rp_span in
+      (* Wrap in (record ...) form for type-checker to handle *)
+      List (Symbol ("record", span_of_loc lp_span) :: elts, span)
     }
 
 quoted:

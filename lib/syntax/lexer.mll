@@ -37,6 +37,22 @@ let octal_value s start len =
   in
   loop 0 start
 
+(** Unescape backslash-escaped characters in symbols *)
+let unescape_symbol sym =
+  let buf = Buffer.create (String.length sym) in
+  let len = String.length sym in
+  let rec loop i =
+    if i >= len then Buffer.contents buf
+    else if sym.[i] = '\\' && i + 1 < len then begin
+      Buffer.add_char buf sym.[i + 1];
+      loop (i + 2)
+    end else begin
+      Buffer.add_char buf sym.[i];
+      loop (i + 1)
+    end
+  in
+  loop 0
+
 (** Process string escape sequences *)
 let unescape_string s =
   let buf = Buffer.create (String.length s) in
@@ -216,8 +232,10 @@ let utf8_3byte = ['\xE0'-'\xEF'] ['\x80'-'\xBF'] ['\x80'-'\xBF']
 let utf8_4byte = ['\xF0'-'\xF7'] ['\x80'-'\xBF'] ['\x80'-'\xBF'] ['\x80'-'\xBF']
 let utf8_char = utf8_2byte | utf8_3byte | utf8_4byte
 
-let symbol_start = ['a'-'z' 'A'-'Z' '_' '+' '-' '*' '/' '<' '>' '=' '!' '&' '%' '^' '~' '@' '$' '|' ':' '\\'] | utf8_char
-let symbol_cont = symbol_start | digit | ['?' '.']
+let symbol_start = ['a'-'z' 'A'-'Z' '_' '+' '-' '*' '/' '<' '>' '=' '!' '&' '%' '^' '~' '@' '$' '|' ':'] | utf8_char
+(* Escaped characters in symbols: \# means literal #, etc. *)
+let symbol_escape = '\\' _
+let symbol_cont = symbol_start | symbol_escape | digit | ['?' '.']
 
 (* Numbers *)
 let int_literal = '-'? digit+
@@ -237,15 +255,22 @@ rule token = parse
   | "#|"           { block_comment 1 lexbuf }
 
   (* Reader macros *)
+  | "\\,@"         { Parser.COMMA_AT }  (* Escaped unquote-splicing *)
+  | "\\,"          { Parser.COMMA }     (* Escaped unquote *)
   | ",@"           { Parser.COMMA_AT }
   | ","            { Parser.COMMA }
   | "'"            { Parser.QUOTE }
   | "`"            { Parser.BACKQUOTE }
   | "#'"           { Parser.HASH_QUOTE }
   | "#("           { Parser.HASH_LPAREN }
+  | "#s("          { Parser.HASH_S_LPAREN }  (* Record/hash-table literal *)
 
   (* Bool-vector literal #&length"string" - parse as opaque value *)
   | "#&" digit+    { bool_vector_string lexbuf }
+
+  (* Char-table and sub-char-table literals - opaque internal representation *)
+  | "#^^["         { char_table_body 1 lexbuf }  (* Sub-char-table *)
+  | "#^["          { char_table_body 1 lexbuf }  (* Char-table *)
 
   (* Delimiters *)
   | "("            { Parser.LPAREN }
@@ -356,15 +381,15 @@ rule token = parse
 
   (* Symbols *)
   | symbol_start symbol_cont* as s
-                   { Parser.SYMBOL s }
+                   { Parser.SYMBOL (unescape_symbol s) }
 
   (* Also allow symbols starting with a number if followed by symbol chars *)
   | digit+ symbol_start symbol_cont* as s
-                   { Parser.SYMBOL s }
+                   { Parser.SYMBOL (unescape_symbol s) }
 
   (* Dot-prefixed symbols like .foo (used with let-alist) *)
   | '.' symbol_start symbol_cont* as s
-                   { Parser.SYMBOL s }
+                   { Parser.SYMBOL (unescape_symbol s) }
 
   (* Ellipsis symbol ... *)
   | "..."          { Parser.SYMBOL "..." }
@@ -414,4 +439,31 @@ and bool_vector_string_body buf = parse
   | eof            {
       let span = span_of_lexbuf lexbuf in
       raise (Lexer_error ("unterminated bool-vector literal", span))
+    }
+
+(* Char-table body: skip contents until matching ] is found *)
+(* These are opaque internal data structures - we just need to parse past them *)
+and char_table_body depth = parse
+  | ']'            { if depth = 1 then Parser.BOOL_VECTOR (* reuse opaque token *) else char_table_body (depth - 1) lexbuf }
+  | '['            { char_table_body (depth + 1) lexbuf }
+  | "#^^["         { char_table_body (depth + 1) lexbuf }  (* Nested sub-char-table *)
+  | "#^["          { char_table_body (depth + 1) lexbuf }  (* Nested char-table *)
+  | '"'            { char_table_string lexbuf; char_table_body depth lexbuf }  (* Skip strings inside *)
+  | '\n'           { Lexing.new_line lexbuf; char_table_body depth lexbuf }
+  | [^ ']' '[' '"' '\n' '#']+ { char_table_body depth lexbuf }  (* Skip other content *)
+  | '#'            { char_table_body depth lexbuf }  (* Single # not starting special syntax *)
+  | eof            {
+      let span = span_of_lexbuf lexbuf in
+      raise (Lexer_error ("unterminated char-table literal", span))
+    }
+
+(* Skip a string inside a char-table *)
+and char_table_string = parse
+  | '"'            { () }
+  | '\\' _         { char_table_string lexbuf }
+  | '\n'           { Lexing.new_line lexbuf; char_table_string lexbuf }
+  | [^ '"' '\\' '\n']+ { char_table_string lexbuf }
+  | eof            {
+      let span = span_of_lexbuf lexbuf in
+      raise (Lexer_error ("unterminated string in char-table", span))
     }
