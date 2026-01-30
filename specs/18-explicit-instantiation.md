@@ -2,7 +2,7 @@
 
 Enable explicit instantiation of polymorphic types at call sites.
 
-**Dependencies:** Spec 15 (Forall Inference) and Spec 17 (Higher-Kinded Types) complete
+**Dependencies:** Spec 15 (Forall Inference); Spec 17 (HKT) for R4 only
 
 ## Goal
 
@@ -11,29 +11,32 @@ functions, resolving ambiguity and improving type inference.
 
 ## Motivation
 
-With higher-kinded types, type inference can become ambiguous:
+Type inference sometimes needs help:
 
 ```elisp
-;; Ambiguous: what is 'f'?
-(fmap #'1+ (make-my-container))
+;; What type is the empty list?
+(mapcar #'1+ '())
 ```
 
 Explicit instantiation resolves this:
 
 ```elisp
-;; Clear: f = list
-(tart [list] fmap #'1+ my-list)
+;; Clear: input is (list int)
+(tart [(a = int)] (mapcar #'1+ '()))
 ```
 
 Other use cases:
 - Disambiguating return types
 - Documenting intended types inline
 - Forcing specific instantiation for testing
+- **Forward compatibility**: library authors can add type parameters without
+  breaking downstream code that uses explicit instantiation
 
 ## Constraints
 
 - **Backward compatible**: Existing code without annotations works unchanged
-- **Partial application**: Can specify some type args, infer others with `_`
+- **Partial specification**: Specify only what you need, rest inferred
+- **Order independent**: Named bindings can appear in any order
 - **Integration**: Works with HKT and existing forall inference
 - **Syntax**: Must be valid Elisp (parsed but ignored at runtime)
 
@@ -42,12 +45,10 @@ Other use cases:
 ```
 tart/
 ├── lib/
-│   ├── typing/
-│   │   └── infer.ml          ; Handle @[...] instantiation
-│   └── sig/
-│       └── sig_parser.ml     ; Parse inline type arguments
+│   └── typing/
+│       └── infer.ml          ; Handle [(name = type)...] instantiation
 ├── lisp/
-│   └── tart.el               ; @-reader macro (if needed)
+│   └── tart.el               ; tart macro
 └── test/
     └── typing/
         └── infer_test.ml     ; Instantiation tests
@@ -55,105 +56,152 @@ tart/
 
 ## Background
 
-### Syntax Options
+### Syntax
 
-The syntax must be valid Elisp that the type checker can recognize:
+The `tart` macro has arity 1, 2, or 3:
 
-**Option A: Function-like macro**
-```elisp
-(tart [list int] identity)    ; Instantiate identity at [list int]
+```
+tyinst = '[' tyassigns* ']'
+ty     = t | '(' t ')'
+expr   = atom | list
+
+(tart expr)                 ; inspect type (outputs note)
+(tart ty expr)              ; type assertion
+(tart tyinst expr)          ; instantiation
+(tart ty tyinst expr)       ; assertion + instantiation
 ```
 
-**Option B: Annotation comment**
-```elisp
-(identity #|@[list]|# my-value) ; Type in comment
-```
-
-**Option C: Vector literal prefix**
-```elisp
-(identity @[list] my-value)     ; @[...] before first arg
-```
-
-We use **Option A** as it's the clearest and most Elisp-friendly.
-
-### Partial Instantiation
-
-When a function has multiple type parameters, some can be left for inference:
+Examples:
 
 ```elisp
-;; Full: (defun pair [a b] (a b) -> (cons a b))
-(tart [int _] pair 1 "hello")   ; a=int, b=inferred as string
+(tart (+ 1 2))                            ; note: Int
+(tart int x)                              ; assert x : int
+(tart [(a = int)] (identity 42))          ; instantiate, infer result
+(tart int [(a = int)] (identity 42))      ; instantiate + assert result : int
 ```
+
+The function call remains a single expression, not spread across the macro args.
+
+### Why Named-Only Bindings
+
+We use exclusively named type parameter bindings rather than positional:
+
+```elisp
+(tart [(a = int) (b = string)] (mapcar fn xs))
+```
+
+Benefits over positional syntax:
+- **Partial specification is natural**: omit parameters you don't need to specify
+- **Order independent**: don't need to remember parameter order
+- **Self-documenting**: parameter names visible at call site
+- **Forward compatible**: adding new type params to a function doesn't break
+  existing call sites that use explicit instantiation
 
 ## Requirements
 
-### R1: Explicit instantiation syntax
+### R0: Type inspection
+
+**Given** a `tart` form with just an expression
+**When** type-checked
+**Then** a note diagnostic is emitted showing the inferred type:
+
+```elisp
+(tart (mapcar #'1+ my-list))
+;; Note: (List Int)
+```
+
+Useful for inspecting types without LSP hover. The note is informational, not
+an error or warning.
+
+**Verify:** `dune test`
+
+### R1: Named binding syntax
 
 **Given** a polymorphic function call
-**When** annotated with `tart`
-**Then** the type arguments are applied:
+**When** annotated with `tart` using `(name = type)` bindings
+**Then** named parameters are bound, unspecified parameters inferred:
 
 ```elisp
 ;; (defun identity [a] (a) -> a)
-(tart [int] identity 42)    ; OK: a = int
-(tart [string] identity 42) ; Error: int not string
+(tart [(a = int)] (identity 42))    ; OK: a = int
+(tart [(a = string)] (identity 42)) ; Error: int not string
 ```
 
 **Verify:** `dune test`
 
-### R2: Higher-kinded instantiation
+### R2: Partial instantiation
 
-**Given** an HK-polymorphic function
+**Given** a function with multiple type parameters
+**When** only some are specified
+**Then** unspecified parameters are inferred:
+
+```elisp
+;; (defun mapcar [a b] (((a -> b)) (list a)) -> (list b))
+(tart [(a = int)] (mapcar #'1+ my-list))  ; b inferred from #'1+
+```
+
+**Verify:** `dune test`
+
+### R3: Order independence
+
+**Given** named bindings in any order
+**When** type-checked
+**Then** bindings are matched by name, not position:
+
+```elisp
+;; (defun pair [a b] (a b) -> (cons a b))
+(tart [(b = string) (a = int)] (pair 1 "hi"))  ; same as [(a = int) (b = string)]
+```
+
+**Verify:** `dune test`
+
+### R4: Higher-kinded instantiation (future)
+
+**Given** an HK-polymorphic function (requires Spec 17)
 **When** instantiated with a type constructor
 **Then** the constructor is applied:
 
 ```elisp
+;; Hypothetical HKT signature:
 ;; (defun fmap [f a b] (((a -> b)) (f a)) -> (f b))
-(tart [list int string] fmap #'number-to-string my-list)
+(tart [(f = list) (a = int) (b = string)] (fmap #'number-to-string my-list))
 ```
 
-**Verify:** `dune test`
+**Verify:** `dune test` (after Spec 17 implemented)
 
-### R3: Partial instantiation with placeholder
+### R5: Unknown parameter error
 
-**Given** an instantiation with `_` placeholder
+**Given** a named binding that doesn't match any type parameter
 **When** type-checked
-**Then** placeholders are inferred:
+**Then** an error is reported:
 
 ```elisp
-;; (defun pair [a b] (a b) -> (cons a b))
-(tart [_ string] pair 1 "hello")  ; a inferred as int
+;; identity has param 'a', not 'x'
+(tart [(x = int)] (identity 42))  ; Error: unknown type parameter 'x'
 ```
 
 **Verify:** `dune test`
 
-### R4: Arity checking
+### R6: Runtime expansion
 
-**Given** wrong number of type arguments
-**When** type-checked
-**Then** error is reported:
-
-```elisp
-;; identity has 1 type param
-(tart [int string] identity 42)  ; Error: expected 1 type arg
-```
-
-**Verify:** `dune test`
-
-### R5: Runtime expansion
-
-**Given** a `tart` instantiation form
+**Given** any `tart` form
 **When** evaluated at runtime
-**Then** it expands to just the function call:
+**Then** it expands to just the expression:
 
 ```elisp
-(macroexpand '(tart [int] identity 42))
+(macroexpand '(tart (+ 1 2)))
+;; => (+ 1 2)
+
+(macroexpand '(tart [(a = int)] (identity 42)))
 ;; => (identity 42)
+
+(macroexpand '(tart int (+ 1 2)))
+;; => (+ 1 2)
 ```
 
 **Verify:** ERT tests; macro expands correctly
 
-### R6: Error messages
+### R7: Error messages
 
 **Given** a type mismatch with explicit instantiation
 **When** reported
@@ -161,7 +209,7 @@ When a function has multiple type parameters, some can be left for inference:
 
 ```
 Error: type mismatch
-  expected: String (from tart annotation)
+  expected: String (from tart instantiation)
   found: Int
 ```
 
@@ -169,62 +217,104 @@ Error: type mismatch
 
 ## Non-Requirements
 
+- Positional type arguments (use named bindings instead)
 - Instantiation at definition sites (only call sites)
 - Instantiation for non-function types
 - Inference from tart to surrounding context
 
 ## Tasks
 
-- [x] [R5] Add `tart` macro to tart.el
-- [x] [R1] Parse `tart` forms in infer.ml
-- [x] [R1] Apply explicit type arguments during inference
-- [x] [R3] Handle `_` placeholder for partial instantiation
-- [x] [R2] Test HK type constructor instantiation
-- [x] [R4] Validate type argument arity
-- [x] [R6] Format error messages with annotation context
-
-Run review agent after R1 complete to validate approach.
+- [x] [R6] Add `tart` macro to tart.el
+- [x] [R7] Format error messages with annotation context
+- [ ] [R0] Emit note diagnostic for arity-1 `(tart expr)`
+- [ ] [R1] Parse `(name = type)` pairs in vector
+- [ ] [R1] Match named bindings to type parameters by name
+- [ ] [R2] Infer unspecified type parameters
+- [ ] [R3] Test order independence
+- [ ] [R4] Test HK type constructor instantiation
+- [ ] [R5] Error on unknown type parameter names
 
 ## Design Notes
 
 ### Parsing
 
-The `tart` macro form `(tart [T1 T2 ...] fn arg1 arg2 ...)` is recognized
-during inference. The type list is parsed using the existing signature parser
-infrastructure.
+The `tart` macro has one, two, or three arguments:
 
-### Instantiation
+```elisp
+(tart EXPR)                ; inspect type (arity 1)
+(tart TYINST EXPR)         ; instantiation (arity 2)
+(tart TYPE EXPR)           ; assertion (arity 2)
+(tart TYPE TYINST EXPR)    ; both (arity 3)
+```
 
-When a `tart` instantiation form is encountered:
+Where `TYINST` is a vector of named bindings: `[(n1 = T1) (n2 = T2) ...]`.
+Each binding is a 3-element list: `(symbol = type)`.
 
-1. Look up the function's polymorphic type
-2. Parse the type arguments from the vector
-3. Substitute type variables with provided types (or fresh TVars for `_`)
-4. Type-check arguments against the instantiated signature
+Disambiguation for arity 2:
+- If first argument is a vector `[...]`, it's instantiation
+- Otherwise it's type assertion
+
+### Instantiation Algorithm
+
+When a `tart` instantiation form `(tart TYINST EXPR)` is encountered:
+
+1. Evaluate EXPR to find the function being called
+2. Look up the function's polymorphic type and its type parameter names
+3. Parse the named bindings from the vector
+4. For each binding `(name = type)`:
+   - Verify `name` is a valid type parameter
+   - Parse `type` using sig_parser
+5. Create fresh type variables for unspecified parameters
+6. Substitute all type variables in the function type
+7. Type-check EXPR against the instantiated signature
 
 ### Integration with HKT
 
-For higher-kinded instantiation, the type argument can be:
-- A concrete type: `int`, `string`
-- A type constructor: `list`, `option`
-- A partial application: `(result err)` (for `* -> *` where result is `* -> * -> *`)
+For higher-kinded instantiation, the type in a binding can be:
+- A concrete type: `(a = int)`, `(b = string)`
+- A type constructor: `(f = list)`, `(f = option)`
+- A partial application: `(f = (result err))` (for `* -> *`)
 
 ### Example
 
 ```elisp
-;; Signature: (defun fmap [f a b] (((a -> b)) (f a)) -> (f b))
+;; Signature: (defun mapcar [a b] (((a -> b)) (list a)) -> (list b))
 
-;; Full instantiation
-(tart [list int string] fmap #'number-to-string my-int-list)
-;; f = list, a = int, b = string
-;; Expected: ((int -> string)) (list int)) -> (list string)
-;; Checks: #'number-to-string : (int -> string), my-int-list : (list int)
-;; Returns: (list string)
+;; Inspect type without assertion (outputs note)
+(tart (mapcar #'upcase my-list))
+;; Note: (List String)
 
-;; Partial instantiation
-(tart [list _ _] fmap #'upcase my-list)
-;; f = list, a = inferred, b = inferred
-;; From #'upcase : (string -> string), infers a = string, b = string
-;; From my-list : (list string), confirms a = string
-;; Returns: (list string)
+;; Specify only what inference can't determine
+(tart [(a = string)] (mapcar #'upcase my-list))
+;; a = string, b inferred from upcase
+
+;; Full specification when needed
+(tart [(a = int) (b = string)] (mapcar #'number-to-string my-list))
+
+;; Order doesn't matter
+(tart [(b = string) (a = int)] (mapcar #'number-to-string my-list))
+
+;; Empty vector = pure inference (same as no tart wrapper)
+(tart [] (mapcar #'upcase my-list))
+
+;; Combined: instantiation + result type assertion
+(tart (list string) [(a = int)] (mapcar #'number-to-string nums))
 ```
+
+### Forward Compatibility
+
+Named bindings enable library evolution. If a library adds a new type parameter:
+
+```elisp
+;; v1: (defun process [a] ...)
+;; v2: (defun process [a opts] ...)  ; new param added
+```
+
+Existing call sites with explicit instantiation continue to work:
+
+```elisp
+(tart [(a = int)] (process x))  ; works in both v1 and v2
+```
+
+With positional syntax, this would break: `(tart [int] (process x))` would fail
+in v2 due to arity mismatch.

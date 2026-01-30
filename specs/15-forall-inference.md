@@ -102,9 +102,8 @@ No new files; extends `lib/sig/sig_parser.ml` and related modules.
 
 - Kind inference (future HKT spec)
 - Scoped type variables across signatures
-- Explicit type instantiation (see Spec 18; alternatively could extend the
-  `tart` macro with binding syntax like `(tart [(a = int)] expr)` if a unified
-  approach is preferred)
+- Explicit type instantiation (see Spec 18, which uses named bindings via the
+  `tart` macro: `(tart [(a = int)] fn args...)`)
 
 ## Tasks
 
