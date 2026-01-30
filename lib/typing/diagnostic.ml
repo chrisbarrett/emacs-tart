@@ -864,3 +864,58 @@ let missing_instance ~span ~class_name ~typ () =
           class_name (Types.to_string typ);
       ];
   }
+
+(** Serialize a source location to JSON. *)
+let location_to_json (span : Loc.span) : Yojson.Safe.t =
+  `Assoc
+    [
+      ("file", `String span.start_pos.file);
+      ("line", `Int span.start_pos.line);
+      ("column", `Int (span.start_pos.col + 1));
+      ("end_line", `Int span.end_pos.line);
+      ("end_column", `Int (span.end_pos.col + 1));
+    ]
+
+(** Serialize a related location to JSON. *)
+let related_location_to_json (rel : related_location) : Yojson.Safe.t =
+  `Assoc
+    [
+      ("location", location_to_json rel.span); ("message", `String rel.message);
+    ]
+
+(** Serialize a diagnostic to JSON. *)
+let to_json (d : t) : Yojson.Safe.t =
+  let base =
+    [
+      ("kind", `String "type");
+      ("severity", `String (format_severity d.severity));
+      ("message", `String d.message);
+      ("location", location_to_json d.span);
+    ]
+  in
+  let with_code =
+    match d.code with
+    | Some code -> ("code", `String (error_code_to_string code)) :: base
+    | None -> base
+  in
+  let with_expected =
+    match d.expected with
+    | Some ty -> ("expected", `String (Types.to_string ty)) :: with_code
+    | None -> with_code
+  in
+  let with_actual =
+    match d.actual with
+    | Some ty -> ("actual", `String (Types.to_string ty)) :: with_expected
+    | None -> with_expected
+  in
+  let with_related =
+    if d.related = [] then with_actual
+    else
+      ("related", `List (List.map related_location_to_json d.related))
+      :: with_actual
+  in
+  let with_help =
+    if d.help = [] then with_related
+    else ("help", `List (List.map (fun h -> `String h) d.help)) :: with_related
+  in
+  `Assoc with_help

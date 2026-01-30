@@ -229,3 +229,23 @@ val missing_instance :
 
     Used when a function with type class constraints is called but no instance
     exists for the required constraint. *)
+
+(** {1 JSON Serialization} *)
+
+val to_json : t -> Yojson.Safe.t
+(** Serialize a diagnostic to JSON.
+
+    Output format:
+    {v
+      {
+        "kind": "type",
+        "code": "E0308",
+        "severity": "error",
+        "message": "type mismatch",
+        "location": { "file": "init.el", "line": 42, "column": 10 },
+        "expected": "String",
+        "actual": "Int",
+        "related": [...],
+        "help": [...]
+      }
+    v} *)

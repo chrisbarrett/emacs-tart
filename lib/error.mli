@@ -52,3 +52,51 @@ val of_diagnostic : Typing.Diagnostic.t -> t
 
 val of_diagnostics : Typing.Diagnostic.t list -> t list
 (** Wrap multiple type diagnostics as errors. *)
+
+(** {1 Formatting} *)
+
+val to_string : t -> string
+(** Format an error as a human-readable string.
+
+    Output format follows compiler conventions:
+    {v
+      error[E0308]: type mismatch
+        --> init.el:42:10
+        |
+        = expected: String
+        = found: Int
+        |
+      help: convert the integer to a string: (number-to-string ...)
+    v}
+
+    For CLI errors:
+    {v
+      error: no input files
+      hint: use --help for usage
+    v}
+
+    For I/O errors:
+    {v
+      error: init.el: No such file or directory
+    v} *)
+
+val to_json : t -> Yojson.Safe.t
+(** Serialize an error to JSON.
+
+    Output format:
+    {v
+      {
+        "kind": "type",
+        "code": "E0308",
+        "severity": "error",
+        "message": "type mismatch",
+        "location": {...},
+        ...
+      }
+    v}
+
+    Different error kinds have different fields:
+    - Type: full diagnostic with expected/actual/related/help
+    - Parse/Eval: message + location
+    - Io: path + message
+    - Cli: message + optional hint *)
