@@ -13,7 +13,7 @@ The `./tart` wrapper script enables rapid iteration for agents and developers by
 
 ### 0.1 Create `./tart` Script
 
-- [ ] [R1-R8] Create executable `./tart` script at repo root
+- [x] [R1-R8] Create executable `./tart` script at repo root
   - Bash script with `set -euo pipefail`
   - Find repo root via `SCRIPT_DIR`
   - Detect nix shell via `IN_NIX_SHELL` environment variable
@@ -55,51 +55,51 @@ The current `--verbose` implementation just shows covered identifiers. Spec 30 r
 
 ### 0.5.1 Add Verbose Logging Utility
 
-- [ ] Create `lib/coverage/verbose_log.ml` and `.mli`
-- [ ] Implement `verbose_log : bool -> ('a, unit, string, unit) format4 -> 'a`
-- [ ] Output to stderr with `[verbose]` prefix
+- [x] Create `lib/coverage/verbose_log.ml` and `.mli`
+- [x] Implement `verbose_log : bool -> ('a, unit, string, unit) format4 -> 'a`
+- [x] Output to stderr with `[verbose]` prefix
 
 ### 0.5.2 Add Verbose Path Resolution Logging
 
-- [ ] Log executable location
-- [ ] Log typings root candidates with found/not found status
-- [ ] Log final selected typings path
+- [x] Log executable location
+- [x] Log typings root candidates with found/not found status
+- [x] Log final selected typings path
 
 ### 0.5.3 Add Verbose Version Detection Logging
 
-- [ ] Log Emacs binary location
-- [ ] Log detected version string
-- [ ] Log version fallback chain
-- [ ] Log selected typings version
+- [x] Log Emacs binary location
+- [x] Log detected version string
+- [x] Log version fallback chain
+- [x] Log selected typings version
 
 ### 0.5.4 Add Verbose Typings Loading Logging
 
-- [ ] Log each `.tart` file loaded
-- [ ] Log signature count per file
-- [ ] Log total signatures loaded
+- [x] Log each `.tart` file loaded
+- [x] Log signature count per file
+- [x] Log total signatures loaded
 
 ### 0.5.5 Add Verbose C Source Scanning Logging (emacs-coverage)
 
-- [ ] Log source directory being scanned
-- [ ] Log per-file DEFUN/DEFVAR/DEFSYM counts
-- [ ] Log totals by category
+- [x] Log source directory being scanned
+- [x] Log per-file DEFUN/DEFVAR/DEFSYM counts
+- [x] Log totals by category
 
 ### 0.5.6 Add Verbose Match Summary Logging
 
-- [ ] Log sample covered symbols (first 5) with source file location
-- [ ] Log sample uncovered symbols (first 5)
-- [ ] Log final match statistics
+- [x] Log sample covered symbols (first 5) with source file location
+- [x] Log sample uncovered symbols (first 5)
+- [x] Log final match statistics
 
 ### 0.5.7 Thread Verbose Flag Through Functions
 
-- [ ] Add `~verbose:bool` parameter to `Emacs_coverage.calculate_coverage`
-- [ ] Add `~verbose:bool` parameter to `Coverage_report.analyze_files`
-- [ ] Add `~verbose:bool` parameter to `Search_path.load_c_core` (or use callback)
+- [x] Add `~verbose:bool` parameter to `Emacs_coverage.calculate_coverage`
+- [x] Add `~verbose:bool` parameter to `Coverage_report.analyze_files`
+- [x] Add `~verbose:bool` parameter to `Search_path.load_c_core` (or use callback)
 
 ### 0.5.8 Add `-v` Short Form to emacs-coverage Command
 
-- [ ] Parse `-v` as alias for `--verbose`
-- [ ] Update help text
+- [x] Parse `-v` as alias for `--verbose`
+- [x] Update help text
 
 **Files:**
 - `lib/coverage/verbose_log.ml` (new)
@@ -143,9 +143,9 @@ This phase establishes the workflow for systematically creating complete, verifi
 
 ### 0.6.1 Create BUGS.md Structure
 
-- [ ] [R5] Create `typings/emacs/BUGS.md` for cross-version issues
-- [ ] [R6] Create `typings/emacs/31.0/BUGS.md` for version-specific issues
-- [ ] [R7,R8] Document format: function name, source location, category, description
+- [x] [R5] Create `typings/emacs/BUGS.md` for cross-version issues
+- [x] [R6] Create `typings/emacs/31.0/BUGS.md` for version-specific issues
+- [x] [R7,R8] Document format: function name, source location, category, description
 
 Categories:
 - **type-system-gap**: Needs features tart doesn't have (dependent types, row polymorphism)
@@ -207,12 +207,12 @@ Comprehensive fixture suite covering pass/fail cases for all error categories.
 
 ### 0.7.1 Create Error Category Directories
 
-- [ ] Create `test/fixtures/typing/errors/type-mismatch/`
-- [ ] Create `test/fixtures/typing/errors/arity/`
-- [ ] Create `test/fixtures/typing/errors/unbound/`
-- [ ] Create `test/fixtures/typing/errors/occurs-check/`
-- [ ] Create `test/fixtures/typing/errors/kind/`
-- [ ] Create `test/fixtures/typing/errors/exhaustiveness/`
+- [x] Create `test/fixtures/typing/errors/type-mismatch/`
+- [x] Create `test/fixtures/typing/errors/arity/`
+- [x] Create `test/fixtures/typing/errors/unbound/`
+- [x] Create `test/fixtures/typing/errors/occurs-check/`
+- [x] Create `test/fixtures/typing/errors/kind/`
+- [x] Create `test/fixtures/typing/errors/exhaustiveness/`
 
 **Files:** 6 new directories under `test/fixtures/typing/errors/`
 
@@ -224,12 +224,12 @@ ls -la test/fixtures/typing/errors/
 
 ### 0.7.2 Type Mismatch Fixtures (R1)
 
-- [ ] Create `errors/type-mismatch/int-for-string.el` - passing int where string expected
-- [ ] Create `errors/type-mismatch/string-for-int.el` - passing string where int expected
-- [ ] Create `errors/type-mismatch/list-for-atom.el` - passing list where atom expected
-- [ ] Create `errors/type-mismatch/function-arity.el` - function type with wrong arity
-- [ ] Create `errors/type-mismatch/polymorphic.el` - incompatible instantiations of type variable
-- [ ] Generate matching `.expected` files via `./tart check`
+- [x] Create `errors/type-mismatch/int-for-string.el` - passing int where string expected
+- [x] Create `errors/type-mismatch/string-for-int.el` - passing string where int expected
+- [x] Create `errors/type-mismatch/list-for-atom.el` - passing list where atom expected
+- [x] Create `errors/type-mismatch/function-arity.el` - function type with wrong arity
+- [x] Create `errors/type-mismatch/polymorphic.el` - incompatible instantiations of type variable
+- [x] Generate matching `.expected` files via `./tart check`
 
 **Files:**
 - `test/fixtures/typing/errors/type-mismatch/int-for-string.el` + `.expected`
@@ -248,10 +248,10 @@ dune test
 
 ### 0.7.3 Arity Error Fixtures (R2)
 
-- [ ] Create `errors/arity/too-few-args.el` - missing required arguments
-- [ ] Create `errors/arity/too-many-args.el` - excess arguments to fixed-arity function
-- [ ] Create `errors/arity/optional-required.el` - omitting required arg when optional exists
-- [ ] Generate matching `.expected` files
+- [x] Create `errors/arity/too-few-args.el` - missing required arguments
+- [x] Create `errors/arity/too-many-args.el` - excess arguments to fixed-arity function
+- [x] Create `errors/arity/optional-required.el` - omitting required arg when optional exists
+- [x] Generate matching `.expected` files
 
 **Files:**
 - `test/fixtures/typing/errors/arity/too-few-args.el` + `.expected`
@@ -268,11 +268,11 @@ dune test
 
 ### 0.7.4 Unbound Identifier Fixtures (R3)
 
-- [ ] Create `errors/unbound/unbound-var.el` - reference to undefined variable
-- [ ] Create `errors/unbound/unbound-fn.el` - call to undefined function
-- [ ] Create `errors/unbound/typo.el` - realistic typo in common function name
-- [ ] Create `errors/unbound/scoping.el` - variable used outside its let scope
-- [ ] Generate matching `.expected` files
+- [x] Create `errors/unbound/unbound-var.el` - reference to undefined variable
+- [x] Create `errors/unbound/unbound-fn.el` - call to undefined function
+- [x] Create `errors/unbound/typo.el` - realistic typo in common function name
+- [x] Create `errors/unbound/scoping.el` - variable used outside its let scope
+- [x] Generate matching `.expected` files
 
 **Files:**
 - `test/fixtures/typing/errors/unbound/unbound-var.el` + `.expected`
@@ -289,9 +289,9 @@ dune test
 
 ### 0.7.5 Occurs Check Fixtures (R4)
 
-- [ ] Create `errors/occurs-check/self-reference.el` - `(setq x (cons x nil))`
-- [ ] Create `errors/occurs-check/mutual-recursion.el` - mutually recursive definitions creating cycle
-- [ ] Generate matching `.expected` files
+- [x] Create `errors/occurs-check/self-reference.el` - `(setq x (cons x nil))`
+- [x] Create `errors/occurs-check/mutual-recursion.el` - mutually recursive definitions creating cycle
+- [x] Generate matching `.expected` files
 
 **Files:**
 - `test/fixtures/typing/errors/occurs-check/self-reference.el` + `.expected`
@@ -306,10 +306,10 @@ dune test
 
 ### 0.7.6 Kind Error Fixtures (R5)
 
-- [ ] Create `errors/kind/type-as-value.el` - using type constructor as value
-- [ ] Create `errors/kind/value-as-type.el` - using value where type expected (in annotations)
-- [ ] Create `errors/kind/wrong-arity-tycon.el` - type constructor with wrong number of args
-- [ ] Generate matching `.expected` files
+- [x] Create `errors/kind/type-as-value.el` - using type constructor as value
+- [x] Create `errors/kind/value-as-type.el` - using value where type expected (in annotations)
+- [x] Create `errors/kind/wrong-arity-tycon.el` - type constructor with wrong number of args
+- [x] Generate matching `.expected` files
 
 **Files:**
 - `test/fixtures/typing/errors/kind/type-as-value.el` + `.expected`
@@ -325,10 +325,10 @@ dune test
 
 ### 0.7.7 Exhaustiveness Fixtures (R6)
 
-- [ ] Create `errors/exhaustiveness/missing-case.el` - pcase missing constructor
-- [ ] Create `errors/exhaustiveness/missing-nil.el` - list match missing nil case
-- [ ] Create `errors/exhaustiveness/missing-default.el` - cond without catch-all
-- [ ] Generate matching `.expected` files
+- [x] Create `errors/exhaustiveness/missing-case.el` - pcase missing constructor
+- [x] Create `errors/exhaustiveness/missing-nil.el` - list match missing nil case
+- [x] Create `errors/exhaustiveness/missing-default.el` - cond without catch-all
+- [x] Generate matching `.expected` files
 
 **Files:**
 - `test/fixtures/typing/errors/exhaustiveness/missing-case.el` + `.expected`
@@ -344,9 +344,9 @@ dune test
 
 ### 0.7.8 Regression Fixtures (R7)
 
-- [ ] Ensure `test/fixtures/typing/regression/` directory exists
-- [ ] Create template header for regression fixtures
-- [ ] Add initial regression fixtures as bugs are discovered
+- [x] Ensure `test/fixtures/typing/regression/` directory exists
+- [x] Create template header for regression fixtures
+- [x] Add initial regression fixtures as bugs are discovered
 
 **Fixture template:**
 ```elisp
@@ -369,10 +369,10 @@ ls test/fixtures/typing/regression/
 
 ### 0.7.9 Realistic User Scenario Fixtures (R8)
 
-- [ ] Create `errors/type-mismatch/user-config.el` - wrong type in defcustom
-- [ ] Create `errors/arity/hook-function.el` - hook function with wrong signature
-- [ ] Create `errors/unbound/require-missing.el` - using function without require
-- [ ] Generate matching `.expected` files
+- [x] Create `errors/type-mismatch/user-config.el` - wrong type in defcustom
+- [x] Create `errors/arity/hook-function.el` - hook function with wrong signature
+- [x] Create `errors/unbound/require-missing.el` - using function without require
+- [x] Generate matching `.expected` files
 
 **Files:**
 - `test/fixtures/typing/errors/type-mismatch/user-config.el` + `.expected`
@@ -388,9 +388,9 @@ cat test/fixtures/typing/errors/type-mismatch/user-config.el
 
 ### 0.7.10 Update Test Harness Discovery (R9)
 
-- [ ] Verify `fixture_test.ml` discovers `errors/` subdirectories automatically
-- [ ] No code changes expected - harness already discovers recursively
-- [ ] Verify test count increases with new fixtures
+- [x] Verify `fixture_test.ml` discovers `errors/` subdirectories automatically
+- [x] No code changes expected - harness already discovers recursively
+- [x] Verify test count increases with new fixtures
 
 **Files:** No changes expected to `test/test_harness/fixture_test.ml`
 
@@ -405,10 +405,10 @@ dune test 2>&1 | grep -E "test|fixture"
 
 ### 0.7.11 Generate and Review Expected Files
 
-- [ ] Run `./tart check` on each fixture to generate actual output
-- [ ] Create `.expected` files with PASS/FAIL status and diagnostic substrings
-- [ ] Review all `.expected` files for correctness
-- [ ] Ensure diagnostic messages are user-friendly and accurate
+- [x] Run `./tart check` on each fixture to generate actual output
+- [x] Create `.expected` files with PASS/FAIL status and diagnostic substrings
+- [x] Review all `.expected` files for correctness
+- [x] Ensure diagnostic messages are user-friendly and accurate
 
 **Verification:**
 ```bash
@@ -448,10 +448,12 @@ cat test/fixtures/typing/errors/type-mismatch/int-for-string.expected
 | Realistic user scenarios | 33 | 4 | Medium | **Done** |
 | Update test harness discovery | 33 | 4 | Low | **Done** |
 | Generate/review expected files | 33 | 4 | Medium | **Done** |
-| Validate data.tart | 32 | 3 | Medium | Not started |
-| Validate fns.tart | 32 | 3 | Medium | Not started |
-| Validate eval.tart | 32 | 3 | Medium | Not started |
-| Validate remaining c-core files | 32 | 3 | Medium | Not started |
+| Validate data.tart | 32 | 3 | Medium | Validation workflow |
+| Validate fns.tart | 32 | 3 | Medium | Validation workflow |
+| Validate eval.tart | 32 | 3 | Medium | Validation workflow |
+| Validate remaining c-core files | 32 | 3 | Medium | Validation workflow |
+| Funcall/Apply typing (R1-R5, R7) | 34 | 5 | High | **Done** |
+| Funcall/Apply typing (R6, R8-R14) | 34 | 5 | High | Deferred |
 
 **Implementation complete:**
 - Phase 0 (Spec 31) - `./tart` wrapper script for fast iteration ✅
@@ -459,10 +461,10 @@ cat test/fixtures/typing/errors/type-mismatch/int-for-string.expected
 - Phase 0.6.1 (Spec 32) - BUGS.md structure for gap documentation ✅
 - Phase 27.5 (Spec 25) - Version-specific test directive ✅
 - Phase 0.7 (Spec 33) - Typing test fixtures ✅ (29 fixtures across 6 error categories)
+- Phase 29 (Spec 34) - Funcall and Apply Typing ✅ (R1-R5, R7 complete; R6, R8-R14 deferred)
 
-**Remaining work:**
-- Phase 0.6.2-0.6.4 (Spec 32) - C-core typings validation workflow (iterative human/agent work)
-- Phase 29 (Spec 34) - Funcall and Apply Typing
+**Remaining work (non-implementation):**
+- Phase 0.6.2-0.6.4 (Spec 32) - C-core typings validation workflow (iterative human/agent validation work, not code implementation)
 
 ---
 
@@ -1583,72 +1585,69 @@ Type `funcall` and `apply` accurately using tracked function types, dual namespa
 
 ### Current State
 
-- `funcall` and `apply` typed as `(forall (r) (-> (Any &rest Any) r))` in `builtin_types.ml`
-- No special handling in inference engine — treated as regular built-in functions
-- Single namespace environment (`Type_env.t` has unified `bindings`)
-- No tuple-list subtyping in unification
-- No occurrence typing for type predicates
+**Status:** Substantially complete (R1-R5, R7 implemented; R6, R8-R14 deferred)
 
-### 29.1 Dual Namespace Environment (Priority 1 — Foundation)
+### 29.1 Dual Namespace Environment (Priority 1 — Foundation) ✓
 
-- [ ] [R1] Add `fn_bindings` field to `lib/core/type_env.ml` alongside `bindings`
-- [ ] [R1] Add `lookup_fn` function to look up in function namespace
-- [ ] [R1] Update `add_binding` or add `add_fn_binding` for function namespace
-- [ ] [R1] Wire through `Env` module in `lib/typing/env.ml`
-- [ ] Update `defun` to add bindings to function namespace
-- [ ] Update `defalias` to add bindings to function namespace
-- [ ] Keep `let`, `setq`, `defvar` in variable namespace (existing behavior)
+- [x] [R1] Add `fn_bindings` field to `lib/core/type_env.ml` alongside `bindings`
+- [x] [R1] Add `lookup_fn` function to look up in function namespace
+- [x] [R1] Update `add_binding` or add `add_fn_binding` for function namespace
+- [x] [R1] Wire through `Env` module in `lib/typing/env.ml`
+- [x] Update `defun` to add bindings to function namespace
+- [x] Update `defalias` to add bindings to function namespace
+- [x] Keep `let`, `setq`, `defvar` in variable namespace (existing behavior)
 
 **Files:** `lib/core/type_env.ml`, `lib/core/type_env.mli`, `lib/typing/env.ml`, `lib/typing/env.mli`, `lib/typing/infer.ml`
 
 **Verify:** `dune test`; same name can have different types in each namespace
 
-### 29.2 Sharp-Quote Function Lookup (Priority 1 — Foundation)
+### 29.2 Sharp-Quote Function Lookup (Priority 1 — Foundation) ✓
 
-- [ ] [R2] Pattern match `(function name)` special form in `infer.ml`
-- [ ] [R2] Look up `name` in function namespace
-- [ ] [R2] Return function type directly
-- [ ] [R3] Verify variable refs (symbols not in function position) use variable namespace
+- [x] [R2] Pattern match `(function name)` special form in `infer.ml`
+- [x] [R2] Look up `name` in function namespace
+- [x] [R2] Return function type directly
+- [x] [R3] Verify variable refs (symbols not in function position) use variable namespace
 
 **Files:** `lib/typing/infer.ml`
 
 **Verify:** `dune test`; `#'name` returns function type from function env
 
-### 29.3 Funcall Type Checking (Priority 2 — Core)
+### 29.3 Funcall Type Checking (Priority 2 — Core) ✓
 
-- [ ] [R4] Detect `(funcall f arg1 arg2 ...)` form in `infer.ml`
-- [ ] [R4] Infer type of `f`, constrain to be function type `(-> (T1 T2 ...) R)`
-- [ ] [R4] Constrain each arg against corresponding param type
-- [ ] [R4] Return result type `R`
-- [ ] [R5] When `f` is `#'name`, use function namespace lookup (automatic via R2)
+- [x] [R4] Detect `(funcall f arg1 arg2 ...)` form in `infer.ml`
+- [x] [R4] Infer type of `f`, constrain to be function type `(-> (T1 T2 ...) R)`
+- [x] [R4] Constrain each arg against corresponding param type
+- [x] [R4] Return result type `R`
+- [x] [R5] When `f` is `#'name`, use function namespace lookup (automatic via R2)
 
 **Files:** `lib/typing/infer.ml`
 
 **Verify:** `dune test`; funcall checks function type against arguments
 
-### 29.4 Funcall Error Messages (Priority 2 — Core)
+### 29.4 Funcall Error Messages (Priority 2 — Core) — Partial
 
-- [ ] [R6] Add funcall-specific context to `lib/typing/constraint.ml`
-- [ ] [R6] Add "expected function type, got X" error message
-- [ ] [R6] Add "in funcall argument N" context for arg mismatches
+- [x] [R6] Rich diagnostic format enabled (switched to Diagnostic.to_string)
+- [ ] [R6] Add funcall-specific context to `lib/typing/constraint.ml` (deferred)
+- [ ] [R6] Add "expected function type, got X" error message (deferred)
+- [ ] [R6] Add "in funcall argument N" context for arg mismatches (deferred)
 
 **Files:** `lib/typing/constraint.ml`, `lib/typing/diagnostic.ml`
 
 **Verify:** `dune test`; funcall type errors are descriptive
 
-### 29.5 Apply with Rest-Arg Functions (Priority 2 — Core)
+### 29.5 Apply with Rest-Arg Functions (Priority 2 — Core) ✓
 
-- [ ] [R7] Detect `(apply f args... list)` form in `infer.ml`
-- [ ] [R7] When `f` has `&rest T` parameter type:
+- [x] [R7] Detect `(apply f args... list)` form in `infer.ml`
+- [x] [R7] When `f` has `&rest T` parameter type:
   - Constrain all fixed args to `T`
   - Constrain final list arg to `(List T)`
-- [ ] [R7] Return result type
+- [x] [R7] Return result type
 
 **Files:** `lib/typing/infer.ml`
 
 **Verify:** `dune test`; apply with &rest functions checks element types
 
-### 29.6 Apply with Fixed-Arity Functions (Priority 2 — Core)
+### 29.6 Apply with Fixed-Arity Functions (Priority 2 — Core) — Deferred
 
 - [ ] [R8] When `f` has fixed arity N and apply has M fixed args + tuple:
   - Infer tuple type for final argument
@@ -1659,7 +1658,7 @@ Type `funcall` and `apply` accurately using tracked function types, dual namespa
 
 **Verify:** `dune test`; apply with tuples checks arity and positional types
 
-### 29.7 Tuple-List Subtyping (Priority 2 — Core)
+### 29.7 Tuple-List Subtyping (Priority 2 — Core) — Deferred
 
 - [ ] [R9] Add tuple-to-list subtyping in `lib/typing/unify.ml`
 - [ ] [R9] `(Tuple T1 T2 ... Tn)` unifies with `(List T)` when all Ti unify with T
@@ -1669,7 +1668,7 @@ Type `funcall` and `apply` accurately using tracked function types, dual namespa
 
 **Verify:** `dune test`; tuples unify with compatible list types
 
-### 29.8 Context-Sensitive Tuple Inference (Priority 2 — Core)
+### 29.8 Context-Sensitive Tuple Inference (Priority 2 — Core) — Deferred
 
 - [ ] [R10] In apply position, infer quoted list literals as tuple types
 - [ ] [R10] `'(1 "x")` → `(Tuple Int String)` instead of `(List (Or Int String))`
@@ -1678,7 +1677,7 @@ Type `funcall` and `apply` accurately using tracked function types, dual namespa
 
 **Verify:** `dune test`; list literals infer as tuples in apply context
 
-### 29.9 Union Function Types (Priority 3 — Enhancement)
+### 29.9 Union Function Types (Priority 3 — Enhancement) — Deferred
 
 - [ ] [R11] Handle `f : (Or (-> A1 R1) (-> A2 R2))` in funcall
 - [ ] [R11] Args must satisfy intersection of param types
@@ -1689,7 +1688,7 @@ Type `funcall` and `apply` accurately using tracked function types, dual namespa
 
 **Verify:** `dune test`; union function types check all variants
 
-### 29.10 Occurrence Typing for Predicates (Priority 3 — Enhancement)
+### 29.10 Occurrence Typing for Predicates (Priority 3 — Enhancement) — Deferred
 
 - [ ] [R12] Track predicate tests in `if` condition
 - [ ] [R12] Narrow variable types in consequent branch
@@ -1700,7 +1699,7 @@ Type `funcall` and `apply` accurately using tracked function types, dual namespa
 
 **Verify:** `dune test`; type predicates narrow types in branches
 
-### 29.11 Never Unify to Any (Priority 3 — Enhancement)
+### 29.11 Never Unify to Any (Priority 3 — Enhancement) — Deferred
 
 - [ ] [R14] Audit unification for implicit `Any` widening paths
 - [ ] [R14] Ensure incompatible types produce errors, not `Any`
@@ -1709,14 +1708,14 @@ Type `funcall` and `apply` accurately using tracked function types, dual namespa
 
 **Verify:** `dune test`; type mismatches produce errors, not Any
 
-### 29.12 Cleanup and Testing
+### 29.12 Cleanup and Testing — Partial
 
-- [ ] Remove weak `funcall`/`apply` signatures from `builtin_types.ml`
-- [ ] Add test fixtures for R1-R3 (dual namespace)
-- [ ] Add test fixtures for R4-R6 (funcall success/error)
-- [ ] Add test fixtures for R7-R8 (apply with rest/fixed-arity)
-- [ ] Add test fixtures for R9-R10 (tuple-list subtyping)
-- [ ] Add test fixtures for R11-R14 (union types, occurrence typing)
+- [ ] Remove weak `funcall`/`apply` signatures from `builtin_types.ml` (deferred)
+- [x] Add test fixtures for R1-R3 (dual namespace)
+- [x] Add test fixtures for R4-R6 (funcall success/error)
+- [x] Add test fixtures for R7-R8 (apply with rest/fixed-arity)
+- [ ] Add test fixtures for R9-R10 (tuple-list subtyping) (deferred)
+- [ ] Add test fixtures for R11-R14 (union types, occurrence typing) (deferred)
 
 **Files:** `lib/typing/builtin_types.ml`, `test/fixtures/typing/`
 
