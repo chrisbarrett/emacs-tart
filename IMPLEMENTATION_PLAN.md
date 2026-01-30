@@ -4,1759 +4,599 @@ Priority: Agent-focused development - fast feedback loops and debugging.
 
 ---
 
-## Phase 0: Fast Feedback (Spec 31)
+## Active Work
 
-**Status:** ✅ Complete
-**Priority:** Highest - enables rapid agent iteration
+### Phase 30: Structured Errors (Spec 35)
 
-The `./tart` wrapper script enables rapid iteration for agents and developers by skipping redundant nix shell invocations and using incremental builds.
+**Status:** Not started
+**Priority:** High - foundation for CLI/IO error handling
+**Depends on:** Spec 13 (error reporting) ✓
 
-### 0.1 Create `./tart` Script
+Unified error type system for composable, machine-readable errors.
 
-- [x] [R1-R8] Create executable `./tart` script at repo root
-  - Bash script with `set -euo pipefail`
-  - Find repo root via `SCRIPT_DIR`
-  - Detect nix shell via `IN_NIX_SHELL` environment variable
-  - Run `dune exec tart -- "$@"` directly when in nix shell
-  - Wrap with `nix develop --command` when outside
-  - Make executable with `chmod +x`
+#### 30.1 Error Type Definition
 
-**Files:** `./tart` (new)
+- [ ] [R1] Create `lib/core/error.ml` with variant type:
+  - `Type of Diagnostic.t`
+  - `Parse of { message; span }`
+  - `Eval of { message; span }`
+  - `Io of { path; message }`
+  - `Cli of { message; hint option }`
+- [ ] [R2] Implement `is_fatal : t -> bool` (Io/Cli fatal; Type/Parse recoverable)
+- [ ] [R3] Implement `location : t -> Location.span option`
+
+**Files:** `lib/core/error.ml`, `lib/core/error.mli`
+
+#### 30.2 Formatting
+
+- [ ] [R4] Implement `to_string` for all variants (compiler-style format)
+- [ ] [R7] Add `to_json : t -> Yojson.Safe.t` to `Diagnostic.t`
+- [ ] [R5] Implement `to_json` for `Error.t`
+
+**Files:** `lib/core/error.ml`, `lib/typing/diagnostic.ml`
+
+#### 30.3 Accumulator and Reporting
+
+- [ ] [R10] Implement `Error.Acc` module (empty, add, add_list, to_list, has_errors)
+- [ ] [R11] Add `of_diagnostics : Diagnostic.t list -> t list`
+- [ ] [R6] Implement `Error.report` with summary count
+
+**Files:** `lib/core/error.ml`
+
+#### 30.4 CLI Integration
+
+- [ ] [R9] Add `io_error : path:string -> exn:exn -> t`
+- [ ] [R8] Migrate CLI errors in `bin/main.ml` to use `Error.t`
+- [ ] Add `--format=json` flag to `tart check`
+
+**Files:** `lib/core/error.ml`, `bin/main.ml`
 
 **Verification:**
 ```bash
-# Script exists and is executable
-test -x ./tart
-
-# Works inside nix shell (fast path)
-nix develop --command ./tart --version
-
-# Works outside nix shell (wrapped path)
-env -u IN_NIX_SHELL ./tart --version
-
-# Passes arguments correctly
-./tart eval '(+ 1 2)'
-
-# Works from subdirectories
-cd lib && ../tart --version
-
-# Propagates exit codes
-./tart check nonexistent.el; echo $?  # Should be 1
+dune build
+./tart check --format=json bad.el | jq .
+./tart check file-with-errors.el  # Shows count at end
 ```
 
 ---
 
-## Phase 0.5: Verbose Coverage Output (Spec 30)
+### Phase 31: Cmdliner CLI (Spec 36)
 
-**Status:** ✅ Complete
-**Priority:** High - enables debugging coverage issues
+**Status:** Not started
+**Priority:** High - better UX for users and agents
+**Depends on:** Phase 30 (structured errors)
 
-The current `--verbose` implementation just shows covered identifiers. Spec 30 requires detailed diagnostic output about path resolution, version detection, typings loading, and match details.
+Migrate manual argument parsing to Cmdliner for declarative CLI.
 
-### 0.5.1 Add Verbose Logging Utility
+#### 31.1 Setup
 
-- [x] Create `lib/coverage/verbose_log.ml` and `.mli`
-- [x] Implement `verbose_log : bool -> ('a, unit, string, unit) format4 -> 'a`
-- [x] Output to stderr with `[verbose]` prefix
+- [ ] [R1] Add cmdliner dependency to `bin/dune`
 
-### 0.5.2 Add Verbose Path Resolution Logging
+#### 31.2 Subcommands
 
-- [x] Log executable location
-- [x] Log typings root candidates with found/not found status
-- [x] Log final selected typings path
+- [ ] [R2] Implement `check` subcommand (default) with `--emacs-version`
+- [ ] [R3] Implement `eval EXPR` subcommand
+- [ ] [R4] Implement `expand [--load FILE]... FILE` subcommand
+- [ ] [R5] Implement `repl` subcommand
+- [ ] [R6] Implement `lsp [--port PORT] [--log-level LEVEL]` subcommand
+- [ ] [R7] Implement `coverage [--format] [--verbose] [--fail-under] [--exclude]`
+- [ ] [R8] Implement `emacs-coverage [--emacs-source] [--emacs-version] [--verbose]`
 
-### 0.5.3 Add Verbose Version Detection Logging
+#### 31.3 Validation and Errors
 
-- [x] Log Emacs binary location
-- [x] Log detected version string
-- [x] Log version fallback chain
-- [x] Log selected typings version
+- [ ] [R9] Invalid port error with structured type
+- [ ] [R10] Missing required argument errors
+- [ ] [R11] Unknown option suggestions (Levenshtein)
+- [ ] [R12] Unknown subcommand suggestions
+- [ ] [R17] Enum validation (lists valid values)
+- [ ] [R18] Range validation (0-100 for --fail-under)
+- [ ] [R16] Use structured error type from Spec 35
 
-### 0.5.4 Add Verbose Typings Loading Logging
+#### 31.4 Help and Version
 
-- [x] Log each `.tart` file loaded
-- [x] Log signature count per file
-- [x] Log total signatures loaded
+- [ ] [R13] Auto-generated `--help` from Cmdliner specs
+- [ ] [R14] `--version` flag
+- [ ] [R15] Exit codes: 0=success, 1=input error, 2=usage error
 
-### 0.5.5 Add Verbose C Source Scanning Logging (emacs-coverage)
+#### 31.5 Cleanup
 
-- [x] Log source directory being scanned
-- [x] Log per-file DEFUN/DEFVAR/DEFSYM counts
-- [x] Log totals by category
+- [ ] Remove manual argument parsing code
+- [ ] Update `main.mli`
 
-### 0.5.6 Add Verbose Match Summary Logging
-
-- [x] Log sample covered symbols (first 5) with source file location
-- [x] Log sample uncovered symbols (first 5)
-- [x] Log final match statistics
-
-### 0.5.7 Thread Verbose Flag Through Functions
-
-- [x] Add `~verbose:bool` parameter to `Emacs_coverage.calculate_coverage`
-- [x] Add `~verbose:bool` parameter to `Coverage_report.analyze_files`
-- [x] Add `~verbose:bool` parameter to `Search_path.load_c_core` (or use callback)
-
-### 0.5.8 Add `-v` Short Form to emacs-coverage Command
-
-- [x] Parse `-v` as alias for `--verbose`
-- [x] Update help text
-
-**Files:**
-- `lib/coverage/verbose_log.ml` (new)
-- `lib/coverage/verbose_log.mli` (new)
-- `lib/coverage/emacs_coverage.ml`
-- `lib/coverage/emacs_coverage.mli`
-- `lib/coverage/coverage_report.ml`
-- `lib/coverage/coverage_report.mli`
-- `lib/sig/search_path.ml`
-- `lib/sig/search_path.mli`
-- `bin/main.ml`
+**Files:** `bin/dune`, `bin/main.ml`, `bin/main.mli`
 
 **Verification:**
 ```bash
-# Verbose output appears on stderr
-tart coverage -v . 2>&1 | grep "\[verbose\]"
-tart emacs-coverage -v 2>&1 | grep "\[verbose\]"
-
-# Shows path resolution
-tart emacs-coverage -v 2>&1 | grep "Typings root"
-
-# Shows version detection
-tart emacs-coverage -v 2>&1 | grep "Detected version"
-
-# Shows typings loading
-tart emacs-coverage -v 2>&1 | grep ".tart:"
-
-# Report goes to stdout, verbose to stderr
-tart emacs-coverage -v > report.txt 2> debug.txt
+./tart --help
+./tart check --help
+./tart lsp --prot 8080  # Should suggest --port
+./tart coverage --format=xml  # Should list valid values
 ```
 
 ---
 
-## Phase 0.6: Emacs Core Typings Workflow (Spec 32)
+### Phase 32: File I/O Errors (Spec 37)
 
-**Status:** Partial - BUGS.md structure complete, signature validation pending
-**Priority:** High - systematic expansion of type coverage
-**Depends on:** Phase 0 (./tart script), Phase 0.5 (verbose coverage)
+**Status:** Not started
+**Priority:** High - clear, actionable file error messages
+**Depends on:** Phase 30 (structured errors)
 
-This phase establishes the workflow for systematically creating complete, verified type signatures for Emacs C core primitives.
+Structured file error handling with suggestions.
 
-**Note:** "Validation" here means running `./tart check` against Emacs lisp/ files and iterating on signatures until they pass. This IS implementation work—writing and refining `.tart` files based on type checker output.
+#### 32.1 Error Type
 
-### 0.6.1 Create BUGS.md Structure
+- [ ] [R9] Create `lib/errors/file_error.ml` with:
+  - `File_not_found of { path; suggestions }`
+  - `Permission_denied of { path }`
+  - `Is_directory of { path }`
+  - `Read_error of { path; message }`
+  - `Signature_not_found of { module_name; search_paths; span option }`
+- [ ] [R10] Error code mapping (E0001-E0005)
 
-- [x] [R5] Create `typings/emacs/BUGS.md` for cross-version issues
-- [x] [R6] Create `typings/emacs/31.0/BUGS.md` for version-specific issues
-- [x] [R7,R8] Document format: function name, source location, category, description
+#### 32.2 Suggestions
 
-Categories:
-- **type-system-gap**: Needs features tart doesn't have (dependent types, row polymorphism)
-- **untypeable**: Behavior can't be captured soundly (dynamic dispatch, eval-based)
-- **ergonomic**: Typeable but awkward (excessive annotations at call sites)
-- **version-specific**: Signature changed between Emacs versions
+- [ ] [R7] Levenshtein filename suggestions (distance <= 2)
+- [ ] [R8] Missing `.el` extension suggestion
+- [ ] [R1] File not found with similar file suggestions
+- [ ] [R3] Directory detection with `*.el` glob suggestion
 
-### 0.6.2 Workflow for Each C Source File
+#### 32.3 Error Handling
 
-For each C file (data.c, fns.c, eval.c, alloc.c, etc.):
+- [ ] [R2] Permission denied formatting
+- [ ] [R6] Read error wrapping with context
+- [ ] [R4] Signature not found with search paths tried
+- [ ] [R5] `--load` file not found in expand command
 
-1. **Extract symbols** - Run `./tart emacs-coverage -v` to list DEFUNs/DEFVARs
-2. **Write signatures** - Create/update corresponding `.tart` file
-3. **Validate** - Run `./tart check` against Emacs lisp/ directory
-4. **Debug** - Use `./tart emacs-coverage -v` to confirm signatures loaded
-5. **Document gaps** - Log untypeable items to appropriate BUGS.md
-6. **Iterate** - Fix type errors until 95%+ pass rate
+#### 32.4 Integration
 
-### 0.6.3 Acceptance Criteria Per File
+- [ ] Update `Search_path` to return structured errors
+- [ ] Update `lib/syntax/read.ml` to wrap I/O exceptions
+- [ ] Update `bin/main.ml` expand command
 
-- [ ] 100% symbol coverage (every public DEFUN/DEFVAR has a type signature)
-- [ ] 95%+ validation success against Emacs lisp/ usages
-- [ ] All untypeable items documented in BUGS.md with category
-
-### 0.6.4 Current C-Core Files Status
-
-The following files exist in `typings/emacs/31.0/c-core/`:
-
-| File | Source | Status | Needs Work |
-|------|--------|--------|------------|
-| data.tart | data.c | Exists | Validate against lisp/, document gaps |
-| fns.tart | fns.c | Exists | Validate against lisp/, document gaps |
-| eval.tart | eval.c | Exists | Validate against lisp/, document gaps |
-| alloc.tart | alloc.c | Exists | Validate against lisp/, document gaps |
-| buffer.tart | buffer.c | Exists | Validate against lisp/, document gaps |
-| window.tart | window.c | Exists | Validate against lisp/, document gaps |
-| frame.tart | frame.c | Exists | Validate against lisp/, document gaps |
-| fileio.tart | fileio.c | Exists | Validate against lisp/, document gaps |
-| editfns.tart | editfns.c | Exists | Validate against lisp/, document gaps |
-| search.tart | search.c | Exists | Validate against lisp/, document gaps |
-| process.tart | process.c | Exists | Validate against lisp/, document gaps |
-| keyboard.tart | keyboard.c | Exists | Validate against lisp/, document gaps |
-| keymap.tart | keymap.c | Exists | Validate against lisp/, document gaps |
-| minibuf.tart | minibuf.c | Exists | Validate against lisp/, document gaps |
-| textprop.tart | textprop.c | Exists | Validate against lisp/, document gaps |
-| print.tart | print.c | Exists | Validate against lisp/, document gaps |
-
-Note: 30.1 and 29.1 directories are backfills from 31.0; version-specific differences need to be audited.
-
----
-
-## Phase 0.7: Typing Test Fixtures (Spec 33)
-
-**Status:** ✅ Complete
-**Priority:** High - documents type checker behavior, enables systematic testing
-**Depends on:** Phase 27 (test harness), Spec 25 completed
-
-Comprehensive fixture suite covering pass/fail cases for all error categories.
-
-### 0.7.1 Create Error Category Directories
-
-- [x] Create `test/fixtures/typing/errors/type-mismatch/`
-- [x] Create `test/fixtures/typing/errors/arity/`
-- [x] Create `test/fixtures/typing/errors/unbound/`
-- [x] Create `test/fixtures/typing/errors/occurs-check/`
-- [x] Create `test/fixtures/typing/errors/kind/`
-- [x] Create `test/fixtures/typing/errors/exhaustiveness/`
-
-**Files:** 6 new directories under `test/fixtures/typing/errors/`
+**Files:** `lib/errors/file_error.ml`, `lib/errors/file_error.mli`, `lib/sig/search_path.ml`, `lib/syntax/read.ml`, `bin/main.ml`
 
 **Verification:**
 ```bash
-ls -la test/fixtures/typing/errors/
-# Should show all 6 directories
+./tart check nonexistent.el  # Shows suggestions
+./tart check lib/  # Shows directory error
+./tart check init.l  # Suggests init.el
+./tart expand --load missing.el test.el  # Shows --load context
 ```
 
-### 0.7.2 Type Mismatch Fixtures (R1)
+---
 
-- [x] Create `errors/type-mismatch/int-for-string.el` - passing int where string expected
-- [x] Create `errors/type-mismatch/string-for-int.el` - passing string where int expected
-- [x] Create `errors/type-mismatch/list-for-atom.el` - passing list where atom expected
-- [x] Create `errors/type-mismatch/function-arity.el` - function type with wrong arity
-- [x] Create `errors/type-mismatch/polymorphic.el` - incompatible instantiations of type variable
-- [x] Generate matching `.expected` files via `./tart check`
+### Phase 33: C-Core Typings Validation (Spec 32)
 
-**Files:**
-- `test/fixtures/typing/errors/type-mismatch/int-for-string.el` + `.expected`
-- `test/fixtures/typing/errors/type-mismatch/string-for-int.el` + `.expected`
-- `test/fixtures/typing/errors/type-mismatch/list-for-atom.el` + `.expected`
-- `test/fixtures/typing/errors/type-mismatch/function-arity.el` + `.expected`
-- `test/fixtures/typing/errors/type-mismatch/polymorphic.el` + `.expected`
+**Status:** Partial (BUGS.md structure done)
+**Priority:** Medium - systematic type coverage expansion
+**Depends on:** Phase 0 (./tart script) ✓, Phase 0.5 (verbose coverage) ✓
+
+Validate existing c-core typings against Emacs lisp/ directory.
+
+#### 33.1 BUGS.md Structure ✓
+
+- [x] Create `typings/emacs/BUGS.md` for cross-version issues
+- [x] Create `typings/emacs/31.0/BUGS.md` for version-specific issues
+- [x] Document format: function name, source location, category, description
+
+Categories: type-system-gap, untypeable, ergonomic, version-specific
+
+#### 33.2 Validation Workflow
+
+For each C-core file:
+
+1. Run `./tart emacs-coverage -v` to list DEFUNs/DEFVARs
+2. Run `./tart check` against Emacs lisp/ directory
+3. Fix type errors in `.tart` files
+4. Document gaps in BUGS.md
+5. Iterate until 95%+ pass rate
+
+#### 33.3 C-Core Files to Validate
+
+| File | Status |
+|------|--------|
+| data.tart | Validate |
+| fns.tart | Validate |
+| eval.tart | Validate |
+| alloc.tart | Validate |
+| buffer.tart | Validate |
+| window.tart | Validate |
+| frame.tart | Validate |
+| fileio.tart | Validate |
+| editfns.tart | Validate |
+| search.tart | Validate |
+| process.tart | Validate |
+| keyboard.tart | Validate |
+| keymap.tart | Validate |
+| minibuf.tart | Validate |
+| textprop.tart | Validate |
+| print.tart | Validate |
+
+Acceptance: 100% symbol coverage, 95%+ validation success, gaps documented.
+
+---
+
+### Phase 34: Funcall/Apply Enhancements (Spec 34 deferred items)
+
+**Status:** Core complete (R1-R5, R7); enhancements pending
+**Priority:** Medium - advanced type checking features
+
+#### 34.1 Funcall Error Messages
+
+- [ ] [R6] Funcall-specific context in `constraint.ml`
+- [ ] [R6] "expected function type, got X" error
+- [ ] [R6] "in funcall argument N" context
+
+#### 34.2 Apply with Fixed-Arity
+
+- [ ] [R8] Fixed-arity apply with tuple argument
+- [ ] [R9] Tuple-to-list subtyping in `unify.ml`
+- [ ] [R10] Context-sensitive tuple inference in apply
+
+#### 34.3 Advanced Features
+
+- [ ] [R11] Union function types in funcall
+- [ ] [R12-R13] Occurrence typing for predicates
+- [ ] [R14] Audit unification for implicit `Any` widening
+
+#### 34.4 Cleanup
+
+- [ ] Remove weak `funcall`/`apply` from `builtin_types.ml`
+- [ ] Add fixtures for R9-R14
+
+**Files:** `lib/typing/constraint.ml`, `lib/typing/unify.ml`, `lib/typing/infer.ml`, `lib/typing/builtin_types.ml`
+
+---
+
+### Phase 35: AST Printer (Spec 38)
+
+**Status:** Not started
+**Priority:** High - foundation for round-trip testing
+**Depends on:** None
+
+Print `Sexp.t` to valid Emacs Lisp for round-trip testing.
+
+#### 35.1 Module Setup
+
+- [ ] [R17] Create `lib/syntax/print.ml` and `print.mli`
+- [ ] Implement `val to_string : Sexp.t -> string`
+
+#### 35.2 Primitive Types
+
+- [ ] [R1] Integer printing
+- [ ] [R2] Float printing
+- [ ] [R3] Simple string printing (double-quoted)
+- [ ] [R4] String escapes (newline, tab, CR, backslash, quote, etc.)
+- [ ] [R5] Non-ASCII strings (UTF-8 or `\xNN`/`\uNNNN`)
+
+#### 35.3 Symbols and Keywords
+
+- [ ] [R6] Symbol printing
+- [ ] [R7] Keyword printing (leading colon)
+
+#### 35.4 Characters
+
+- [ ] [R8] Simple character literals (`?c` syntax)
+- [ ] [R9] Escaped character literals (`?\n`, `?\t`, `?\\`)
+- [ ] [R10] Character modifiers (Control, Meta, Shift, Hyper, Alt, Super)
+
+#### 35.5 Compound Types
+
+- [ ] [R11] List printing (parenthesized, space-separated)
+- [ ] [R12] Quote forms as reader macros (`'x`, `` `x ``, `,x`, `,@x`, `#'f`)
+- [ ] [R13] Vector printing (`#(...)`)
+- [ ] [R14] Dotted pair printing (`(a . b)`)
+- [ ] [R15] Improper list printing (`(1 2 . 3)`)
+
+#### 35.6 Error Handling
+
+- [ ] [R16] Error node printing (`#<error: ...>`)
+- [ ] [R18] Round-trip tests (parse → print → parse = original)
+
+**Files:** `lib/syntax/print.ml`, `lib/syntax/print.mli`
+
+**Verification:**
+```bash
+dune build
+dune test  # Round-trip tests
+```
+
+---
+
+### Phase 36: Emacs Reader Oracle (Spec 39)
+
+**Status:** Not started
+**Priority:** High - authoritative parsing verification
+**Depends on:** Phase 30 (structured errors), Phase 32 (file I/O errors)
+
+Invoke Emacs as gold-standard oracle to verify tart parses correctly.
+
+#### 36.1 Core Oracle
+
+- [ ] [R1, R5] `read_string` with `--batch --quick` mode
+- [ ] [R2, R12] `read_file` for multi-form files
+- [ ] [R4] PATH-based Emacs lookup
+
+#### 36.2 Error Handling
+
+- [ ] [R3, R9, R11] `emacs_error` type: `Read_error`, `Emacs_not_found`, `Emacs_failed`
+- [ ] [R10] Timeout handling (default 5000ms)
+
+#### 36.3 Comparison
+
+- [ ] [R6] `compare_string`/`compare_file` functions
+- [ ] [R7] Canonical printing matching `prin1-to-string` conventions
+- [ ] [R8] Special read syntax tests (quote, backquote, function, reader macros)
+- [ ] [R13] Comment stripping verification
+
+**Files:** `lib/oracle/emacs_reader.ml`, `lib/oracle/emacs_reader.mli`, `lib/oracle/oracle.ml`, `lib/oracle/oracle.mli`, `test/oracle/oracle_test.ml`
+
+**Verification:**
+```bash
+dune build
+dune test
+./tart oracle test.el  # Compare tart vs Emacs
+```
+
+---
+
+### Phase 37: Content-Addressable Cache (Spec 40)
+
+**Status:** Not started
+**Priority:** Medium - performance optimization
+**Depends on:** None
+
+XDG-compliant content-addressable caching for incremental type-checking.
+
+#### 37.1 XDG Paths
+
+- [ ] [R1] `cache_dir` using `$XDG_CACHE_HOME/tart/` or `~/.cache/tart/`
+- [ ] [R10] `v1/` subdirectory for version evolution
+- [ ] [R7] Create directory structure on demand
+
+#### 37.2 Key Computation
+
+- [ ] [R9] `binary_path` using `Sys.executable_name`
+- [ ] [R2] `compute_key` with SHA256 of binary + input content
+
+#### 37.3 Store/Retrieve
+
+- [ ] [R3, R8] `store` with atomic writes (temp file + rename)
+- [ ] [R4] `retrieve` returning `Some data` or `None`
+- [ ] [R5] Graceful miss handling (corrupted file = None)
+- [ ] [R6] JSON format with version and timestamp
+
+**Files:** `lib/cache/content_cache.ml`, `lib/cache/content_cache.mli`
+
+**Verification:**
+```bash
+dune build
+dune test
+XDG_CACHE_HOME=/tmp/test ./tart check file.el && ls /tmp/test/tart/v1/
+```
+
+---
+
+### Phase 38: Emacs Source Corpus (Spec 41)
+
+**Status:** Not started
+**Priority:** Medium - testing infrastructure
+**Depends on:** Spec 29 (emacs-coverage) ✓
+
+Clone Emacs source in XDG cache for testing against real Elisp.
+
+#### 38.1 Cache Location
+
+- [ ] [R3-4] XDG path resolution (`$XDG_CACHE_HOME/tart/emacs-src/` or `~/.cache/tart/emacs-src/`)
+
+#### 38.2 Clone Management
+
+- [ ] [R1] Clone from `https://git.savannah.gnu.org/git/emacs.git` if not present
+- [ ] [R2] Reuse existing clone (no network activity)
+- [ ] [R15] `corpus clean` command to remove and report freed bytes
+
+#### 38.3 Version Control
+
+- [ ] [R5] `corpus checkout <tag>` (e.g., `emacs-29.1`)
+- [ ] [R6] `corpus checkout <sha>` for specific commits
+- [ ] [R7-8] Auto-detect system Emacs version via `emacs --version`
+- [ ] [R9] `--emacs-version` option for CI
+
+#### 38.4 File Operations
+
+- [ ] [R10] `corpus list` - all `.el` files, absolute paths
+- [ ] [R11] Include generated files (`loaddefs.el`, etc.)
+- [ ] [R14] `corpus path` - output absolute path
+
+#### 38.5 Error Handling
+
+- [ ] [R12] Network failure on fresh clone
+- [ ] [R13] Network failure on fetch (suggest local tags)
+
+**Files:** `lib/corpus/emacs_corpus.ml`, `lib/corpus/emacs_corpus.mli`, `bin/main.ml`
+
+**Verification:**
+```bash
+./tart corpus list | wc -l  # 3000+
+./tart corpus checkout emacs-29.1
+./tart corpus path
+./tart corpus clean
+```
+
+---
+
+### Phase 39: Round-Trip Test Harness (Spec 42)
+
+**Status:** Not started
+**Priority:** High - parsing accuracy verification
+**Depends on:** Phase 35 (AST printer), Phase 36 (Emacs oracle), Phase 38 (corpus)
+
+Parse-print-parse testing for 100% parsing accuracy.
+
+#### 39.1 Core Checks
+
+- [ ] [R1] `check_file` - structural equality (parse → print → parse)
+- [ ] [R2] `check_file_with_emacs` - Emacs oracle verification
+
+#### 39.2 Failure Reporting
+
+- [ ] [R3] Failure shows path + error with location
+- [ ] [R4] Failure shows unified diff of expected vs actual
+
+#### 39.3 Caching
+
+- [ ] [R5] Cache hit skips (content hash matches)
+- [ ] [R6] Cache miss triggers full check, update on success
+
+#### 39.4 Corpus Integration
+
+- [ ] [R7] Discover all `.el` files recursively
+- [ ] [R12] Parallel execution
+
+#### 39.5 Results
+
+- [ ] [R8-9] Exit non-zero on parse error or mismatch
+- [ ] [R10] `dune test` integration
+- [ ] [R11] Summary statistics (total, passed, failed, cached)
+
+**Files:** `lib/roundtrip/roundtrip.ml`, `lib/roundtrip/roundtrip.mli`, `lib/roundtrip/cache.ml`, `lib/roundtrip/cache.mli`, `test/roundtrip/roundtrip_test.ml`, `scripts/run-roundtrip.sh`
 
 **Verification:**
 ```bash
 dune test
-# All type-mismatch fixtures should pass
-./tart check test/fixtures/typing/errors/type-mismatch/int-for-string.el
-# Should output type mismatch diagnostic
+./scripts/run-roundtrip.sh
+./scripts/run-roundtrip.sh --with-emacs
 ```
 
-### 0.7.3 Arity Error Fixtures (R2)
+---
 
-- [x] Create `errors/arity/too-few-args.el` - missing required arguments
-- [x] Create `errors/arity/too-many-args.el` - excess arguments to fixed-arity function
-- [x] Create `errors/arity/optional-required.el` - omitting required arg when optional exists
-- [x] Generate matching `.expected` files
+### Phase 40: CI Version Matrix (Spec 43)
 
-**Files:**
-- `test/fixtures/typing/errors/arity/too-few-args.el` + `.expected`
-- `test/fixtures/typing/errors/arity/too-many-args.el` + `.expected`
-- `test/fixtures/typing/errors/arity/optional-required.el` + `.expected`
+**Status:** Not started
+**Priority:** Medium - CI quality
+**Depends on:** Phase 39 (round-trip harness)
+
+Multi-version Emacs testing with blocking/advisory tiers.
+
+#### 40.1 Nix Dev Shells
+
+- [ ] [R6] Add `devShells.emacs28`, `devShells.emacs29`, `devShells.emacs30`, `devShells.emacsMain` to flake.nix
+
+#### 40.2 CI Matrix
+
+- [ ] [R1, R9] Version matrix with tier labels (28/29/30 blocking, main advisory)
+- [ ] [R7] Parallel execution (`fail-fast: false`)
+- [ ] [R10] Nix caching with magic-nix-cache-action
+
+#### 40.3 Failure Handling
+
+- [ ] [R2] Blocking failures fail the build
+- [ ] [R3] Advisory failures don't fail build (`continue-on-error`)
+- [ ] [R4] Advisory failure warning annotations
+
+#### 40.4 Testing
+
+- [ ] [R5] E2E runs with correct Emacs version per matrix job
+- [ ] [R8] Version-specific test skip helpers
+
+**Files:** `.github/workflows/ci.yml`, `flake.nix`
 
 **Verification:**
 ```bash
-dune test
-# All arity fixtures should pass
-./tart check test/fixtures/typing/errors/arity/too-few-args.el
-# Should output arity diagnostic
-```
-
-### 0.7.4 Unbound Identifier Fixtures (R3)
-
-- [x] Create `errors/unbound/unbound-var.el` - reference to undefined variable
-- [x] Create `errors/unbound/unbound-fn.el` - call to undefined function
-- [x] Create `errors/unbound/typo.el` - realistic typo in common function name
-- [x] Create `errors/unbound/scoping.el` - variable used outside its let scope
-- [x] Generate matching `.expected` files
-
-**Files:**
-- `test/fixtures/typing/errors/unbound/unbound-var.el` + `.expected`
-- `test/fixtures/typing/errors/unbound/unbound-fn.el` + `.expected`
-- `test/fixtures/typing/errors/unbound/typo.el` + `.expected`
-- `test/fixtures/typing/errors/unbound/scoping.el` + `.expected`
-
-**Verification:**
-```bash
-dune test
-./tart check test/fixtures/typing/errors/unbound/unbound-var.el
-# Should output unbound variable diagnostic
-```
-
-### 0.7.5 Occurs Check Fixtures (R4)
-
-- [x] Create `errors/occurs-check/self-reference.el` - `(setq x (cons x nil))`
-- [x] Create `errors/occurs-check/mutual-recursion.el` - mutually recursive definitions creating cycle
-- [x] Generate matching `.expected` files
-
-**Files:**
-- `test/fixtures/typing/errors/occurs-check/self-reference.el` + `.expected`
-- `test/fixtures/typing/errors/occurs-check/mutual-recursion.el` + `.expected`
-
-**Verification:**
-```bash
-dune test
-./tart check test/fixtures/typing/errors/occurs-check/self-reference.el
-# Should output infinite type / occurs check diagnostic
-```
-
-### 0.7.6 Kind Error Fixtures (R5)
-
-- [x] Create `errors/kind/type-as-value.el` - using type constructor as value
-- [x] Create `errors/kind/value-as-type.el` - using value where type expected (in annotations)
-- [x] Create `errors/kind/wrong-arity-tycon.el` - type constructor with wrong number of args
-- [x] Generate matching `.expected` files
-
-**Files:**
-- `test/fixtures/typing/errors/kind/type-as-value.el` + `.expected`
-- `test/fixtures/typing/errors/kind/value-as-type.el` + `.expected`
-- `test/fixtures/typing/errors/kind/wrong-arity-tycon.el` + `.expected`
-
-**Verification:**
-```bash
-dune test
-./tart check test/fixtures/typing/errors/kind/wrong-arity-tycon.el
-# Should output kind mismatch diagnostic
-```
-
-### 0.7.7 Exhaustiveness Fixtures (R6)
-
-- [x] Create `errors/exhaustiveness/missing-case.el` - pcase missing constructor
-- [x] Create `errors/exhaustiveness/missing-nil.el` - list match missing nil case
-- [x] Create `errors/exhaustiveness/missing-default.el` - cond without catch-all
-- [x] Generate matching `.expected` files
-
-**Files:**
-- `test/fixtures/typing/errors/exhaustiveness/missing-case.el` + `.expected`
-- `test/fixtures/typing/errors/exhaustiveness/missing-nil.el` + `.expected`
-- `test/fixtures/typing/errors/exhaustiveness/missing-default.el` + `.expected`
-
-**Verification:**
-```bash
-dune test
-./tart check test/fixtures/typing/errors/exhaustiveness/missing-case.el
-# Should output exhaustiveness warning
-```
-
-### 0.7.8 Regression Fixtures (R7)
-
-- [x] Ensure `test/fixtures/typing/regression/` directory exists
-- [x] Create template header for regression fixtures
-- [x] Add initial regression fixtures as bugs are discovered
-
-**Fixture template:**
-```elisp
-;; Regression: [brief description of the bug]
-;; Fixed: [date or commit]
-;; test: expect-error "relevant error substring"
-
-;; Code that triggered the bug
-```
-
-**Files:**
-- `test/fixtures/typing/regression/` (directory already exists)
-- Fixtures added as bugs are found and fixed
-
-**Verification:**
-```bash
-ls test/fixtures/typing/regression/
-# Directory should exist, may be empty initially
-```
-
-### 0.7.9 Realistic User Scenario Fixtures (R8)
-
-- [x] Create `errors/type-mismatch/user-config.el` - wrong type in defcustom
-- [x] Create `errors/arity/hook-function.el` - hook function with wrong signature
-- [x] Create `errors/unbound/require-missing.el` - using function without require
-- [x] Generate matching `.expected` files
-
-**Files:**
-- `test/fixtures/typing/errors/type-mismatch/user-config.el` + `.expected`
-- `test/fixtures/typing/errors/arity/hook-function.el` + `.expected`
-- `test/fixtures/typing/errors/unbound/require-missing.el` + `.expected`
-
-**Verification:**
-```bash
-# Review fixtures manually - should read as plausible user code
-cat test/fixtures/typing/errors/type-mismatch/user-config.el
-# Should look like realistic init.el snippet, not synthetic test case
-```
-
-### 0.7.10 Update Test Harness Discovery (R9)
-
-- [x] Verify `fixture_test.ml` discovers `errors/` subdirectories automatically
-- [x] No code changes expected - harness already discovers recursively
-- [x] Verify test count increases with new fixtures
-
-**Files:** No changes expected to `test/test_harness/fixture_test.ml`
-
-**Verification:**
-```bash
-# Before adding fixtures
-dune test 2>&1 | grep -E "test|fixture"
-
-# After adding fixtures - count should increase
-dune test 2>&1 | grep -E "test|fixture"
-```
-
-### 0.7.11 Generate and Review Expected Files
-
-- [x] Run `./tart check` on each fixture to generate actual output
-- [x] Create `.expected` files with PASS/FAIL status and diagnostic substrings
-- [x] Review all `.expected` files for correctness
-- [x] Ensure diagnostic messages are user-friendly and accurate
-
-**Verification:**
-```bash
-# All tests pass
-dune test
-
-# Review a sample expected file
-cat test/fixtures/typing/errors/type-mismatch/int-for-string.expected
-# Should show FAIL with type mismatch diagnostic substring
+nix develop .#emacs29 --command emacs --version
+gh workflow run ci.yml
 ```
 
 ---
 
-## Task Summary (New Priority Work)
-
-| Task | Spec | Priority | Complexity | Status |
-|------|------|----------|------------|--------|
-| Create `./tart` script | 31 | 1 | Low | **Done** |
-| Add verbose logging utility | 30 | 2 | Low | **Done** |
-| Add verbose path resolution | 30 | 2 | Medium | **Done** |
-| Add verbose version detection | 30 | 2 | Medium | **Done** |
-| Add verbose typings loading | 30 | 2 | Medium | **Done** |
-| Add verbose C scanning | 30 | 2 | Medium | **Done** |
-| Add verbose match summary | 30 | 2 | Medium | **Done** |
-| Thread verbose through functions | 30 | 2 | Medium | **Done** (via main.ml) |
-| Add `-v` short form | 30 | 2 | Low | **Done** |
-| Create BUGS.md structure | 32 | 3 | Low | **Done** |
-| Version-specific test directive | 25 | 3 | Medium | **Done** |
-| Create error category directories | 33 | 4 | Low | **Done** |
-| Type mismatch fixtures | 33 | 4 | Medium | **Done** |
-| Arity error fixtures | 33 | 4 | Medium | **Done** |
-| Unbound identifier fixtures | 33 | 4 | Medium | **Done** |
-| Occurs check fixtures | 33 | 4 | Medium | **Done** |
-| Kind error fixtures | 33 | 4 | Medium | **Done** |
-| Exhaustiveness fixtures | 33 | 4 | Medium | **Done** |
-| Regression fixtures | 33 | 4 | Low | **Done** |
-| Realistic user scenarios | 33 | 4 | Medium | **Done** |
-| Update test harness discovery | 33 | 4 | Low | **Done** |
-| Generate/review expected files | 33 | 4 | Medium | **Done** |
-| Validate data.tart | 32 | 3 | Medium | Validation workflow |
-| Validate fns.tart | 32 | 3 | Medium | Validation workflow |
-| Validate eval.tart | 32 | 3 | Medium | Validation workflow |
-| Validate remaining c-core files | 32 | 3 | Medium | Validation workflow |
-| Funcall/Apply typing (R1-R5, R7) | 34 | 5 | High | **Done** |
-| Funcall/Apply typing (R6, R8-R14) | 34 | 5 | High | Deferred |
-
-**Implementation complete:**
-- Phase 0 (Spec 31) - `./tart` wrapper script for fast iteration ✅
-- Phase 0.5 (Spec 30) - Verbose output for coverage debugging ✅
-- Phase 0.6.1 (Spec 32) - BUGS.md structure for gap documentation ✅
-- Phase 27.5 (Spec 25) - Version-specific test directive ✅
-- Phase 0.7 (Spec 33) - Typing test fixtures ✅ (29 fixtures across 6 error categories)
-- Phase 29 (Spec 34) - Funcall and Apply Typing ✅ (R1-R5, R7 complete; R6, R8-R14 deferred)
-
-**Remaining work:**
-- Phase 0.6.2-0.6.4 (Spec 32) - C-core typings validation: run `./tart check` against Emacs lisp/, fix signature errors, document gaps in BUGS.md
-
----
-
-## Completed Phases (Historical)
-
-The following phases document completed work from specs 07-29.
-
-## Phase 1: Complete Signature System (Spec 07)
-
-Foundation for module boundaries and type-checked code.
-
-### 1.1 Function and Variable Loading
-
-- [x] [R5] Load `defun` signatures into type environment
-- [x] [R6] Load `defvar` declarations into type environment
-- [x] Verify: Type checker uses loaded signatures for calls
-
-### 1.2 Type Aliases
-
-- [x] [R7] Load type aliases (with definition) into type context
-- [x] [R8] Load parameterized type aliases with instantiation
-- [x] Verify: Aliases expand correctly in type expressions
-
-### 1.3 Opaque Types
-
-- [x] [R9] Load opaque types (no definition) as distinct abstract types
-- [x] [R10] Handle opaque types with phantom type parameters
-- [x] Verify: Opaque types not unifiable with other types
-
-### 1.4 Module Directives
-
-- [x] [R12] Implement `open` directive (import types, not re-export)
-- [x] [R13] Implement `include` directive (inline and re-export)
-- [x] Verify: Opened types available but not exported
-
-### 1.5 Struct Imports
-
-- [x] [R11] Implement `import-struct` to generate type, constructor, predicate,
-      accessors
-- [x] Verify: Struct accessor calls type-check based on slot types
-
-### 1.6 Signature Search Path
-
-- [x] [R15] Implement `tart-type-path` search path configuration
-- [x] [R16] Implement module discovery order (sibling, search path, stdlib)
-- [x] Verify: `(require 'cl-lib)` loads signatures from search path
-
-### 1.7 Stdlib Signatures
-
-- [x] [R17] Create `stdlib/builtins.tart` with arithmetic, list, string,
-      predicate signatures
-- [x] [R17] Create `stdlib/cl-lib.tart` with basic cl-lib signatures
-- [x] [R17] Create `stdlib/seq.tart` with seq.el signatures
-- [x] Verify: Built-in calls type-check correctly
-
-## Phase 2: Migrate to Prek (Spec 16)
-
-Faster git hooks improve every development iteration.
-
-- [x] [R1] Add prek to flake.nix devShell packages
-- [x] [R2] Update any docs referencing pre-commit
-- [x] [R3] Run `prek install -f` to reinstall hooks
-- [x] [R4] Verify all hooks pass with prek
-
-## Phase 3: Emacs LSP Integration (Specs 09, 10)
-
-Enable hover and diagnostics in Emacs via eglot.
-
-### 3.1 CLI LSP Command
-
-- [x] [R9] Wire `tart lsp` to start LSP server on stdio
-- [x] [R10] Add `--port` option for TCP mode
-- [x] Verify: LSP client connects and receives diagnostics
-
-### 3.2 Eglot Integration
-
-- [x] [R5] Add eglot server configuration for tart
-- [x] [R8] Add customization options (`tart-executable`, etc.)
-- [x] Verify: `M-x eglot` connects and hover shows types
-
-### 3.3 Basic Documentation
-
-- [x] [R11] Add setup instructions to README
-- [x] Verify: README contains installation and usage examples
-
-## Phase 4: Forall Inference (Spec 15)
-
-Reduces boilerplate in signature files.
-
-### 4.1 Implicit Quantification
-
-- [x] [R1] Collect type variables in left-to-right first-occurrence order
-- [x] [R2] Explicit quantifiers disable inference; error on unbound vars
-- [x] Verify: `(defun seq-map (((a -> b)) (seq a)) -> (list b))` infers `[a b]`
-
-### 4.2 Edge Cases
-
-- [x] [R3] Handle phantom type variables (only in return type)
-- [x] [R4] Distinguish quoted literals from type variables
-- [x] [R5] Traverse nested arrow types for variable collection
-- [x] [R6] Deduplicate quantifier list
-- [x] Verify: Inference handles all grammar productions
-
-## Phase 5: Module Boundaries (Spec 12)
-
-Enables type-checked module interactions.
-
-### 5.1 Basic Module Loading
-
-- [x] [R1] Enable type checking for any `.el` file via LSP
-- [x] [R2] Verify implementations match `.tart` signatures
-- [x] [R3] Load signatures from search path for required modules
-- [x] Verify: Mismatched implementations produce errors
-
-### 5.2 Public/Private Distinction
-
-- [x] [R5] Distinguish public (in `.tart`) vs internal (not listed) functions
-- [x] [R8] Warn on functions defined but not in signature file
-- [x] Verify: Internal functions inferred but not exported
-
-### 5.3 Module Dependencies
-
-- [x] [R6] Load signatures when `(require 'module)` is encountered
-- [x] [R7] Handle autoloaded function lookup via prefix-based search
-- [x] [R9] Handle circular module dependencies with lazy loading
-- [x] Verify: Required module signatures available for type checking
-
-## Phase 6: Error Reporting (Spec 13)
-
-Improve error message quality.
-
-### 6.1 Type Mismatch Formatting
-
-- [x] [R1] Format type mismatch errors with expected/found
-- [x] [R2] Format branch type mismatch errors
-- [x] [R3] Format Option/nil errors with suggestions
-- [x] Verify: Errors show context and suggestions
-
-### 6.2 Name Errors
-
-- [x] [R4] Implement Levenshtein-based typo suggestions
-- [x] [R5] Format arity mismatch errors with signature
-- [x] [R6] Format signature mismatch errors with both locations
-- [x] Verify: Typos suggest similar names
-
-### 6.3 LSP Integration
-
-- [x] [R7] Map rich diagnostics to LSP format with related info
-- [x] Verify: LSP clients show related information
-
-## Phase 7: Emacs REPL Integration (Spec 10)
-
-Interactive development workflow. All tooling lives in `tart-mode.el`, separate
-from the runtime macros in `tart.el`.
-
-### 7.0 File Split
-
-- [x] Split current `tart.el` into `tart.el` (macros only) and `tart-mode.el`
-      (dev tooling)
-- [x] Verify: `(require 'tart)` loads only macros, no eglot/comint deps
-
-### 7.1 Inferior Mode
-
-- [x] [R1,R2,R9] Implement `inferior-tart-mode` with comint
-- [x] [R3] Implement send-to-REPL commands
-- [x] [R4] Implement type/expand inspection commands
-- [x] Verify: REPL interaction works from elisp buffers
-
-### 7.2 Minor Mode
-
-- [x] [R7] Implement `tart-mode` minor mode with keymap
-- [x] [R10] Add compilation-mode error parsing
-- [x] Verify: Keybindings work, errors are clickable
-
-## Phase 8: tart.el Runtime (Spec 14)
-
-Inline type annotations in `.el` files. The runtime macros live in `tart.el`
-(minimal, no dependencies). Development tooling is in `tart-mode.el` (see
-Phase 7).
-
-### 8.1 Macro Definitions (in tart.el)
-
-- [x] [R8] Implement `tart` macro (expands to form)
-- [x] [R8] Implement `tart-type` macro (expands to nil)
-- [x] [R8] Implement `tart-declare` macro (expands to nil)
-- [x] Verify: Macros expand correctly at runtime
-
-### 8.2 Type Checker Recognition
-
-- [x] [R1] Recognize `(declare (tart ...))` in function definitions
-- [x] [R2] Add expression annotation checking (`(tart TYPE FORM)`)
-- [x] [R3,R4] Track variable types from annotations
-- [x] [R3] Check `setq`/`setf` against declared variable types
-- [x] Verify: Type errors on annotation mismatches
-
-### 8.3 Type Aliases
-
-- [x] [R5,R6] Implement file-local type alias scope
-- [x] [R7] Enforce invariance for parameterized types
-- [x] Verify: Aliases usable in same file, not exported
-
-### 8.4 Integration
-
-- [x] [R10] Verify inline annotations match `.tart` declarations
-- [x] [R9] Format error messages for annotation mismatches
-- [x] Verify: Mismatched inline/`.tart` produces error
-
-## Phase 9: ADT System (Spec 11)
-
-Runtime representation and pattern matching.
-
-### 9.1 Code Generation
-
-- [x] [R1] Generate constructor functions from ADT definitions
-- [x] [R2] Generate predicate functions
-- [x] [R3] Generate accessor functions
-- [x] [R6] Handle multi-field constructors (vectors)
-- [x] [R7] Test recursive type handling
-- [x] Verify: ADT construction/access works at runtime
-
-### 9.2 Type Checking
-
-- [x] [R4] Implement pcase type narrowing in branches
-- [x] [R5] Implement exhaustiveness checking with warnings
-- [x] Verify: Non-exhaustive matches produce warnings
-
-## Phase 10: LSP Incremental (Spec 08)
-
-Performance optimization for large codebases.
-
-### 10.1 Query-Based Caching
-
-- [x] [R9] Implement query-based caching for incremental type checking
-- [x] Verify: Edit one function; others not recomputed (log check)
-
-## Dependencies
-
+## Task Summary
+
+| Phase | Spec | Priority | Status |
+|-------|------|----------|--------|
+| 30 | 35 | 1 | Not started |
+| 31 | 36 | 2 | Not started |
+| 32 | 37 | 2 | Not started |
+| 33 | 32 | 3 | Partial |
+| 34 | 34 | 4 | Partial |
+| 35 | 38 | 1 | Not started |
+| 36 | 39 | 2 | Not started |
+| 37 | 40 | 3 | Not started |
+| 38 | 41 | 3 | Not started |
+| 39 | 42 | 2 | Not started |
+| 40 | 43 | 3 | Not started |
+
+Dependencies:
 ```
-Spec 07 (Signatures) ──┬─> Spec 15 (Forall Inference)
-                       ├─> Spec 12 (Module Boundaries)
-                       ├─> Spec 14 (tart.el Runtime)
-                       └─> Spec 11 (ADT System)
+Spec 35 (Structured Errors)
+    ├─> Spec 36 (Cmdliner CLI)
+    ├─> Spec 37 (File I/O Errors)
+    └─> Spec 39 (Emacs Reader Oracle)
 
-Spec 08 (LSP) ─────────┬─> Spec 09 (CLI) ──> Spec 10 (Emacs)
-                       └─> Spec 13 (Error Reporting)
+Spec 38 (AST Printer)
+    └─> Spec 42 (Round-Trip Harness)
 
-Spec 22 (CI Releases) ──> Spec 23 (Binary Installation)
+Spec 39 (Emacs Reader Oracle)
+    └─> Spec 42 (Round-Trip Harness)
 
-Spec 27 (Dependency Graph) ──> Spec 26 (LSP Signature Sync)
+Spec 41 (Emacs Source Corpus)
+    └─> Spec 42 (Round-Trip Harness)
 
-Spec 24 (Versioned Typings) ──> Spec 25 (Typechecker Test Harness) ──> Spec 33 (Typing Fixtures)
+Spec 42 (Round-Trip Harness)
+    └─> Spec 43 (CI Version Matrix)
+
+Spec 40 (Content Cache) - standalone
 ```
 
-## Phase 11: LSP Navigation Features (Spec 08 Phase 2)
-
-Navigation and code intelligence features for IDE productivity.
-
-### 11.1 Go to Definition
-
-- [x] [R12] Implement `textDocument/definition` for function calls
-- [x] [R13] Return definition location from defun spans
-- [x] [R14] Handle cross-file definitions via signature lookup
-- [x] Verify: Clicking on function name jumps to definition
-
-### 11.2 Find References
-
-- [x] [R15] Implement `textDocument/references` for symbols
-- [x] [R16] Collect all references to a symbol across the document
-- [x] Verify: Shows all usages of a function/variable
-
-### 11.3 Code Actions
-
-- [x] [R17] Implement `textDocument/codeAction` framework
-- [x] [R18] Add "Extract function" refactoring
-- [x] [R19] Add "Add type annotation" quickfix
-- [x] Verify: Code actions appear on type errors
-
-## Phase 12: LSP Completion and Symbols (Future)
-
-Auto-completion and document structure for improved IDE experience.
-
-### 12.1 Document Symbols
-
-- [x] Implement `textDocument/documentSymbol` for outline view
-- [x] Return defun, defvar, defconst declarations with their types
-- [x] Include nested defuns (inner functions)
-- [x] Verify: Emacs imenu/outline shows document structure (manual)
-
-### 12.2 Auto-Completion
-
-- [x] Implement `textDocument/completion` for symbol names
-- [x] Complete local variables in scope
-- [x] Complete functions from loaded signatures (stdlib, requires)
-- [x] Include type information in completion items
-- [x] Verify: Typing prefix shows completion candidates with types (manual)
-
-### 12.3 Signature Help
-
-- [x] Implement `textDocument/signatureHelp` for function calls
-- [x] Show function signature when cursor is in argument list
-- [x] Highlight current parameter position
-- [x] Verify: Typing `(mapcar |` shows signature with first param highlighted (manual)
-
-### 12.4 Symbol Rename
-
-- [x] Implement `textDocument/rename` for local symbols
-- [x] Rename variables and function definitions within file
-- [x] Verify: Renaming updates all references consistently
-
-## Phase 13: Expanded Stdlib
-
-Broader coverage of common Emacs packages.
-
-### 13.1 Buffer and Window Operations
-
-- [x] Add `stdlib/buffers.tart` for buffer manipulation functions
-- [x] Add `stdlib/windows.tart` for window management
-- [x] Add `stdlib/frames.tart` for frame operations
-- [x] Verify: Buffer/window/frame code type-checks correctly
-
-### 13.2 File Operations
-
-- [x] Add `stdlib/files.tart` for file I/O (includes directory operations)
-- [x] Verify: File manipulation code type-checks
-
-### 13.3 Text Properties and Overlays
-
-- [x] Add `stdlib/text-properties.tart`
-- [x] Add `stdlib/overlays.tart`
-- [x] Verify: Text property code type-checks
-
-### 13.4 Common Packages
-
-- [x] Add `stdlib/dash.tart` for dash.el
-- [x] Add `stdlib/s.tart` for s.el
-- [x] Add `stdlib/f.tart` for f.el
-- [x] Verify: Code using these packages type-checks
-
-## Phase 14: Higher-Kinded Types (Spec 17)
-
-Enable polymorphism over type constructors via kind inference.
-
-### 14.1 Kind Representation
-
-- [x] [R1] Add `kind` type to lib/typing/kind.ml
-- [x] [R1] Add kind comparison and pretty-printing
-- [x] Verify: `dune test`; kinds construct and compare
-
-### 14.2 Kind Defaulting
-
-- [x] [R5] Default existing type variables to kind `*`
-- [x] Verify: Existing signatures unchanged
-
-### 14.3 Kind Inference
-
-- [x] [R2] Implement kind inference algorithm in kind_infer.ml
-- [x] [R3] Add kind checking to type applications
-- [x] Verify: HK type variable `f` inferred as `* -> *`
-
-### 14.4 Explicit Annotations and Errors
-
-- [x] [R4] Parse explicit kind annotations `(f : (* -> *))`
-- [x] [R6] Implement kind error formatting
-- [x] Verify: Kind mismatch shows expected/found
-
-### 14.5 HK Instantiation
-
-- [x] [R7] Update unification for HK instantiation
-- [x] [R8] Test nested/partial type constructors
-- [x] Verify: `fmap` instantiation preserves type safety
-
-## Phase 15: Explicit Type Instantiation (Spec 18)
-
-Enable explicit instantiation of polymorphic types at call sites.
-
-### 15.1 Runtime Macro
-
-- [x] [R5] Add `@type` macro to tart.el (expands to function call)
-- [x] Verify: ERT tests; `(@type [int] identity 42)` expands to `(identity 42)`
-
-### 15.2 Basic Instantiation
-
-- [x] [R1] Recognize `@type` forms in infer.ml
-- [x] [R1] Parse type arguments from vector using sig_parser
-- [x] [R1] Apply explicit type arguments during inference
-- [x] Verify: `(@type [int] identity 42)` type-checks
-
-### 15.3 Partial Instantiation
-
-- [x] [R3] Handle `_` placeholder for partial instantiation
-- [x] Verify: `(@type [_ string] pair 1 "hi")` infers first arg
-
-### 15.4 HK Instantiation
-
-- [x] [R2] Test HK type constructor instantiation
-- [x] Verify: `(@type [list int string] fmap ...)` works
-
-### 15.5 Error Handling
-
-- [x] [R4] Validate type argument arity
-- [x] [R6] Format error messages with annotation context
-- [x] Verify: Wrong arity and type mismatch errors show context
-
 ---
 
-## Phase 16: Scoped Type Variables (Spec 19)
-
-Enable type variables to be shared across multiple signatures within a scope.
-
-### 16.1 Parsing and AST
-
-- [x] [R1] Add TypeScope variant to sig_ast.ml
-- [x] [R1] Parse type-scope blocks in sig_parser.ml
-- [x] Verify: `dune test`; scoped blocks parse correctly
-
-### 16.2 Scope Variable Binding
-
-- [x] [R2] Implement scope variable binding during loading
-- [x] [R3] Handle explicit forall inside scope (merges with scope vars)
-- [x] [R8] Validate variable binding in scopes (error on unbound)
-- [x] Verify: Scoped variables shared; external independent
-
-### 16.3 Advanced Features
-
-- [x] [R4] Integrate with kind inference for HK scoped variables
-- [x] [R5] Implement nested scope shadowing
-- [x] [R6] Handle opaque types in scopes
-- [x] Verify: HK scopes and nesting work correctly
-
-### 16.4 Integration
-
-- [x] [R7] Export scoped declarations with correct polymorphic types
-- [x] Verify: Exported functions usable from other modules
-
----
-
-## Phase 17: Expanded Stdlib Phase 2 (Spec 20)
-
-Additional commonly-used Emacs libraries for broader type checking coverage.
-
-### 17.1 Hash Tables and Maps
-
-- [x] [R1] Create stdlib/ht.tart with ht.el hash table library signatures
-- [x] [R2] Create stdlib/map.tart with map.el generic map operations
-- [x] Verify: ht.tart and map.tart parse and load
-
-### 17.2 String and Utility Functions
-
-- [x] [R3] Create stdlib/subr-x.tart with subr-x.el signatures
-- [x] [R5] Create stdlib/rx.tart with rx-to-string signature
-- [x] Verify: subr-x.tart and rx.tart parse and load
-
-### 17.3 Process Management
-
-- [x] [R4] Create stdlib/process.tart with process function signatures
-- [x] Verify: process.tart parses and loads
-
-### 17.4 Expanded cl-lib
-
-- [x] [R6] Expand stdlib/cl-lib.tart with additional functions
-- [x] Verify: Expanded cl-lib.tart loads
-
----
-
-## Phase 18: Remove Type Classes
-
-Type classes were implemented per Spec 21, but after evaluation the feature was
-deemed unnecessary for Elisp's idioms. Elisp's polymorphism is either fully
-parametric (works on any type) or uses explicit higher-order functions (passing
-comparators). This phase removes the feature.
-
-### 18.1 Delete Spec and Stdlib
-
-- [x] Delete `specs/21-type-classes.md`
-- [x] Delete `stdlib/classes/` directory (eq.tart, ord.tart, show.tart, functor.tart)
-- [x] Verify: No `.tart` files reference class/instance syntax
-
-### 18.2 Remove Core Implementation
-
-- [x] Delete `lib/typing/instance.ml` and `lib/typing/instance.mli`
-- [x] Delete `test/typing/instance_test.ml`
-- [x] Update `lib/tart.ml` to remove `Instance` module export
-- [x] Verify: `dune build` succeeds after removal
-
-### 18.3 Remove AST and Parsing
-
-- [x] Remove `DClass` and `DInstance` variants from `lib/sig/sig_ast.ml`
-- [x] Remove `class_decl` and `instance_decl` type definitions from sig_ast.ml/mli
-- [x] Remove class/instance parsing from `lib/sig/sig_parser.ml`
-- [x] Remove constraint syntax (`=>`) parsing from defun signatures
-- [x] Verify: `dune test` passes; existing .tart files still parse
-
-### 18.4 Remove Signature Loading
-
-- [x] Remove `DClass`/`DInstance` handling from `lib/sig/sig_loader.ml`
-- [x] Remove constraint inference from `lib/sig/forall_infer.ml`
-- [x] Verify: Signature loading works without class/instance support
-
-### 18.5 Remove Type System Integration
-
-- [x] Remove `type_constraint` from `lib/core/types.ml`
-- [x] Remove constraint field from `scheme` type in `lib/core/type_env.ml`
-- [x] Remove `class_constraint_with_span` from `lib/typing/infer.ml`
-- [x] Remove constraint tracking from inference result types
-- [x] Verify: Type inference works without constraints
-
-### 18.6 Remove Module Check Integration
-
-- [x] Remove `instance_error` type from `lib/typing/module_check.ml`
-- [x] Remove instance registry building (Step 10)
-- [x] Remove `instance_errors` from check result type
-- [x] Remove instance resolution calls
-- [x] Verify: Module checking works without instance resolution
-
-### 18.7 Remove Diagnostics
-
-- [x] Remove `E0601` error code from `lib/typing/diagnostic.ml` (already removed)
-- [x] Remove `missing_instance` diagnostic function (already removed)
-- [x] Verify: All remaining diagnostics work correctly
-
-### 18.8 Update Documentation
-
-- [x] Review `docs/research/*.md` for type class references (research docs - low priority, no changes needed)
-- [x] Update README.md to remove type class example
-- [x] Update docs/library-authors.adoc to remove type class section
-- [x] Update DESIGN.md if needed (no changes needed)
-- [x] Verify: Documentation accurate after removal
-
----
-
-## Phase 19: Dogfood tart.el
-
-Type-check tart's own Emacs Lisp code.
-
-Note: Phase 19 is DEFERRED. Rationale:
-- tart.el contains only macros which are recognized patterns in the type checker
-  (not via signatures), so a .tart file adds no value
-- tart-mode.el uses comint, eglot, compile, and cl-lib extensively; full coverage
-  would require first creating signatures for these Emacs libraries
-- The return on investment is low until more Emacs libraries have signatures
-
-### 19.1 tart.el Signatures (N/A)
-
-- [x] Analysis: tart.el contains only macros (tart, tart-type, tart-declare, @type)
-      which are built-in recognized patterns - signatures not applicable
-- [x] Verify: Macros work correctly (tested via tart-tests.el)
-
-### 19.2 tart-mode.el Signatures (Deferred)
-
-Prerequisites needed:
-- [ ] stdlib/comint.tart - comint-mode, comint-send-string, etc.
-- [ ] stdlib/eglot.tart - eglot-server-programs, eglot-ensure, etc.
-- [ ] stdlib/compile.tart - compilation-error-regexp-alist, etc.
-
-After prerequisites:
-- [ ] Create `lisp/tart-mode.tart` with signatures for dev tooling
-- [ ] Verify: `tart check lisp/tart-mode.el` passes
-
-### 19.3 Fix Any Issues Found (Deferred)
-
-- [ ] Address type errors discovered during dogfooding
-- [ ] Document any patterns that are hard to type
-- [ ] Verify: Both files type-check cleanly
-
----
-
-## Phase 20: Documentation
-
-Create comprehensive documentation using AsciiDoc, plus refresh the README.
-
-### 20.1 Documentation Structure
-
-- [x] Create `docs/getting-started.adoc` - Quick start guide
-- [x] Create `docs/library-authors.adoc` - Guide for library authors writing `.tart` files
-- [x] Create `docs/tooling-setup.adoc` - LSP setup guide for Emacs users
-- [x] Create `docs/cli-reference.adoc` - CLI reference (manpage source)
-
-### 20.2 README Refresh
-
-- [x] Rewrite `README.md` with elevator pitch and friendly introduction
-  - Lead with "what problem does this solve"
-  - Show compelling before/after examples
-  - Quick installation instructions
-  - Link to full documentation
-  - Make development status less prominent
-
-### Documentation Content Outline
-
-**`getting-started.adoc`**
-1. What is Tart? (2 paragraphs)
-2. Installation (Nix, building from source)
-3. Your first `.tart` file
-4. Running the type checker
-5. Seeing errors in your editor
-6. Next steps (links to other guides)
-
-**`library-authors.adoc`**
-1. The `.tart` file format
-2. Declaring functions (`defun`)
-3. Declaring variables (`defvar`)
-4. Type aliases (`type`)
-5. Opaque types (`opaque`)
-6. Generic functions (type parameters, bounds)
-7. Module organization (`open`, `include`)
-8. Publishing type definitions
-9. Stdlib coverage and contributing signatures
-
-**`tooling-setup.adoc`**
-1. Prerequisites (Emacs 29+, eglot)
-2. Installing tart-mode
-3. Configuring eglot for tart
-4. Features: hover, diagnostics, go-to-definition
-5. The REPL (inferior-tart-mode)
-6. Troubleshooting common issues
-7. For init.el users (type checking your config)
-
-**`cli-reference.adoc`**
-1. Synopsis
-2. Description
-3. Commands
-   - `tart [check]` - Type check files
-   - `tart eval` - Evaluate expression
-   - `tart expand` - Macro expansion
-   - `tart repl` - Interactive REPL
-   - `tart lsp` - Language server
-4. Options
-5. Exit codes
-6. Environment variables
-7. Files (search paths, stdlib location)
-8. Examples
-9. See also
-
----
-
-## Phase 21: E2E Test Harness (Spec 21)
-
-ERT tests for Emacs integration against live tart processes.
-
-### 21.1 Test Infrastructure
-
-- [x] [R1] Create `scripts/run-emacs-tests.sh` test runner
-- [x] [R2] Create `lisp/tart-test-helpers.el` with test utilities
-- [x] [R14] Create `test/fixtures/e2e/valid.el` and `valid.tart`
-- [x] [R14] Create `test/fixtures/e2e/error.el` and `error.tart`
-- [x] Verify: `./scripts/run-emacs-tests.sh` runs all tests
-
-### 21.2 LSP Tests
-
-- [x] [R3] Test eglot connects to tart LSP server
-- [x] [R4] Test LSP diagnostics for type errors
-- [x] [R5] Test LSP hover shows type information
-- [x] Verify: All LSP tests pass
-
-### 21.3 REPL Tests
-
-- [x] [R6] Test REPL starts and shows prompt
-- [x] [R7] Test REPL evaluates expressions
-- [x] [R8] Test REPL ,type command
-- [x] Verify: All REPL tests pass
-
-### 21.4 Integration Tests
-
-- [x] [R9] Test send-defun to REPL
-- [x] [R10] Test type-at-point
-- [x] [R11] Test keybindings
-- [x] [R12] Test cleanup removes processes
-- [x] [R13] Test timeout behavior
-- [x] Verify: All integration tests pass
-
----
-
-## Phase 22: CI Release Builds (Spec 22)
-
-GitHub Actions workflow for building and releasing tart binaries.
-
-### 22.1 Workflow Setup
-
-- [x] Create `.github/workflows/release.yml`
-- [x] Configure v* tag trigger
-- [x] Set up build matrix (darwin arm64/x86_64, linux arm64/x86_64)
-
-### 22.2 Build Steps
-
-- [x] Install Nix with DeterminateSystems/determinate-nix-action@v3
-- [x] Configure Nix cache with DeterminateSystems/magic-nix-cache-action@v8
-- [x] Build with `nix build .#default`
-- [x] Rename to `tart-{os}-{arch}` format
-
-### 22.3 Release Job
-
-- [x] Collect artifacts from all matrix builds
-- [x] Detect prerelease tags (rc, alpha, beta)
-- [x] Create release with softprops/action-gh-release
-- [x] Attach all 4 binaries as assets
-
----
-
-## Phase 23: Binary Installation (Spec 23)
-
-Download prebuilt tart binaries from GitHub releases.
-
-**Prerequisite:** Phase 22 (CI releases) must be complete to publish binaries.
-
-### 23.1 Version Configuration
-
-- [x] [R1] Add `tart-version` defcustom (nil = latest, string = specific version)
-- [x] Verify: `.dir-locals.el` with `((emacs-lisp-mode . ((tart-version . "0.2.0"))))` respected
-
-### 23.2 Platform Detection
-
-- [x] [R3] Implement `tart--platform-asset` using `system-type` and `system-configuration`
-- [x] Handle darwin/arm64, darwin/x86_64, linux/arm64, linux/x86_64
-- [x] Verify: `(tart--platform-asset)` returns correct asset name for current system
-
-### 23.3 Executable Resolution
-
-- [x] [R5] Change `tart-executable` default to `'managed`
-- [x] [R5] Implement `tart--resolve-executable` (managed → downloaded binary, string → direct)
-- [x] Update existing callers to use `tart--resolve-executable`
-- [x] Verify: Default `'managed` uses downloaded binary; string overrides
-
-### 23.4 Binary Download
-
-- [x] [R2] Implement `tart-install-binary` command
-- [x] [R2] Query GitHub API for release (latest or `tart-version`)
-- [x] [R2] Download to `~/.emacs.d/tart/bin/tart-VERSION`
-- [x] [R6] Show progress in echo area during download
-- [x] Verify: `M-x tart-install-binary` → binary in `~/.emacs.d/tart/bin/`, executable
-
-### 23.5 Hook-Friendly Eglot
-
-- [x] [R4] Implement `tart--binary-available-p` predicate
-- [x] [R4] Add `tart-eglot` with install prompt (kept `tart-eglot-ensure` for compatibility)
-- [x] [R4] Prompt to install if binary missing before starting eglot
-- [x] Verify: Without binary, `tart-eglot` prompts; after install, eglot connects
-
-### 23.6 Error Handling
-
-- [x] [R7] Handle no network with clear error message
-- [x] [R7] Handle asset not found for platform with supported platforms list
-- [x] [R7] Handle GitHub rate limit with suggestion to set `GITHUB_TOKEN`
-- [x] Verify: Airplane mode → "Network error" message, not hang
-
----
-
-## Phase 24: Module Dependency Graph (Spec 27)
-
-Track module dependencies for incremental re-checking. Foundation for LSP
-signature file synchronization.
-
-### 24.1 Graph Data Structures
-
-- [x] Create `lib/graph/dependency_graph.ml` with forward/reverse index
-- [x] Define `module_id` type and `edge_kind` enum
-- [x] Implement `direct_dependents` and transitive `dependents` queries
-- [x] Verify: `dune test`; graph construction and queries work
-
-### 24.2 Dependency Extraction from .el Files
-
-- [x] [R1] Extract `(require 'foo)` → Require edge
-- [x] [R1] Extract `(autoload 'fn "bar")` → Autoload edge
-- [x] Verify: Parser extracts both require and autoload edges
-
-### 24.3 Dependency Extraction from .tart Files
-
-- [x] [R2] Extract `(open 'seq)` → Open edge
-- [x] [R2] Extract `(include 'dash)` → Include edge
-- [x] Verify: Signature parser extracts both open and include edges
-
-### 24.4 Sibling Edge and Core Typings
-
-- [x] [R3] Add implicit sibling edge: `foo.el` → `foo.tart`
-- [x] [R6] Add pseudo-module for core typings that all files depend on
-- [x] Verify: Sibling and core typing edges present in graph
-
-### 24.5 Incremental Updates
-
-- [x] [R4] Update graph on `didOpen` (parse, add edges)
-- [x] [R4] Update graph on `didChange` (re-extract, diff edges)
-- [x] [R4] Keep graph entry on `didClose` (file still exists on disk)
-- [x] Verify: Graph updates correctly as documents open/change/close
-
-### 24.6 Invalidation Cascade
-
-- [x] [R5] Implement invalidation: module X changes → get dependents → invalidate caches
-- [x] Wire to form_cache.ml for cache invalidation
-- [x] Verify: Changing a module invalidates dependent module caches
-
-### 24.7 Cycle Detection
-
-- [x] [R7] Detect cycles during graph construction
-- [x] Report cycles as errors in `.tart` files, warnings in `.el` files
-- [x] Verify: Circular requires produce appropriate diagnostics
-
----
-
-## Phase 25: LSP Signature File Synchronization (Spec 26)
-
-Keep type checking in sync when editing `.tart` signature files alongside `.el` files.
-
-**Prerequisite:** Phase 24 (dependency graph) provides the dependents lookup.
-
-### 25.1 Signature Tracker Module
-
-- [x] Create `lib/lsp/signature_tracker.ml` to track open `.tart` buffers
-- [x] Store buffer contents keyed by URI
-- [x] Verify: Module compiles and exports required functions
-
-### 25.2 Handle .tart in didOpen
-
-- [x] [R1] Recognize `.tart` files in `textDocument/didOpen`
-- [x] Store buffer contents in signature tracker
-- [x] Associate with dependent `.el` files via filename convention
-- [x] Verify: Opening `.tart` file registers it in tracker
-
-### 25.3 Handle .tart in didChange
-
-- [x] [R2] Update signature tracker on `textDocument/didChange` for `.tart` files
-- [x] Query dependency graph for dependents
-- [x] Re-publish diagnostics for each dependent `.el` file
-- [x] Verify: Changing `.tart` triggers re-check of dependent `.el`
-
-### 25.4 Handle .tart in didClose
-
-- [x] [R4] Remove `.tart` from signature tracker on `didClose`
-- [x] Re-check dependents (they'll now read from disk)
-- [x] Verify: Closing `.tart` falls back to disk version
-
-### 25.5 Signature Loading Integration
-
-- [x] [R3] Modify sig_loader to check signature tracker first
-- [x] If `.tart` is open in LSP → use buffer contents
-- [x] Else → read from disk (existing behavior)
-- [x] Verify: Open `.tart` buffer contents used for type checking
-
-### 25.6 Form Cache Invalidation
-
-- [x] [R5] When `.tart` changes, invalidate form cache for dependent `.el` files
-- [x] Use existing `config_hash` mechanism
-- [x] Verify: Cached forms invalidated on signature change
-
-### 25.7 Edge Cases
-
-- [x] Handle `.tart` open but dependent `.el` not open (no action needed)
-- [x] Handle `.tart` saved but buffer differs from disk (use buffer)
-- [x] Handle multiple `.el` files depending on one `.tart`
-- [x] Handle `.tart` parse errors (keep last valid state, show parse error)
-- [x] Verify: All edge cases handled gracefully
-
----
-
-## Phase 26: Versioned Typings Distribution (Spec 24)
-
-Versioned Emacs core typings with auto-detection.
-
-### 26.1 Emacs Version Detection
-
-- [x] Create `lib/sig/emacs_version.ml` module
-- [x] Run `emacs --version` and parse major.minor
-- [x] Handle missing Emacs gracefully (use `latest/` with warning)
-- [x] Verify: Version detection works for Emacs 29, 30, 31
-
-### 26.2 CLI Override Flag
-
-- [x] [R2] Add `--emacs-version VERSION` flag to CLI
-- [x] Error if specified directory doesn't exist
-- [x] Verify: Override flag takes precedence over detection
-
-### 26.3 Version Fallback in Search Path
-
-- [x] [R3] Implement fallback chain: exact → minor → major → latest
-- [x] Example: `31.0.50` → `31.0` → `31` → `latest`
-- [x] Verify: Fallback chain finds closest available version
-
-### 26.4 Directory Structure Migration
-
-- [x] Delete `stdlib/` directory entirely
-- [x] Create `typings/emacs/31.0/c-core/` directory
-- [x] Create `typings/emacs/latest` symlink to `31.0`
-- [x] Verify: Search path resolves to new typings location
-
-### 26.5 C-Core Typings for Emacs 31.0
-
-Create signature files mapping 1:1 to Emacs source:
-
-- [x] [R5] Create `typings/emacs/31.0/c-core/data.tart` (eq, null, +, -, car, cdr, predicates)
-- [x] [R5] Create `typings/emacs/31.0/c-core/fns.tart` (length, concat, mapcar, assoc)
-- [x] [R5] Create `typings/emacs/31.0/c-core/eval.tart` (funcall, apply, signal, catch)
-- [x] [R5] Create `typings/emacs/31.0/c-core/alloc.tart` (cons, list, make-vector)
-- [x] [R5] Create `typings/emacs/31.0/c-core/buffer.tart` (current-buffer, set-buffer)
-- [x] [R5] Create `typings/emacs/31.0/c-core/window.tart` (selected-window, window-buffer)
-- [x] [R5] Create `typings/emacs/31.0/c-core/frame.tart` (selected-frame, frame-parameters)
-- [x] [R5] Create `typings/emacs/31.0/c-core/fileio.tart` (find-file-noselect, write-region)
-- [x] [R5] Create `typings/emacs/31.0/c-core/editfns.tart` (point, goto-char, insert)
-- [x] [R5] Create `typings/emacs/31.0/c-core/search.tart` (re-search-forward, match-string)
-- [x] [R5] Create `typings/emacs/31.0/c-core/process.tart` (start-process, process-send-string)
-- [x] [R5] Create `typings/emacs/31.0/c-core/keyboard.tart` (read-key-sequence)
-- [x] [R5] Create `typings/emacs/31.0/c-core/keymap.tart` (define-key, lookup-key)
-- [x] [R5] Create `typings/emacs/31.0/c-core/minibuf.tart` (read-string, completing-read)
-- [x] [R5] Create `typings/emacs/31.0/c-core/textprop.tart` (get-text-property, put-text-property)
-- [x] [R5] Create `typings/emacs/31.0/c-core/print.tart` (prin1, princ, message)
-- [x] Verify: All c-core files parse and load without conflicts
-
-### 26.6 Multi-File C-Core Loading
-
-- [x] Update search_path.ml to load all `.tart` files in c-core directory
-- [x] Merge signatures; error on conflicts at load time
-- [x] Verify: Type checking works with split c-core files
-
-### 26.7 LSP Version Detection
-
-- [x] [R7] Detect Emacs version once at LSP startup
-- [x] Use detected version for entire session
-- [x] Log detected version at debug level
-- [x] Verify: LSP logs which typings version is being used
-
-### 26.8 Backfill Older Versions
-
-- [x] Copy `31.0/` to `30.1/` and `29.1/`
-- [ ] Diff against Emacs source for version-specific changes (future work)
-- [ ] Add JSON, tree-sitter, SQLite, etc. signatures where appropriate (future work)
-- [x] Verify: Typings work for Emacs 29.1 and 30.1
-
-Note: Version-specific differences between 29.1, 30.1, and 31.0 are tracked in Phase 0.6 (Spec 32)
-
----
-
-## Phase 27: Typechecker Test Harness (Spec 25)
-
-Fixture-based acceptance tests for type checker output.
-
-**Prerequisite:** Phase 26 (versioned typings) provides version-aware type loading.
-
-### 27.1 Expected File Parser
-
-- [x] Define `.expected` file format (PASS/FAIL on line 1, diagnostics following)
-- [x] Implement parser in `lib/test_harness/acceptance.ml`
-- [x] Verify: Parser handles both PASS and FAIL expectations
-
-### 27.2 Acceptance Harness Core
-
-- [x] Implement `check_fixture : path:string -> Fixture_result.t`
-- [x] Implement `run_all : dir:string -> Summary.t`
-- [x] Support parallel execution for speed
-- [x] Verify: Single fixture and batch execution work
-
-### 27.3 Core Typings Fixtures
-
-Create fixtures exercising each C primitive category:
-
-- [x] [R5] Create `test/fixtures/typing/core/arithmetic.el` (+, -, *, /, mod)
-- [x] [R5] Create `test/fixtures/typing/core/lists.el` (car, cdr, cons, nth, mapcar)
-- [x] [R5] Create `test/fixtures/typing/core/strings.el` (concat, substring, upcase)
-- [x] [R5] Create `test/fixtures/typing/core/predicates.el` (null, listp, stringp)
-- [x] [R5] Create `test/fixtures/typing/core/control.el` (funcall, apply, signal)
-- [x] Include both passing and failing cases in each fixture
-- [x] Verify: All core fixtures have matching `.expected` files
-
-### 27.4 Diagnostic Assertions
-
-- [x] [R2] Support `test: expect-error "substring"` comment syntax
-- [x] [R3] Support `test: expect-error-at 6:1` location assertions
-- [x] Verify: Diagnostic content and location assertions work
-
-### 27.5 Version-Specific Tests
-
-- [x] [R4] Support `test: emacs-version 31.0` directive
-- [x] Create `test/fixtures/typing/version/` directory
-- [x] Add version-specific fixtures (e.g., version-30.el example)
-- [x] Verify: Version-specific fixtures run with correct typings
-
-### 27.6 Regression Fixtures
-
-- [x] [R6] Create `test/fixtures/typing/regression/` directory
-- [ ] Add fixtures named after issues/bugs as found
-- [ ] Verify: Regression fixtures document expected behavior
-
-### 27.7 Integration with dune test
-
-- [x] [R8] Wire harness into `dune test` as acceptance_test.ml
-- [x] Show diff between expected and actual on failures
-- [x] [R9] Run fixtures in parallel for speed
-- [x] Target: Full suite <30s
-- [x] Verify: `dune test` includes acceptance tests
-
----
-
-## Priority Order
-
-### Completed Phases (Specs 07-29)
-
-1. **Phase 1**: Signature system ✓
-2. **Phase 2**: Prek migration ✓
-3. **Phase 3**: Emacs LSP integration ✓
-4. **Phase 4**: Forall inference ✓
-5. **Phase 5**: Module boundaries ✓
-6. **Phase 6**: Error reporting ✓
-7. **Phase 7**: Emacs REPL ✓
-8. **Phase 8**: tart.el Runtime ✓
-9. **Phase 9**: ADT system ✓
-10. **Phase 10**: LSP incremental ✓
-11. **Phase 11**: LSP navigation features ✓
-12. **Phase 12**: LSP completion and symbols ✓
-13. **Phase 13**: Expanded stdlib ✓
-14. **Phase 14**: Higher-Kinded Types ✓
-15. **Phase 15**: Explicit Type Instantiation ✓
-16. **Phase 16**: Scoped Type Variables ✓
-17. **Phase 17**: Expanded Stdlib Phase 2 ✓
-18. **Phase 18**: Remove Type Classes ✓
-19. **Phase 19**: Dogfood tart.el (DEFERRED - needs prerequisite stdlib)
-20. **Phase 20**: Documentation ✓
-21. **Phase 21**: E2E Test Harness ✓
-22. **Phase 22**: CI Release Builds ✓
-23. **Phase 23**: Binary Installation ✓
-24. **Phase 24**: Module Dependency Graph ✓
-25. **Phase 25**: LSP Signature File Synchronization ✓
-26. **Phase 26**: Versioned Typings Distribution ✓
-27. **Phase 27**: Typechecker Test Harness (partial - version-specific tests pending)
-28. **Phase 28**: Coverage Report ✓
-29. **Phase 29**: Emacs Coverage ✓
-
-### Current Priority (Specs 30-33)
-
-**Active development focus:**
-
-1. **Phase 0** (Spec 31): Fast Feedback - `./tart` wrapper script
-   - **Status:** Complete ✅
-   - **Priority:** Highest - unblocks all subsequent work
-   - **Complexity:** Low (single bash script)
-
-2. **Phase 0.5** (Spec 30): Verbose Coverage Output
-   - **Status:** Complete ✅
-   - **Priority:** High - enables debugging
-   - **Complexity:** Medium (threading verbose flag through multiple modules)
-
-3. **Phase 0.6** (Spec 32): Emacs Core Typings Workflow
-   - **Status:** Partial (BUGS.md structure complete)
-   - **Priority:** High - systematic type coverage expansion
-   - **Complexity:** Medium (validation work, gap documentation)
-   - **Depends on:** Phase 0, Phase 0.5
-
-4. **Phase 0.7** (Spec 33): Typing Test Fixtures
-   - **Status:** Not started
-   - **Priority:** High - documents type checker behavior
-   - **Complexity:** Medium (fixture creation, expected file generation)
-   - **Depends on:** Phase 27 (test harness)
-
-5. **Phase 29** (Spec 34): Funcall and Apply Typing
-   - **Status:** Not started
-   - **Priority:** High - type-safe dynamic dispatch
-   - **Complexity:** High (dual namespace, apply/funcall special forms, tuple subtyping)
-   - **Depends on:** Spec 15 (forall inference) ✓, Spec 17 (HKT) ✓
-
-### Deferred Work
-
-- **Phase 19**: Dogfood tart.el - needs comint, eglot, compile signatures
-
----
-
-## Phase 28: Coverage Report (Spec 28)
-
-Command to measure type signature coverage for Emacs packages.
-
-**Prerequisite:** Phase 27 (test harness) for testing.
-
-### 28.1 Definition Extractor ✓
-
-- [x] [R4] Extract function definitions (defun, defsubst, cl-defun, defmacro, cl-defmacro)
-- [x] [R5] Extract variable definitions (defvar, defcustom, defconst, defvar-local)
-- [x] [R6] Extract struct definitions (cl-defstruct with generated accessors)
-- [x] [R7] Extract EIEIO class definitions (defclass with slots)
-- [x] [R8] Extract face definitions (defface)
-- [x] Verify: Extractor captures all standard definition forms
-
-### 28.2 Private Identifier Detection ✓
-
-- [x] [R9] Detect private identifiers (containing `--`)
-- [x] Mark private vs public for coverage calculation
-- [x] Verify: `my-pkg--private` marked private, `my-pkg-public` marked public
-
-### 28.3 Directory Scanning ✓
-
-- [x] [R1] Default to scanning current directory recursively
-- [x] [R2] Accept explicit file/directory path arguments
-- [x] [R17] Support `--exclude` patterns for test files
-- [x] Verify: `tart coverage src/` scans all `.el` files
-
-### 28.4 Coverage Calculation ✓
-
-- [x] [R10] Compare definitions against sibling `.tart` files
-- [x] Match against signatures in search path
-- [x] Calculate coverage percentage (public only)
-- [x] Verify: Covered = has matching signature, uncovered = no match
-
-### 28.5 Report Generation ✓
-
-- [x] [R11] Summary format with counts and percentage
-- [x] [R12] Uncovered list with file:line locations
-- [x] [R13] Private list (excluded from percentage)
-- [x] [R15] JSON output with `--format=json`
-- [x] [R18] Verbose mode with `--verbose`
-- [x] Verify: Both human and machine-readable outputs work
-
-### 28.6 CLI Integration ✓
-
-- [x] [R3] Add `tart coverage` and `tart cov` alias
-- [x] [R14] Exit codes (0 success, 1 error, 2 usage)
-- [x] [R16] `--fail-under=N` threshold flag
-- [x] Verify: CLI matches existing tart conventions
-
----
-
-## Phase 29: Funcall and Apply Typing (Spec 34)
-
-Type `funcall` and `apply` accurately using tracked function types, dual namespaces, and tuple/list subtyping.
-
-**Dependencies:** Spec 15 (forall inference) ✓, Spec 17 (HKT) ✓
-
-### Current State
-
-**Status:** Substantially complete (R1-R5, R7 implemented; R6, R8-R14 deferred)
-
-### 29.1 Dual Namespace Environment (Priority 1 — Foundation) ✓
-
-- [x] [R1] Add `fn_bindings` field to `lib/core/type_env.ml` alongside `bindings`
-- [x] [R1] Add `lookup_fn` function to look up in function namespace
-- [x] [R1] Update `add_binding` or add `add_fn_binding` for function namespace
-- [x] [R1] Wire through `Env` module in `lib/typing/env.ml`
-- [x] Update `defun` to add bindings to function namespace
-- [x] Update `defalias` to add bindings to function namespace
-- [x] Keep `let`, `setq`, `defvar` in variable namespace (existing behavior)
-
-**Files:** `lib/core/type_env.ml`, `lib/core/type_env.mli`, `lib/typing/env.ml`, `lib/typing/env.mli`, `lib/typing/infer.ml`
-
-**Verify:** `dune test`; same name can have different types in each namespace
-
-### 29.2 Sharp-Quote Function Lookup (Priority 1 — Foundation) ✓
-
-- [x] [R2] Pattern match `(function name)` special form in `infer.ml`
-- [x] [R2] Look up `name` in function namespace
-- [x] [R2] Return function type directly
-- [x] [R3] Verify variable refs (symbols not in function position) use variable namespace
-
-**Files:** `lib/typing/infer.ml`
-
-**Verify:** `dune test`; `#'name` returns function type from function env
-
-### 29.3 Funcall Type Checking (Priority 2 — Core) ✓
-
-- [x] [R4] Detect `(funcall f arg1 arg2 ...)` form in `infer.ml`
-- [x] [R4] Infer type of `f`, constrain to be function type `(-> (T1 T2 ...) R)`
-- [x] [R4] Constrain each arg against corresponding param type
-- [x] [R4] Return result type `R`
-- [x] [R5] When `f` is `#'name`, use function namespace lookup (automatic via R2)
-
-**Files:** `lib/typing/infer.ml`
-
-**Verify:** `dune test`; funcall checks function type against arguments
-
-### 29.4 Funcall Error Messages (Priority 2 — Core) — Partial
-
-- [x] [R6] Rich diagnostic format enabled (switched to Diagnostic.to_string)
-- [ ] [R6] Add funcall-specific context to `lib/typing/constraint.ml` (deferred)
-- [ ] [R6] Add "expected function type, got X" error message (deferred)
-- [ ] [R6] Add "in funcall argument N" context for arg mismatches (deferred)
-
-**Files:** `lib/typing/constraint.ml`, `lib/typing/diagnostic.ml`
-
-**Verify:** `dune test`; funcall type errors are descriptive
-
-### 29.5 Apply with Rest-Arg Functions (Priority 2 — Core) ✓
-
-- [x] [R7] Detect `(apply f args... list)` form in `infer.ml`
-- [x] [R7] When `f` has `&rest T` parameter type:
-  - Constrain all fixed args to `T`
-  - Constrain final list arg to `(List T)`
-- [x] [R7] Return result type
-
-**Files:** `lib/typing/infer.ml`
-
-**Verify:** `dune test`; apply with &rest functions checks element types
-
-### 29.6 Apply with Fixed-Arity Functions (Priority 2 — Core) — Deferred
-
-- [ ] [R8] When `f` has fixed arity N and apply has M fixed args + tuple:
-  - Infer tuple type for final argument
-  - Tuple must have exactly (N - M) elements
-  - Each tuple element type matches corresponding param
-
-**Files:** `lib/typing/infer.ml`
-
-**Verify:** `dune test`; apply with tuples checks arity and positional types
-
-### 29.7 Tuple-List Subtyping (Priority 2 — Core) — Deferred
-
-- [ ] [R9] Add tuple-to-list subtyping in `lib/typing/unify.ml`
-- [ ] [R9] `(Tuple T1 T2 ... Tn)` unifies with `(List T)` when all Ti unify with T
-- [ ] [R9] One-directional: tuple → list, not list → tuple
-
-**Files:** `lib/typing/unify.ml`
-
-**Verify:** `dune test`; tuples unify with compatible list types
-
-### 29.8 Context-Sensitive Tuple Inference (Priority 2 — Core) — Deferred
-
-- [ ] [R10] In apply position, infer quoted list literals as tuple types
-- [ ] [R10] `'(1 "x")` → `(Tuple Int String)` instead of `(List (Or Int String))`
-
-**Files:** `lib/typing/infer.ml`
-
-**Verify:** `dune test`; list literals infer as tuples in apply context
-
-### 29.9 Union Function Types (Priority 3 — Enhancement) — Deferred
-
-- [ ] [R11] Handle `f : (Or (-> A1 R1) (-> A2 R2))` in funcall
-- [ ] [R11] Args must satisfy intersection of param types
-- [ ] [R11] Result is union of return types
-- [ ] May require constraint system extension
-
-**Files:** `lib/typing/infer.ml`, possibly `lib/typing/constraint.ml`
-
-**Verify:** `dune test`; union function types check all variants
-
-### 29.10 Occurrence Typing for Predicates (Priority 3 — Enhancement) — Deferred
-
-- [ ] [R12] Track predicate tests in `if` condition
-- [ ] [R12] Narrow variable types in consequent branch
-- [ ] [R12] Implement for type predicates: `stringp`, `listp`, `functionp`, `numberp`, etc.
-- [ ] [R13] Thread narrowed types through funcall
-
-**Files:** `lib/typing/infer.ml`
-
-**Verify:** `dune test`; type predicates narrow types in branches
-
-### 29.11 Never Unify to Any (Priority 3 — Enhancement) — Deferred
-
-- [ ] [R14] Audit unification for implicit `Any` widening paths
-- [ ] [R14] Ensure incompatible types produce errors, not `Any`
-
-**Files:** `lib/typing/unify.ml`
-
-**Verify:** `dune test`; type mismatches produce errors, not Any
-
-### 29.12 Cleanup and Testing — Partial
-
-- [ ] Remove weak `funcall`/`apply` signatures from `builtin_types.ml` (deferred)
-- [x] Add test fixtures for R1-R3 (dual namespace)
-- [x] Add test fixtures for R4-R6 (funcall success/error)
-- [x] Add test fixtures for R7-R8 (apply with rest/fixed-arity)
-- [ ] Add test fixtures for R9-R10 (tuple-list subtyping) (deferred)
-- [ ] Add test fixtures for R11-R14 (union types, occurrence typing) (deferred)
-
-**Files:** `lib/typing/builtin_types.ml`, `test/fixtures/typing/`
-
-**Verify:** `dune test`; all new fixtures pass
-
-### Discovered Issues
-
-- **Dual namespace is pervasive** — updating `Type_env.t` touches many files; expect ~10 files to update
-- **Occurrence typing (R12, R13) is significant** — may warrant its own spec or defer
-- **Union function types (R11)** — requires careful thought about constraint solving; may defer
-
-### Suggested Implementation Order
-
-1. **R1 → R2 → R3** (namespace foundation) — enables all subsequent work
-2. **R4 → R5** (basic funcall) — immediate value for users
-3. **R7 → R8 → R9 → R10** (apply and tuples) — completes core functionality
-4. **R6 → R14** (error handling) — polish
-5. **R11 → R12 → R13** (advanced) — consider deferring if complexity is high
+## Completed Phases
+
+### Infrastructure (Done)
+- Phase 0: Fast Feedback - `./tart` wrapper (Spec 31) ✓
+- Phase 0.5: Verbose Coverage Output (Spec 30) ✓
+- Phase 0.7: Typing Test Fixtures (Spec 33) ✓
+
+### Core Type System (Done)
+- Phase 1: Signature System (Spec 07) ✓
+- Phase 4: Forall Inference (Spec 15) ✓
+- Phase 5: Module Boundaries (Spec 12) ✓
+- Phase 9: ADT System (Spec 11) ✓
+- Phase 14: Higher-Kinded Types (Spec 17) ✓
+- Phase 15: Explicit Instantiation (Spec 18) ✓
+- Phase 16: Scoped Type Variables (Spec 19) ✓
+- Phase 18: Remove Type Classes ✓
+- Phase 29: Funcall/Apply Core (Spec 34 R1-R5, R7) ✓
+
+### Tooling (Done)
+- Phase 2: Prek Migration (Spec 16) ✓
+- Phase 3: Emacs LSP Integration (Specs 09, 10) ✓
+- Phase 6: Error Reporting (Spec 13) ✓
+- Phase 7: Emacs REPL (Spec 10) ✓
+- Phase 8: tart.el Runtime (Spec 14) ✓
+- Phase 10-12: LSP Features (Spec 08) ✓
+- Phase 20: Documentation ✓
+- Phase 21: E2E Test Harness (Spec 21) ✓
+- Phase 22-23: CI Releases & Binary Installation (Specs 22, 23) ✓
+
+### Type Coverage (Done)
+- Phase 13, 17: Expanded Stdlib (Spec 20) ✓
+- Phase 24-25: Dependency Graph & Signature Sync (Specs 26, 27) ✓
+- Phase 26: Versioned Typings (Spec 24) ✓
+- Phase 27: Typechecker Test Harness (Spec 25) ✓
+- Phase 28-29: Coverage Reports (Specs 28, 29) ✓
+
+### Deferred
+- Phase 19: Dogfood tart.el - needs comint/eglot/compile signatures
 
 ---
 
 ## Future Work (Requires New Specs)
 
-The following areas are mentioned as future work in the specs:
-
-1. **Additional Stdlib Coverage**
-   - More Emacs packages (org-mode, magit, etc.)
-   - Additional third-party package signatures
-
-2. **Feature Availability Detection**
-   - Detect optional Emacs features (JSON, tree-sitter, SQLite, etc.)
-   - Conditional typing based on available features
-
-3. **Separate Typings Repository**
-   - Move typings to separate repo for independent versioning
-   - Community contributions for third-party packages
-
-4. **GUI Backend Typings**
-   - ns.c, w32.c, pgtk.c, x11.c platform-specific functions
-
-5. **Lisp-Core Typings**
-   - subr.el, simple.el after C coverage is solid
+- Additional stdlib coverage (org-mode, magit, etc.)
+- Feature availability detection (JSON, tree-sitter, SQLite)
+- Separate typings repository
+- GUI backend typings (ns.c, w32.c, pgtk.c, x11.c)
+- Lisp-core typings (subr.el, simple.el)
+- Cache size limits/eviction policies
+- Remote/shared caching
+- Windows/macOS CI testing
