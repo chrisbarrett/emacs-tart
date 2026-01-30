@@ -6,112 +6,82 @@ Priority: Agent-focused development - fast feedback loops and debugging.
 
 ## Active Work
 
-### Phase 30: Structured Errors (Spec 35)
+### Phase 30: Structured Errors (Spec 35) ✓
 
-**Status:** Not started
+**Status:** Complete
 **Priority:** High - foundation for CLI/IO error handling
 **Depends on:** Spec 13 (error reporting) ✓
 
 Unified error type system for composable, machine-readable errors.
 
-#### 30.1 Error Type Definition
+#### 30.1 Error Type Definition ✓
 
-- [ ] [R1] Create `lib/core/error.ml` with variant type:
-  - `Type of Diagnostic.t`
-  - `Parse of { message; span }`
-  - `Eval of { message; span }`
-  - `Io of { path; message }`
-  - `Cli of { message; hint option }`
-- [ ] [R2] Implement `is_fatal : t -> bool` (Io/Cli fatal; Type/Parse recoverable)
-- [ ] [R3] Implement `location : t -> Location.span option`
+- [x] [R1] Create `lib/error.ml` with variant type
+- [x] [R2] Implement `is_fatal : t -> bool`
+- [x] [R3] Implement `location : t -> Location.span option`
 
-**Files:** `lib/core/error.ml`, `lib/core/error.mli`
+#### 30.2 Formatting ✓
 
-#### 30.2 Formatting
+- [x] [R4] Implement `to_string` for all variants
+- [x] [R7] Add `to_json : t -> Yojson.Safe.t` to `Diagnostic.t`
+- [x] [R5] Implement `to_json` for `Error.t`
 
-- [ ] [R4] Implement `to_string` for all variants (compiler-style format)
-- [ ] [R7] Add `to_json : t -> Yojson.Safe.t` to `Diagnostic.t`
-- [ ] [R5] Implement `to_json` for `Error.t`
+#### 30.3 Accumulator and Reporting ✓
 
-**Files:** `lib/core/error.ml`, `lib/typing/diagnostic.ml`
+- [x] [R10] Implement `Error.Acc` module
+- [x] [R11] Add `of_diagnostics : Diagnostic.t list -> t list`
+- [x] [R6] Implement `Error.report` with summary count
 
-#### 30.3 Accumulator and Reporting
+#### 30.4 CLI Integration ✓
 
-- [ ] [R10] Implement `Error.Acc` module (empty, add, add_list, to_list, has_errors)
-- [ ] [R11] Add `of_diagnostics : Diagnostic.t list -> t list`
-- [ ] [R6] Implement `Error.report` with summary count
-
-**Files:** `lib/core/error.ml`
-
-#### 30.4 CLI Integration
-
-- [ ] [R9] Add `io_error : path:string -> exn:exn -> t`
-- [ ] [R8] Migrate CLI errors in `bin/main.ml` to use `Error.t`
-- [ ] Add `--format=json` flag to `tart check`
-
-**Files:** `lib/core/error.ml`, `bin/main.ml`
-
-**Verification:**
-```bash
-dune build
-./tart check --format=json bad.el | jq .
-./tart check file-with-errors.el  # Shows count at end
-```
+- [x] [R9] Add `io_error : path:string -> exn:exn -> t`
+- [x] [R8] Migrate CLI errors in `bin/main.ml` to use `Error.t`
+- [x] Add `--format=json` flag to `tart check`
 
 ---
 
-### Phase 31: Cmdliner CLI (Spec 36)
+### Phase 31: Cmdliner CLI (Spec 36) ✓
 
-**Status:** Not started
+**Status:** Complete
 **Priority:** High - better UX for users and agents
-**Depends on:** Phase 30 (structured errors)
+**Depends on:** Phase 30 (structured errors) ✓
 
 Migrate manual argument parsing to Cmdliner for declarative CLI.
 
-#### 31.1 Setup
+#### 31.1 Setup ✓
 
-- [ ] [R1] Add cmdliner dependency to `bin/dune`
+- [x] [R1] Add cmdliner dependency to `bin/dune`
 
-#### 31.2 Subcommands
+#### 31.2 Subcommands ✓
 
-- [ ] [R2] Implement `check` subcommand (default) with `--emacs-version`
-- [ ] [R3] Implement `eval EXPR` subcommand
-- [ ] [R4] Implement `expand [--load FILE]... FILE` subcommand
-- [ ] [R5] Implement `repl` subcommand
-- [ ] [R6] Implement `lsp [--port PORT] [--log-level LEVEL]` subcommand
-- [ ] [R7] Implement `coverage [--format] [--verbose] [--fail-under] [--exclude]`
-- [ ] [R8] Implement `emacs-coverage [--emacs-source] [--emacs-version] [--verbose]`
+- [x] [R2] Implement `check` subcommand (default) with `--emacs-version`
+- [x] [R3] Implement `eval EXPR` subcommand
+- [x] [R4] Implement `expand [--load FILE]... FILE` subcommand
+- [x] [R5] Implement `repl` subcommand
+- [x] [R6] Implement `lsp [--port PORT] [--log-level LEVEL]` subcommand
+- [x] [R7] Implement `coverage [--format] [--verbose] [--fail-under] [--exclude]`
+- [x] [R8] Implement `emacs-coverage [--emacs-source] [--emacs-version] [--verbose]`
 
-#### 31.3 Validation and Errors
+#### 31.3 Validation and Errors ✓
 
-- [ ] [R9] Invalid port error with structured type
-- [ ] [R10] Missing required argument errors
-- [ ] [R11] Unknown option suggestions (Levenshtein)
-- [ ] [R12] Unknown subcommand suggestions
-- [ ] [R17] Enum validation (lists valid values)
-- [ ] [R18] Range validation (0-100 for --fail-under)
-- [ ] [R16] Use structured error type from Spec 35
+- [x] [R9] Invalid port error with structured type
+- [x] [R10] Missing required argument errors
+- [x] [R11] Unknown option suggestions (Levenshtein)
+- [x] [R12] Unknown subcommand suggestions
+- [x] [R17] Enum validation (lists valid values)
+- [x] [R18] Range validation (0-100 for --fail-under)
+- [x] [R16] Use structured error type from Spec 35
 
-#### 31.4 Help and Version
+#### 31.4 Help and Version ✓
 
-- [ ] [R13] Auto-generated `--help` from Cmdliner specs
-- [ ] [R14] `--version` flag
-- [ ] [R15] Exit codes: 0=success, 1=input error, 2=usage error
+- [x] [R13] Auto-generated `--help` from Cmdliner specs
+- [x] [R14] `--version` flag
+- [x] [R15] Exit codes: 0=success, 1=input error, 124=usage error (Cmdliner default)
 
-#### 31.5 Cleanup
+#### 31.5 Cleanup ✓
 
-- [ ] Remove manual argument parsing code
-- [ ] Update `main.mli`
-
-**Files:** `bin/dune`, `bin/main.ml`, `bin/main.mli`
-
-**Verification:**
-```bash
-./tart --help
-./tart check --help
-./tart lsp --prot 8080  # Should suggest --port
-./tart coverage --format=xml  # Should list valid values
-```
+- [x] Remove manual argument parsing code
+- [x] Backward compatibility: prepend "check" when first arg looks like file
 
 ---
 

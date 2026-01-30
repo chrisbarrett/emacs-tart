@@ -1,4 +1,4 @@
 (executable
  (name main)
  (public_name tart)
- (libraries tart unix))
+ (libraries tart unix cmdliner))
