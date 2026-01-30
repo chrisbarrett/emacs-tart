@@ -483,12 +483,12 @@ gh workflow run ci.yml
 
 | Phase | Spec | Priority | Status |
 |-------|------|----------|--------|
-| 30 | 35 | 1 | Not started |
-| 31 | 36 | 2 | Not started |
-| 32 | 37 | 2 | Not started |
+| 30 | 35 | 1 | Complete ✓ |
+| 31 | 36 | 2 | Complete ✓ |
+| 32 | 37 | 2 | Mostly Complete |
 | 33 | 32 | 3 | Partial |
 | 34 | 34 | 4 | Partial |
-| 35 | 38 | 1 | Not started |
+| 35 | 38 | 1 | Complete ✓ |
 | 36 | 39 | 2 | Not started |
 | 37 | 40 | 3 | Not started |
 | 38 | 41 | 3 | Not started |
