@@ -135,11 +135,13 @@ tart emacs-coverage -v > report.txt 2> debug.txt
 
 ## Phase 0.6: Emacs Core Typings Workflow (Spec 32)
 
-**Status:** Partial - BUGS.md structure complete, validation workflow pending
+**Status:** Partial - BUGS.md structure complete, signature validation pending
 **Priority:** High - systematic expansion of type coverage
 **Depends on:** Phase 0 (./tart script), Phase 0.5 (verbose coverage)
 
 This phase establishes the workflow for systematically creating complete, verified type signatures for Emacs C core primitives.
+
+**Note:** "Validation" here means running `./tart check` against Emacs lisp/ files and iterating on signatures until they pass. This IS implementation work—writing and refining `.tart` files based on type checker output.
 
 ### 0.6.1 Create BUGS.md Structure
 
@@ -463,8 +465,8 @@ cat test/fixtures/typing/errors/type-mismatch/int-for-string.expected
 - Phase 0.7 (Spec 33) - Typing test fixtures ✅ (29 fixtures across 6 error categories)
 - Phase 29 (Spec 34) - Funcall and Apply Typing ✅ (R1-R5, R7 complete; R6, R8-R14 deferred)
 
-**Remaining work (non-implementation):**
-- Phase 0.6.2-0.6.4 (Spec 32) - C-core typings validation workflow (iterative human/agent validation work, not code implementation)
+**Remaining work:**
+- Phase 0.6.2-0.6.4 (Spec 32) - C-core typings validation: run `./tart check` against Emacs lisp/, fix signature errors, document gaps in BUGS.md
 
 ---
 
