@@ -218,49 +218,49 @@ Acceptance: 100% symbol coverage, 95%+ validation success, gaps documented.
 
 ---
 
-### Phase 35: AST Printer (Spec 38)
+### Phase 35: AST Printer (Spec 38) ✓
 
-**Status:** Not started
+**Status:** Complete
 **Priority:** High - foundation for round-trip testing
 **Depends on:** None
 
 Print `Sexp.t` to valid Emacs Lisp for round-trip testing.
 
-#### 35.1 Module Setup
+#### 35.1 Module Setup ✓
 
-- [ ] [R17] Create `lib/syntax/print.ml` and `print.mli`
-- [ ] Implement `val to_string : Sexp.t -> string`
+- [x] [R17] Create `lib/syntax/print.ml` and `print.mli`
+- [x] Implement `val to_string : Sexp.t -> string`
 
-#### 35.2 Primitive Types
+#### 35.2 Primitive Types ✓
 
-- [ ] [R1] Integer printing
-- [ ] [R2] Float printing
-- [ ] [R3] Simple string printing (double-quoted)
-- [ ] [R4] String escapes (newline, tab, CR, backslash, quote, etc.)
-- [ ] [R5] Non-ASCII strings (UTF-8 or `\xNN`/`\uNNNN`)
+- [x] [R1] Integer printing
+- [x] [R2] Float printing
+- [x] [R3] Simple string printing (double-quoted)
+- [x] [R4] String escapes (newline, tab, CR, backslash, quote, etc.)
+- [x] [R5] Non-ASCII strings (UTF-8 or `\xNN`/`\uNNNN`)
 
-#### 35.3 Symbols and Keywords
+#### 35.3 Symbols and Keywords ✓
 
-- [ ] [R6] Symbol printing
-- [ ] [R7] Keyword printing (leading colon)
+- [x] [R6] Symbol printing
+- [x] [R7] Keyword printing (leading colon)
 
-#### 35.4 Characters
+#### 35.4 Characters ✓
 
-- [ ] [R8] Simple character literals (`?c` syntax)
-- [ ] [R9] Escaped character literals (`?\n`, `?\t`, `?\\`)
-- [ ] [R10] Character modifiers (Control, Meta, Shift, Hyper, Alt, Super)
+- [x] [R8] Simple character literals (`?c` syntax)
+- [x] [R9] Escaped character literals (`?\n`, `?\t`, `?\\`)
+- [x] [R10] Character modifiers (Control, Meta, Shift, Hyper, Alt, Super)
 
-#### 35.5 Compound Types
+#### 35.5 Compound Types ✓
 
-- [ ] [R11] List printing (parenthesized, space-separated)
-- [ ] [R12] Quote forms as reader macros (`'x`, `` `x ``, `,x`, `,@x`, `#'f`)
-- [ ] [R13] Vector printing (`#(...)`)
-- [ ] [R14] Dotted pair printing (`(a . b)`)
-- [ ] [R15] Improper list printing (`(1 2 . 3)`)
+- [x] [R11] List printing (parenthesized, space-separated)
+- [x] [R12] Quote forms as reader macros (`'x`, `` `x ``, `,x`, `,@x`, `#'f`)
+- [x] [R13] Vector printing (`#(...)`)
+- [x] [R14] Dotted pair printing (`(a . b)`)
+- [x] [R15] Improper list printing (`(1 2 . 3)`)
 
-#### 35.6 Error Handling
+#### 35.6 Error Handling ✓
 
-- [ ] [R16] Error node printing (`#<error: ...>`)
+- [x] [R16] Error node printing (`#<error: ...>`)
 - [ ] [R18] Round-trip tests (parse → print → parse = original)
 
 **Files:** `lib/syntax/print.ml`, `lib/syntax/print.mli`

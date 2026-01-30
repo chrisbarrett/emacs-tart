@@ -44,6 +44,7 @@ module Sexp = Syntax.Sexp
 module Lexer = Syntax.Lexer
 module Parser = Syntax.Parser
 module Read = Syntax.Read
+module Print = Syntax.Print
 
 (** {1 Interpreter} *)
 
