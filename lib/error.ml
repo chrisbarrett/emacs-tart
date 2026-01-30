@@ -143,3 +143,7 @@ let report (errors : t list) : unit =
   if count > 0 then
     let plural = if count = 1 then "error" else "errors" in
     prerr_endline (Printf.sprintf "\nFound %d %s" count plural)
+
+let report_json (errors : t list) : unit =
+  let json_array = `List (List.map to_json errors) in
+  print_endline (Yojson.Safe.pretty_to_string json_array)

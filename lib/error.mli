@@ -143,3 +143,18 @@ val report : t list -> unit
 
       Found 2 errors
     v} *)
+
+val report_json : t list -> unit
+(** Report errors as JSON to stdout.
+
+    Outputs a JSON array of error objects:
+    {v
+      [
+        {
+          "kind": "type",
+          "code": "E0308",
+          ...
+        },
+        ...
+      ]
+    v} *)

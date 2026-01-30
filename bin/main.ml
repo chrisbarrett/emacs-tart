@@ -3,6 +3,9 @@
     Subcommand dispatch for type-checking, evaluation, macro expansion, and LSP
     server. *)
 
+(** Output format for check command *)
+type output_format = Human | Json
+
 (** Format a parse error for display in compiler-style format *)
 let format_parse_error (err : Tart.Read.parse_error) : string =
   let pos = err.span.start_pos in
@@ -11,20 +14,22 @@ let format_parse_error (err : Tart.Read.parse_error) : string =
 
 (** Type-check a single file with a given environment.
 
-    Returns the updated environment (with definitions from this file) and the
-    error count for this file. *)
-let check_file env filename : Tart.Type_env.t * int =
+    Returns the updated environment (with definitions from this file) and list
+    of errors. *)
+let check_file env filename : Tart.Type_env.t * Tart.Error.t list =
   (* Parse the file *)
   let parse_result = Tart.Read.parse_file filename in
 
-  (* Print parse errors *)
-  let parse_error_count = List.length parse_result.errors in
-  List.iter
-    (fun err -> prerr_endline (format_parse_error err))
-    parse_result.errors;
+  (* Convert parse errors to Error.t *)
+  let parse_errors =
+    List.map
+      (fun (err : Tart.Read.parse_error) ->
+        Tart.Error.parse_error ~message:err.message ~span:err.span)
+      parse_result.errors
+  in
 
   (* Type-check if we have any successfully parsed forms *)
-  if parse_result.sexps = [] then (env, parse_error_count)
+  if parse_result.sexps = [] then (env, parse_errors)
   else
     let check_result = Tart.Check.check_program ~env parse_result.sexps in
 
@@ -43,35 +48,40 @@ let check_file env filename : Tart.Type_env.t * int =
         check_result.undefineds
     in
 
-    (* Combine all diagnostics *)
+    (* Combine all diagnostics and convert to Error.t *)
     let diagnostics = type_diagnostics @ undefined_diagnostics in
-    List.iter (fun d -> prerr_endline (Tart.Diagnostic.to_string d)) diagnostics;
+    let type_errors = Tart.Error.of_diagnostics diagnostics in
 
-    let error_count =
-      parse_error_count + Tart.Diagnostic.count_errors diagnostics
-    in
-    (check_result.env, error_count)
+    (check_result.env, parse_errors @ type_errors)
 
 (** Default command: type-check files.
 
     Files are processed in order; definitions from earlier files are visible to
     later files. *)
-let cmd_check files =
+let cmd_check ~format files =
   if files = [] then (
-    prerr_endline "tart: no input files. Use --help for usage.";
+    let err =
+      Tart.Error.cli_error ~message:"no input files"
+        ~hint:"use --help for usage" ()
+    in
+    prerr_endline (Tart.Error.to_string err);
     exit 2)
   else
-    (* Check each file, accumulating the environment *)
+    (* Check each file, accumulating the environment and errors *)
     let initial_env = Tart.Check.default_env () in
-    let _, total_errors =
+    let _, all_errors =
       List.fold_left
         (fun (env, acc_errors) file ->
           let env', file_errors = check_file env file in
-          (env', acc_errors + file_errors))
-        (initial_env, 0) files
+          (env', acc_errors @ file_errors))
+        (initial_env, []) files
     in
+    (* Report errors in the requested format *)
+    (match format with
+    | Human -> Tart.Error.report all_errors
+    | Json -> Tart.Error.report_json all_errors);
     (* Exit code: 0 if no errors, 1 if errors *)
-    if total_errors > 0 then exit 1
+    if all_errors <> [] then exit 1
 
 (** Eval subcommand: evaluate expression and print result with type.
 
@@ -765,6 +775,7 @@ Usage:
 Options:
   --version              Print version and exit
   --help, -h             Print this help message
+  --format=FORMAT        Output format: human (default), json
   --emacs-version VER    Use typings for Emacs version VER (e.g., 31.0)
 
 Eval options:
@@ -797,7 +808,11 @@ let () =
   let args = Array.to_list Sys.argv |> List.tl in
   match args with
   | [] ->
-      prerr_endline "tart: no input files. Use --help for usage.";
+      let err =
+        Tart.Error.cli_error ~message:"no input files"
+          ~hint:"use --help for usage" ()
+      in
+      prerr_endline (Tart.Error.to_string err);
       exit 2
   | [ "--version" ] | [ "-v" ] -> print_version ()
   | [ "--help" ] | [ "-h" ] -> print_help ()
@@ -805,7 +820,8 @@ let () =
   | "eval" :: rest -> (
       match rest with
       | [] ->
-          prerr_endline "tart eval: missing expression";
+          let err = Tart.Error.cli_error ~message:"missing expression" () in
+          prerr_endline (Tart.Error.to_string err);
           exit 2
       | [ "--help" ] | [ "-h" ] ->
           print_endline "Usage: tart eval <EXPR>";
@@ -814,7 +830,10 @@ let () =
           exit 0
       | [ expr ] -> cmd_eval expr
       | _ ->
-          prerr_endline "tart eval: expected single expression";
+          let err =
+            Tart.Error.cli_error ~message:"expected single expression" ()
+          in
+          prerr_endline (Tart.Error.to_string err);
           exit 2)
   | "expand" :: rest -> (
       let load_files = ref [] in
@@ -827,10 +846,18 @@ let () =
             load_files := !load_files @ [ f ];
             parse_expand_args rest
         | "--load" :: [] ->
-            prerr_endline "tart expand: --load requires a file";
+            let err =
+              Tart.Error.cli_error ~message:"--load requires a file" ()
+            in
+            prerr_endline (Tart.Error.to_string err);
             exit 2
         | arg :: _ when String.starts_with ~prefix:"-" arg ->
-            prerr_endline ("tart expand: unknown option: " ^ arg);
+            let err =
+              Tart.Error.cli_error
+                ~message:(Printf.sprintf "unknown option: %s" arg)
+                ~hint:"use --help for available options" ()
+            in
+            prerr_endline (Tart.Error.to_string err);
             exit 2
         | file :: rest -> (
             match !target_file with
@@ -838,7 +865,10 @@ let () =
                 target_file := Some file;
                 parse_expand_args rest
             | Some _ ->
-                prerr_endline "tart expand: only one file allowed";
+                let err =
+                  Tart.Error.cli_error ~message:"only one file allowed" ()
+                in
+                prerr_endline (Tart.Error.to_string err);
                 exit 2)
       in
       parse_expand_args rest;
@@ -854,7 +884,8 @@ let () =
       else
         match !target_file with
         | None ->
-            prerr_endline "tart expand: missing file";
+            let err = Tart.Error.cli_error ~message:"missing file" () in
+            prerr_endline (Tart.Error.to_string err);
             exit 2
         | Some file -> cmd_expand ~load_files:!load_files file)
   | "repl" :: rest -> (
@@ -873,7 +904,8 @@ let () =
           print_endline "  ,help        Show available commands";
           exit 0
       | _ ->
-          prerr_endline "tart repl: unexpected arguments";
+          let err = Tart.Error.cli_error ~message:"unexpected arguments" () in
+          prerr_endline (Tart.Error.to_string err);
           exit 2)
   | "lsp" :: rest ->
       let port = ref None in
@@ -895,14 +927,26 @@ let () =
             log_level := Tart.Server.Normal;
             parse_lsp_args rest
         | "--log-level" :: _ :: _ ->
-            prerr_endline
-              "tart lsp: --log-level must be debug, normal, or quiet";
+            let err =
+              Tart.Error.cli_error ~message:"invalid log level"
+                ~hint:"valid levels: debug, normal, quiet" ()
+            in
+            prerr_endline (Tart.Error.to_string err);
             exit 2
         | "--log-level" :: [] ->
-            prerr_endline "tart lsp: --log-level requires an argument";
+            let err =
+              Tart.Error.cli_error ~message:"--log-level requires an argument"
+                ()
+            in
+            prerr_endline (Tart.Error.to_string err);
             exit 2
         | arg :: _ ->
-            prerr_endline ("tart lsp: unknown option: " ^ arg);
+            let err =
+              Tart.Error.cli_error
+                ~message:(Printf.sprintf "unknown option: %s" arg)
+                ~hint:"use --help for available options" ()
+            in
+            prerr_endline (Tart.Error.to_string err);
             exit 2
       in
       parse_lsp_args rest;
@@ -937,7 +981,12 @@ let () =
             format := Tart.Report_format.Human;
             parse_coverage_args rest
         | arg :: _rest when String.starts_with ~prefix:"--format=" arg ->
-            prerr_endline "tart coverage: --format must be 'human' or 'json'";
+            let err =
+              Tart.Error.cli_error
+                ~message:(Printf.sprintf "invalid format: %s" arg)
+                ~hint:"valid formats: human, json" ()
+            in
+            prerr_endline (Tart.Error.to_string err);
             exit 2
         | arg :: rest when String.starts_with ~prefix:"--fail-under=" arg -> (
             let value = String.sub arg 13 (String.length arg - 13) in
@@ -946,14 +995,23 @@ let () =
                 fail_under := Some n;
                 parse_coverage_args rest
             | _ ->
-                prerr_endline "tart coverage: --fail-under requires 0-100";
+                let err =
+                  Tart.Error.cli_error
+                    ~message:"--fail-under requires a value from 0 to 100" ()
+                in
+                prerr_endline (Tart.Error.to_string err);
                 exit 2)
         | arg :: rest when String.starts_with ~prefix:"--exclude=" arg ->
             let pattern = String.sub arg 10 (String.length arg - 10) in
             exclude := !exclude @ [ pattern ];
             parse_coverage_args rest
         | arg :: _ when String.starts_with ~prefix:"-" arg ->
-            prerr_endline ("tart coverage: unknown option: " ^ arg);
+            let err =
+              Tart.Error.cli_error
+                ~message:(Printf.sprintf "unknown option: %s" arg)
+                ~hint:"use --help for available options" ()
+            in
+            prerr_endline (Tart.Error.to_string err);
             exit 2
         | path :: rest ->
             paths := !paths @ [ path ];
@@ -977,26 +1035,52 @@ let () =
   | "check" :: rest ->
       (* Explicit check subcommand - same as default behavior *)
       let emacs_version = ref None in
+      let format = ref Human in
       let show_help = ref false in
       let file_list = ref [] in
       let rec parse_check_args = function
         | [] -> ()
         | "--help" :: _ | "-h" :: _ -> show_help := true
+        | "--format=json" :: rest ->
+            format := Json;
+            parse_check_args rest
+        | "--format=human" :: rest ->
+            format := Human;
+            parse_check_args rest
+        | arg :: _ when String.starts_with ~prefix:"--format=" arg ->
+            let err =
+              Tart.Error.cli_error
+                ~message:(Printf.sprintf "invalid format: %s" arg)
+                ~hint:"valid formats: human, json" ()
+            in
+            prerr_endline (Tart.Error.to_string err);
+            exit 2
         | "--emacs-version" :: v :: rest ->
             (match Tart.Emacs_version.parse_version v with
             | Some ver -> emacs_version := Some ver
             | None ->
-                prerr_endline
-                  (Printf.sprintf "tart check: invalid Emacs version '%s'" v);
-                prerr_endline "Expected format: MAJOR.MINOR (e.g., 31.0)";
+                let err =
+                  Tart.Error.cli_error
+                    ~message:(Printf.sprintf "invalid Emacs version '%s'" v)
+                    ~hint:"expected format: MAJOR.MINOR (e.g., 31.0)" ()
+                in
+                prerr_endline (Tart.Error.to_string err);
                 exit 2);
             parse_check_args rest
         | "--emacs-version" :: [] ->
-            prerr_endline
-              "tart check: --emacs-version requires a version argument";
+            let err =
+              Tart.Error.cli_error
+                ~message:"--emacs-version requires a version argument" ()
+            in
+            prerr_endline (Tart.Error.to_string err);
             exit 2
         | arg :: _ when String.starts_with ~prefix:"-" arg ->
-            prerr_endline ("tart check: unknown option: " ^ arg);
+            let err =
+              Tart.Error.cli_error
+                ~message:(Printf.sprintf "unknown option: %s" arg)
+                ~hint:"use --help for available options" ()
+            in
+            prerr_endline (Tart.Error.to_string err);
             exit 2
         | file :: rest ->
             file_list := !file_list @ [ file ];
@@ -1009,6 +1093,8 @@ let () =
         print_endline "Type-check Elisp files.";
         print_endline "";
         print_endline "Options:";
+        print_endline
+          "  --format=FORMAT      Output format: human (default), json";
         print_endline "  --emacs-version VER  Use typings for Emacs version VER";
         exit 0)
       else (
@@ -1019,7 +1105,7 @@ let () =
               (Printf.sprintf "[tart] Using Emacs version: %s"
                  (Tart.Emacs_version.version_to_string ver))
         | None -> ());
-        cmd_check !file_list)
+        cmd_check ~format:!format !file_list)
   | "emacs-coverage" :: rest ->
       let emacs_source = ref None in
       let emacs_version = ref None in
@@ -1035,23 +1121,37 @@ let () =
             emacs_source := Some path;
             parse_emacs_coverage_args rest
         | "--emacs-source" :: [] ->
-            prerr_endline "tart emacs-coverage: --emacs-source requires a path";
+            let err =
+              Tart.Error.cli_error ~message:"--emacs-source requires a path" ()
+            in
+            prerr_endline (Tart.Error.to_string err);
             exit 2
         | "--emacs-version" :: v :: rest ->
             (match Tart.Emacs_version.parse_version v with
             | Some ver -> emacs_version := Some ver
             | None ->
-                prerr_endline
-                  (Printf.sprintf "tart emacs-coverage: invalid version '%s'" v);
-                prerr_endline "Expected format: MAJOR.MINOR (e.g., 31.0)";
+                let err =
+                  Tart.Error.cli_error
+                    ~message:(Printf.sprintf "invalid Emacs version '%s'" v)
+                    ~hint:"expected format: MAJOR.MINOR (e.g., 31.0)" ()
+                in
+                prerr_endline (Tart.Error.to_string err);
                 exit 2);
             parse_emacs_coverage_args rest
         | "--emacs-version" :: [] ->
-            prerr_endline
-              "tart emacs-coverage: --emacs-version requires a version";
+            let err =
+              Tart.Error.cli_error
+                ~message:"--emacs-version requires a version argument" ()
+            in
+            prerr_endline (Tart.Error.to_string err);
             exit 2
         | arg :: _ ->
-            prerr_endline ("tart emacs-coverage: unknown option: " ^ arg);
+            let err =
+              Tart.Error.cli_error
+                ~message:(Printf.sprintf "unknown option: %s" arg)
+                ~hint:"use --help for available options" ()
+            in
+            prerr_endline (Tart.Error.to_string err);
             exit 2
       in
       parse_emacs_coverage_args rest;
@@ -1072,6 +1172,7 @@ let () =
   | files ->
       (* Parse check command options *)
       let emacs_version = ref None in
+      let format = ref Human in
       let show_help = ref false in
       let show_version = ref false in
       let file_list = ref [] in
@@ -1079,20 +1180,46 @@ let () =
         | [] -> ()
         | "--help" :: _ | "-h" :: _ -> show_help := true
         | "--version" :: _ | "-v" :: _ -> show_version := true
+        | "--format=json" :: rest ->
+            format := Json;
+            parse_check_args rest
+        | "--format=human" :: rest ->
+            format := Human;
+            parse_check_args rest
+        | arg :: _ when String.starts_with ~prefix:"--format=" arg ->
+            let err =
+              Tart.Error.cli_error
+                ~message:(Printf.sprintf "invalid format: %s" arg)
+                ~hint:"valid formats: human, json" ()
+            in
+            prerr_endline (Tart.Error.to_string err);
+            exit 2
         | "--emacs-version" :: v :: rest ->
             (match Tart.Emacs_version.parse_version v with
             | Some ver -> emacs_version := Some ver
             | None ->
-                prerr_endline
-                  (Printf.sprintf "tart: invalid Emacs version '%s'" v);
-                prerr_endline "Expected format: MAJOR.MINOR (e.g., 31.0)";
+                let err =
+                  Tart.Error.cli_error
+                    ~message:(Printf.sprintf "invalid Emacs version '%s'" v)
+                    ~hint:"expected format: MAJOR.MINOR (e.g., 31.0)" ()
+                in
+                prerr_endline (Tart.Error.to_string err);
                 exit 2);
             parse_check_args rest
         | "--emacs-version" :: [] ->
-            prerr_endline "tart: --emacs-version requires a version argument";
+            let err =
+              Tart.Error.cli_error
+                ~message:"--emacs-version requires a version argument" ()
+            in
+            prerr_endline (Tart.Error.to_string err);
             exit 2
         | arg :: _ when String.starts_with ~prefix:"-" arg ->
-            prerr_endline ("tart: unknown option: " ^ arg);
+            let err =
+              Tart.Error.cli_error
+                ~message:(Printf.sprintf "unknown option: %s" arg)
+                ~hint:"use --help for available options" ()
+            in
+            prerr_endline (Tart.Error.to_string err);
             exit 2
         | file :: rest ->
             file_list := !file_list @ [ file ];
@@ -1109,4 +1236,4 @@ let () =
               (Printf.sprintf "[tart] Using Emacs version: %s"
                  (Tart.Emacs_version.version_to_string ver))
         | None -> ());
-        cmd_check !file_list)
+        cmd_check ~format:!format !file_list)

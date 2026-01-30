@@ -32,6 +32,11 @@
 val version : string
 (** Library version. *)
 
+(** {1 Errors} *)
+
+module Error = Error
+(** Unified error type for all subsystems. *)
+
 (** {1 Syntax} *)
 
 module Location = Syntax.Location
