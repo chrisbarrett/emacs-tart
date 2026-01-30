@@ -1034,7 +1034,7 @@ let test_kind_arity_mismatch_formatting () =
    ============================================================================= *)
 
 let test_explicit_instantiation_error_message () =
-  (* When (@type [string] identity 42) mismatches, error should reference @type *)
+  (* When (tart [string] identity 42) mismatches, error should reference tart *)
   let span = Loc.dummy_span in
   let context =
     Constraint.ExplicitInstantiation
@@ -1046,11 +1046,11 @@ let test_explicit_instantiation_error_message () =
   let d = Diag.of_unify_error err in
   Alcotest.(check bool) "is error" true (Diag.is_error d);
   Alcotest.(check bool)
-    "message mentions @type annotation" true
-    (contains_pattern (Str.regexp "@type") d.message)
+    "message mentions tart instantiation" true
+    (contains_pattern (Str.regexp "tart") d.message)
 
 let test_explicit_instantiation_shows_expected_from_annotation () =
-  (* Error should indicate expected type comes from @type annotation *)
+  (* Error should indicate expected type comes from tart instantiation *)
   let span = Loc.dummy_span in
   let context =
     Constraint.ExplicitInstantiation
@@ -1061,13 +1061,13 @@ let test_explicit_instantiation_shows_expected_from_annotation () =
   in
   let d = Diag.of_unify_error err in
   let str = Diag.to_string d in
-  (* Should show that expected type is from @type annotation *)
+  (* Should show that expected type is from tart instantiation *)
   Alcotest.(check bool)
     "shows expected type" true
     (contains_pattern (Str.regexp "expected.*String") str);
   Alcotest.(check bool)
-    "shows from annotation" true
-    (contains_pattern (Str.regexp "@type.*annotation") str)
+    "shows from instantiation" true
+    (contains_pattern (Str.regexp "tart.*instantiation") str)
 
 let test_explicit_instantiation_shows_found_type () =
   let span = Loc.dummy_span in
@@ -1102,7 +1102,7 @@ let test_explicit_instantiation_has_error_code () =
     "code is E0308" (Some Diag.E0308) d.code
 
 let test_explicit_instantiation_multiple_type_args () =
-  (* For (@type [int string] pair 1 "hi") style errors *)
+  (* For (tart [int string] pair 1 "hi") style errors *)
   let span = Loc.dummy_span in
   let context =
     Constraint.ExplicitInstantiation
@@ -1261,7 +1261,7 @@ let () =
         ] );
       ( "explicit_instantiation",
         [
-          Alcotest.test_case "error message mentions @type" `Quick
+          Alcotest.test_case "error message mentions tart" `Quick
             test_explicit_instantiation_error_message;
           Alcotest.test_case "shows expected from annotation" `Quick
             test_explicit_instantiation_shows_expected_from_annotation;

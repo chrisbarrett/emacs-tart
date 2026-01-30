@@ -30,10 +30,10 @@
 ;;
 ;; The macros are:
 ;;
-;; - `tart': Assert that an expression has a specific type
+;; - `tart': Assert that an expression has a specific type, or explicitly
+;;           instantiate a polymorphic function call when first arg is a vector
 ;; - `tart-type': Define a file-local type alias
 ;; - `tart-declare': Declare a variable's type
-;; - `@type': Explicitly instantiate a polymorphic function call
 ;;
 ;; This package has NO dependencies and is safe to require in any Emacs Lisp
 ;; file.  For development tools (LSP integration, REPL, etc.), see `tart-mode'.
@@ -41,18 +41,37 @@
 ;;; Code:
 
 ;;;###autoload
-(defmacro tart (_type form)
-  "Type assertion macro for the Tart type checker.
-TYPE is a type expression (ignored at runtime).
-FORM is evaluated and returned unchanged.
+(defmacro tart (type-or-types &rest args)
+  "Type annotation macro for the Tart type checker.
 
-At compile time with the Tart type checker, this asserts that FORM
-has the specified TYPE.  At runtime, this simply returns FORM.
+Two forms are supported:
 
-Example:
-  (tart string \"hello\")     ; Asserts the string literal has type string
-  (tart int (+ 1 2))         ; Asserts the expression has type int"
-  form)
+1. Type assertion: (tart TYPE FORM)
+   TYPE is a type expression (ignored at runtime).
+   FORM is evaluated and returned unchanged.
+   At compile time, this asserts that FORM has the specified TYPE.
+
+2. Explicit instantiation: (tart [TYPES...] FN ARGS...)
+   TYPES is a vector of type arguments to apply.
+   FN is the polymorphic function to call.
+   ARGS are the arguments to pass to FN.
+   The underscore `_' can be used as a placeholder for inference.
+
+At runtime, both forms simply evaluate to their result.
+
+Examples:
+  (tart string \"hello\")              ; Assert type
+  (tart int (+ 1 2))                  ; Assert type
+  (tart [int] identity 42)            ; Instantiate at int
+  (tart [list int string] fmap f xs)  ; Instantiate with explicit types
+  (tart [_ string] pair 1 \"hi\")       ; Infer first type, fix second"
+  (if (vectorp type-or-types)
+      ;; Explicit instantiation: (tart [types...] fn args...)
+      (let ((fn (car args))
+            (fn-args (cdr args)))
+        `(,fn ,@fn-args))
+    ;; Type assertion: (tart type form)
+    (car args)))
 
 ;;;###autoload
 (defmacro tart-type (_name &rest _definition)
@@ -83,26 +102,6 @@ Example:
   (tart-declare my-buffer buffer)
   (defvar my-buffer)"
   nil)
-
-;;;###autoload
-(defmacro @type (_types fn &rest args)
-  "Explicitly instantiate a polymorphic function call.
-TYPES is a vector of type arguments to apply.
-FN is the function to call.
-ARGS are the arguments to pass to FN.
-
-At compile time with the Tart type checker, this applies the explicit
-type arguments to the polymorphic function, resolving any ambiguity.
-At runtime, this simply calls FN with ARGS.
-
-The underscore `_' can be used as a placeholder to let the type checker
-infer that type argument.
-
-Example:
-  (@type [int] identity 42)           ; Instantiate identity at int
-  (@type [list int string] fmap f xs) ; Instantiate fmap with explicit types
-  (@type [_ string] pair 1 \"hi\")      ; Infer first type, fix second"
-  `(,fn ,@args))
 
 (provide 'tart)
 ;;; tart.el ends here

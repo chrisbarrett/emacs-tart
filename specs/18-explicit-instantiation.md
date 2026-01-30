@@ -22,7 +22,7 @@ Explicit instantiation resolves this:
 
 ```elisp
 ;; Clear: f = list
-(fmap @[list] #'1+ my-list)
+(tart [list] fmap #'1+ my-list)
 ```
 
 Other use cases:
@@ -61,7 +61,7 @@ The syntax must be valid Elisp that the type checker can recognize:
 
 **Option A: Function-like macro**
 ```elisp
-(@type [list int] identity)    ; Instantiate identity at [list int]
+(tart [list int] identity)    ; Instantiate identity at [list int]
 ```
 
 **Option B: Annotation comment**
@@ -82,7 +82,7 @@ When a function has multiple type parameters, some can be left for inference:
 
 ```elisp
 ;; Full: (defun pair [a b] (a b) -> (cons a b))
-(@type [int _] pair 1 "hello")   ; a=int, b=inferred as string
+(tart [int _] pair 1 "hello")   ; a=int, b=inferred as string
 ```
 
 ## Requirements
@@ -90,13 +90,13 @@ When a function has multiple type parameters, some can be left for inference:
 ### R1: Explicit instantiation syntax
 
 **Given** a polymorphic function call
-**When** annotated with `@type`
+**When** annotated with `tart`
 **Then** the type arguments are applied:
 
 ```elisp
 ;; (defun identity [a] (a) -> a)
-(@type [int] identity 42)    ; OK: a = int
-(@type [string] identity 42) ; Error: int not string
+(tart [int] identity 42)    ; OK: a = int
+(tart [string] identity 42) ; Error: int not string
 ```
 
 **Verify:** `dune test`
@@ -109,7 +109,7 @@ When a function has multiple type parameters, some can be left for inference:
 
 ```elisp
 ;; (defun fmap [f a b] (((a -> b)) (f a)) -> (f b))
-(@type [list int string] fmap #'number-to-string my-list)
+(tart [list int string] fmap #'number-to-string my-list)
 ```
 
 **Verify:** `dune test`
@@ -122,7 +122,7 @@ When a function has multiple type parameters, some can be left for inference:
 
 ```elisp
 ;; (defun pair [a b] (a b) -> (cons a b))
-(@type [_ string] pair 1 "hello")  ; a inferred as int
+(tart [_ string] pair 1 "hello")  ; a inferred as int
 ```
 
 **Verify:** `dune test`
@@ -135,19 +135,19 @@ When a function has multiple type parameters, some can be left for inference:
 
 ```elisp
 ;; identity has 1 type param
-(@type [int string] identity 42)  ; Error: expected 1 type arg
+(tart [int string] identity 42)  ; Error: expected 1 type arg
 ```
 
 **Verify:** `dune test`
 
 ### R5: Runtime expansion
 
-**Given** an `@type` form
+**Given** a `tart` instantiation form
 **When** evaluated at runtime
 **Then** it expands to just the function call:
 
 ```elisp
-(macroexpand '(@type [int] identity 42))
+(macroexpand '(tart [int] identity 42))
 ;; => (identity 42)
 ```
 
@@ -161,7 +161,7 @@ When a function has multiple type parameters, some can be left for inference:
 
 ```
 Error: type mismatch
-  expected: String (from @type annotation)
+  expected: String (from tart annotation)
   found: Int
 ```
 
@@ -171,12 +171,12 @@ Error: type mismatch
 
 - Instantiation at definition sites (only call sites)
 - Instantiation for non-function types
-- Inference from @type to surrounding context
+- Inference from tart to surrounding context
 
 ## Tasks
 
-- [x] [R5] Add `@type` macro to tart.el
-- [x] [R1] Parse `@type` forms in infer.ml
+- [x] [R5] Add `tart` macro to tart.el
+- [x] [R1] Parse `tart` forms in infer.ml
 - [x] [R1] Apply explicit type arguments during inference
 - [x] [R3] Handle `_` placeholder for partial instantiation
 - [x] [R2] Test HK type constructor instantiation
@@ -189,13 +189,13 @@ Run review agent after R1 complete to validate approach.
 
 ### Parsing
 
-The `@type` macro form `(@type [T1 T2 ...] fn arg1 arg2 ...)` is recognized
+The `tart` macro form `(tart [T1 T2 ...] fn arg1 arg2 ...)` is recognized
 during inference. The type list is parsed using the existing signature parser
 infrastructure.
 
 ### Instantiation
 
-When an `@type` form is encountered:
+When a `tart` instantiation form is encountered:
 
 1. Look up the function's polymorphic type
 2. Parse the type arguments from the vector
@@ -215,14 +215,14 @@ For higher-kinded instantiation, the type argument can be:
 ;; Signature: (defun fmap [f a b] (((a -> b)) (f a)) -> (f b))
 
 ;; Full instantiation
-(@type [list int string] fmap #'number-to-string my-int-list)
+(tart [list int string] fmap #'number-to-string my-int-list)
 ;; f = list, a = int, b = string
 ;; Expected: ((int -> string)) (list int)) -> (list string)
 ;; Checks: #'number-to-string : (int -> string), my-int-list : (list int)
 ;; Returns: (list string)
 
 ;; Partial instantiation
-(@type [list _ _] fmap #'upcase my-list)
+(tart [list _ _] fmap #'upcase my-list)
 ;; f = list, a = inferred, b = inferred
 ;; From #'upcase : (string -> string), infers a = string, b = string
 ;; From my-list : (list string), confirms a = string

@@ -143,6 +143,9 @@ let rec infer (env : Env.t) (sexp : Syntax.Sexp.t) : result =
   | List (Symbol ("or", _) :: args, span) -> infer_or env args span
   (* === Not === *)
   | List ([ Symbol ("not", _); arg ], span) -> infer_not env arg span
+  (* === Tart explicit instantiation: (tart [T1 T2 ...] fn args...) === *)
+  | List (Symbol ("tart", _) :: Vector (type_args, _) :: fn :: args, span) ->
+      infer_explicit_instantiation env type_args fn args span
   (* === Tart type annotation: (tart TYPE FORM) === *)
   | List ([ Symbol ("tart", _); type_sexp; form ], span) ->
       infer_tart_annotation env type_sexp form span
@@ -151,9 +154,6 @@ let rec infer (env : Env.t) (sexp : Syntax.Sexp.t) : result =
       infer_pcase env expr clauses span
   | List (Symbol ("pcase-exhaustive", _) :: expr :: clauses, span) ->
       infer_pcase env expr clauses span
-  (* === Explicit type instantiation: (@type [T1 T2 ...] fn args...) === *)
-  | List (Symbol ("@type", _) :: Vector (type_args, _) :: fn :: args, span) ->
-      infer_explicit_instantiation env type_args fn args span
   (* === Funcall: (funcall f arg1 arg2 ...) === *)
   | List (Symbol ("funcall", _) :: fn_expr :: args, span) ->
       infer_funcall env fn_expr args span
@@ -747,7 +747,7 @@ and infer_tart_annotation env type_sexp form _span =
 
 (** Infer the type of an explicit type instantiation.
 
-    (@type [T1 T2 ...] fn args...) explicitly instantiates the polymorphic
+    (tart [T1 T2 ...] fn args...) explicitly instantiates the polymorphic
     function fn with the given type arguments, then applies it to args.
 
     The type arguments are parsed using sig_parser and applied to the function's
@@ -758,8 +758,8 @@ and infer_explicit_instantiation (env : Env.t)
     (args : Syntax.Sexp.t list) (span : Loc.span) : result =
   let open Syntax.Sexp in
   (* Parse the type arguments.
-     Note: We do NOT apply forall inference here because type arguments in @type
-     are meant to be concrete instantiations, not polymorphic types. A simple
+     Note: We do NOT apply forall inference here because type arguments in tart
+     instantiation are meant to be concrete types, not polymorphic. A simple
      name like "list" should become TCon "List", not a forall-wrapped type var. *)
   let parsed_type_args =
     List.map

@@ -516,13 +516,13 @@ let type_mismatch_with_context ~span ~expected ~actual ~context () =
       let type_args_str =
         String.concat ", " (List.map Types.to_string type_args)
       in
-      (* Per R6: message should reference @type annotation and show expected from it *)
+      (* Per R6: message should reference tart annotation and show expected from it *)
       let related =
         [
           {
             span = Loc.dummy_span;
             message =
-              Printf.sprintf "expected %s (from @type annotation [%s])"
+              Printf.sprintf "expected %s (from tart instantiation [%s])"
                 (Types.to_string expected) type_args_str;
           };
         ]
@@ -531,7 +531,8 @@ let type_mismatch_with_context ~span ~expected ~actual ~context () =
         severity = Error;
         code = Some E0308;
         span;
-        message = "type mismatch: @type annotation specifies incompatible type";
+        message =
+          "type mismatch: tart instantiation specifies incompatible type";
         expected = Some expected;
         actual = Some actual;
         related;

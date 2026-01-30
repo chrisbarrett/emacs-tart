@@ -641,35 +641,35 @@ let test_invariance_poly_function_ok () =
   Alcotest.(check int) "no errors" 0 (List.length result.errors)
 
 (* =============================================================================
-   @type (Explicit Type Instantiation) Tests
+   Tart Explicit Instantiation Tests
    ============================================================================= *)
 
-(** Test that (@type [int] identity 42) type-checks correctly *)
+(** Test that (tart [int] identity 42) type-checks correctly *)
 let test_at_type_basic () =
   let env =
     Env.extend_poly "identity" [ "a" ] (arrow [ TCon "a" ] (TCon "a")) Env.empty
   in
-  let sexp = parse "(@type [int] identity 42)" in
+  let sexp = parse "(tart [int] identity 42)" in
   let ty, errors = Check.check_expr ~env sexp in
   Alcotest.(check int) "no errors" 0 (List.length errors);
   Alcotest.(check string) "returns Int" "Int" (to_string ty)
 
-(** Test that (@type [string] identity 42) produces type error *)
+(** Test that (tart [string] identity 42) produces type error *)
 let test_at_type_type_mismatch () =
   let env =
     Env.extend_poly "identity" [ "a" ] (arrow [ TCon "a" ] (TCon "a")) Env.empty
   in
-  let sexp = parse {|(@type [string] identity 42)|} in
+  let sexp = parse {|(tart [string] identity 42)|} in
   let _, errors = Check.check_expr ~env sexp in
   (* Should error: 42 is Int, but String was specified *)
   Alcotest.(check bool) "has type error" true (List.length errors > 0)
 
-(** Test that (@type [_] identity 42) with placeholder infers correctly *)
+(** Test that (tart [_] identity 42) with placeholder infers correctly *)
 let test_at_type_placeholder () =
   let env =
     Env.extend_poly "identity" [ "a" ] (arrow [ TCon "a" ] (TCon "a")) Env.empty
   in
-  let sexp = parse "(@type [_] identity 42)" in
+  let sexp = parse "(tart [_] identity 42)" in
   let ty, errors = Check.check_expr ~env sexp in
   Alcotest.(check int) "no errors" 0 (List.length errors);
   Alcotest.(check string) "returns Int" "Int" (to_string ty)
@@ -680,7 +680,7 @@ let test_at_type_multi_param () =
     arrow [ TCon "a"; TCon "b" ] (TApp (TCon "cons", [ TCon "a"; TCon "b" ]))
   in
   let env = Env.extend_poly "pair" [ "a"; "b" ] pair_ty Env.empty in
-  let sexp = parse {|(@type [int string] pair 1 "hi")|} in
+  let sexp = parse {|(tart [int string] pair 1 "hi")|} in
   let ty, errors = Check.check_expr ~env sexp in
   Alcotest.(check int) "no errors" 0 (List.length errors);
   Alcotest.(check string) "returns cons" "(cons Int String)" (to_string ty)
@@ -691,25 +691,25 @@ let test_at_type_partial () =
     arrow [ TCon "a"; TCon "b" ] (TApp (TCon "cons", [ TCon "a"; TCon "b" ]))
   in
   let env = Env.extend_poly "pair" [ "a"; "b" ] pair_ty Env.empty in
-  let sexp = parse {|(@type [_ string] pair 1 "hi")|} in
+  let sexp = parse {|(tart [_ string] pair 1 "hi")|} in
   let ty, errors = Check.check_expr ~env sexp in
   Alcotest.(check int) "no errors" 0 (List.length errors);
   (* First param inferred from 1 (Int), second explicit (String) *)
   Alcotest.(check string) "returns cons" "(cons Int String)" (to_string ty)
 
-(** Test @type in a program context *)
+(** Test tart instantiation in a program context *)
 let test_at_type_in_program () =
   let sexps =
     parse_many
       {|(defun my-identity (x)
           (declare (tart [a] (a) -> a))
           x)
-        (@type [int] my-identity 42)|}
+        (tart [int] my-identity 42)|}
   in
   let result = Check.check_program sexps in
   Alcotest.(check int) "no errors" 0 (List.length result.errors)
 
-(** Test HK type constructor instantiation: (@type [list int string] fmap ...)
+(** Test HK type constructor instantiation: (tart [list int string] fmap ...)
 *)
 let test_at_type_hk_instantiation () =
   (* fmap : [f a b] (((a -> b)) (f a)) -> (f b)
@@ -734,7 +734,7 @@ let test_at_type_hk_instantiation () =
   in
   let env = Env.extend_mono "my-list" (TApp (TCon "List", [ Prim.int ])) env in
   let sexp =
-    parse {|(@type [list int string] fmap number-to-string my-list)|}
+    parse {|(tart [list int string] fmap number-to-string my-list)|}
   in
   let ty, errors = Check.check_expr ~env sexp in
   Alcotest.(check int) "no errors" 0 (List.length errors);
@@ -761,7 +761,7 @@ let test_at_type_hk_partial () =
     Env.extend_mono "my-list" (TApp (TCon "List", [ Prim.string ])) env
   in
   (* Use placeholder for a, let it be inferred from my-list and upcase *)
-  let sexp = parse {|(@type [list _ _] fmap upcase my-list)|} in
+  let sexp = parse {|(tart [list _ _] fmap upcase my-list)|} in
   let ty, errors = Check.check_expr ~env sexp in
   Alcotest.(check int) "no errors" 0 (List.length errors);
   Alcotest.(check string) "returns (List String)" "(List String)" (to_string ty)
@@ -787,27 +787,27 @@ let test_at_type_hk_mismatch () =
   let env =
     Env.extend_mono "my-list" (TApp (TCon "Option", [ Prim.string ])) env
   in
-  let sexp = parse {|(@type [list string string] fmap upcase my-list)|} in
+  let sexp = parse {|(tart [list string string] fmap upcase my-list)|} in
   let _, errors = Check.check_expr ~env sexp in
   (* Should have error: list vs option *)
   Alcotest.(check bool) "has type error" true (List.length errors > 0)
 
-(** Test that (@type [int string] identity 42) fails: too many type args *)
+(** Test that (tart [int string] identity 42) fails: too many type args *)
 let test_at_type_too_many_args () =
   let env =
     Env.extend_poly "identity" [ "a" ] (arrow [ TCon "a" ] (TCon "a")) Env.empty
   in
-  let sexp = parse {|(@type [int string] identity 42)|} in
+  let sexp = parse {|(tart [int string] identity 42)|} in
   let _, errors = Check.check_expr ~env sexp in
   (* Should error: identity has 1 type param, we gave 2 *)
   Alcotest.(check bool) "has type error" true (List.length errors > 0)
 
-(** Test that (@type [] identity 42) fails: too few type args *)
+(** Test that (tart [] identity 42) fails: too few type args *)
 let test_at_type_too_few_args () =
   let env =
     Env.extend_poly "identity" [ "a" ] (arrow [ TCon "a" ] (TCon "a")) Env.empty
   in
-  let sexp = parse {|(@type [] identity 42)|} in
+  let sexp = parse {|(tart [] identity 42)|} in
   let _, errors = Check.check_expr ~env sexp in
   (* Should error: identity has 1 type param, we gave 0 *)
   Alcotest.(check bool) "has type error" true (List.length errors > 0)
@@ -825,7 +825,7 @@ let test_at_type_arity_error_message () =
   let env =
     Env.extend_poly "identity" [ "a" ] (arrow [ TCon "a" ] (TCon "a")) Env.empty
   in
-  let sexp = parse {|(@type [int string] identity 42)|} in
+  let sexp = parse {|(tart [int string] identity 42)|} in
   let _, errors = Check.check_expr ~env sexp in
   Alcotest.(check bool) "has error" true (List.length errors > 0);
   let diag = Tart.Diagnostic.of_unify_error (List.hd errors) in
@@ -840,7 +840,7 @@ let test_at_type_multi_param_arity () =
   in
   let env = Env.extend_poly "pair" [ "a"; "b" ] pair_ty Env.empty in
   (* pair has 2 type params, we give 3 *)
-  let sexp = parse {|(@type [int string bool] pair 1 "hi")|} in
+  let sexp = parse {|(tart [int string bool] pair 1 "hi")|} in
   let _, errors = Check.check_expr ~env sexp in
   Alcotest.(check bool) "has type error" true (List.length errors > 0)
 
@@ -1009,7 +1009,7 @@ let () =
           Alcotest.test_case "polymorphic function ok" `Quick
             test_invariance_poly_function_ok;
         ] );
-      ( "@type",
+      ( "tart_instantiation",
         [
           Alcotest.test_case "basic instantiation" `Quick test_at_type_basic;
           Alcotest.test_case "type mismatch" `Quick test_at_type_type_mismatch;

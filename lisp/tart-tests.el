@@ -66,26 +66,26 @@
   (should (eq (tart-declare my-buffer buffer) nil))
   (should (eq (tart-declare handler ((string) -> nil)) nil)))
 
-;;; @type Macro Tests (R5)
+;;; Explicit Instantiation Tests
 
-(ert-deftest at-type-macro-expands-to-call ()
-  "The `@type' macro should expand to a function call."
-  (should (equal (macroexpand '(@type [int] identity 42))
+(ert-deftest tart-instantiation-expands-to-call ()
+  "The `tart' macro with vector should expand to a function call."
+  (should (equal (macroexpand '(tart [int] identity 42))
                  '(identity 42)))
-  (should (equal (macroexpand '(@type [list int string] fmap f xs))
+  (should (equal (macroexpand '(tart [list int string] fmap f xs))
                  '(fmap f xs)))
-  (should (equal (macroexpand '(@type [_ string] pair 1 "hi"))
+  (should (equal (macroexpand '(tart [_ string] pair 1 "hi"))
                  '(pair 1 "hi"))))
 
-(ert-deftest at-type-macro-evaluates-call ()
-  "The `@type' macro should evaluate the function call at runtime."
-  (should (equal (@type [int] identity 42) 42))
-  (should (equal (@type [string] identity "hello") "hello"))
-  (should (equal (@type [int] + 1 2 3) 6)))
+(ert-deftest tart-instantiation-evaluates-call ()
+  "The `tart' macro with vector should evaluate the function call at runtime."
+  (should (equal (tart [int] identity 42) 42))
+  (should (equal (tart [string] identity "hello") "hello"))
+  (should (equal (tart [int] + 1 2 3) 6)))
 
-(ert-deftest at-type-macro-with-no-args ()
-  "The `@type' macro should work with nullary functions."
-  (should (equal (macroexpand '(@type [] point))
+(ert-deftest tart-instantiation-with-no-type-args ()
+  "The `tart' macro with empty vector should work with nullary functions."
+  (should (equal (macroexpand '(tart [] point))
                  '(point))))
 
 ;;; tart-tests.el ends here
