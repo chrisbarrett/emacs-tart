@@ -183,12 +183,13 @@ let test_declare_tart_return_mismatch () =
   (* Should have type error: Int (x) doesn't match String (return) *)
   Alcotest.(check bool) "has error" true (List.length result.errors > 0)
 
-(** Test that polymorphic declare tart works correctly *)
+(** Test that polymorphic declare tart works correctly.
+    Requires explicit [a] quantifier - implicit inference was removed. *)
 let test_declare_tart_polymorphic () =
   let sexps =
     parse_many
       {|(defun my-id (x)
-          (declare (tart (a) -> a))
+          (declare (tart [a] (a) -> a))
           x)
         (my-id 42)
         (my-id "hello")|}

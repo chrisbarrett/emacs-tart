@@ -13,7 +13,6 @@ module Env = Core.Type_env
 module C = Constraint
 module Sig_parser = Sig.Sig_parser
 module Sig_loader = Sig.Sig_loader
-module Forall_infer = Sig.Forall_infer
 module Sig_ast = Sig.Sig_ast
 module Loc = Syntax.Location
 
@@ -87,25 +86,14 @@ let rec substitute_tvar_names (subst : (string * typ) list) (ty : typ) : typ =
   | TUnion types -> TUnion (List.map (substitute_tvar_names subst) types)
   | TTuple types -> TTuple (List.map (substitute_tvar_names subst) types)
 
-(** Get the list of known type names from an alias context. Used to avoid
-    inferring type constructors as type variables during forall inference. *)
-let known_types_of_aliases (aliases : Sig_loader.alias_context) : string list =
-  Sig_loader.alias_names aliases
-
 (** Convert a sig_type to a typ at the given level with alias expansion.
 
-    Applies forall inference, creates fresh TVars for type parameters, and
+    Creates fresh TVars for type parameters (from explicit quantifiers only) and
     substitutes them in the type body. [aliases] provides file-local type
     aliases for expansion. *)
 let sig_type_to_typ_with_tvars ?(aliases = Sig_loader.empty_aliases)
     (level : int) (sig_type : Sig_ast.sig_type) : typ =
-  (* Get known types from aliases to prevent them from becoming type variables *)
-  let known_types = known_types_of_aliases aliases in
-
-  (* Apply forall inference to get implicit quantifiers *)
-  let sig_type = Forall_infer.infer_sig_type ~known_types sig_type in
-
-  (* Extract type variable names from forall, if present *)
+  (* Extract type variable names from explicit forall, if present *)
   let tvar_names, inner_type =
     match sig_type with
     | Sig_ast.STForall (binders, inner, _) ->

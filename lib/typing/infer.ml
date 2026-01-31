@@ -14,7 +14,6 @@ module G = Generalize
 module Loc = Syntax.Location
 module Sig_parser = Sig.Sig_parser
 module Sig_loader = Sig.Sig_loader
-module Forall_infer = Sig.Forall_infer
 module Sig_ast = Sig.Sig_ast
 
 type undefined_var = { name : string; span : Loc.span }
@@ -708,10 +707,7 @@ and infer_tart_annotation env type_sexp form _span =
   (* Parse the type annotation *)
   match parse_tart_type type_sexp with
   | Some sig_type ->
-      (* Apply forall inference to get implicit quantifiers *)
-      let sig_type = Forall_infer.infer_sig_type ~known_types:[] sig_type in
-
-      (* Extract type variable names from forall, if present *)
+      (* Extract type variable names from explicit forall, if present *)
       let tvar_names, inner_type =
         match sig_type with
         | Sig_ast.STForall (binders, inner, _) ->
@@ -1229,10 +1225,6 @@ and infer_defun (env : Env.t) (sexp : Syntax.Sexp.t) : defun_result option =
       | Some type_sexp -> (
           match parse_tart_type type_sexp with
           | Some sig_type ->
-              (* Apply forall inference if no explicit quantifiers *)
-              let sig_type =
-                Forall_infer.infer_sig_type ~known_types:[] sig_type
-              in
               infer_defun_with_declaration env name params actual_body span
                 sig_type
           | None ->

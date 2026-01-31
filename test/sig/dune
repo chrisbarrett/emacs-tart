@@ -3,6 +3,5 @@
   sig_parser_test
   sig_loader_test
   search_path_test
-  forall_infer_test
   emacs_version_test)
  (libraries alcotest sig syntax core typing str unix))

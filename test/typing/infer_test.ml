@@ -395,12 +395,13 @@ let test_defun_declare_tart_monomorphic () =
 
 let test_defun_declare_tart_polymorphic () =
   (* Defun with polymorphic declaration returns type with fresh TVars.
-     The forall is added by check_form via generalize, not by infer_defun. *)
+     The forall is added by check_form via generalize, not by infer_defun.
+     Requires explicit [a] quantifier - implicit inference was removed. *)
   reset_tvar_counter ();
   let sexp =
     parse
       {|(defun my-id (x)
-              (declare (tart (a) -> a))
+              (declare (tart [a] (a) -> a))
               x)|}
   in
   match Infer.infer_defun Env.empty sexp with
