@@ -108,9 +108,22 @@ val opaque_con_name : string -> string -> string
 (** Generate a unique type constructor name for an opaque type. Format:
     module_name/type_name *)
 
+val add_opaque : string -> opaque_type -> opaque_context -> opaque_context
+(** Add an opaque type to the context *)
+
 val build_opaque_context : string -> Sig_ast.signature -> opaque_context
 (** Build opaque context from signature declarations. Only includes type
     declarations without bodies (opaque types). *)
+
+(** {1 Type Context}
+
+    Combined context for type resolution during signature loading. Contains both
+    aliases and opaque types. *)
+
+type type_context = { tc_aliases : alias_context; tc_opaques : opaque_context }
+
+val empty_type_context : type_context
+(** Empty type context with no aliases or opaques *)
 
 (** {1 Type Conversion} *)
 
@@ -151,6 +164,7 @@ val no_resolver : module_resolver
 (** {1 Signature Loading} *)
 
 val load_signature_with_resolver :
+  ?prelude_ctx:type_context ->
   resolver:module_resolver ->
   Core.Type_env.t ->
   Sig_ast.signature ->
@@ -163,6 +177,10 @@ val load_signature_with_resolver :
     import types only; include directives re-export values. Returns the extended
     environment.
 
+    @param prelude_ctx
+      Optional prelude type context. When provided, prelude type aliases (list,
+      option, etc.) are available for use in the signature without explicit
+      import.
     @param resolver Function to resolve module names to signatures
     @param env Base type environment to extend
     @param sig_file The signature to load *)

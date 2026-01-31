@@ -46,7 +46,7 @@ let load_typings ~(typings_root : string) ~(version : Sig.Emacs_version.version)
     |> Sig.Search_path.with_typings_root typings_root
     |> Sig.Search_path.with_emacs_version version
   in
-  Sig.Search_path.load_c_core ~search_path ~env:Core.Type_env.empty
+  Sig.Search_path.load_c_core ~search_path Core.Type_env.empty
 
 (** {1 Coverage Calculation} *)
 

@@ -60,7 +60,7 @@ let analyze_file ~(search_path : Sig.Search_path.t) (el_path : string) :
       (* Start with an empty environment and load signatures *)
       let base_env = Core.Type_env.empty in
       (* Load c-core signatures *)
-      let env = Sig.Search_path.load_c_core ~search_path ~env:base_env in
+      let env = Sig.Search_path.load_c_core ~search_path base_env in
       (* Load sibling .tart file if present *)
       let env = load_sibling_signatures el_path env in
       (* Check each definition against the environment *)

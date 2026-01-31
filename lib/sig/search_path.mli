@@ -97,6 +97,7 @@ val make_resolver : ?el_path:string -> t -> Sig_loader.module_resolver
 val load_module :
   search_path:t ->
   ?el_path:string ->
+  ?with_prelude:bool ->
   env:Core.Type_env.t ->
   string ->
   Core.Type_env.t option
@@ -104,6 +105,7 @@ val load_module :
 
     @param search_path The search path configuration
     @param el_path Optional path to the `.el` file being type-checked
+    @param with_prelude If true (default), prelude types are available
     @param env Base type environment to extend
     @param module_name The module name to load
     @return Extended type environment, or None if module not found *)
@@ -111,6 +113,7 @@ val load_module :
 val load_module_with_sig :
   search_path:t ->
   ?el_path:string ->
+  ?with_prelude:bool ->
   env:Core.Type_env.t ->
   string ->
   (Core.Type_env.t * Sig_ast.signature) option
@@ -121,6 +124,7 @@ val load_module_with_sig :
 
     @param search_path The search path configuration
     @param el_path Optional path to the `.el` file being type-checked
+    @param with_prelude If true (default), prelude types are available
     @param env Base type environment to extend
     @param module_name The module name to load
     @return Extended type environment and signature AST, or None if not found *)
@@ -134,7 +138,7 @@ val list_c_core_files : string -> string list
     @return Sorted list of full paths to .tart files *)
 
 val load_c_core_files :
-  c_core_dir:string -> env:Core.Type_env.t -> Core.Type_env.t
+  c_core_dir:string -> ?with_prelude:bool -> Core.Type_env.t -> Core.Type_env.t
 (** Load all c-core signature files into a type environment.
 
     Iterates through all .tart files in the c-core directory and loads their
@@ -143,10 +147,11 @@ val load_c_core_files :
     value.
 
     @param c_core_dir Path to the c-core directory containing .tart files
+    @param with_prelude If true (default), prelude types are available
     @param env Base type environment to extend
     @return Extended type environment with all c-core signatures *)
 
-val load_c_core : search_path:t -> env:Core.Type_env.t -> Core.Type_env.t
+val load_c_core : search_path:t -> Core.Type_env.t -> Core.Type_env.t
 (** Load c-core signatures from versioned typings.
 
     Uses the version fallback chain to find the c-core directory, then loads all

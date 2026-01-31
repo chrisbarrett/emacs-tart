@@ -769,10 +769,14 @@ type load_state = {
 }
 (** State accumulated during loading *)
 
-(** Create initial load state *)
-let init_load_state ~resolver ~base_env ~module_name =
+(** Create initial load state.
+
+    @param type_ctx
+      Initial type context (prelude or empty). When provided, prelude type
+      aliases are available for use in the signature being loaded. *)
+let init_load_state ~type_ctx ~resolver ~base_env ~module_name =
   {
-    ls_type_ctx = empty_type_context;
+    ls_type_ctx = type_ctx;
     ls_env = base_env;
     ls_resolver = resolver;
     ls_loaded = [ module_name ];
@@ -1179,12 +1183,17 @@ and load_scoped_decl (sig_file : signature)
     environment.
 
     @param resolver Function to resolve module names to signatures
+    @param prelude_ctx Optional prelude type context for implicit prelude types
     @param env Base type environment to extend
     @param sig_file The signature to load *)
-let load_signature_with_resolver ~(resolver : module_resolver)
+let load_signature_with_resolver ?prelude_ctx ~(resolver : module_resolver)
     (env : Type_env.t) (sig_file : signature) : Type_env.t =
+  let type_ctx =
+    match prelude_ctx with Some ctx -> ctx | None -> empty_type_context
+  in
   let state =
-    init_load_state ~resolver ~base_env:env ~module_name:sig_file.sig_module
+    init_load_state ~type_ctx ~resolver ~base_env:env
+      ~module_name:sig_file.sig_module
   in
   let final_state = load_decls_into_state sig_file state in
   final_state.ls_env

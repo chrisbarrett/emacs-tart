@@ -1483,7 +1483,7 @@ let test_list_c_core_files () =
 (** Test that load_c_core_files loads all c-core signatures *)
 let test_load_c_core_files () =
   let c_core_dir = Filename.concat typings_dir "emacs/31.0/c-core" in
-  let env = Search_path.load_c_core_files ~c_core_dir ~env:Type_env.empty in
+  let env = Search_path.load_c_core_files ~c_core_dir Type_env.empty in
   (* Should have functions from data.tart *)
   (match Type_env.lookup "car" env with
   | None -> Alcotest.fail "car not found in merged env"
@@ -1518,7 +1518,7 @@ let test_load_c_core () =
     |> Search_path.with_typings_root emacs_typings
     |> Search_path.with_emacs_version version
   in
-  let env = Search_path.load_c_core ~search_path:sp ~env:Type_env.empty in
+  let env = Search_path.load_c_core ~search_path:sp Type_env.empty in
   (* Should have functions from multiple c-core files *)
   (match Type_env.lookup "car" env with
   | None -> Alcotest.fail "car not found via load_c_core"

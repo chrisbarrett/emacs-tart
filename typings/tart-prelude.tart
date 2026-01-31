@@ -1,0 +1,32 @@
+;; Tart Prelude
+;;
+;; Implicit utility types built on compiler intrinsics.
+;; This file is loaded automatically before any other .tart file.
+;;
+;; Intrinsics (built into compiler):
+;;   Truthy, Nil, Never, Int, Float, Num, String, Symbol, Keyword
+;;   Any, Bool, List, Option (and parameterized versions)
+;;   Union (|), literals ('foo, :kw, 1, etc.)
+;;
+;; The prelude bridges lowercase type names in signatures to the
+;; uppercase built-in type constructors used internally.
+;;
+;; Note: `is` and `nonempty` require type subtraction (-) which is not yet
+;; implemented. They will be added in a future version.
+
+;; The symbol 't—Elisp's canonical truthy value
+(type t 't)
+
+;; Universal type - alias for built-in Any
+(type any Any)
+
+;; Boolean - alias for built-in Bool
+(type bool Bool)
+
+;; Homogeneous list - alias for built-in List
+(type list [a] (List a))
+
+;; Optional - alias for built-in Option
+;; Note: The bound (a : truthy) prevents (option (option x)) since (option x)
+;; contains nil which is not <: truthy.
+(type option [(a : truthy)] (Option a))

@@ -237,11 +237,14 @@ let has_external_deps (sig_file : Sig_ast.signature) : bool =
 
     @param search_path The search path configuration
     @param el_path Optional path to the `.el` file being type-checked
+    @param with_prelude
+      If true, prelude types are available in loaded signatures
     @param env Base type environment to extend
     @param module_name The module name to load
     @return Extended type environment, or None if module not found *)
 let load_module ~(search_path : t) ?(el_path : string option)
-    ~(env : Core.Type_env.t) (module_name : string) : Core.Type_env.t option =
+    ?(with_prelude = true) ~(env : Core.Type_env.t) (module_name : string) :
+    Core.Type_env.t option =
   let resolver = make_resolver ?el_path search_path in
   match resolver module_name with
   | None -> None
@@ -257,8 +260,12 @@ let load_module ~(search_path : t) ?(el_path : string option)
           | Error _ -> false
       in
       if valid then
+        let prelude_ctx =
+          if with_prelude then Some (Prelude.prelude_type_context ()) else None
+        in
         let new_env =
-          Sig_loader.load_signature_with_resolver ~resolver env sig_file
+          Sig_loader.load_signature_with_resolver ?prelude_ctx ~resolver env
+            sig_file
         in
         Some new_env
       else None
@@ -266,9 +273,12 @@ let load_module ~(search_path : t) ?(el_path : string option)
 (** Load signatures for a module and also return the signature AST.
 
     Like [load_module] but also returns the parsed signature AST for further
-    processing (e.g., instance extraction). *)
+    processing (e.g., instance extraction).
+
+    @param with_prelude
+      If true, prelude types are available in loaded signatures *)
 let load_module_with_sig ~(search_path : t) ?(el_path : string option)
-    ~(env : Core.Type_env.t) (module_name : string) :
+    ?(with_prelude = true) ~(env : Core.Type_env.t) (module_name : string) :
     (Core.Type_env.t * Sig_ast.signature) option =
   let resolver = make_resolver ?el_path search_path in
   match resolver module_name with
@@ -282,8 +292,12 @@ let load_module_with_sig ~(search_path : t) ?(el_path : string option)
           | Error _ -> false
       in
       if valid then
+        let prelude_ctx =
+          if with_prelude then Some (Prelude.prelude_type_context ()) else None
+        in
         let new_env =
-          Sig_loader.load_signature_with_resolver ~resolver env sig_file
+          Sig_loader.load_signature_with_resolver ?prelude_ctx ~resolver env
+            sig_file
         in
         Some (new_env, sig_file)
       else None
@@ -305,11 +319,16 @@ let list_c_core_files (c_core_dir : string) : string list =
     value.
 
     @param c_core_dir Path to the c-core directory containing .tart files
+    @param with_prelude
+      If true, prelude types are available in loaded signatures
     @param env Base type environment to extend
     @return Extended type environment with all c-core signatures *)
-let load_c_core_files ~(c_core_dir : string) ~(env : Core.Type_env.t) :
-    Core.Type_env.t =
+let load_c_core_files ~(c_core_dir : string) ?(with_prelude = true)
+    (env : Core.Type_env.t) : Core.Type_env.t =
   let files = list_c_core_files c_core_dir in
+  let prelude_ctx =
+    if with_prelude then Some (Prelude.prelude_type_context ()) else None
+  in
   List.fold_left
     (fun acc_env path ->
       match parse_signature_file path with
@@ -326,7 +345,8 @@ let load_c_core_files ~(c_core_dir : string) ~(env : Core.Type_env.t) :
           if valid then
             (* Use empty resolver since c-core files shouldn't have deps *)
             let resolver _ = None in
-            Sig_loader.load_signature_with_resolver ~resolver acc_env sig_file
+            Sig_loader.load_signature_with_resolver ?prelude_ctx ~resolver
+              acc_env sig_file
           else acc_env)
     env files
 
@@ -338,12 +358,12 @@ let load_c_core_files ~(c_core_dir : string) ~(env : Core.Type_env.t) :
     @param search_path The search path configuration
     @param env Base type environment to extend
     @return Extended type environment with c-core signatures *)
-let load_c_core ~(search_path : t) ~(env : Core.Type_env.t) : Core.Type_env.t =
+let load_c_core ~(search_path : t) (env : Core.Type_env.t) : Core.Type_env.t =
   match (search_path.typings_root, search_path.emacs_version) with
   | Some typings_root, Some version -> (
       match find_typings_dir ~typings_root ~version with
       | Some typings_dir ->
           let c_core_dir = Filename.concat typings_dir "c-core" in
-          load_c_core_files ~c_core_dir ~env
+          load_c_core_files ~c_core_dir env
       | None -> env)
   | _ -> env

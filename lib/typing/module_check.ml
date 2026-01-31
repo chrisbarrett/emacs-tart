@@ -227,8 +227,10 @@ let load_sibling_signature ~(config : config) (el_path : string) :
   | Some sig_ast ->
       let resolver = Search.make_resolver ~el_path config.search_path in
       let base_env = Builtin_types.initial_env () in
+      let prelude_ctx = Sig.Prelude.prelude_type_context () in
       let env =
-        Loader.load_signature_with_resolver ~resolver base_env sig_ast
+        Loader.load_signature_with_resolver ~prelude_ctx ~resolver base_env
+          sig_ast
       in
       Some (env, sig_ast)
   | None -> None
