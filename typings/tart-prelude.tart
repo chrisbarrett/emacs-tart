@@ -5,20 +5,17 @@
 ;;
 ;; Intrinsics (built into compiler):
 ;;   Truthy, Nil, Never, Int, Float, Num, String, Symbol, Keyword
-;;   Any, List, Option (and parameterized versions)
+;;   List, Pair, Vector, HashTable (parameterized)
 ;;   Union (|), literals ('foo, :kw, 1, etc.)
 ;;
 ;; The prelude bridges lowercase type names in signatures to the
 ;; uppercase built-in type constructors used internally.
-;;
-;; Note: `is` and `nonempty` require type subtraction (-) which is not yet
-;; implemented. They will be added in a future version.
 
 ;; The symbol 't—Elisp's canonical truthy value
 (type t 't)
 
-;; Universal type - alias for built-in Any
-(type any Any)
+;; Universal type - truthy or nil
+(type any (truthy | nil))
 
 ;; Boolean - t or nil (Elisp's boolean convention)
 (type bool (t | nil))
@@ -26,7 +23,13 @@
 ;; Homogeneous list - alias for built-in List
 (type list [a] (List a))
 
-;; Optional - alias for built-in Option
+;; Optional - value or nil
 ;; Note: The bound (a : truthy) prevents (option (option x)) since (option x)
 ;; contains nil which is not <: truthy.
-(type option [(a : truthy)] (Option a))
+(type option [(a : truthy)] (a | nil))
+
+;; TODO: docstring
+(type is [a] (a - nil))
+
+;; TODO: docstring
+(type nonempty [a] (is (list a)))
