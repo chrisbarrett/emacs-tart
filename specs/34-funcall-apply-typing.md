@@ -30,18 +30,23 @@ Type `funcall` and `apply` accurately using tracked function types, dual namespa
 
 **Verify:** `dune test`; same name can have different types in each namespace
 
-### R2: Sharp-quote function lookup
+### R2: Quoted symbol function lookup
 
-**Given** `#'name` (function special form)
+**Given** `#'name` or `'name` passed to funcall/apply
 **When** type-checked
 **Then** looks up `name` in function namespace, returns its function type
 
 ```elisp
 (defun add1 (x) (+ x 1))
 #'add1                    ; type: (-> (Int) Int)
+'add1                     ; same type—both resolve via function namespace
 ```
 
-**Verify:** `dune test`; `#'name` returns function type from function env
+Sharp-quote and regular quote are equivalent for type-checking; the difference
+is a byte-compiler hint. Regular quote in funcall/apply position triggers a
+style warning but not a type error.
+
+**Verify:** `dune test`; both `#'name` and `'name` return function type
 
 ### R3: Variable reference lookup
 
@@ -71,18 +76,24 @@ f                         ; type: (-> (Int) Int) from variable env
 
 **Verify:** `dune test`; funcall checks function type against arguments
 
-### R5: Funcall with sharp-quote
+### R5: Funcall with quoted symbol
 
-**Given** `(funcall #'name args...)`
+**Given** `(funcall #'name args...)` or `(funcall 'name args...)`
 **When** type-checked
 **Then** looks up `name` in function namespace, checks args against its type
 
 ```elisp
 (funcall #'+ 1 2 3)       ; + : (-> (&rest Int) Int), result: Int
+(funcall '+ 1 2 3)        ; equivalent—same lookup, same type
 (funcall #'cons 1 '(2))   ; cons : (-> (a (List a)) (List a)), result: (List Int)
 ```
 
-**Verify:** `dune test`; funcall with #' uses function namespace
+Sharp-quote (`#'`) and regular quote (`'`) are semantically equivalent at
+runtime. Sharp-quote is a hint to the byte-compiler. When a regular-quoted
+symbol is passed to `funcall` or `apply`, emit a style warning recommending
+sharp-quote, but type-check identically.
+
+**Verify:** `dune test`; both #' and ' use function namespace; ' emits warning
 
 ### R6: Funcall type errors
 
@@ -230,10 +241,10 @@ f                         ; type: (-> (Int) Int) from variable env
 ## Tasks
 
 - [ ] [R1] Add separate function env to type environment
-- [ ] [R2] Handle `function` special form in infer.ml
+- [ ] [R2] Handle quoted symbols in funcall/apply (both #' and ')
 - [ ] [R3] Ensure variable refs use variable namespace
 - [ ] [R4] Special-case funcall in type inference
-- [ ] [R5] Integrate #' lookup with funcall
+- [ ] [R5] Emit style warning for regular-quoted symbols in funcall/apply
 - [ ] [R6] Add funcall-specific error messages
 - [ ] [R7] Implement apply for &rest functions
 - [ ] [R8] Implement apply for fixed-arity with tuples
