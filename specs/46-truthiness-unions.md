@@ -31,7 +31,7 @@ Extends `lib/typing/infer.ml` (union construction), `lib/typing/diagnostic.ml`
 (or a b)  ; a : truthy
 ```
 **When** type-checked
-**Then** result type is `A` (not a union)
+**Then** result type is `A` (b is unreachable)
 
 **Verify:** `dune test`; truthy first arg means no union
 
@@ -78,6 +78,17 @@ Extends `lib/typing/infer.ml` (union construction), `lib/typing/diagnostic.ml`
 **Then** result type is `(String | nil)`
 
 **Verify:** `dune test`; nullable arg adds nil to result
+
+### R5a: `and` with nil argument short-circuits
+
+**Given**:
+```elisp
+(and a b)  ; a : nil, b : String
+```
+**When** type-checked
+**Then** result type is `nil` (b is unreachable)
+
+**Verify:** `dune test`; nil arg means result is nil
 
 ### R6: `not` inverts truthiness
 
@@ -177,6 +188,7 @@ note: function declared to return Int
 - [ ] [R3] or preserves nil from final
 - [ ] [R4] and returns last when all truthy
 - [ ] [R5] and adds nil when any nullable
+- [ ] [R5a] and short-circuits on nil
 - [ ] [R6] not inverts truthiness
 - [ ] [R7] Branch error points to offending + declaration
 - [ ] [R8] cond unions branches
