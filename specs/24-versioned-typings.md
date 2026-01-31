@@ -22,6 +22,7 @@ Type coverage for Emacs C primitives and core Lisp, versioned by release. Auto-d
 
 ```
 typings/
+├── prelude.tart           ; implicit, utility types
 ├── emacs/
 │   ├── 29.1/c-core/*.tart
 │   ├── 30.1/c-core/*.tart
@@ -110,9 +111,34 @@ Each `c-core/*.tart` covers all DEFUNs from corresponding `.c` file:
 - Error functions return `never`
 - All files loaded and merged; conflicts error at load time
 
-### R6: Delete stdlib
+### R6: Implicit prelude
 
-Remove `stdlib/` entirely. All typings live under `typings/`.
+All `.tart` files implicitly import a minimal prelude that defines utility types
+in terms of compiler intrinsics. The prelude is not user-overridable.
+
+**Compiler intrinsics** (built into the type system):
+- `truthy`, `nil` — the two top types (don't unify); only `nil` is falsy
+- `never` — bottom type (no inhabitants)
+- `int`, `float`, `num` — numeric lattice (subtypes of `truthy`)
+- `string`, `symbol`, `keyword` — subtypes of `truthy`
+- `cons` — cons cells (subtype of `truthy`)
+- Literal types (`1`, `1.0`, `'foo`) — subtypes of `truthy`
+- Type operators: `|` (union), `-` (subtraction)
+
+**Prelude types** (defined in terms of intrinsics):
+```lisp
+(type t 't)
+(type any (truthy | nil))
+(type bool (t | nil))
+(type list [a] ((cons a (list a)) | nil))
+(type is [a] (a - nil))
+(type option [(a : truthy)] (a | nil))
+(type nonempty [a] (is (list a)))
+```
+
+The prelude lives at `typings/prelude.tart` and is loaded before any other
+typings. Everything else (Emacs primitives, cl-lib, third-party packages) comes
+from versioned typings bootstrapped from C sources and bundled Lisp.
 
 ### R7: LSP
 
@@ -121,7 +147,7 @@ Detect version once at startup; use for entire session. Log detected version.
 ## Migration
 
 1. Create `typings/emacs/31.0/c-core/`
-2. Delete `stdlib/` entirely
+2. Create `typings/prelude.tart` with utility types
 3. Add version detection to search_path.ml
 4. Add `--emacs-version` CLI flag
 5. Backfill 29.1, 30.1 (copy then diff)
@@ -134,7 +160,7 @@ Detect version once at startup; use for entire session. Log detected version.
 - [ ] Handle missing Emacs gracefully
 - [ ] Create c-core/*.tart for 31.0
 - [ ] Multi-file c-core loading
-- [ ] Delete stdlib/
+- [ ] Create prelude.tart with utility types
 - [ ] Wire LSP to version detection
 - [ ] Backfill 29.1, 30.1 typings
 
