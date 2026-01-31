@@ -62,6 +62,8 @@ and sig_type =
   | STUnion of sig_type list * span  (** Union type (e.g., [(int | string)]) *)
   | STTuple of sig_type list * span
       (** Tuple type (e.g., [(tuple int string bool)]) *)
+  | STSubtract of sig_type * sig_type * span
+      (** Type subtraction (e.g., [(a - nil)], removes nil from union a) *)
 
 (** Function parameter in signature types *)
 and sig_param =
@@ -201,6 +203,7 @@ let sig_type_loc = function
   | STForall (_, _, loc) -> loc
   | STUnion (_, loc) -> loc
   | STTuple (_, loc) -> loc
+  | STSubtract (_, _, loc) -> loc
 
 (** Get the source location of a declaration *)
 let decl_loc = function
@@ -247,3 +250,6 @@ let st_union types loc = STUnion (types, loc)
 
 (** Create a tuple type *)
 let st_tuple types loc = STTuple (types, loc)
+
+(** Create a type subtraction *)
+let st_subtract minuend subtrahend loc = STSubtract (minuend, subtrahend, loc)

@@ -28,8 +28,11 @@
 ;; contains nil which is not <: truthy.
 (type option [(a : truthy)] (a | nil))
 
-;; TODO: docstring
+;; Refinement type: removes nil from a union.
+;; (is (int | nil)) => int
+;; Used to assert a value is non-nil.
 (type is [a] (a - nil))
 
-;; TODO: docstring
+;; Non-empty list: a list that is guaranteed not to be nil.
+;; (nonempty int) is equivalent to (cons int (list int))
 (type nonempty [a] (is (list a)))
