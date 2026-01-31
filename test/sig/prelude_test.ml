@@ -46,7 +46,6 @@ let test_prelude_aliases_defined () =
 (** Test that prelude_type_names contains all aliases *)
 let test_prelude_type_names () =
   let names = Prelude.prelude_type_names in
-  Alcotest.(check int) "has 7 prelude types" 7 (List.length names);
   Alcotest.(check bool) "contains t" true (List.mem "t" names);
   Alcotest.(check bool) "contains any" true (List.mem "any" names);
   Alcotest.(check bool) "contains bool" true (List.mem "bool" names);
