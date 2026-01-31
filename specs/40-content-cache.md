@@ -123,9 +123,47 @@ Old `v1/` entries remain valid; future `v2/` would coexist.
 
 **Verify:** Files stored under `v1/`
 
+### R11: Age-based eviction
+
+**Given** cache entries older than threshold **When** eviction runs **Then**
+delete entries with mtime > N days
+
+```ocaml
+val evict_older_than : days:int -> unit
+```
+
+Default threshold: 30 days. Content-addressed keys mean old file versions become
+unreachable naturally; eviction reclaims disk space from stale entries.
+
+**Verify:** `dune test`; entries older than threshold deleted; newer preserved
+
+### R12: Eviction trigger
+
+**Given** tart startup **When** cache directory exists **Then** run eviction
+once per session
+
+Eviction runs at most once per process to avoid repeated directory scans. Use a
+marker file (`$CACHE_DIR/.last-eviction`) with mtime to skip if eviction ran
+recently (e.g., within 1 hour).
+
+```ocaml
+val maybe_evict : unit -> unit
+(* Runs eviction if not done recently *)
+```
+
+**Verify:** `dune test`; eviction runs on first call; skipped on subsequent calls
+
+### R13: Eviction is best-effort
+
+**Given** eviction failure (permissions, I/O error) **When** deleting entries
+**Then** log warning, continue with remaining entries, don't fail the operation
+
+Eviction must never block type-checking. Partial cleanup is acceptable.
+
+**Verify:** `dune test`; read-only file doesn't crash eviction
+
 ## Non-Requirements
 
-- Cache size limits/eviction
 - Hit rate tracking
 - Remote/shared cache
 - Partial result caching
@@ -138,5 +176,8 @@ Old `v1/` entries remain valid; future `v2/` would coexist.
 - [ ] [R3, R7, R8] `store` with atomic writes
 - [ ] [R4, R5] `retrieve` with graceful errors
 - [ ] [R6, R10] JSON format with version
+- [ ] [R11] `evict_older_than` with mtime check
+- [ ] [R12] `maybe_evict` with marker file
+- [ ] [R13] Best-effort error handling in eviction
 - [ ] Tests
 - [ ] Integrate into type-checking
