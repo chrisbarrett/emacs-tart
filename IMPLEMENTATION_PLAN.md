@@ -129,12 +129,13 @@ The previous Emacs typings were deleted to be rewritten using the new type syste
 ```
 typings/emacs/
 ├── BUGS.md                     ; Cross-version issues
-├── 31.0/
-│   ├── BUGS.md                 ; Version-specific issues
-│   └── c-core/
-│       └── (*.tart files)
-└── latest -> 31.0              ; Symlink to latest
+└── 31.0/
+    ├── BUGS.md                 ; Version-specific issues
+    └── c-core/
+        └── (*.tart files)
 ```
+
+Note: Targeting 31.0 only for now. The `latest` symlink and older versions (30.1, 29.1) are deferred.
 
 ### 4.2 Verbose Coverage Output (Spec 30)
 
@@ -218,13 +219,9 @@ Document untypeable or problematic symbols using these categories:
 - **Resolution:** See Spec 34
 ```
 
-### 4.5 Backfill Older Versions
+### 4.5 Backfill Older Versions (DEFERRED)
 
-After 31.0 typings are complete and validated:
-1. Copy 31.0 to 30.1 and 29.1
-2. Diff against Emacs source for those versions
-3. Adjust signatures for API differences
-4. Document version-specific issues
+Focus on 31.0 only for now. Backfilling 30.1/29.1 is future work after the 31.0 typings are stable and validated.
 
 ---
 
@@ -389,7 +386,6 @@ Phase 2.3 (No-shadowing) ←─────────────────�
 
 Phase 4.1 (Directory setup) → Phase 4.2 (Verbose coverage) → Phase 4.3 (Create typings)
 Phase 4.4 (BUGS.md) ← Phase 4.3
-Phase 4.5 (Backfill versions) ← Phase 4.3
 
 Phase 5.* (Error quality) — parallel, after Phase 2
 Phase 6.* (Testing) — parallel, after Phase 1
