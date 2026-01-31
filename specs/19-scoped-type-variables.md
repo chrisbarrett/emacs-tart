@@ -2,7 +2,7 @@
 
 Enable type variables to be shared across multiple signatures within a scope.
 
-**Dependencies:** Spec 15 (Forall Inference), Spec 17 (Higher-Kinded Types)
+**Dependencies:** Spec 15 (Explicit Forall), Spec 17 (Higher-Kinded Types)
 
 ## Goal
 
@@ -23,13 +23,14 @@ Currently, each function signature has its own independent type variables:
 With scoped type variables, we can express that these functions share a type:
 
 ```elisp
-;; Declare a type variable scope
-(type-scope [a]
+;; Bind type variables across declarations
+(let [a]
   (defun iter-next ((iter a)) -> ((a | nil)))
   (defun iter-peek ((iter a)) -> ((a | nil))))
 ```
 
 Use cases:
+
 - **Iterators**: next, peek, collect all share element type
 - **State machines**: transition functions share state type
 - **Builder patterns**: chained setters share builder type
@@ -48,8 +49,8 @@ Use cases:
 tart/
 ├── lib/
 │   └── sig/
-│       ├── sig_ast.ml       ; Add TypeScope variant
-│       ├── sig_parser.ml    ; Parse type-scope blocks
+│       ├── sig_ast.ml       ; Add Let variant
+│       ├── sig_parser.ml    ; Parse `let` blocks
 │       └── sig_loader.ml    ; Load scoped declarations
 └── test/
     └── sig/
@@ -60,12 +61,11 @@ tart/
 
 ### R1: Type scope declaration syntax
 
-**Given** a `.tart` signature file
-**When** it contains a `type-scope` block
+**Given** a `.tart` signature file **When** it contains a `let` block
 **Then** the type variables are shared across all declarations in the block:
 
 ```elisp
-(type-scope [a]
+(let [a]
   (defun iter-next ((iter a)) -> ((a | nil)))
   (defun iter-peek ((iter a)) -> ((a | nil)))
   (defun iter-collect ((iter a)) -> (list a)))
@@ -75,13 +75,12 @@ tart/
 
 ### R2: Scoped type variable binding
 
-**Given** a type scope with variables `[a b]`
-**When** declarations inside use `a` or `b`
-**Then** they refer to the same type variable (not fresh ones)
+**Given** a type scope with variables `[a b]` **When** declarations inside use
+`a` or `b` **Then** they refer to the same type variable (not fresh ones)
 **And** declarations outside the scope cannot use those variables
 
 ```elisp
-(type-scope [a]
+(let [a]
   (defun get-first ((list a)) -> (a | nil))
   (defun get-last ((list a)) -> (a | nil)))
 
@@ -93,12 +92,12 @@ tart/
 
 ### R3: Explicit forall inside scope
 
-**Given** a function inside a type-scope that needs additional type variables
-**When** declared with explicit `[vars]`
-**Then** those variables are added to the scope variables:
+**Given** a function inside a `let` that needs additional type variables
+**When** declared with explicit `[vars]` **Then** those variables are added to
+the scope variables:
 
 ```elisp
-(type-scope [a]
+(let [a]
   ;; Uses scope's 'a' plus local 'b'
   (defun iter-map [b] (((a -> b)) (iter a)) -> (iter b)))
 ```
@@ -107,12 +106,11 @@ tart/
 
 ### R4: Higher-kinded scoped variables
 
-**Given** a type scope with HK variable annotation
-**When** used in declarations
+**Given** a type scope with HK variable annotation **When** used in declarations
 **Then** kind constraints are checked:
 
 ```elisp
-(type-scope [(f : (* -> *))]
+(let [(f : (* -> *))]
   (defun fmap-scope [a b] (((a -> b)) (f a)) -> (f b))
   (defun pure-scope [a] (a) -> (f a)))
 ```
@@ -121,14 +119,13 @@ tart/
 
 ### R5: Nested type scopes
 
-**Given** nested `type-scope` blocks
-**When** parsed
-**Then** inner scope shadows outer scope variables of the same name:
+**Given** nested `let` blocks **When** parsed **Then** inner scope
+shadows outer scope variables of the same name:
 
 ```elisp
-(type-scope [a]
+(let [a]
   (defun outer ((list a)) -> a)
-  (type-scope [a]  ; shadows outer 'a'
+  (let [a]  ; shadows outer 'a'
     (defun inner ((vector a)) -> a)))
 ```
 
@@ -136,12 +133,11 @@ tart/
 
 ### R6: Type scope with opaque types
 
-**Given** a type scope combined with opaque type declaration
-**When** parsed
+**Given** a type scope combined with opaque type declaration **When** parsed
 **Then** the scoped variable can be used in the opaque type:
 
 ```elisp
-(type-scope [a]
+(let [a]
   (type iter)  ; opaque, but conceptually holds 'a'
   (defun make-iter ((list a)) -> iter)
   (defun iter-next (iter) -> (a | nil)))
@@ -154,13 +150,12 @@ documentation but no structural connection.
 
 ### R7: Scope at module level
 
-**Given** a type-scope at the top level of a `.tart` file
-**When** loaded
+**Given** a `let` at the top level of a `.tart` file **When** loaded
 **Then** all contained declarations are exported with the scope applied:
 
 ```elisp
 ;; iter.tart
-(type-scope [a]
+(let [a]
   (type iter)
   (defun make-iter ((list a)) -> iter)
   (defun iter-next (iter) -> (a | nil)))
@@ -173,12 +168,11 @@ documentation but no structural connection.
 
 ### R8: Error on unbound scoped variable
 
-**Given** a declaration inside type-scope using undefined variable
-**When** parsed
-**Then** error is reported:
+**Given** a declaration inside `let` using undefined variable **When**
+parsed **Then** error is reported:
 
 ```elisp
-(type-scope [a]
+(let [a]
   (defun bad (b) -> b))  ; Error: unbound type variable 'b'
 ```
 
@@ -193,8 +187,8 @@ documentation but no structural connection.
 
 ## Tasks
 
-- [ ] [R1] Add TypeScope variant to sig_ast.ml
-- [ ] [R1] Parse type-scope blocks in sig_parser.ml
+- [ ] [R1] Add Let variant to sig_ast.ml
+- [ ] [R1] Parse `let` blocks in sig_parser.ml
 - [ ] [R2] Implement scope variable binding during loading
 - [ ] [R3] Handle explicit forall inside scope
 - [ ] [R4] Integrate with kind inference for HK scoped variables
@@ -203,7 +197,8 @@ documentation but no structural connection.
 - [ ] [R7] Export scoped declarations with correct types
 - [ ] [R8] Validate variable binding in scopes
 
-Run review agent after R1-R3 work to validate approach before implementing R4-R8.
+Run review agent after R1-R3 work to validate approach before implementing
+R4-R8.
 
 ## Design Notes
 
@@ -212,30 +207,23 @@ Run review agent after R1-R3 work to validate approach before implementing R4-R8
 ```ocaml
 type decl =
   | ...
-  | DTypeScope of tvar_binder list * decl list
+  | DLet of tvar_binder list * decl list
 ```
 
 ### Loading Strategy
 
-When loading a type-scope:
+When loading a `let`:
+
 1. Create fresh type variables for the scope's binders
 2. Add them to a "scope context" (separate from the module's type context)
 3. Load each declaration with the scope context available
 4. For each defun, the final scheme includes both scope vars and local vars
 
-### Interaction with Forall Inference
-
-Inside a type-scope:
-- Variables from the scope are available without explicit `[vars]`
-- Additional variables can be added with explicit `[vars]` on functions
-- If a function uses explicit `[vars]`, inference is disabled (existing behavior)
-- Scope variables + local variables form the complete quantifier set
-
 ### Example: Full Iterator Module
 
 ```elisp
 ;; iter.tart
-(type-scope [a]
+(let [a]
   (type iter)  ; opaque iterator type
 
   ;; Construction

@@ -2,7 +2,7 @@
 
 Enable explicit instantiation of polymorphic types at call sites.
 
-**Dependencies:** Spec 15 (Forall Inference); Spec 17 (HKT) for R4 only
+**Dependencies:** Spec 15 (Explicit Forall); Spec 17 (HKT) for R4 only
 
 ## Goal
 
@@ -37,7 +37,7 @@ Other use cases:
 - **Backward compatible**: Existing code without annotations works unchanged
 - **Partial specification**: Specify only what you need, rest inferred
 - **Order independent**: Named bindings can appear in any order
-- **Integration**: Works with HKT and existing forall inference
+- **Integration**: Works with HKT and explicit forall quantifiers
 - **Syntax**: Must be valid Elisp (parsed but ignored at runtime)
 
 ## Output

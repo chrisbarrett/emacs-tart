@@ -2,7 +2,7 @@
 
 Enable type constructors as first-class values via kind inference.
 
-**Dependencies:** Spec 15 (Forall Inference) complete
+**Dependencies:** Spec 15 (Explicit Forall) complete
 
 ## Goal
 
