@@ -235,7 +235,7 @@ let test_or_empty () =
 
 let test_not_returns_bool () =
   let ty = infer_type "(not 42)" in
-  Alcotest.(check string) "not returns bool" "Bool" ty
+  Alcotest.(check string) "not returns bool" "(Or T Nil)" ty
 
 let test_and_last_type () =
   let ty = infer_type "(and 1 \"str\")" in

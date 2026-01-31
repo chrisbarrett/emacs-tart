@@ -7,7 +7,7 @@
     Prelude types:
     - t: The symbol 't (Elisp's canonical truthy value)
     - any: Alias for built-in Any (truthy | nil)
-    - bool: Alias for built-in Bool (t | nil)
+    - bool: Union type (t | nil)
     - list: Alias for built-in List (parameterized)
     - option: Alias for built-in Option (parameterized, with truthy bound)
 
@@ -56,8 +56,12 @@ let prelude_aliases : (string * Sig_loader.type_alias) list =
     ("t", { Sig_loader.alias_params = []; alias_body = tcon "'t" });
     (* (type any Any) - maps lowercase any to built-in Any *)
     ("any", { Sig_loader.alias_params = []; alias_body = tcon "Any" });
-    (* (type bool Bool) - maps lowercase bool to built-in Bool *)
-    ("bool", { Sig_loader.alias_params = []; alias_body = tcon "Bool" });
+    (* (type bool (t | nil)) - boolean as a union, not a built-in *)
+    ( "bool",
+      {
+        Sig_loader.alias_params = [];
+        alias_body = Sig_ast.STUnion ([ tcon "T"; tcon "Nil" ], prelude_span);
+      } );
     (* (type list [a] (List a)) - maps lowercase list to built-in List *)
     ( "list",
       {

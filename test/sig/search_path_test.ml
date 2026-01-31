@@ -547,13 +547,8 @@ let test_load_data_tart () =
       (* Verify type checking works with a predicate (uses Any, avoids num/int subtyping) *)
       let ty, errors = check_expr_str ~env "(null nil)" in
       Alcotest.(check int) "null no errors" 0 (List.length errors);
-      let ty_str = Types.to_string ty in
-      Alcotest.(check bool)
-        "null returns bool" true
-        (try
-           let _ = Str.search_forward (Str.regexp_string "ool") ty_str 0 in
-           true
-         with Not_found -> false)
+      (* null returns Prim.bool which is (Or T Nil) *)
+      Alcotest.(check string) "null returns bool" "(Or T Nil)" (Types.to_string ty)
 
 (** Test that fns.tart parses successfully (Spec 24 R5) *)
 let test_parse_fns_tart () =

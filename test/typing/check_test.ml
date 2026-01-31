@@ -153,7 +153,7 @@ let test_builtin_null () =
   let sexp = parse "(null ())" in
   let ty, errors = Check.check_expr sexp in
   Alcotest.(check int) "no errors" 0 (List.length errors);
-  Alcotest.(check string) "null returns Bool" "Bool" (to_string ty)
+  Alcotest.(check string) "null returns Bool" "(Or T Nil)" (to_string ty)
 
 (* =============================================================================
    declare tart Tests
@@ -506,7 +506,7 @@ let test_tart_type_parameterized_usage () =
   Alcotest.(check int) "no errors" 0 (List.length result.errors);
   match result.forms with
   | [ _; Check.DefvarForm { var_type; _ } ] ->
-      Alcotest.(check string) "type" "(-> (Int) Bool)" (to_string var_type)
+      Alcotest.(check string) "type" "(-> (Int) (Or T Nil))" (to_string var_type)
   | _ -> Alcotest.fail "expected TartTypeForm then DefvarForm"
 
 (** Test multi-param tart-type *)

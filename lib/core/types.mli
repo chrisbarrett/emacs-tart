@@ -146,8 +146,8 @@ val is_truthy : typ -> bool
     A type is truthy if it's a concrete non-nil primitive, a type application
     other than Option, a function, tuple, or forall with truthy body.
 
-    A type is NOT truthy if it's Nil, Bool, Any, a union containing Nil, an
-    unresolved type variable, or an Option type. *)
+    A type is NOT truthy if it's Nil, Any, Prim.bool (T | Nil), a union
+    containing Nil, an unresolved type variable, or an Option type. *)
 
 val validate_option_arg : typ -> (unit, validation_error) result
 (** Validate that a type is suitable as an Option argument. Returns [Ok ()] if

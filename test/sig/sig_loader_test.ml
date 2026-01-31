@@ -255,7 +255,7 @@ let test_combined_declarations () =
   (* Check defvar *)
   let ty1, errors1 = check_expr_str ~env "debug-mode" in
   Alcotest.(check int) "no errors for defvar" 0 (List.length errors1);
-  Alcotest.(check string) "defvar type is Bool" "Bool" (Types.to_string ty1);
+  Alcotest.(check string) "defvar type is Bool" "(Or T Nil)" (Types.to_string ty1);
   (* Check defun *)
   let ty2, errors2 = check_expr_str ~env "(process \"input\")" in
   Alcotest.(check int) "no errors for defun" 0 (List.length errors2);
@@ -907,7 +907,7 @@ let test_import_struct_generates_predicate () =
   | None -> Alcotest.fail "person-p not found"
   | Some scheme ->
       let scheme_str = Type_env.scheme_to_string scheme in
-      (* Should be Any -> Bool *)
+      (* Should be Any -> (Or T Nil) *)
       Alcotest.(check bool)
         "predicate takes Any" true
         (try
@@ -917,7 +917,7 @@ let test_import_struct_generates_predicate () =
       Alcotest.(check bool)
         "predicate returns Bool" true
         (try
-           let _ = Str.search_forward (Str.regexp_string "Bool") scheme_str 0 in
+           let _ = Str.search_forward (Str.regexp_string "(Or T Nil)") scheme_str 0 in
            true
          with Not_found -> false)
 
@@ -1142,7 +1142,7 @@ let test_data_predicate_type () =
   (* Predicate should accept any value and return bool *)
   let ty, errors = check_expr_str ~env {|(result-ok-p 42)|} in
   Alcotest.(check int) "no type errors" 0 (List.length errors);
-  Alcotest.(check string) "predicate returns bool" "Bool" (Types.to_string ty)
+  Alcotest.(check string) "predicate returns bool" "(Or T Nil)" (Types.to_string ty)
 
 (** Test that predicates work with ADT values *)
 let test_data_predicate_with_adt () =
@@ -1153,7 +1153,7 @@ let test_data_predicate_with_adt () =
   (* Predicate should work on ADT values *)
   let ty, errors = check_expr_str ~env {|(result-ok-p (Ok 42))|} in
   Alcotest.(check int) "no type errors" 0 (List.length errors);
-  Alcotest.(check string) "predicate returns bool" "Bool" (Types.to_string ty)
+  Alcotest.(check string) "predicate returns bool" "(Or T Nil)" (Types.to_string ty)
 
 (** Test nullary data predicates *)
 let test_data_nullary_predicates () =
@@ -1172,7 +1172,7 @@ let test_data_nullary_predicates () =
   (* Test predicate type *)
   let ty, errors = check_expr_str ~env {|(bool-true-p (True))|} in
   Alcotest.(check int) "no type errors" 0 (List.length errors);
-  Alcotest.(check string) "predicate returns bool" "Bool" (Types.to_string ty)
+  Alcotest.(check string) "predicate returns bool" "(Or T Nil)" (Types.to_string ty)
 
 (** Test predicate naming uses lowercase constructor *)
 let test_data_predicate_lowercase () =

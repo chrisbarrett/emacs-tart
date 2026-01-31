@@ -78,7 +78,7 @@ let test_primitive_types () =
   Alcotest.(check string) "String" "String" (to_string Prim.string);
   Alcotest.(check string) "Nil" "Nil" (to_string Prim.nil);
   Alcotest.(check string) "T" "T" (to_string Prim.t);
-  Alcotest.(check string) "Bool" "Bool" (to_string Prim.bool);
+  Alcotest.(check string) "Bool" "(Or T Nil)" (to_string Prim.bool);
   Alcotest.(check string) "Any" "Any" (to_string Prim.any);
   Alcotest.(check string) "Truthy" "Truthy" (to_string Prim.truthy);
   Alcotest.(check string) "Never" "Never" (to_string Prim.never)
@@ -161,7 +161,7 @@ let test_union_simple () =
 let test_tuple_type () =
   let ty = TTuple [ Prim.string; Prim.int; Prim.bool ] in
   Alcotest.(check string)
-    "Tuple String Int Bool" "(Tuple String Int Bool)" (to_string ty)
+    "Tuple String Int Bool" "(Tuple String Int (Or T Nil))" (to_string ty)
 
 (* =============================================================================
    Type Equality Tests
@@ -333,7 +333,7 @@ let test_option_of_checked_bool_fails () =
   match option_of_checked Prim.bool with
   | Ok _ -> Alcotest.fail "Option Bool should be invalid"
   | Error (NonTruthyOptionArg ty) ->
-      Alcotest.(check string) "error contains Bool" "Bool" (to_string ty)
+      Alcotest.(check string) "error contains Bool" "(Or T Nil)" (to_string ty)
 
 let test_option_of_checked_option_fails () =
   (* Option String is NOT truthy, so Option (Option String) should fail *)

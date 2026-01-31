@@ -5,7 +5,7 @@
 ;;
 ;; Intrinsics (built into compiler):
 ;;   Truthy, Nil, Never, Int, Float, Num, String, Symbol, Keyword
-;;   Any, Bool, List, Option (and parameterized versions)
+;;   Any, List, Option (and parameterized versions)
 ;;   Union (|), literals ('foo, :kw, 1, etc.)
 ;;
 ;; The prelude bridges lowercase type names in signatures to the
@@ -20,8 +20,8 @@
 ;; Universal type - alias for built-in Any
 (type any Any)
 
-;; Boolean - alias for built-in Bool
-(type bool Bool)
+;; Boolean - t or nil (Elisp's boolean convention)
+(type bool (t | nil))
 
 ;; Homogeneous list - alias for built-in List
 (type list [a] (List a))

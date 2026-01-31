@@ -97,7 +97,7 @@ module Prim = struct
   let nil = TCon "Nil"
   let t = TCon "T"
   let truthy = TCon "Truthy"
-  let bool = TCon "Bool"
+  let bool = TUnion [ t; nil ]
   let any = TCon "Any"
   let never = TCon "Never"
 end
@@ -184,7 +184,7 @@ and param_equal p1 p2 =
     - Nil: the only falsy type
     - Truthy: anything that is not Nil (primitive supertype)
     - Any = Truthy | Nil (top type)
-    - Bool = T | Nil
+    - Prim.bool = T | Nil (defined as union, not built-in)
 
     For Option types, we require the inner type to be Truthy. This ensures
     "some" and "none" cases are always distinguishable. Without this constraint,
@@ -208,7 +208,7 @@ type validation_error =
 
     A type is NOT truthy if:
     - It's Nil
-    - It's Bool (which includes Nil)
+    - It's Prim.bool (which is T | Nil, includes Nil)
     - It's Any (which includes Nil)
     - It's a union containing Nil
     - It's an unresolved type variable (conservatively false)
@@ -222,7 +222,6 @@ let rec is_truthy ty =
   | TCon name -> (
       match name with
       | "Nil" -> false (* Nil is the falsy value *)
-      | "Bool" -> false (* Bool = T | Nil, includes Nil *)
       | "Any" -> false (* Any = Truthy | Nil, includes Nil *)
       (* All other primitives are truthy *)
       | "Int" | "Float" | "Num" | "String" | "Symbol" | "Keyword" | "T"
