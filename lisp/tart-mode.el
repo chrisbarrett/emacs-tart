@@ -113,6 +113,13 @@ and their corresponding .el implementation files."
   :type 'boolean
   :group 'tart)
 
+(defcustom tart-setup-eglot t
+  "Whether to register tart as an eglot server for `emacs-lisp-mode'.
+When non-nil, adds tart to `eglot-server-programs' so that eglot
+can use tart for type checking elisp files with sibling .tart files."
+  :type 'boolean
+  :group 'tart)
+
 ;;; Inferior Tart Mode (REPL)
 
 (defvar tart-error-regexp
@@ -617,8 +624,9 @@ have already installed the binary."
     (eglot-ensure)))
 
 ;; Register tart as an LSP server for emacs-lisp-mode
-(add-to-list 'eglot-server-programs
-             '(emacs-lisp-mode . tart--eglot-server-program))
+(when tart-setup-eglot
+  (add-to-list 'eglot-server-programs
+               '(emacs-lisp-mode . tart--eglot-server-program)))
 
 ;;; Find-sibling Integration
 
