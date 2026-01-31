@@ -165,8 +165,8 @@ For hash tables (ht.el), use the existing `hash-table` type with type
 parameters for key and value types where possible.
 
 For map.el, since it operates on multiple container types (alist, plist,
-hash-table), use polymorphic signatures with `any` where container type
-varies.
+hash-table), use the generic `map` supertype (see Spec 11) for polymorphic
+signatures.
 
 For process functions, use an opaque `process` type similar to how
 `buffer` and `window` are handled.

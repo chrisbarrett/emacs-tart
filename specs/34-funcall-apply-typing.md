@@ -6,12 +6,12 @@ Type `funcall` and `apply` accurately using tracked function types, dual namespa
 
 ## Context
 
-`funcall` and `apply` are fundamental Lisp evaluation primitives. Currently typed as `(forall (r) (-> (Any &rest Any) r))`, losing all type information. This spec makes them fully type-safe.
+`funcall` and `apply` are fundamental Lisp evaluation primitives. Without special handling, they lose all type information. This spec makes them fully type-safe.
 
 ## Constraints
 
 - Lisp-2: separate function and variable namespaces
-- Never degenerate to `Any` during unification
+- Never widen to top type during unification
 - Tuple/list interop via subtyping
 - Support union function types for dynamic dispatch
 
@@ -184,9 +184,9 @@ f                         ; type: (-> (Int) Int) from variable env
 ```elisp
 (defun safe-length (x)
   (if (stringp x)
-      (length x)              ; x : String here
+      (length x)              ; x : string here
     (if (listp x)
-        (length x)            ; x : (List Any) here
+        (length x)            ; x : list here
       0)))
 ```
 
@@ -207,19 +207,19 @@ f                         ; type: (-> (Int) Int) from variable env
 
 **Verify:** `dune test`; funcall uses narrowed types
 
-### R14: Never unify to Any
+### R14: Never widen to top type
 
 **Given** incompatible types during unification
 **When** no valid unifier exists
-**Then** produce type error rather than widening to Any
+**Then** produce type error rather than silently widening
 
 ```elisp
 (let ((x (if condition 1 "hello")))
-  ;; x : (Or Int String), NOT Any
+  ;; x : (int | string), NOT widened
   (+ x 1))                    ; Error: (Or Int String) not compatible with Int
 ```
 
-**Verify:** `dune test`; type mismatches produce errors, not Any
+**Verify:** `dune test`; type mismatches produce errors, not silent widening
 
 ## Non-Requirements
 
@@ -242,6 +242,6 @@ f                         ; type: (-> (Int) Int) from variable env
 - [ ] [R11] Handle union function types in funcall/apply
 - [ ] [R12] Implement occurrence typing for type predicates
 - [ ] [R13] Thread narrowed types through funcall
-- [ ] [R14] Remove Any-widening paths from unification
+- [ ] [R14] Ensure unification errors rather than widens
 - [ ] Update builtin_types.ml to remove weak funcall/apply signatures
 - [ ] Add test fixtures for all requirements

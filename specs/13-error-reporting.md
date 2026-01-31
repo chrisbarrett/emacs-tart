@@ -2,8 +2,7 @@
 
 Diagnostic message format and user-facing error quality.
 
-**Dependencies:** Spec 06 (type representation for printing), Spec 08 (LSP
-delivery)
+**Dependencies:** Spec 08 (LSP delivery), Spec 47 (error code registry)
 
 ## Goal
 
@@ -221,15 +220,8 @@ error[E0308]: implementation does not match signature
 
 ## Error Codes
 
-| Code  | Category     | Description                      |
-|-------|--------------|----------------------------------|
-| E0308 | Type         | Type mismatch                    |
-| E0317 | Type         | Incompatible branch types        |
-| E0425 | Name         | Undefined variable               |
-| E0426 | Name         | Undefined function               |
-| E0061 | Arity        | Wrong number of arguments        |
-| E0106 | Annotation   | Missing type annotation required |
-| E0521 | Polymorphism | Type too specific for context    |
+See **Spec 47** for the canonical error code registry. All diagnostics must
+include an error code from that spec.
 
 ## Tasks
 

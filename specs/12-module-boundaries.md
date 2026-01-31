@@ -1,19 +1,20 @@
 # Spec 12: Module Boundary Rules
 
-Rules for type checking at module boundaries and handling untyped code.
+Rules for type checking at module boundaries.
 
 **Dependencies:** Spec 07 (signature files), Spec 08 (LSP for trigger)
 
 ## Goal
 
-Define when type checking is triggered, how typed and untyped code interact,
-and what constitutes the public interface of a module.
+Define when type checking is triggered, how modules interact, and what
+constitutes the public interface of a module. All code is fully typed—signatures
+exist for Emacs core and are inferred or declared for user code.
 
 ## Constraints
 
+- **Fully typed**: No gradual typing; all code has types (inferred or declared)
 - **Always available**: Any `.el` file can be type-checked via LSP
-- **Gradual**: Types come from search path; untyped code is `any`
-- **Sound within typed world**: No `any` escape hatch
+- **Sound**: Type errors are always errors, never silently widened
 
 ## Output
 
@@ -49,9 +50,9 @@ No new files; extends `lib/typing/check.ml` and `lib/sig/sig_loader.ml`.
 
 **Verify:** `dune test`; mismatched implementations produce errors
 
-### R3: Typed calling untyped
+### R3: External library signatures
 
-**Given** typed module uses an untyped module
+**Given** code uses an external library
 **And** a signature exists in the search path:
 ```elisp
 ;; ~/.config/emacs/tart/external-lib.tart
@@ -63,13 +64,13 @@ No new files; extends `lib/typing/check.ml` and `lib/sig/sig_loader.ml`.
 
 **Verify:** `dune test`; wrong argument types produce errors
 
-### R4: Untyped calling typed
+### R4: Missing signature is an error
 
-**Given** an untyped module calls a typed module
-**When** the typed module is compiled
-**Then** no checking occurs at the call site (caller is untyped)
+**Given** code calls a function with no signature (not in search path, not inferred)
+**When** type-checked
+**Then** error: "No signature found for `unknown-fn`"
 
-**Verify:** Document behavior; no automated test needed (soundness is maintained)
+**Verify:** `dune test`; missing signatures produce errors, not silent `any`
 
 ### R5: Public vs internal
 
@@ -140,7 +141,7 @@ No new files; extends `lib/typing/check.ml` and `lib/sig/sig_loader.ml`.
 - [x] [R1] Enable type checking for any .el file
 - [x] [R2] Verify implementations match signatures when .tart exists
 - [x] [R3] Load signatures from search path for required modules
-- [ ] [R4] Document untyped→typed boundary (no action needed)
+- [ ] [R4] Error on missing signatures
 - [x] [R5] Distinguish public vs internal functions
 - [x] [R6] Load signatures for required modules
 - [x] [R7] Handle autoloaded function lookup via search path

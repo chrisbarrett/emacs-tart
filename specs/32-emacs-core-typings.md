@@ -145,7 +145,7 @@ C source files map 1:1 to `.tart` files per Spec 24.
 ### `funcall`
 - **Location:** eval.c:2789
 - **Issue:** Accepts any function and any arguments; return type is dynamic
-- **Workaround:** Typed as `[a] (-> a) &rest any -> a` (loses argument checking)
+- **Resolution:** See Spec 34 for type-safe funcall/apply via dual namespaces
 
 ## ergonomic
 

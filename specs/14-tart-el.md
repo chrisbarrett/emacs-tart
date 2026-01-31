@@ -164,19 +164,19 @@ Note: Development tooling (REPL, eglot integration, minor mode) lives in
 ```elisp
 (defvar my-ints (tart (list int) '(1 2 3)))
 
-;; Error: (list int) is not compatible with (list any)
-(defun takes-any-list (xs)
-  (declare (tart ((list any)) -> nil))
+;; Error: (list int) is not compatible with (list string)
+(defun takes-string-list (xs)
+  (declare (tart ((list string)) -> nil))
   nil)
-(takes-any-list my-ints)  ; Type error
+(takes-string-list my-ints)  ; Type error
 
 ;; This is sound: prevents mutation bugs
 (defun mutates-list (xs)
-  (declare (tart ((list any)) -> nil))
+  (declare (tart ((list string)) -> nil))
   (push "oops" xs))  ; Would corrupt my-ints if allowed
 ```
 
-**Verify:** `dune test`; `(list int)` not subtype of `(list any)`
+**Verify:** `dune test`; `(list int)` not subtype of `(list string)` (invariance)
 
 ### R8: Macro expansion (runtime behavior)
 

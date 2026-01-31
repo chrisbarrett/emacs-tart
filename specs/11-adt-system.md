@@ -270,7 +270,7 @@ At usage site, type depends on context:
 | Context expects | Result type                 |
 | --------------- | --------------------------- |
 | `(list num)`    | `(list num)` via `1 <: num` |
-| must structure | `(cons 1 (cons 1.0 nil))`   |
+| must structure  | `(cons 1 (cons 1.0 nil))`   |
 | `truthy`        | `truthy`                    |
 | unconstrained   | principal type preserved    |
 
@@ -331,7 +331,7 @@ Standard library types using subtraction:
 
 ```lisp
 (type is [t] (t - nil))
-(type nonempty [t] ((list t) - nil))
+(type nonempty [t] (is (list t)))
 ```
 
 **Verify:** `dune test`; subtraction removes union members correctly
