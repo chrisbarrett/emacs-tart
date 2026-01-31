@@ -1,21 +1,23 @@
 # Spec 37: File I/O Errors
 
-Structured handling of file I/O errors with clear messages and actionable suggestions.
+Structured handling of file I/O errors with clear messages and actionable
+suggestions.
 
 **Dependencies:** Spec 35 (structured-errors)
 
 ## Goal
 
-When users encounter file errors (not found, permission denied, etc.), they immediately understand what went wrong and how to fix it.
+When users encounter file errors (not found, permission denied, etc.), they
+immediately understand what went wrong and how to fix it.
 
 ## Constraints
 
-| Constraint | Detail |
-|------------|--------|
-| Structured | Uses error types from Spec 35, not raw exceptions |
-| Contextual | Errors include what operation was being attempted |
+| Constraint | Detail                                                         |
+| ---------- | -------------------------------------------------------------- |
+| Structured | Uses error types from Spec 35, not raw exceptions              |
+| Contextual | Errors include what operation was being attempted              |
 | Actionable | Suggests fixes for common mistakes (typos, missing extensions) |
-| Consistent | Follows error format from Spec 13 |
+| Consistent | Follows error format from Spec 13                              |
 
 ## Output
 
@@ -33,9 +35,9 @@ lib/syntax/read.ml         ; Updated to return structured errors
 
 ### R1: File not found with suggestions
 
-**Given** a file path `foo.el` that does not exist
-**When** the user runs `tart check foo.el`
-**Then** error includes the path and suggests similar files if any exist in the same directory
+**Given** a file path `foo.el` that does not exist **When** the user runs
+`tart check foo.el` **Then** error includes the path and suggests similar files
+if any exist in the same directory
 
 ```
 error[E0001]: file not found
@@ -52,9 +54,8 @@ help: did you mean one of these?
 
 ### R2: Permission denied errors
 
-**Given** a file `restricted.el` without read permissions
-**When** the user runs `tart check restricted.el`
-**Then** error clearly states permission issue
+**Given** a file `restricted.el` without read permissions **When** the user runs
+`tart check restricted.el` **Then** error clearly states permission issue
 
 ```
 error[E0002]: permission denied
@@ -69,9 +70,8 @@ help: check file permissions with: ls -la restricted.el
 
 ### R3: Directory instead of file
 
-**Given** a path `mydir/` that is a directory
-**When** the user runs `tart check mydir/`
-**Then** error explains that a file was expected
+**Given** a path `mydir/` that is a directory **When** the user runs
+`tart check mydir/` **Then** error explains that a file was expected
 
 ```
 error[E0003]: expected file, found directory
@@ -87,8 +87,8 @@ help: to check all .el files in a directory, use: tart check mydir/*.el
 ### R4: Signature file not found
 
 **Given** a `.el` file that references a module without a `.tart` signature
-**When** the search path cannot locate `module.tart`
-**Then** error indicates the missing signature and search locations tried
+**When** the search path cannot locate `module.tart` **Then** error indicates
+the missing signature and search locations tried
 
 ```
 error[E0004]: signature file not found
@@ -109,9 +109,9 @@ help: create a signature file at ./my-module.tart
 
 ### R5: --load file not found in expand command
 
-**Given** `tart expand --load macros.el file.el` where `macros.el` does not exist
-**When** the command is executed
-**Then** error indicates which --load file was not found
+**Given** `tart expand --load macros.el file.el` where `macros.el` does not
+exist **When** the command is executed **Then** error indicates which --load
+file was not found
 
 ```
 error[E0001]: file not found
@@ -124,9 +124,8 @@ error[E0001]: file not found
 
 ### R6: Read error with context
 
-**Given** a file read that fails partway through (e.g., disk error)
-**When** the read operation fails
-**Then** error includes file path and operation context
+**Given** a file read that fails partway through (e.g., disk error) **When** the
+read operation fails **Then** error includes file path and operation context
 
 ```
 error[E0005]: read error
@@ -141,9 +140,9 @@ note: occurred while parsing file
 
 ### R7: Similar filename suggestions
 
-**Given** a typo in a filename like `init.l` instead of `init.el`
-**When** the file is not found
-**Then** error suggests files with similar names (Levenshtein distance <= 2)
+**Given** a typo in a filename like `init.l` instead of `init.el` **When** the
+file is not found **Then** error suggests files with similar names (Levenshtein
+distance <= 2)
 
 ```
 error[E0001]: file not found
@@ -158,9 +157,8 @@ help: did you mean: init.el
 
 ### R8: Missing .el extension suggestion
 
-**Given** a file path `config` where `config.el` exists
-**When** the user runs `tart check config`
-**Then** error suggests adding the `.el` extension
+**Given** a file path `config` where `config.el` exists **When** the user runs
+`tart check config` **Then** error suggests adding the `.el` extension
 
 ```
 error[E0001]: file not found
@@ -175,9 +173,8 @@ help: did you mean: config.el
 
 ### R9: Structured error type
 
-**Given** the file error module
-**When** errors are created
-**Then** they use a structured type integrating with Spec 35
+**Given** the file error module **When** errors are created **Then** they use a
+structured type integrating with Spec 35
 
 ```ocaml
 type file_error =
@@ -192,17 +189,16 @@ type file_error =
 
 ### R10: Error code mapping
 
-**Given** file errors
-**When** formatted for display
-**Then** each error type has a consistent error code
+**Given** file errors **When** formatted for display **Then** each error type
+has a consistent error code
 
-| Code  | Error Type |
-|-------|------------|
-| E0001 | File not found |
-| E0002 | Permission denied |
-| E0003 | Is directory |
+| Code  | Error Type          |
+| ----- | ------------------- |
+| E0001 | File not found      |
+| E0002 | Permission denied   |
+| E0003 | Is directory        |
 | E0004 | Signature not found |
-| E0005 | Read error |
+| E0005 | Read error          |
 
 **Verify:** `dune test`; error codes are consistent
 
@@ -211,18 +207,19 @@ type file_error =
 - Recovery from transient I/O errors (retry logic)
 - Network file system specific handling
 - Symbolic link resolution messages
-- File encoding detection errors (handled separately)
 
 ## Tasks
 
 - [ ] [R9] Create `lib/errors/file_error.ml` with structured error type
 - [ ] [R10] Implement error code mapping and formatting
-- [ ] [R7] Add Levenshtein-based filename suggestions (reuse from Spec 13 if available)
+- [ ] [R7] Add Levenshtein-based filename suggestions (reuse from Spec 13 if
+      available)
 - [ ] [R1, R8] Implement file not found with suggestions
 - [ ] [R2] Implement permission denied handling
 - [ ] [R3] Implement directory detection
 - [ ] [R6] Implement read error wrapping
-- [ ] [R4] Update `Search_path` to return structured errors for missing signatures
+- [ ] [R4] Update `Search_path` to return structured errors for missing
+      signatures
 - [ ] [R5] Update `bin/main.ml` expand command to use file errors
 - [ ] Update `lib/syntax/read.ml` to wrap I/O exceptions
 - [ ] Add tests for all error scenarios
