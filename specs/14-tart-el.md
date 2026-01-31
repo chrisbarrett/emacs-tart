@@ -222,9 +222,11 @@ my-file.el:10:1: error: function body doesn't match declared return type
 **Given** a module with both `.tart` file and inline annotations
 **When** type-checked
 **Then**:
-- `.tart` declarations define the public interface
+- `.tart` declarations define the public interface and are always authoritative
 - Inline annotations provide internal types
 - Inline annotations cannot contradict `.tart` declarations
+    - may be covariant or contravariant vs the public signature as appropriate
+    - some though needed here--support explicit co/contra builtin type constructor?
 
 ```elisp
 ;; my-utils.tart declares: (defun my-add (int int) -> int)
