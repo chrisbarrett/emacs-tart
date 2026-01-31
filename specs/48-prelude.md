@@ -143,9 +143,12 @@ lib/sig/
 
 ### R4: Not user-overridable
 
-**Given** a user-defined type with the same name as a prelude type
-**When** signatures are loaded
-**Then** error: "cannot redefine prelude type 'list'"
+Prelude types are subject to the general no-shadowing rule (Spec 07 R17):
+redefining any imported binding—including prelude types—is an error.
+
+```elisp
+(type list int)  ; Error: cannot redefine imported binding 'list'
+```
 
 **Verify:** `dune test`; redefining `list`, `option`, etc. produces error
 
@@ -189,6 +192,6 @@ lib/sig/
 
 - [ ] [R1] Create `typings/tart-prelude.tart` with type definitions
 - [ ] [R2,R3] Modify sig_loader.ml to load prelude first
-- [ ] [R4] Add error for redefining prelude types
+- [ ] [R4] Covered by Spec 07 R17 (no-shadowing rule)
 - [ ] [R5] Ensure type aliases expand correctly
 - [ ] [R6] Validate bounded quantifier on `option`

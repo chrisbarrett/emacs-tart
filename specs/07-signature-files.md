@@ -228,6 +228,72 @@ The first match wins, allowing project-local overrides.
 
 **Verify:** `(require 'cl-lib)` loads `cl-lib.tart` signatures from typings
 
+### R17: No shadowing of imported bindings
+
+**Given** a name brought into scope via `open`, `include`, or the prelude (Spec 48)
+**When** the current file defines a type, function, or variable with that name
+**Then** error: "cannot redefine imported binding 'name'"
+
+```elisp
+(open 'seq)
+(type seq int)  ; Error: cannot redefine imported binding 'seq'
+```
+
+This applies uniformly to all imports, including prelude types like `list`,
+`option`, etc.
+
+**Verify:** `dune test`; redefining opened/included names produces error
+
+### R18: Local type aliases
+
+**Given** a need for local type abbreviations for readability
+**When** using `(let ...)` in a signature file
+**Then** the bindings are scoped to the body and not exported
+
+```elisp
+(let [(type pair (cons int int))]
+  (defun swap-pair (pair) -> pair)
+  (defun make-pair (int int) -> pair))
+;; 'pair' not visible outside let; swap-pair and make-pair are exported
+```
+
+Local aliases do not conflict with imports—they shadow within their scope only.
+
+**Verify:** `dune test`; let-bound types usable in body, not exported
+
+### R19: Auxiliary signature files
+
+**Given** a `.tart` file with no corresponding `.el` file
+**When** used in other signatures
+**Then** it can be `include`'d but not `open`'ed
+
+```
+typings/
+├── my-common-types.tart   ; auxiliary, no .el
+└── my-package.tart        ; has my-package.el
+```
+
+```elisp
+;; my-common-types.tart
+(open 'seq)
+(type tagged-list [a] (cons symbol (list a)))
+(type result [a e] ((ok . a) | (err . e)))
+```
+
+```elisp
+;; my-package.tart
+(include 'my-common-types)  ; OK: re-exports tagged-list, result
+;; (open 'my-common-types)  ; Error: no corresponding .el
+```
+
+Auxiliary files:
+- Are parsed and validated (their `open` usages are checked)
+- Can be `include`'d multiple times safely (de-duplicated)
+- Cannot be `open`'ed (no runtime module to import from)
+- Reduce boilerplate across multiple signature files
+
+**Verify:** `dune test`; include works, open errors for auxiliary files
+
 ## Tasks
 
 - [x] [R1] Define signature file AST
@@ -246,6 +312,9 @@ The first match wins, allowing project-local overrides.
 - [x] [R14] Parse union types with `|` syntax
 - [x] [R15] Implement signature search path
 - [x] [R16] Implement module discovery with search order
+- [ ] [R17] Error on shadowing imported bindings
+- [ ] [R18] Implement `let` for local type aliases
+- [ ] [R19] Support auxiliary .tart files (include-only, de-duplicated)
 
 Run review agent after `builtins.tart` covers basic list/string functions before
 proceeding to Spec 08.
