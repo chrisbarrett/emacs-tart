@@ -1,159 +1,190 @@
-# Spec 11: Algebraic Data Type System
+# Spec 11: Union Types and Row Polymorphism
 
-Runtime representation and pattern matching for ADTs declared in `.tart` files.
+Type-safe structural typing for Elisp's idiomatic alist/plist patterns.
 
-**Dependencies:** Spec 07 (signature files parse ADT declarations)
+**Dependencies:** Spec 07 (signature files), Spec 46 (truthiness-aware unions)
 
 ## Goal
 
-Define how ADT values are represented at runtime and integrate with Elisp's
-`pcase` for exhaustive pattern matching.
+Provide sum types and record types via unions and row polymorphism, matching
+Elisp's native use of alists and plists rather than introducing foreign ADT
+representations.
+
+## Rationale
+
+Elisp idiomatically represents structured data as:
+
+- **Alists** for records: `((name . "Alice") (age . 30))`
+- **Plists** for keyword-based records: `(:name "Alice" :age 30)`
+- **Tagged values** for variants: `(ok . value)` or `(err . message)`
+
+Traditional ADTs would impose foreign runtime representations. Instead, unions
+and row polymorphism type-check existing Elisp patterns directly.
 
 ## Constraints
 
-- **Zero overhead**: ADT values use standard Elisp data structures
-- **pcase integration**: Patterns work with existing `pcase` infrastructure
-- **Exhaustiveness**: Type checker warns on non-exhaustive matches
+- **Zero overhead**: Types describe existing Elisp structures, no wrappers
+- **Exhaustiveness**: Pattern matches on unions must cover all cases
+- **Row polymorphism**: Functions accept records with "at least these fields"
+- **pcase integration**: Work with existing `pcase` destructuring
 
 ## Output
 
 ```
 tart/
 ├── lib/
-│   └── adt/
-│       ├── adt.ml           ; ADT representation and codegen
-│       └── exhaustiveness.ml ; Pattern match exhaustiveness checking
+│   ├── union.ml           ; Union type representation and subtyping
+│   ├── row.ml             ; Row polymorphism for map-like types
+│   └── exhaustiveness.ml  ; Pattern match exhaustiveness checking
 └── test/
-    └── adt/
-        └── adt_test.ml
+    ├── union_test.ml
+    ├── row_test.ml
+    └── exhaustiveness_test.ml
 ```
 
-## Runtime Representation
+## Union Types
 
-ADT values are represented as tagged cons cells:
+Tagged unions represent sum types using Elisp's tagged cons idiom:
 
-| Type-Level   | Runtime                |
-|--------------|------------------------|
-| `(Some x)`   | `(Some . x)`           |
-| `(None)`     | `nil`                  |
-| `(Ok x)`     | `(ok . x)`             |
-| `(Err e)`    | `(err . e)`            |
-| `(Leaf x)`   | `(leaf . x)`           |
-| `(Node l r)` | `(node l . r)`         |
+```lisp
+;; Type declaration in .tart
+(type result [a e]
+  ((ok . a) | (err . e)))
 
-**Special case**: Single-value `Option` uses `nil` for `None` and unwrapped
-value for `Some` when the value is truthy.
+;; Elisp usage—no special constructors needed
+(cons 'ok value)   ; Creates (ok . value)
+(cons 'err msg)    ; Creates (err . msg)
+```
+
+## Row Polymorphism
+
+Row-polymorphic records type alists, plists, and hash-tables with extensibility:
+
+```lisp
+;; Type accepts any alist with at least 'name and 'age fields
+((alist (name . string) (age . int) & r) -> string)
+
+;; Works with:
+((name . "Alice") (age . 30))
+((name . "Bob") (age . 25) (email . "bob@example.com"))
+```
 
 ## Requirements
 
-### R1: Constructor code generation
+### R1: Union type declarations
 
-**Given** an ADT definition:
-```elisp
-(data Result (a e)
-  (Ok a)
-  (Err e))
+**Given** a union type in `.tart`:
+```lisp
+(type either [a e] ((ok . a) | (err . e))
 ```
-**When** the module is loaded
-**Then** constructor functions exist:
-```elisp
-(defun Ok (x) (cons 'ok x))
-(defun Err (e) (cons 'err e))
-```
+**When** values are type-checked
+**Then** `(cons 'ok x)` unifies to `either a _`
 
-**Verify:** `dune test`; `(Ok 42)` returns `(ok . 42)`
+**Verify:** `dune test`; union construction type-checks correctly
 
-### R2: Predicate generation
+### R2: Union narrowing in pcase
 
-**Given** an ADT definition
-**When** loaded
-**Then** predicates exist:
-```elisp
-(defun result-ok-p (r) (and (consp r) (eq (car r) 'ok)))
-(defun result-err-p (r) (and (consp r) (eq (car r) 'err)))
-```
-
-**Verify:** `dune test`; `(result-ok-p (Ok 1))` returns `t`
-
-### R3: Accessor generation
-
-**Given** an ADT with fields
-**When** loaded
-**Then** accessors exist:
-```elisp
-(defun result-ok-value (r) (cdr r))
-(defun result-err-value (r) (cdr r))
-```
-
-**Verify:** `dune test`; `(result-ok-value (Ok 42))` returns `42`
-
-### R4: pcase pattern integration
-
-**Given** a `pcase` expression matching an ADT:
-```elisp
+**Given** a `pcase` on a union type:
+```lisp
 (pcase result
-  (`(ok . ,value) (process value))
-  (`(err . ,error) (handle error)))
+  (`(ok . ,value) (use value))
+  (`(err . ,msg) (report msg)))
 ```
 **When** type-checked
-**Then** `value` has type `a` and `error` has type `e` in their branches
+**Then** `value` has type `a` in the ok branch, `msg` has type `e` in err branch
 
-**Verify:** `dune test`; type narrowing works in pattern branches
+**Verify:** `dune test`; type narrowing applies in pattern branches
 
-### R5: Exhaustiveness checking
+### R3: Exhaustiveness checking for unions
 
-**Given** a non-exhaustive pattern match:
-```elisp
+**Given** a non-exhaustive match on a union:
+```lisp
 (pcase opt
-  (`(Some . ,x) x))  ; Missing: None
+  (`(some . ,x) x))  ; Missing: nil case
 ```
-**When** type-checked
-**Then** warning: "Non-exhaustive pattern match. Missing: None"
+**When** `opt` has type where any case can be nil
+**Then** warning: "Non-exhaustive pattern match. Missing: nil"
 
-**Verify:** `dune test`; warning on incomplete matches; no warning on complete matches
+**When** `opt` has type where all cases unify with truthy
+**Then** no warning—single branch is exhaustive
 
-### R6: Multi-field constructors
+**Verify:** `dune test`; exhaustiveness respects truthiness refinements
 
-**Given** an ADT with multiple fields:
-```elisp
-(data Point ()
-  (Point2D Int Int)
-  (Point3D Int Int Int))
+### R4: Row-polymorphic alist types
+
+**Given** a function typed with row polymorphism:
+```lisp
+(defun get-name (person)
+  (declare (tart ((alist (name . string) & r) -> string)))
+  (alist-get 'name person))
 ```
-**When** represented at runtime
-**Then** use vectors or nested cons:
-```elisp
-(Point2D 1 2)   → [point2d 1 2]
-(Point3D 1 2 3) → [point3d 1 2 3]
+**When** called with an alist having extra fields
+**Then** type-checks successfully
+
+**Verify:** `dune test`; extra fields don't cause type errors
+
+### R5: Row-polymorphic plist types
+
+**Given** a function typed for plists:
+```lisp
+(defun get-title (item)
+  (declare (tart ((plist :title string & r) -> string)))
+  (plist-get item :title))
+```
+**When** called with a plist having extra properties
+**Then** type-checks successfully
+
+**Verify:** `dune test`; plist row polymorphism works
+
+### R6: Row-polymorphic field access via map patterns
+
+Standard `pcase` is purely structural—use `map` patterns for row-polymorphic access:
+
+```lisp
+(require 'map)
+
+(pcase-let (((map :name (:age a)) person))
+  ...)
 ```
 
-**Verify:** `dune test`; accessors work for all fields
+**Given** a `map` pattern extracting fields from a row-polymorphic type
+**When** the type has more fields than matched
+**Then** no warning—extra fields are permitted by row polymorphism
 
-### R7: Recursive types
+**When** matching on a field not in the type
+**Then** type error: field not present
 
-**Given** a recursive ADT:
-```elisp
-(data Tree (a)
-  (Leaf a)
-  (Node (Tree a) (Tree a)))
+**Verify:** `dune test`; map patterns integrate with row types
+
+### R7: Unions are closed; row polymorphism is for map-like types
+
+Unions are always closed (exhaustive). Row polymorphism (`& r`) applies only to
+map-like type constructors (`alist`, `plist`, `hash-table`), not to unions.
+
+```lisp
+;; Closed union—only 'a and 'b are valid
+(type my-tag ('a | 'b))
+
+;; Row-polymorphic types—extra fields permitted
+(type named-alist (alist (name . string) & r))
+(type titled-plist (plist :title string & r))
+(type keyed-hash (hash-table (id . int) & r))
 ```
-**When** values are constructed
-**Then** they nest correctly:
-```elisp
-(Node (Leaf 1) (Node (Leaf 2) (Leaf 3)))
-→ (node (leaf . 1) (node (leaf . 2) (leaf . 3)))
-```
 
-**Verify:** `dune test`; recursive construction and destruction works
+**Given** a value matched against a union type
+**Then** exhaustiveness checking requires all variants covered
+
+**Given** a value matched against a row-polymorphic alist/plist/hash-table
+**Then** extra fields beyond those specified are permitted
+
+**Verify:** `dune test`; unions are exhaustive, map-like types are extensible
 
 ## Tasks
 
-- [x] [R1] Generate constructor functions from ADT definitions
-- [x] [R2] Generate predicate functions
-- [x] [R3] Generate accessor functions
-- [ ] [R4] Implement pcase type narrowing
-- [ ] [R5] Implement exhaustiveness checking
-- [x] [R6] Handle multi-field constructors
-- [x] [R7] Test recursive type handling
-
-Run review agent after R1-R3 work (basic codegen) before implementing R4-R5 (type checking).
+- [ ] [R1] Implement union type representation and subtyping
+- [ ] [R2] Implement type narrowing in pcase branches
+- [ ] [R3] Implement exhaustiveness checking for unions
+- [ ] [R4] Implement row-polymorphic alist types
+- [ ] [R5] Implement row-polymorphic plist types
+- [ ] [R6] Handle structural pattern exhaustiveness correctly
+- [ ] [R7] Distinguish closed and open unions
