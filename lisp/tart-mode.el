@@ -51,6 +51,7 @@
 (require 'compile)
 (require 'eglot)
 (require 'url)
+(require 'xdg)
 
 ;;; Customization
 
@@ -89,20 +90,47 @@ These are appended after the `repl' subcommand."
   :type '(repeat string)
   :group 'tart)
 
-(defcustom tart-repl-history-file
-  (locate-user-emacs-file "tart-repl-history")
+(defcustom tart-directory-style 'xdg
+  "Where to store tart files (binaries, history).
+When `xdg', uses XDG base directories:
+  - Binaries in $XDG_DATA_HOME/tart/bin/ (~/.local/share/tart/bin/)
+  - History in $XDG_STATE_HOME/tart/repl-history (~/.local/state/tart/)
+When `emacs', uses Emacs user directory:
+  - Binaries in ~/.emacs.d/tart/bin/
+  - History in ~/.emacs.d/tart-repl-history"
+  :type '(choice (const :tag "XDG base directories" xdg)
+                 (const :tag "Emacs user directory" emacs))
+  :group 'tart)
+
+(defun tart--default-install-directory ()
+  "Return the default install directory based on `tart-directory-style'."
+  (pcase tart-directory-style
+    ('xdg (expand-file-name "tart/bin/" (xdg-data-home)))
+    ('emacs (locate-user-emacs-file "tart/bin/"))))
+
+(defun tart--default-history-file ()
+  "Return the default history file path based on `tart-directory-style'."
+  (pcase tart-directory-style
+    ('xdg (expand-file-name "tart/repl-history" (xdg-state-home)))
+    ('emacs (locate-user-emacs-file "tart-repl-history"))))
+
+(defcustom tart-repl-history-file 'default
   "File to save REPL input history.
+When `default', uses path based on `tart-directory-style'.
+When a string, uses that path directly.
 Set to nil to disable history persistence."
-  :type '(choice (file :tag "History file")
+  :type '(choice (const :tag "Based on tart-directory-style" default)
+                 (file :tag "Custom path")
                  (const :tag "No history file" nil))
   :group 'tart)
 
-(defcustom tart-install-directory
-  (locate-user-emacs-file "tart/bin/")
+(defcustom tart-install-directory 'default
   "Directory for managed tart binary installations.
-When `tart-executable' is `managed', binaries are downloaded to
-this directory as tart-VERSION (e.g., tart-0.2.0)."
-  :type 'directory
+When `default', uses path based on `tart-directory-style'.
+When a string, uses that directory directly.
+Binaries are downloaded as tart-VERSION (e.g., tart-0.2.0)."
+  :type '(choice (const :tag "Based on tart-directory-style" default)
+                 (directory :tag "Custom directory"))
   :group 'tart)
 
 (defcustom tart-setup-find-sibling-rules t
@@ -179,8 +207,10 @@ Commands:
   (setq-local comint-prompt-read-only t)
   ;; History configuration
   (setq-local comint-input-ring-size 500)
-  (when tart-repl-history-file
-    (setq-local comint-input-ring-file-name tart-repl-history-file)
+  (when-let* ((history-file (pcase tart-repl-history-file
+                              ('default (tart--default-history-file))
+                              ((pred stringp) tart-repl-history-file))))
+    (setq-local comint-input-ring-file-name history-file)
     (comint-read-input-ring t))
   ;; Font-lock for output
   (setq-local font-lock-defaults '(nil nil nil nil))
@@ -200,7 +230,7 @@ Commands:
 
 (defun tart--save-repl-history ()
   "Save REPL history to file."
-  (when (and tart-repl-history-file
+  (when (and tart-repl-history-file  ; not nil
              (derived-mode-p 'inferior-tart-mode))
     (comint-write-input-ring)))
 
@@ -404,7 +434,10 @@ Provides keybindings for REPL interaction and type inspection.
 
 (defun tart--bin-directory ()
   "Return the directory for managed tart binaries."
-  (expand-file-name tart-install-directory))
+  (expand-file-name
+   (if (eq tart-install-directory 'default)
+       (tart--default-install-directory)
+     tart-install-directory)))
 
 (defun tart--platform-asset ()
   "Return the asset name for the current platform.
