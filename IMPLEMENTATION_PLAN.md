@@ -285,6 +285,45 @@ These tasks fix spec violations in the existing implementation.
 3. Directory vs file detection
 4. Signature not found with search path listing
 
+### 5.4 Surface Signature Parse/Validation Errors
+
+**Problem:** When `.tart` files have parse or validation errors, they are silently skipped. Users see no indication why their signature isn't being loaded.
+
+**Files:**
+- `lib/sig/search_path.ml` — Change `parse_signature_file` to return errors
+- `lib/sig/search_path.mli` — Update interface
+- `lib/lsp/server.ml` — Publish diagnostics for `.tart` file errors
+- `lib/typing/diagnostic.ml` — Add signature error formatting
+
+**Current behavior (silent swallowing):**
+```ocaml
+(* search_path.ml:185-198 *)
+let parse_signature_file path : signature option =
+  try
+    if parse_result.errors <> [] then None  (* Lexer errors lost *)
+    ...
+    | Error _ -> None  (* Parser errors lost *)
+  with _ -> None  (* Exceptions lost *)
+
+(* search_path.ml:255-257, 280-282, 322-324 *)
+match Sig_loader.validate_signature sig_file with
+| Ok () -> true
+| Error _ -> false  (* Validation errors lost *)
+```
+
+**Changes:**
+1. Change `parse_signature_file` return type to `(signature, sig_error list) result`
+2. Create `sig_error` type that covers lexer, parser, and validation errors
+3. Propagate errors through `load_module`, `load_module_with_sig`, `make_resolver`
+4. In LSP: publish diagnostics for `.tart` files when errors occur
+5. In CLI: print signature errors before type-checking proceeds
+6. Include `.tart` file path and span in all error messages
+
+**Verify:**
+- Create `test.tart` with `(defun foo (a) -> a)` (unbound type var)
+- Run `./tart check test.el` — should show error about unbound `a` in `test.tart`
+- Open in editor with LSP — should see diagnostic in `test.tart`
+
 ---
 
 ## Phase 6: Testing Infrastructure
@@ -392,6 +431,7 @@ Phase 7.* (CLI polish) — after core functionality
 **Milestone 3: LSP**
 - [ ] Editing `.tart` updates `.el` diagnostics
 - [ ] Dependency graph tracks invalidation
+- [ ] Parse/validation errors in `.tart` files are surfaced (not silently skipped)
 
 **Milestone 4: Typings**
 - [ ] `data.tart`, `fns.tart`, `alloc.tart`, `eval.tart` validated
