@@ -2,27 +2,29 @@
 
 Versioned Emacs core typings with auto-detection.
 
-**Deps:** Spec 07 (search path), Spec 09 (CLI). **Testing:** Spec 25. **LSP sync:** Spec 26.
+**Deps:** Spec 07 (search path), Spec 09 (CLI). **Testing:** Spec 25. **LSP
+sync:** Spec 26.
 
 ## Goal
 
-Type coverage for Emacs C primitives and core Lisp, versioned by release. Auto-detect Emacs version, load matching typings.
+Type coverage for Emacs C primitives and core Lisp, versioned by release.
+Auto-detect Emacs version, load matching typings.
 
 ## Constraints
 
-| Constraint | Detail |
-|------------|--------|
-| Version-specific | Types differ across Emacs 29/30/31 |
-| C core first | Prioritize stable C primitives before Lisp |
-| Auto-discovery | Detect version from `emacs --version` on PATH |
-| Override | `--emacs-version` flag for explicit selection |
-| Bundled | Ship in tart repo; separate repo is future work |
+| Constraint       | Detail                                          |
+| ---------------- | ----------------------------------------------- |
+| Version-specific | Types differ across Emacs 29/30/31              |
+| C core first     | Prioritize stable C primitives before Lisp      |
+| Auto-discovery   | Detect version from `emacs --version` on PATH   |
+| Override         | `--emacs-version` flag for explicit selection   |
+| Bundled          | Ship in tart repo; separate repo is future work |
 
 ## Directory Structure
 
 ```
 typings/
-├── prelude.tart           ; implicit, utility types
+├── tart-prelude.tart           ; implicit, utility types
 ├── emacs/
 │   ├── 29.1/c-core/*.tart
 │   ├── 30.1/c-core/*.tart
@@ -33,24 +35,24 @@ typings/
 
 C-core files map 1:1 to Emacs source:
 
-| File | Source | Functions |
-|------|--------|-----------|
-| data.tart | data.c | `eq null + - car cdr` predicates, arithmetic |
-| fns.tart | fns.c | `length concat mapcar assoc` utilities |
-| eval.tart | eval.c | `funcall apply signal catch` control flow |
-| alloc.tart | alloc.c | `cons list make-vector` allocation |
-| buffer.tart | buffer.c | `current-buffer set-buffer` buffer ops |
-| window.tart | window.c | `selected-window window-buffer` window ops |
-| frame.tart | frame.c | `selected-frame frame-parameters` frame ops |
-| fileio.tart | fileio.c | `find-file-noselect write-region` file I/O |
-| editfns.tart | editfns.c | `point goto-char insert` editing |
-| search.tart | search.c | `re-search-forward match-string` search |
-| process.tart | process.c | `start-process process-send-string` subprocs |
-| keyboard.tart | keyboard.c | `read-key-sequence` input |
-| keymap.tart | keymap.c | `define-key lookup-key` keymaps |
-| minibuf.tart | minibuf.c | `read-string completing-read` minibuffer |
-| textprop.tart | textprop.c | `get-text-property put-text-property` props |
-| print.tart | print.c | `prin1 princ message` output |
+| File          | Source     | Functions                                    |
+| ------------- | ---------- | -------------------------------------------- |
+| data.tart     | data.c     | `eq null + - car cdr` predicates, arithmetic |
+| fns.tart      | fns.c      | `length concat mapcar assoc` utilities       |
+| eval.tart     | eval.c     | `funcall apply signal catch` control flow    |
+| alloc.tart    | alloc.c    | `cons list make-vector` allocation           |
+| buffer.tart   | buffer.c   | `current-buffer set-buffer` buffer ops       |
+| window.tart   | window.c   | `selected-window window-buffer` window ops   |
+| frame.tart    | frame.c    | `selected-frame frame-parameters` frame ops  |
+| fileio.tart   | fileio.c   | `find-file-noselect write-region` file I/O   |
+| editfns.tart  | editfns.c  | `point goto-char insert` editing             |
+| search.tart   | search.c   | `re-search-forward match-string` search      |
+| process.tart  | process.c  | `start-process process-send-string` subprocs |
+| keyboard.tart | keyboard.c | `read-key-sequence` input                    |
+| keymap.tart   | keymap.c   | `define-key lookup-key` keymaps              |
+| minibuf.tart  | minibuf.c  | `read-string completing-read` minibuffer     |
+| textprop.tart | textprop.c | `get-text-property put-text-property` props  |
+| print.tart    | print.c    | `prin1 princ message` output                 |
 
 Future: `lisp-core/` for subr.el, simple.el after C coverage complete.
 
@@ -58,13 +60,13 @@ Future: `lisp-core/` for subr.el, simple.el after C coverage complete.
 
 Ship unconditionally; feature detection is separate spec:
 
-| Feature | Source | Detection |
-|---------|--------|-----------|
-| JSON | json.c | `(fboundp 'json-parse-string)` |
-| Tree-sitter | treesit.c | `(fboundp 'treesit-available-p)` |
-| SQLite | sqlite.c | `(fboundp 'sqlite-open)` |
-| GnuTLS | gnutls.c | `(fboundp 'gnutls-available-p)` |
-| D-Bus | dbusbind.c | `(fboundp 'dbus-call-method)` |
+| Feature     | Source     | Detection                        |
+| ----------- | ---------- | -------------------------------- |
+| JSON        | json.c     | `(fboundp 'json-parse-string)`   |
+| Tree-sitter | treesit.c  | `(fboundp 'treesit-available-p)` |
+| SQLite      | sqlite.c   | `(fboundp 'sqlite-open)`         |
+| GnuTLS      | gnutls.c   | `(fboundp 'gnutls-available-p)`  |
+| D-Bus       | dbusbind.c | `(fboundp 'dbus-call-method)`    |
 
 GUI backends (ns/w32/pgtk/x11) deferred.
 
@@ -96,6 +98,7 @@ $ tart check foo.el → uses typings/emacs/31.0/
 ### R3: Fallback chain
 
 Search order: exact → minor → major → latest symlink.
+
 ```
 31.0.50 → 31.0 → 31 → latest
 ```
@@ -107,6 +110,7 @@ No Emacs on PATH + no flag → use `latest/` with warning.
 ### R5: C-core typings
 
 Each `c-core/*.tart` covers all DEFUNs from corresponding `.c` file:
+
 - Polymorphic functions use quantifiers
 - Error functions return `never`
 - All files loaded and merged; conflicts error at load time
@@ -117,15 +121,17 @@ All `.tart` files implicitly import a minimal prelude that defines utility types
 in terms of compiler intrinsics. The prelude is not user-overridable.
 
 **Compiler intrinsics** (built into the type system):
+
 - `truthy`, `nil` — the two top types (don't unify); only `nil` is falsy
 - `never` — bottom type (no inhabitants)
 - `int`, `float`, `num` — numeric lattice (subtypes of `truthy`)
 - `string`, `symbol`, `keyword` — subtypes of `truthy`
 - `cons` — cons cells (subtype of `truthy`)
-- Literal types (`1`, `1.0`, `'foo`) — subtypes of `truthy`
+- Literal types (`1`, `1.0`, `'foo`, `:kw`) — subtypes of `truthy`
 - Type operators: `|` (union), `-` (subtraction)
 
 **Prelude types** (defined in terms of intrinsics):
+
 ```lisp
 (type t 't)
 (type any (truthy | nil))
@@ -136,7 +142,7 @@ in terms of compiler intrinsics. The prelude is not user-overridable.
 (type nonempty [a] (is (list a)))
 ```
 
-The prelude lives at `typings/prelude.tart` and is loaded before any other
+The prelude lives at `typings/tart-prelude.tart` and is loaded before any other
 typings. Everything else (Emacs primitives, cl-lib, third-party packages) comes
 from versioned typings bootstrapped from C sources and bundled Lisp.
 
@@ -147,7 +153,7 @@ Detect version once at startup; use for entire session. Log detected version.
 ## Migration
 
 1. Create `typings/emacs/31.0/c-core/`
-2. Create `typings/prelude.tart` with utility types
+2. Create `typings/tart-prelude.tart` with utility types
 3. Add version detection to search_path.ml
 4. Add `--emacs-version` CLI flag
 5. Backfill 29.1, 30.1 (copy then diff)
@@ -160,14 +166,6 @@ Detect version once at startup; use for entire session. Log detected version.
 - [ ] Handle missing Emacs gracefully
 - [ ] Create c-core/*.tart for 31.0
 - [ ] Multi-file c-core loading
-- [ ] Create prelude.tart with utility types
+- [ ] Create tart-prelude.tart with utility types
 - [ ] Wire LSP to version detection
 - [ ] Backfill 29.1, 30.1 typings
-
-## Non-Goals
-
-- Feature availability detection (separate spec)
-- Separate typings repository (future)
-- GUI backend typings (deferred)
-- Third-party package typings (future, under `typings/dash/` etc.)
-- Lisp-core typings (after C coverage solid)
