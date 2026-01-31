@@ -105,6 +105,14 @@ this directory as tart-VERSION (e.g., tart-0.2.0)."
   :type 'directory
   :group 'tart)
 
+(defcustom tart-setup-find-sibling-rules t
+  "Whether to add find-sibling rules for .tart and .el files.
+When non-nil, adds rules to `find-sibling-rules' so that
+`find-sibling-file' can navigate between .tart signature files
+and their corresponding .el implementation files."
+  :type 'boolean
+  :group 'tart)
+
 ;;; Inferior Tart Mode (REPL)
 
 (defvar tart-error-regexp
@@ -611,6 +619,14 @@ have already installed the binary."
 ;; Register tart as an LSP server for emacs-lisp-mode
 (add-to-list 'eglot-server-programs
              '(emacs-lisp-mode . tart--eglot-server-program))
+
+;;; Find-sibling Integration
+
+(when tart-setup-find-sibling-rules
+  (add-to-list 'find-sibling-rules
+               `(,(rx (group (+? anything)) ".tart" eos) "\\1.el"))
+  (add-to-list 'find-sibling-rules
+               `(,(rx (group (+? anything)) ".el" eos) "\\1.tart")))
 
 (provide 'tart-mode)
 ;;; tart-mode.el ends here
