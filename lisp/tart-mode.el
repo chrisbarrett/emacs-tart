@@ -151,8 +151,14 @@ can use tart for type checking elisp files with sibling .tart files."
 ;;; Inferior Tart Mode (REPL)
 
 (defvar tart-error-regexp
-  '(tart
-    "^\\([^ \n]+\\):\\([0-9]+\\):\\([0-9]+\\)\\(?:-[0-9]+\\)?\\(?::[0-9]+\\)?: \\(?:error\\|warning\\): "
+  `(tart
+    ,(rx bol
+         (group (+ (not (any " \n"))))      ; file
+         ":" (group (+ digit))              ; line
+         ":" (group (+ digit))              ; col
+         (? "-" (+ digit))                  ; optional end col
+         (? ":" (+ digit))                  ; optional second col
+         ": " (or "error" "warning") ": ")
     1 2 3 2)
   "Compilation error regexp for tart output.
 Matches file:line:col: error/warning: format.
@@ -164,7 +170,7 @@ The type is 2 (error) for both errors and warnings.")
     map)
   "Keymap for `inferior-tart-mode'.")
 
-(defconst tart--prompt-regexp "^\\(?:tart\\|\\.\\.\\.\\) ?> "
+(defconst tart--prompt-regexp (rx bol (or "tart" "...") (? " ") "> ")
   "Regexp matching the tart REPL prompt.
 Matches both the main prompt \"tart> \" and continuation \"... > \".")
 
@@ -400,7 +406,7 @@ Sends `,expand <sexp>' to the tart REPL and displays the result."
   "Major mode for editing Tart type signature files.")
 
 ;;;###autoload
-(add-to-list 'auto-mode-alist '("\\.tart\\'" . tart-signature-mode))
+(add-to-list 'auto-mode-alist `(,(rx ".tart" eos) . tart-signature-mode))
 
 ;;; Minor Mode
 
@@ -463,7 +469,7 @@ if the platform is not supported."
 Each element is a version string like \"0.2.0\"."
   (let ((bin-dir (tart--bin-directory)))
     (when (file-directory-p bin-dir)
-      (let ((files (directory-files bin-dir nil "^tart-[0-9]")))
+      (let ((files (directory-files bin-dir nil (rx bos "tart-" digit))))
         (sort (mapcar (lambda (f) (substring f 5)) files)
               (lambda (a b) (version< b a)))))))
 
