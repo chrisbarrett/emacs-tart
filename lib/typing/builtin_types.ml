@@ -22,8 +22,8 @@ let list_t elem = TApp (TCon "List", [ elem ])
 (** Helper to create a vector type *)
 let vector_t elem = TApp (TCon "Vector", [ elem ])
 
-(** Helper to create an option type *)
-let option_t elem = TApp (TCon "Option", [ elem ])
+(** Helper to create an option type (a | nil) *)
+let option_t elem = TUnion [ elem; Prim.nil ]
 
 (** Helper for a simple function type with positional args *)
 let fn params ret = TArrow (List.map (fun t -> PPositional t) params, ret)

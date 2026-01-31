@@ -315,18 +315,19 @@ let test_list_any_list_any () =
     "(List Any) = (List Any)" true
     (unify_ok (list_of Prim.any) (list_of Prim.any))
 
-(** Test invariance with Option type *)
-let test_option_int_not_option_any () =
+(** Test invariance with Vector type *)
+let test_vector_int_not_vector_string () =
+  (* (Vector Int) should NOT unify with (Vector String) - enforces invariance *)
   Alcotest.(check bool)
-    "(Option Int) != (Option Any)" true
-    (unify_fails (option_of Prim.int) (option_of Prim.any))
+    "(Vector Int) != (Vector String)" true
+    (unify_fails (vector_of Prim.int) (vector_of Prim.string))
 
 (** Test invariance with nested type applications *)
 let test_nested_invariance () =
-  (* List (Option Int) should not unify with List (Option Any) *)
+  (* List (Vector Int) should not unify with List (Vector String) *)
   Alcotest.(check bool)
-    "(List (Option Int)) != (List (Option Any))" true
-    (unify_fails (list_of (option_of Prim.int)) (list_of (option_of Prim.any)))
+    "(List (Vector Int)) != (List (Vector String))" true
+    (unify_fails (list_of (vector_of Prim.int)) (list_of (vector_of Prim.string)))
 
 (** Test invariance with hash tables (multiple type params) *)
 let test_hash_table_invariance () =
@@ -374,17 +375,17 @@ let test_hk_constructor_instantiation () =
   (* a should resolve to Int *)
   Alcotest.(check string) "a = Int" "Int" (to_string a)
 
-(** Test that HK constructor variable can unify with Option. *)
-let test_hk_option_instantiation () =
+(** Test that HK constructor variable can unify with Vector. *)
+let test_hk_vector_instantiation () =
   setup ();
   let f = fresh () in
   let a = fresh () in
   let hk_app = TApp (f, [ a ]) in
-  let option_string = option_of Prim.string in
+  let vector_string = vector_of Prim.string in
   Alcotest.(check bool)
-    "(f a) = (Option String)" true
-    (unify_ok hk_app option_string);
-  Alcotest.(check string) "f = Option" "Option" (to_string f);
+    "(f a) = (Vector String)" true
+    (unify_ok hk_app vector_string);
+  Alcotest.(check string) "f = Vector" "Vector" (to_string f);
   Alcotest.(check string) "a = String" "String" (to_string a)
 
 (** Test that two HK type applications with same constructor variable unify. *)
@@ -431,12 +432,12 @@ let test_hk_nested_application () =
   (* (f (g a)) *)
   let inner = TApp (g, [ a ]) in
   let outer = TApp (f, [ inner ]) in
-  (* (List (Option Int)) *)
-  let target = list_of (option_of Prim.int) in
+  (* (List (Vector Int)) *)
+  let target = list_of (vector_of Prim.int) in
   Alcotest.(check bool)
-    "(f (g a)) = (List (Option Int))" true (unify_ok outer target);
+    "(f (g a)) = (List (Vector Int))" true (unify_ok outer target);
   Alcotest.(check string) "f = List" "List" (to_string f);
-  Alcotest.(check string) "g = Option" "Option" (to_string g);
+  Alcotest.(check string) "g = Vector" "Vector" (to_string g);
   Alcotest.(check string) "a = Int" "Int" (to_string a)
 
 (** Test HK with arity mismatch fails. *)
@@ -584,7 +585,7 @@ let () =
             test_list_int_not_list_any;
           Alcotest.test_case "List Any = List Any" `Quick test_list_any_list_any;
           Alcotest.test_case "Option Int != Option Any" `Quick
-            test_option_int_not_option_any;
+            test_vector_int_not_vector_string;
           Alcotest.test_case "nested invariance" `Quick test_nested_invariance;
           Alcotest.test_case "hash table invariance" `Quick
             test_hash_table_invariance;
@@ -596,7 +597,7 @@ let () =
           Alcotest.test_case "HK constructor instantiation" `Quick
             test_hk_constructor_instantiation;
           Alcotest.test_case "HK option instantiation" `Quick
-            test_hk_option_instantiation;
+            test_hk_vector_instantiation;
           Alcotest.test_case "HK same constructor" `Quick
             test_hk_same_constructor;
           Alcotest.test_case "HK different constructors fail" `Quick

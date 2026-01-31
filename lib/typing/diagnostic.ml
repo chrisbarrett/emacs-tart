@@ -57,11 +57,8 @@ type t = {
 }
 (** A structured diagnostic message *)
 
-(** Check if a type is an Option type. *)
-let is_option_type ty =
-  match Types.repr ty with
-  | Types.TApp (Types.TCon "Option", _) -> true
-  | _ -> false
+(** Check if a type is an Option type (a | nil). *)
+let is_option_type ty = Option.is_some (Types.is_option ty)
 
 (** Generate help suggestions for type mismatches.
 
@@ -77,17 +74,22 @@ let suggest_type_fix ~expected ~actual : string list =
   | Types.TCon "Int", Types.TCon "String" ->
       [ "convert the string to a number: (string-to-number ...)" ]
   (* Option inner -> inner: suggest nil handling *)
-  | _, Types.TApp (Types.TCon "Option", [ inner ])
-    when Types.equal expected inner || Types.equal expected (Types.repr inner)
-    ->
-      [
-        "check for nil first: (when-let ((x ...)) ...)";
-        "or provide a default: (or ... default-value)";
-      ]
+  | _, _ when Option.is_some (Types.is_option actual) -> (
+      match Types.is_option actual with
+      | Some inner
+        when Types.equal expected inner
+             || Types.equal expected (Types.repr inner) ->
+          [
+            "check for nil first: (when-let ((x ...)) ...)";
+            "or provide a default: (or ... default-value)";
+          ]
+      | _ -> [])
   (* inner -> Option inner: not usually an error, but could suggest wrapping *)
-  | Types.TApp (Types.TCon "Option", [ inner ]), _
-    when Types.equal (Types.repr inner) actual ->
-      [ "the value is already non-nil and can be used directly" ]
+  | _, _ when Option.is_some (Types.is_option expected) -> (
+      match Types.is_option expected with
+      | Some inner when Types.equal (Types.repr inner) actual ->
+          [ "the value is already non-nil and can be used directly" ]
+      | _ -> [])
   (* Symbol -> String: suggest symbol-name *)
   | Types.TCon "String", Types.TCon "Symbol" ->
       [ "convert the symbol to a string: (symbol-name ...)" ]
@@ -391,14 +393,20 @@ let suggest_branch_fix ~this_type ~other_type : string list =
   | Types.TCon "String", Types.TCon "Int" ->
       [ "convert the string to an integer: (string-to-number ...)" ]
   (* Option vs non-Option: suggest handling nil *)
-  | _, Types.TApp (Types.TCon "Option", [ inner ])
-    when Types.equal this_type inner || Types.equal this_type (Types.repr inner)
-    ->
-      [ "wrap the non-optional value: (some ...)" ]
-  | Types.TApp (Types.TCon "Option", [ inner ]), _
-    when Types.equal other_type inner
-         || Types.equal other_type (Types.repr inner) ->
-      [ "unwrap the optional value or provide a default" ]
+  | _, _ when Option.is_some (Types.is_option other_type) -> (
+      match Types.is_option other_type with
+      | Some inner
+        when Types.equal this_type inner
+             || Types.equal this_type (Types.repr inner) ->
+          [ "wrap the non-optional value: (some ...)" ]
+      | _ -> [])
+  | _, _ when Option.is_some (Types.is_option this_type) -> (
+      match Types.is_option this_type with
+      | Some inner
+        when Types.equal other_type inner
+             || Types.equal other_type (Types.repr inner) ->
+          [ "unwrap the optional value or provide a default" ]
+      | _ -> [])
   | _ -> []
 
 (** Create a branch type mismatch diagnostic (E0317) *)

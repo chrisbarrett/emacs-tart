@@ -118,7 +118,7 @@ val vector_of : typ -> typ
 (** [vector_of elem] creates [(Vector elem)]. *)
 
 val option_of : typ -> typ
-(** [option_of elem] creates [(Option elem)]. Note: Does not validate the truthy
+(** [option_of elem] creates [(elem | Nil)]. Note: Does not validate the truthy
     constraint. *)
 
 val pair_of : typ -> typ -> typ
@@ -126,6 +126,15 @@ val pair_of : typ -> typ -> typ
 
 val hash_table_of : typ -> typ -> typ
 (** [hash_table_of k v] creates [(HashTable k v)]. *)
+
+val is_any : typ -> bool
+(** Check if a type is the "any" type (truthy | nil). Used in unification to
+    maintain top-type semantics. *)
+
+val is_option : typ -> typ option
+(** Check if a type is an option type (a | nil) and return the inner type.
+    Returns [Some inner] if the type is [(inner | nil)], [None] otherwise. Used
+    in diagnostics to detect nullable types. *)
 
 val arrow : typ list -> typ -> typ
 (** [arrow params ret] creates a function type with positional parameters. *)
@@ -146,8 +155,8 @@ val is_truthy : typ -> bool
     A type is truthy if it's a concrete non-nil primitive, a type application
     other than Option, a function, tuple, or forall with truthy body.
 
-    A type is NOT truthy if it's Nil, Any, Prim.bool (T | Nil), a union
-    containing Nil, an unresolved type variable, or an Option type. *)
+    A type is NOT truthy if it's Nil, a union containing Nil (including
+    Prim.any, Prim.bool, option_of), or an unresolved type variable. *)
 
 val validate_option_arg : typ -> (unit, validation_error) result
 (** Validate that a type is suitable as an Option argument. Returns [Ok ()] if

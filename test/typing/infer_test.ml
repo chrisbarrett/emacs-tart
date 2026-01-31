@@ -86,7 +86,7 @@ let test_quoted_symbol () =
   Alcotest.(check string) "quoted symbol" "Symbol" (infer_type "'foo")
 
 let test_quoted_list () =
-  Alcotest.(check string) "quoted list" "(List Any)" (infer_type "'(1 2 3)")
+  Alcotest.(check string) "quoted list" "(List (Or Truthy Nil))" (infer_type "'(1 2 3)")
 
 let test_quoted_int () =
   Alcotest.(check string) "quoted int" "Int" (infer_type "'42")

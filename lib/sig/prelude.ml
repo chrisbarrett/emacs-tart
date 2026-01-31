@@ -6,10 +6,10 @@
 
     Prelude types:
     - t: The symbol 't (Elisp's canonical truthy value)
-    - any: Alias for built-in Any (truthy | nil)
+    - any: Union type (truthy | nil)
     - bool: Union type (t | nil)
     - list: Alias for built-in List (parameterized)
-    - option: Alias for built-in Option (parameterized, with truthy bound)
+    - option: Union type (a | nil) with truthy bound on a
 
     The prelude is loaded before any other .tart file and its bindings cannot be
     shadowed (per Spec 07 R17). *)
@@ -54,8 +54,13 @@ let prelude_aliases : (string * Sig_loader.type_alias) list =
   [
     (* (type t 't) - maps to symbol literal 't *)
     ("t", { Sig_loader.alias_params = []; alias_body = tcon "'t" });
-    (* (type any Any) - maps lowercase any to built-in Any *)
-    ("any", { Sig_loader.alias_params = []; alias_body = tcon "Any" });
+    (* (type any (truthy | nil)) - top type as a union *)
+    ( "any",
+      {
+        Sig_loader.alias_params = [];
+        alias_body =
+          Sig_ast.STUnion ([ tcon "Truthy"; tcon "Nil" ], prelude_span);
+      } );
     (* (type bool (t | nil)) - boolean as a union, not a built-in *)
     ( "bool",
       {
@@ -68,11 +73,11 @@ let prelude_aliases : (string * Sig_loader.type_alias) list =
         Sig_loader.alias_params = [ "a" ];
         alias_body = tapp "List" [ tvar "a" ];
       } );
-    (* (type option [a] (Option a)) - maps lowercase option to built-in Option *)
+    (* (type option [a] (a | nil)) - optional as union, truthy bound on a *)
     ( "option",
       {
         Sig_loader.alias_params = [ "a" ];
-        alias_body = tapp "Option" [ tvar "a" ];
+        alias_body = Sig_ast.STUnion ([ tvar "a"; tcon "Nil" ], prelude_span);
       } );
   ]
 

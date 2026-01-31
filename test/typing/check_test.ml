@@ -118,7 +118,8 @@ let test_builtin_car_returns_option () =
   let ty, errors = Check.check_expr sexp in
   (* Uses default environment which includes built-in types *)
   Alcotest.(check int) "no errors" 0 (List.length errors);
-  Alcotest.(check string) "car returns Option Any" "(Option Any)" (to_string ty)
+  (* car returns (a | nil) where a is inferred from the list; quoted list gives (Or Truthy Nil) *)
+  Alcotest.(check string) "car returns Option Any" "(Or (Or Truthy Nil) Nil)" (to_string ty)
 
 (** Test that (+ 1 "x") produces a type error. The built-in + expects Int
     arguments, not String. *)
@@ -336,7 +337,7 @@ let test_defvar_no_init () =
   match result.forms with
   | [ Check.DefvarForm { name; var_type } ] ->
       Alcotest.(check string) "name" "my-buffer" name;
-      Alcotest.(check string) "type" "Any" (to_string var_type)
+      Alcotest.(check string) "type" "(Or Truthy Nil)" (to_string var_type)
   | _ -> Alcotest.fail "expected DefvarForm"
 
 (* =============================================================================
@@ -785,9 +786,7 @@ let test_at_type_hk_mismatch () =
       env
   in
   (* my-list is Option String, but we say list *)
-  let env =
-    Env.extend_mono "my-list" (TApp (TCon "Option", [ Prim.string ])) env
-  in
+  let env = Env.extend_mono "my-list" (option_of Prim.string) env in
   let sexp = parse {|(tart [list string string] fmap upcase my-list)|} in
   let _, errors = Check.check_expr ~env sexp in
   (* Should have error: list vs option *)

@@ -79,7 +79,7 @@ let test_primitive_types () =
   Alcotest.(check string) "Nil" "Nil" (to_string Prim.nil);
   Alcotest.(check string) "T" "T" (to_string Prim.t);
   Alcotest.(check string) "Bool" "(Or T Nil)" (to_string Prim.bool);
-  Alcotest.(check string) "Any" "Any" (to_string Prim.any);
+  Alcotest.(check string) "Any" "(Or Truthy Nil)" (to_string Prim.any);
   Alcotest.(check string) "Truthy" "Truthy" (to_string Prim.truthy);
   Alcotest.(check string) "Never" "Never" (to_string Prim.never)
 
@@ -89,7 +89,7 @@ let test_list_type () =
 
 let test_option_type () =
   let ty = option_of Prim.string in
-  Alcotest.(check string) "Option String" "(Option String)" (to_string ty)
+  Alcotest.(check string) "Option String" "(Or String Nil)" (to_string ty)
 
 let test_pair_type () =
   let ty = pair_of Prim.string Prim.int in
@@ -98,7 +98,7 @@ let test_pair_type () =
 let test_nested_type () =
   let ty = list_of (option_of Prim.int) in
   Alcotest.(check string)
-    "List (Option Int)" "(List (Option Int))" (to_string ty)
+    "List (Option Int)" "(List (Or Int Nil))" (to_string ty)
 
 (* =============================================================================
    Function Type Tests
@@ -119,7 +119,7 @@ let test_arrow_with_optional () =
       ([ PPositional Prim.string; POptional (option_of Prim.int) ], Prim.string)
   in
   Alcotest.(check string)
-    "with optional" "(-> (String &optional (Option Int)) String)" (to_string ty)
+    "with optional" "(-> (String &optional (Or Int Nil)) String)" (to_string ty)
 
 let test_arrow_with_rest () =
   let ty = TArrow ([ PRest Prim.string ], Prim.string) in
@@ -296,14 +296,14 @@ let test_option_of_checked_string () =
   match option_of_checked Prim.string with
   | Ok ty ->
       Alcotest.(check string)
-        "Option String valid" "(Option String)" (to_string ty)
+        "Option String valid" "(Or String Nil)" (to_string ty)
   | Error _ -> Alcotest.fail "Option String should be valid"
 
 let test_option_of_checked_int () =
   (* Int is truthy, so Option Int should succeed *)
   match option_of_checked Prim.int with
   | Ok ty ->
-      Alcotest.(check string) "Option Int valid" "(Option Int)" (to_string ty)
+      Alcotest.(check string) "Option Int valid" "(Or Int Nil)" (to_string ty)
   | Error _ -> Alcotest.fail "Option Int should be valid"
 
 let test_option_of_checked_list () =
@@ -311,7 +311,7 @@ let test_option_of_checked_list () =
   match option_of_checked (list_of Prim.int) with
   | Ok ty ->
       Alcotest.(check string)
-        "Option (List Int) valid" "(Option (List Int))" (to_string ty)
+        "Option (List Int) valid" "(Or (List Int) Nil)" (to_string ty)
   | Error _ -> Alcotest.fail "Option (List Int) should be valid"
 
 let test_option_of_checked_nil_fails () =
@@ -326,7 +326,7 @@ let test_option_of_checked_any_fails () =
   match option_of_checked Prim.any with
   | Ok _ -> Alcotest.fail "Option Any should be invalid"
   | Error (NonTruthyOptionArg ty) ->
-      Alcotest.(check string) "error contains Any" "Any" (to_string ty)
+      Alcotest.(check string) "error contains Any" "(Or Truthy Nil)" (to_string ty)
 
 let test_option_of_checked_bool_fails () =
   (* Bool is NOT truthy (includes Nil), so Option Bool should fail *)
@@ -341,7 +341,7 @@ let test_option_of_checked_option_fails () =
   | Ok _ -> Alcotest.fail "Option (Option String) should be invalid"
   | Error (NonTruthyOptionArg ty) ->
       Alcotest.(check string)
-        "error contains Option" "(Option String)" (to_string ty)
+        "error contains Option" "(Or String Nil)" (to_string ty)
 
 let test_validation_error_message () =
   (* Test error message formatting *)

@@ -1,4 +1,4 @@
 FAIL
 type mismatch
 expected: Symbol
-found: (List Any)
+found: (List (Or Truthy Nil))

@@ -135,15 +135,15 @@ let rec unify ?(invariant = false) t1 t2 loc : unit internal_result =
             | Ok () ->
                 tv := Link ty;
                 Ok ()))
-    (* Any is the top type - unifies with anything, EXCEPT in invariant contexts
-       (inside type application arguments). This enforces invariance for
-       parameterized types: (list int) does NOT unify with (list any). *)
-    | TCon "Any", _ | _, TCon "Any" ->
+    (* Any (truthy | nil) is the top type - unifies with anything, EXCEPT in
+       invariant contexts (inside type application arguments). This enforces
+       invariance for parameterized types: (list int) does NOT unify with
+       (list any). *)
+    | _ when is_any t1 || is_any t2 ->
         if invariant then
           (* In invariant context, Any only unifies with Any *)
-          match (t1, t2) with
-          | TCon "Any", TCon "Any" -> Ok ()
-          | _ -> Error (ITypeMismatch (t1, t2, loc))
+          if is_any t1 && is_any t2 then Ok ()
+          else Error (ITypeMismatch (t1, t2, loc))
         else Ok ()
     (* Type constants must match exactly *)
     | TCon n1, TCon n2 ->

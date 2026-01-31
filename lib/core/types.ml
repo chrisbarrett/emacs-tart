@@ -98,7 +98,7 @@ module Prim = struct
   let t = TCon "T"
   let truthy = TCon "Truthy"
   let bool = TUnion [ t; nil ]
-  let any = TCon "Any"
+  let any = TUnion [ truthy; nil ]
   let never = TCon "Never"
 end
 
@@ -106,9 +106,30 @@ end
 let list_of elem = TApp (TCon "List", [ elem ])
 
 let vector_of elem = TApp (TCon "Vector", [ elem ])
-let option_of elem = TApp (TCon "Option", [ elem ])
+let option_of elem = TUnion [ elem; Prim.nil ]
 let pair_of a b = TApp (TCon "Pair", [ a; b ])
 let hash_table_of k v = TApp (TCon "HashTable", [ k; v ])
+
+(** Check if a type is the "any" type (truthy | nil). Used in unification to
+    maintain top-type semantics. *)
+let is_any ty =
+  match repr ty with
+  | TUnion [ t1; t2 ] -> (
+      match (repr t1, repr t2) with
+      | TCon "Truthy", TCon "Nil" | TCon "Nil", TCon "Truthy" -> true
+      | _ -> false)
+  | _ -> false
+
+(** Check if a type is an option type (a | nil) and return the inner type. Used
+    in diagnostics to detect nullable types. *)
+let is_option ty =
+  match repr ty with
+  | TUnion [ t1; t2 ] -> (
+      match (repr t1, repr t2) with
+      | _, TCon "Nil" -> Some t1
+      | TCon "Nil", _ -> Some t2
+      | _ -> None)
+  | _ -> None
 
 (** Create a function type with positional parameters *)
 let arrow params ret = TArrow (List.map (fun p -> PPositional p) params, ret)
@@ -183,12 +204,13 @@ and param_equal p1 p2 =
     hierarchy is:
     - Nil: the only falsy type
     - Truthy: anything that is not Nil (primitive supertype)
-    - Any = Truthy | Nil (top type)
-    - Prim.bool = T | Nil (defined as union, not built-in)
+    - Prim.any = Truthy | Nil (top type, defined as union)
+    - Prim.bool = T | Nil (defined as union)
+    - option_of a = a | Nil (defined as union)
 
-    For Option types, we require the inner type to be Truthy. This ensures
+    For option types, we require the inner type to be Truthy. This ensures
     "some" and "none" cases are always distinguishable. Without this constraint,
-    (Option Nil) would be indistinguishable from Nil itself, breaking pattern
+    option_of Nil would be indistinguishable from Nil itself, breaking pattern
     matching semantics. *)
 
 (** Errors that can occur during type construction/validation *)
@@ -208,11 +230,8 @@ type validation_error =
 
     A type is NOT truthy if:
     - It's Nil
-    - It's Prim.bool (which is T | Nil, includes Nil)
-    - It's Any (which includes Nil)
-    - It's a union containing Nil
-    - It's an unresolved type variable (conservatively false)
-    - It's an Option type (which includes Nil by definition) *)
+    - It's a union containing Nil (includes Prim.bool, Prim.any, option_of)
+    - It's an unresolved type variable (conservatively false) *)
 let rec is_truthy ty =
   match repr ty with
   | TVar _ ->
@@ -222,7 +241,6 @@ let rec is_truthy ty =
   | TCon name -> (
       match name with
       | "Nil" -> false (* Nil is the falsy value *)
-      | "Any" -> false (* Any = Truthy | Nil, includes Nil *)
       (* All other primitives are truthy *)
       | "Int" | "Float" | "Num" | "String" | "Symbol" | "Keyword" | "T"
       | "Truthy" | "Never" ->
@@ -232,9 +250,6 @@ let rec is_truthy ty =
       | _ -> true)
   | TApp (con, _args) -> (
       match repr con with
-      | TCon "Option" ->
-          (* Option a = a | Nil, so always includes Nil *)
-          false
       | TCon ("List" | "Vector" | "Pair" | "HashTable") ->
           (* Container types are truthy - empty list is still non-nil in Elisp.
              Note: This differs from some languages where empty containers are falsy. *)

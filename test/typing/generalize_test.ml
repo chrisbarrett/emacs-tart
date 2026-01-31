@@ -188,7 +188,7 @@ let test_value_restriction_reverse () =
   let _ = Unify.solve result.constraints in
   (* xs should be monomorphic (List Any), not polymorphic *)
   let ty_str = to_string result.ty in
-  Alcotest.(check string) "reverse result monomorphic" "(List Any)" ty_str
+  Alcotest.(check string) "reverse result monomorphic" "(List (Or Truthy Nil))" ty_str
 
 (* =============================================================================
    Test Suite

@@ -907,11 +907,11 @@ let test_import_struct_generates_predicate () =
   | None -> Alcotest.fail "person-p not found"
   | Some scheme ->
       let scheme_str = Type_env.scheme_to_string scheme in
-      (* Should be Any -> (Or T Nil) *)
+      (* Should be (Or Truthy Nil) -> (Or T Nil) *)
       Alcotest.(check bool)
         "predicate takes Any" true
         (try
-           let _ = Str.search_forward (Str.regexp_string "Any") scheme_str 0 in
+           let _ = Str.search_forward (Str.regexp_string "(Or Truthy Nil)") scheme_str 0 in
            true
          with Not_found -> false);
       Alcotest.(check bool)

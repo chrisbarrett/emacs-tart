@@ -723,7 +723,10 @@ and infer_tart_annotation env type_sexp form _span =
       in
 
       (* Convert sig_type to typ and substitute fresh TVars *)
-      let base_ty = Sig_loader.sig_type_to_typ tvar_names inner_type in
+      let prelude = Sig.Prelude.prelude_alias_context () in
+      let base_ty =
+        Sig_loader.sig_type_to_typ_with_aliases prelude tvar_names inner_type
+      in
       let declared_ty = substitute_tvar_names tvar_subst base_ty in
 
       (* Create constraint: form's type = declared type *)
@@ -765,8 +768,10 @@ and infer_explicit_instantiation (env : Env.t)
         | _ -> (
             match Sig_parser.parse_sig_type sexp with
             | Ok sig_type ->
-                (* Convert directly without forall inference *)
-                Some (Sig_loader.sig_type_to_typ [] sig_type)
+                (* Convert directly without forall inference, using prelude aliases *)
+                let prelude = Sig.Prelude.prelude_alias_context () in
+                Some
+                  (Sig_loader.sig_type_to_typ_with_aliases prelude [] sig_type)
             | Error _ -> None))
       type_arg_sexps
   in
@@ -1301,8 +1306,11 @@ and infer_defun_with_declaration (env : Env.t) (name : string)
   in
 
   (* Convert sig_params to types, then substitute fresh TVars for type var names *)
+  let prelude = Sig.Prelude.prelude_alias_context () in
   let convert_and_subst sty =
-    let base_ty = Sig_loader.sig_type_to_typ tvar_names sty in
+    let base_ty =
+      Sig_loader.sig_type_to_typ_with_aliases prelude tvar_names sty
+    in
     substitute_tvar_names tvar_subst base_ty
   in
 
