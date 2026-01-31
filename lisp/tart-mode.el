@@ -507,20 +507,13 @@ searches `exec-path' for relative paths."
 
 (defvar url-http-end-of-headers)  ; defined by url.el
 
-(defun tart--github-api-url (endpoint)
-  "Return the GitHub API URL for ENDPOINT."
-  (format "https://api.github.com/repos/%s/%s" tart--github-repo endpoint))
-
 (defun tart--github-request (endpoint callback)
   "Make async GitHub API request to ENDPOINT, calling CALLBACK with parsed JSON.
 CALLBACK receives two arguments: the parsed JSON on success, or nil and an
 error message string on failure."
-  (let ((url (tart--github-api-url endpoint))
-        (url-request-extra-headers
-         `(("Accept" . "application/vnd.github+json")
-           ("X-GitHub-Api-Version" . "2022-11-28")
-           ,@(when-let* ((token (getenv "GITHUB_TOKEN")))
-               `(("Authorization" . ,(concat "Bearer " token)))))))
+  (let ((url (format "https://api.github.com/repos/%s/%s" tart--github-repo endpoint))
+        (url-request-extra-headers '(("Accept" . "application/vnd.github+json")
+                                     ("X-GitHub-Api-Version" . "2022-11-28"))))
     (url-retrieve
      url
      (lambda (status)
@@ -530,11 +523,7 @@ error message string on failure."
          (condition-case err
              (let ((json (json-parse-buffer :object-type 'alist)))
                (if-let* ((message (alist-get 'message json)))
-                   ;; GitHub API error response
-                   (funcall callback nil
-                            (if (string-match-p "rate limit" message)
-                                "GitHub rate limit exceeded. Set GITHUB_TOKEN environment variable."
-                              message))
+                   (funcall callback nil message) ; Show GitHub API error
                  (funcall callback json nil)))
            (error (funcall callback nil (format "JSON parse error: %s" err))))))
      nil t t)))
