@@ -10,6 +10,7 @@ Clone Emacs source in XDG cache for testing against real Elisp.
 |------------|--------|
 | XDG compliant | `$XDG_CACHE_HOME/tart/emacs-src/` |
 | Lazy clone | Only clone when needed |
+| Shallow | Minimize disk/network via `--depth 1` |
 | Version control | Tags, commits, branches |
 | Offline graceful | Clear error if network unavailable |
 
@@ -24,11 +25,18 @@ bin/main.ml  ; Add corpus subcommands
 
 ## Requirements
 
-### R1: Clone if not present
+### R1: Shallow clone if not present
 
-**Given** cache dir missing **When** corpus accessed **Then** clone from `https://git.savannah.gnu.org/git/emacs.git`
+**Given** cache dir missing **When** corpus accessed **Then** shallow clone from
+`https://git.savannah.gnu.org/git/emacs.git`
 
-**Verify:** `rm -rf ~/.cache/tart/emacs-src && tart corpus list | head -1`
+```bash
+git clone --depth 1 --branch <tag> <url> <path>
+```
+
+Emacs history spans decades; shallow clone reduces ~3GB to ~200MB.
+
+**Verify:** `rm -rf ~/.cache/tart/emacs-src && tart corpus checkout emacs-31.1 && du -sh ~/.cache/tart/emacs-src`
 
 ### R2: Reuse existing clone
 
@@ -48,9 +56,15 @@ bin/main.ml  ; Add corpus subcommands
 
 **Verify:** `unset XDG_CACHE_HOME && tart corpus path` outputs `$HOME/.cache/tart/emacs-src`
 
-### R5: Checkout tag
+### R5: Checkout tag (shallow fetch)
 
-**Given** existing clone **When** `tart corpus checkout emacs-29.1` **Then** checkout that tag, fetch if needed
+**Given** existing clone **When** `tart corpus checkout emacs-29.1` **Then**
+fetch tag shallowly if not present, checkout
+
+```bash
+git fetch --depth 1 origin tag <tag> --no-tags
+git checkout <tag>
+```
 
 **Verify:** `tart corpus checkout emacs-29.1 && git -C "$(tart corpus path)" describe --tags`
 
@@ -125,15 +139,14 @@ bin/main.ml  ; Add corpus subcommands
 
 ## Non-Requirements
 
-- Shallow clones
 - Multiple concurrent versions
 - Windows support
 
 ## Tasks
 
 - [ ] [R3-4] XDG path resolution
-- [ ] [R1-2] Clone-if-needed
-- [ ] [R5-6] Tag/commit checkout
+- [ ] [R1-2] Shallow clone-if-needed
+- [ ] [R5-6] Shallow tag fetch + checkout
 - [ ] [R7-8] Version auto-detection
 - [ ] [R9] `--emacs-version` option
 - [ ] [R10-11] File listing
