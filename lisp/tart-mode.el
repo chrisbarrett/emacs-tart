@@ -348,6 +348,15 @@ Sends `,expand <sexp>' to the tart REPL and displays the result."
          (result (tart--send-repl-command (concat ",expand " sexp))))
     (message "%s" result)))
 
+;;; Major Mode for .tart Files
+
+;;;###autoload
+(define-derived-mode tart-signature-mode lisp-mode "Tart"
+  "Major mode for editing Tart type signature files.")
+
+;;;###autoload
+(add-to-list 'auto-mode-alist '("\\.tart\\'" . tart-signature-mode))
+
 ;;; Minor Mode
 
 (defvar tart-mode-map
