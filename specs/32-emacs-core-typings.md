@@ -2,7 +2,8 @@
 
 Systematic creation of complete, verified type signatures for Emacs C core.
 
-**Deps:** Spec 30 (verbose coverage), Spec 31 (fast feedback).
+**Deps:** Spec 30 (verbose coverage), Spec 31 (fast feedback), Spec 48 (prelude
+types available in signatures).
 
 ## Goal
 

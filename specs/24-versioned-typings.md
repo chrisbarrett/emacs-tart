@@ -2,8 +2,8 @@
 
 Versioned Emacs core typings with auto-detection.
 
-**Deps:** Spec 07 (search path), Spec 09 (CLI). **Testing:** Spec 25. **LSP
-sync:** Spec 26.
+**Deps:** Spec 07 (search path), Spec 09 (CLI), Spec 48 (prelude). **Testing:**
+Spec 25. **LSP sync:** Spec 26.
 
 ## Goal
 
@@ -117,34 +117,10 @@ Each `c-core/*.tart` covers all DEFUNs from corresponding `.c` file:
 
 ### R6: Implicit prelude
 
-All `.tart` files implicitly import a minimal prelude that defines utility types
-in terms of compiler intrinsics. The prelude is not user-overridable.
-
-**Compiler intrinsics** (built into the type system):
-
-- `truthy`, `nil` — the two top types (don't unify); only `nil` is falsy
-- `never` — bottom type (no inhabitants)
-- `int`, `float`, `num` — numeric lattice (subtypes of `truthy`)
-- `string`, `symbol`, `keyword` — subtypes of `truthy`
-- `cons` — cons cells (subtype of `truthy`)
-- Literal types (`1`, `1.0`, `'foo`, `:kw`) — subtypes of `truthy`
-- Type operators: `|` (union), `-` (subtraction)
-
-**Prelude types** (defined in terms of intrinsics):
-
-```lisp
-(type t 't)
-(type any (truthy | nil))
-(type bool (t | nil))
-(type list [a] ((cons a (list a)) | nil))
-(type is [a] (a - nil))
-(type option [(a : truthy)] (a | nil))
-(type nonempty [a] (is (list a)))
-```
-
-The prelude lives at `typings/tart-prelude.tart` and is loaded before any other
-typings. Everything else (Emacs primitives, cl-lib, third-party packages) comes
-from versioned typings bootstrapped from C sources and bundled Lisp.
+The prelude (Spec 48) loads before versioned typings. It defines utility types
+(`list`, `option`, `is`, `nonempty`, etc.) in terms of compiler intrinsics.
+Versioned typings and all other `.tart` files can use prelude types without
+explicit import.
 
 ### R7: LSP
 
@@ -166,6 +142,5 @@ Detect version once at startup; use for entire session. Log detected version.
 - [ ] Handle missing Emacs gracefully
 - [ ] Create c-core/*.tart for 31.0
 - [ ] Multi-file c-core loading
-- [ ] Create tart-prelude.tart with utility types
 - [ ] Wire LSP to version detection
 - [ ] Backfill 29.1, 30.1 typings

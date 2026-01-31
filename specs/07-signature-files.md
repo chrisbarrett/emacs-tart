@@ -3,7 +3,7 @@
 Parser and loader for `.tart` signature files that declare types for Elisp code.
 
 **Dependencies:** Spec 04 parser (reuse S-exp infrastructure), Spec 06 type
-representation.
+representation, Spec 48 (prelude).
 
 ## Goal
 

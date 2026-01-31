@@ -2,7 +2,8 @@
 
 Union type inference for branching forms with truthiness tracking.
 
-**Dependencies:** Spec 34 (R14 union-from-branches), Spec 13 (error format)
+**Dependencies:** Spec 34 (R14 union-from-branches), Spec 13 (error format),
+Spec 48 (prelude: `truthy`, `nil`, `t`, `bool`)
 
 ## Goal
 

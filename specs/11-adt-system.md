@@ -2,7 +2,8 @@
 
 Type-safe structural typing for Elisp's idiomatic alist/plist patterns.
 
-**Dependencies:** Spec 07 (signature files), Spec 46 (truthiness-aware unions)
+**Dependencies:** Spec 07 (signature files), Spec 46 (truthiness-aware unions),
+Spec 48 (prelude types: `list`, `option`, `is`, `nonempty`)
 
 ## Goal
 
@@ -286,16 +287,16 @@ int float
  1   1.0   (literal types at bottom)
 ```
 
-truthy and nil are distinct top-types that do not unify. The prelude that ships
-with tart defines `(type any (truthy | nil))`. The type system may not generate
-`(truthy | nil)` as a unification--it is always explicitly annotated.
+`truthy` and `nil` are distinct top-types that do not unify. The prelude (Spec
+48) defines `(type any (truthy | nil))`. The type system may not generate
+`(truthy | nil)` as a unification—it is always explicitly annotated.
 
-**List/nil resolution via type subtraction:**
+**List/nil resolution via type subtraction** (prelude types from Spec 48):
 
 ```lisp
 (type list [t] ((cons t (list t)) | nil))
 (type is [t] (t - nil))              ; remove nil from union
-(type option [(t : truthy)] (t | nil))  ; add nil (inverse of must)
+(type option [(t : truthy)] (t | nil))  ; add nil (inverse of is)
 
 (type nonempty [t] (is (list t)))    ; (cons t (list t))
 (type nonempty [t] ((list t) - nil))    ; equivalent

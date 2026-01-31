@@ -1,0 +1,194 @@
+# Spec 48: Prelude
+
+Implicit utility types built on compiler intrinsics.
+
+**Deps:** None (foundational). **Consumers:** Spec 07 (sig loading), Spec 11
+(unions), Spec 24 (versioned typings), Spec 32 (core typings workflow).
+
+## Goal
+
+Define the prelude: a small, fixed set of type aliases that bridge compiler
+intrinsics to ergonomic everyday types. The prelude loads implicitly before any
+other `.tart` file.
+
+## Rationale
+
+Tart's type system has primitive types built into the compiler (intrinsics).
+Users shouldn't need to manually construct common patterns like "a value that
+might be nil" or "a non-empty list" from intrinsics. The prelude provides these
+building blocks so all other typings can use them.
+
+## Constraints
+
+| Constraint        | Detail                                          |
+| ----------------- | ----------------------------------------------- |
+| Minimal           | Only types derivable from intrinsics            |
+| Implicit          | Loaded automatically; no `(open 'tart-prelude)` |
+| Not overridable   | Users cannot shadow or replace prelude types    |
+| No functions      | Prelude contains only `(type ...)` declarations |
+| Version-agnostic  | Same prelude across all Emacs versions          |
+
+## Compiler Intrinsics
+
+These types are built into the type system itself, defined in `builtin_types.ml`:
+
+| Type      | Description                                      |
+| --------- | ------------------------------------------------ |
+| `truthy`  | Top type for non-nil values                      |
+| `nil`     | The nil type (singleton)                         |
+| `never`   | Bottom type (no inhabitants)                     |
+| `int`     | Integers                                         |
+| `float`   | Floating-point numbers                           |
+| `num`     | Supertype of `int` and `float`                   |
+| `string`  | Strings                                          |
+| `symbol`  | Symbols                                          |
+| `keyword` | Keywords (`:foo`)                                |
+| `cons`    | Cons cells                                       |
+| `\|`      | Union type operator                              |
+| `-`       | Type subtraction operator                        |
+
+Literal types (`1`, `1.0`, `'foo`, `:kw`) are also intrinsics, as subtypes of
+their corresponding base types.
+
+**Key invariant:** `truthy` and `nil` do not unify. This is the foundation for
+nullable/non-nullable type safety.
+
+## Prelude Types
+
+The prelude defines these types in terms of intrinsics:
+
+```lisp
+;; typings/tart-prelude.tart
+
+;; The symbol 't—Elisp's canonical truthy value
+(type t 't)
+
+;; Universal type: any Elisp value
+(type any (truthy | nil))
+
+;; Boolean: t or nil (Elisp's boolean convention)
+(type bool (t | nil))
+
+;; Homogeneous list (recursive, nullable)
+(type list [a] ((cons a (list a)) | nil))
+
+;; Refinement: remove nil from a type
+(type is [a] (a - nil))
+
+;; Optional: add nil to a truthy type
+(type option [(a : truthy)] (a | nil))
+
+;; Non-empty list (list without nil)
+(type nonempty [a] (is (list a)))
+```
+
+### Type Relationships
+
+```
+Subtyping:
+  (nonempty a) <: (list a) <: any
+  (nonempty a) <: truthy
+  (is (a | nil)) <: a (when a <: truthy)
+
+Equivalences:
+  (list a) = ((cons a (list a)) | nil)
+  (nonempty a) = (cons a (list a))
+  (option a) = (a | nil) (when a <: truthy)
+  bool = (t | nil)
+```
+
+## Output
+
+```
+typings/
+└── tart-prelude.tart    ; Prelude type definitions
+lib/sig/
+└── sig_loader.ml        ; (modify) Load prelude before other typings
+```
+
+## Requirements
+
+### R1: Prelude file location
+
+**Given** the tart installation
+**When** looking for the prelude
+**Then** it exists at `typings/tart-prelude.tart`
+
+**Verify:** File exists; parseable as valid `.tart` syntax
+
+### R2: Implicit loading
+
+**Given** any `.tart` file being loaded
+**When** the signature loader processes it
+**Then** prelude types are already available without explicit `(open ...)`
+
+```lisp
+;; In any .tart file, these just work:
+(defun head [a] ((list a)) -> (option a))
+(defun safe-head [a] ((nonempty a)) -> a)
+```
+
+**Verify:** `dune test`; prelude types usable without import
+
+### R3: Load order
+
+**Given** the signature loading process
+**When** typings are loaded
+**Then** prelude loads first, before:
+1. Version-specific Emacs typings (`typings/emacs/{version}/`)
+2. User typings (via `tart-type-path`)
+3. Project-local sibling `.tart` files
+
+**Verify:** Prelude types available in all subsequent signature files
+
+### R4: Not user-overridable
+
+**Given** a user-defined type with the same name as a prelude type
+**When** signatures are loaded
+**Then** error: "cannot redefine prelude type 'list'"
+
+**Verify:** `dune test`; redefining `list`, `option`, etc. produces error
+
+### R5: Type alias semantics
+
+**Given** prelude types are aliases
+**When** used in type expressions
+**Then** they expand to their definitions during type checking
+
+```lisp
+(list int) expands to ((cons int (list int)) | nil)
+(option string) expands to (string | nil)
+(nonempty int) expands to (cons int (list int))
+```
+
+**Verify:** Type errors show expanded form when helpful
+
+### R6: Bounded quantifier on `option`
+
+**Given** `(type option [(a : truthy)] (a | nil))`
+**When** instantiating `option` with a nullable type
+**Then** error: bound violation
+
+```lisp
+(option int)              ; OK: int <: truthy
+(option (int | nil))      ; Error: (int | nil) not <: truthy
+(option (option string))  ; Error: (string | nil) not <: truthy
+```
+
+**Verify:** `dune test`; nested option is a type error
+
+## Non-Goals
+
+- **Emacs primitives:** Functions like `car`, `cdr`, `cons` are defined in
+  versioned typings (Spec 24, Spec 32), not the prelude
+- **Third-party types:** Types for dash.el, s.el, etc. are separate typings
+- **User extensibility:** Users cannot add to the prelude; they create their own
+  `.tart` files
+
+## Tasks
+
+- [ ] [R1] Create `typings/tart-prelude.tart` with type definitions
+- [ ] [R2,R3] Modify sig_loader.ml to load prelude first
+- [ ] [R4] Add error for redefining prelude types
+- [ ] [R5] Ensure type aliases expand correctly
+- [ ] [R6] Validate bounded quantifier on `option`
