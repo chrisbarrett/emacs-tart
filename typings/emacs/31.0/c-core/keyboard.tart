@@ -1,0 +1,153 @@
+;; Type signatures for Emacs keyboard.c
+;;
+;; Source: emacs/src/keyboard.c
+;; Emacs version: 31.0
+;;
+;; Contains keyboard input and command loop handling.
+
+;; ===========================================================================
+;; Input reading
+;; ===========================================================================
+
+;; (read-char &optional PROMPT INHERIT-INPUT-METHOD SECONDS) - read char
+(defun read-char (&optional any any any) -> int)
+
+;; (read-char-exclusive &optional PROMPT INHERIT-INPUT-METHOD SECONDS) - read char, ignore non-chars
+(defun read-char-exclusive (&optional any any any) -> int)
+
+;; (read-event &optional PROMPT INHERIT-INPUT-METHOD SECONDS) - read event
+(defun read-event (&optional any any any) -> any)
+
+;; (read-key-sequence PROMPT &optional CONTINUE-ECHO DONT-DOWNCASE-LAST CAN-RETURN-SWITCH-FRAME CMD-LOOP TIMEOUT) - read keys as string
+(defun read-key-sequence ((string | nil) &optional any any any any any) -> (string | (list any)))
+
+;; (read-key-sequence-vector PROMPT &optional CONTINUE-ECHO DONT-DOWNCASE-LAST CAN-RETURN-SWITCH-FRAME CMD-LOOP TIMEOUT) - read keys as vector
+(defun read-key-sequence-vector ((string | nil) &optional any any any any any) -> (list any))
+
+;; ===========================================================================
+;; Input state
+;; ===========================================================================
+
+;; (input-pending-p &optional CHECK-TIMERS) - test if input available
+(defun input-pending-p (&optional any) -> bool)
+
+;; (discard-input) - discard pending input
+(defun discard-input () -> nil)
+
+;; (current-idle-time) - return idle duration, or nil
+(defun current-idle-time () -> (any | nil))
+
+;; (current-input-mode) - return (INTERRUPT FLOW META QUIT)
+(defun current-input-mode () -> (list any))
+
+;; ===========================================================================
+;; Command keys
+;; ===========================================================================
+
+;; (this-command-keys) - return keys that invoked this command
+(defun this-command-keys () -> (string | (list any)))
+
+;; (this-command-keys-vector) - return keys as vector
+(defun this-command-keys-vector () -> (list any))
+
+;; (this-single-command-keys) - return keys for single command
+(defun this-single-command-keys () -> (list any))
+
+;; (this-single-command-raw-keys) - return raw keys
+(defun this-single-command-raw-keys () -> (list any))
+
+;; (clear-this-command-keys &optional KEEP-RECORD) - clear stored keys
+(defun clear-this-command-keys (&optional any) -> nil)
+
+;; (recent-keys &optional INCLUDE-CMDS) - return recent key events
+(defun recent-keys (&optional any) -> (list any))
+
+;; (lossage-size SIZE) - set size of key lossage
+(defun lossage-size (&optional int) -> int)
+
+;; ===========================================================================
+;; Recursive editing
+;; ===========================================================================
+
+;; (recursive-edit) - enter recursive edit
+(defun recursive-edit () -> nil)
+
+;; (exit-recursive-edit) - exit recursive edit
+(defun exit-recursive-edit () -> nil)
+
+;; (abort-recursive-edit) - abort recursive edit
+(defun abort-recursive-edit () -> nil)
+
+;; (top-level) - exit all recursive edits
+(defun top-level () -> nil)
+
+;; (recursion-depth) - return current recursion depth
+(defun recursion-depth () -> int)
+
+;; ===========================================================================
+;; Position functions
+;; ===========================================================================
+
+;; (posn-at-point &optional POS WINDOW) - return position info at point
+(defun posn-at-point (&optional int any) -> (any | nil))
+
+;; (posn-at-x-y X Y &optional FRAME-OR-WINDOW WHOLE) - return position info at coords
+(defun posn-at-x-y (int int &optional any any) -> any)
+
+;; ===========================================================================
+;; Event conversion
+;; ===========================================================================
+
+;; (event-convert-list EVENT-DESC) - convert event description to event
+(defun event-convert-list ((list any)) -> any)
+
+;; (internal-event-symbol-parse-modifiers SYMBOL) - parse modifiers
+(defun internal-event-symbol-parse-modifiers (symbol) -> (list any))
+
+;; ===========================================================================
+;; Input mode settings
+;; ===========================================================================
+
+;; (set-input-mode INTERRUPT FLOW META &optional QUIT) - set input mode
+(defun set-input-mode (any any any &optional any) -> nil)
+
+;; (set-input-interrupt-mode FLAG) - set interrupt mode
+(defun set-input-interrupt-mode (any) -> nil)
+
+;; (set-input-meta-mode META) - set meta key mode
+(defun set-input-meta-mode (any) -> nil)
+
+;; (set-output-flow-control FLOW &optional TERMINAL) - set flow control
+(defun set-output-flow-control (any &optional any) -> nil)
+
+;; (set-quit-char QUIT) - set quit character
+(defun set-quit-char (int) -> nil)
+
+;; ===========================================================================
+;; Misc
+;; ===========================================================================
+
+;; (suspend-emacs &optional STUFFSTRING) - suspend Emacs
+(defun suspend-emacs (&optional string) -> any)
+
+;; (open-dribble-file FILE) - record input to file
+(defun open-dribble-file ((string | nil)) -> nil)
+
+;; (command-error-default-function DATA CONTEXT CALLER) - default error handler
+(defun command-error-default-function (any string symbol) -> nil)
+
+;; (insert-special-event EVENT &optional FRAME) - insert special event
+(defun insert-special-event (any &optional any) -> nil)
+
+;; ===========================================================================
+;; Internal functions
+;; ===========================================================================
+
+;; (set--this-command-keys KEYS) - set command keys
+(defun set--this-command-keys ((list any)) -> nil)
+
+;; (internal--track-mouse BODY) - internal mouse tracking
+(defun internal--track-mouse (any) -> any)
+
+;; (internal-handle-focus-in EVENT) - handle focus event
+(defun internal-handle-focus-in (any) -> nil)
