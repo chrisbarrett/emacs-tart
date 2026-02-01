@@ -241,8 +241,14 @@ let validate_signature_all (sig_file : signature) : load_error list =
 
     Type aliases map names to their definitions for expansion during loading. *)
 
+type alias_param = {
+  ap_name : string;  (** Parameter name (e.g., "a") *)
+  ap_bound : sig_type option;  (** Upper bound (e.g., truthy) *)
+}
+(** A type parameter with optional bound *)
+
 type type_alias = {
-  alias_params : string list;  (** Type parameters (e.g., [a e] in result) *)
+  alias_params : alias_param list;  (** Type parameters with optional bounds *)
   alias_body : sig_type;  (** The definition body *)
 }
 (** A type alias definition with optional parameters *)
@@ -265,6 +271,10 @@ let add_alias (name : string) (alias : type_alias) (ctx : alias_context) :
 (** Get all alias names from the context *)
 let alias_names (ctx : alias_context) : string list = List.map fst ctx
 
+(** Convert a tvar_binder to an alias_param *)
+let binder_to_alias_param (b : tvar_binder) : alias_param =
+  { ap_name = b.name; ap_bound = b.bound }
+
 (** Build alias context from signature declarations. Only includes type
     declarations with bodies (aliases, not opaque types). *)
 let build_alias_context (sig_file : signature) : alias_context =
@@ -276,7 +286,7 @@ let build_alias_context (sig_file : signature) : alias_context =
           | Some body ->
               let alias =
                 {
-                  alias_params = List.map (fun b -> b.name) d.type_params;
+                  alias_params = List.map binder_to_alias_param d.type_params;
                   alias_body = body;
                 }
               in
@@ -445,6 +455,25 @@ type type_context = { tc_aliases : alias_context; tc_opaques : opaque_context }
 let empty_type_context =
   { tc_aliases = empty_aliases; tc_opaques = empty_opaques }
 
+(** Check if a type satisfies a bound constraint.
+
+    Currently supports:
+    - truthy bound: the argument type must not contain nil
+
+    This is a simplified subtype check for bound constraints. The key use case
+    is preventing [(a : truthy)] bound violations like [(option (option x))]
+    where the inner option can be nil, violating the truthy constraint. *)
+let satisfies_bound (arg_typ : Types.typ) (bound_typ : Types.typ) : bool =
+  let bound_typ = Types.repr bound_typ in
+  match bound_typ with
+  | Types.TCon "Truthy" ->
+      (* Truthy bound: arg must not contain nil *)
+      Types.is_truthy arg_typ
+  | _ ->
+      (* For other bounds, we'd need a full subtyping check.
+         For now, conservatively accept anything. *)
+      true
+
 (** Convert a signature type to a core type. [ctx] is the type context
     containing aliases and opaques. [tvar_names] is the list of bound type
     variable names in scope. *)
@@ -490,12 +519,36 @@ let rec sig_type_to_typ_with_ctx (ctx : type_context) (tvar_names : string list)
           | _ ->
               (* Not an alias/opaque or has parameters (needs args) *)
               sig_name_to_prim name))
-  | STApp (name, args, _) -> (
+  | STApp (name, args, _span) -> (
       (* Type application - check for alias expansion first *)
       match lookup_alias name ctx.tc_aliases with
       | Some alias when List.length alias.alias_params = List.length args ->
-          (* Parameterized alias - substitute args into body and expand *)
-          let subst = List.combine alias.alias_params args in
+          (* Parameterized alias - check bounds and substitute args into body *)
+          (* First, check bounds for each argument *)
+          List.iter2
+            (fun param arg ->
+              match param.ap_bound with
+              | None -> () (* No bound - any type is acceptable *)
+              | Some bound_sig_type ->
+                  (* Convert the argument to a core type for checking *)
+                  let arg_typ = sig_type_to_typ_with_ctx ctx tvar_names arg in
+                  (* Convert the bound to a core type *)
+                  let bound_typ =
+                    sig_type_to_typ_with_ctx ctx tvar_names bound_sig_type
+                  in
+                  (* Check that arg satisfies the bound (arg <: bound).
+                     For truthy bound, arg must be truthy. *)
+                  if not (satisfies_bound arg_typ bound_typ) then
+                    failwith
+                      (Printf.sprintf
+                         "Bound violation in %s: %s is not a subtype of %s" name
+                         (Types.to_string arg_typ)
+                         (Types.to_string bound_typ)))
+            alias.alias_params args;
+          (* Substitute args into body and expand *)
+          let subst =
+            List.combine (List.map (fun p -> p.ap_name) alias.alias_params) args
+          in
           let expanded = substitute_sig_type subst alias.alias_body in
           sig_type_to_typ_with_ctx ctx tvar_names expanded
       | _ -> (
@@ -1170,7 +1223,7 @@ and load_decls_into_state (sig_file : signature) (state : load_state) :
               (* Type alias *)
               let alias =
                 {
-                  alias_params = List.map (fun b -> b.name) d.type_params;
+                  alias_params = List.map binder_to_alias_param d.type_params;
                   alias_body = body;
                 }
               in
@@ -1231,7 +1284,7 @@ and load_scoped_decl (sig_file : signature)
       | Some body ->
           let alias =
             {
-              alias_params = List.map (fun b -> b.name) d.type_params;
+              alias_params = List.map binder_to_alias_param d.type_params;
               alias_body = body;
             }
           in

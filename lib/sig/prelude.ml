@@ -44,9 +44,13 @@ let tapp name args = Sig_ast.STApp (name, args, prelude_span)
 let tsubtract minuend subtrahend =
   Sig_ast.STSubtract (minuend, subtrahend, prelude_span)
 
-(** Make a type binder (unused but available for future prelude extensions) *)
-let _binder ?bound name =
-  { Sig_ast.name; bound; kind = None; loc = prelude_span }
+(** Create an alias parameter without bound *)
+let param name : Sig_loader.alias_param =
+  { Sig_loader.ap_name = name; ap_bound = None }
+
+(** Create an alias parameter with truthy bound *)
+let param_truthy name : Sig_loader.alias_param =
+  { Sig_loader.ap_name = name; ap_bound = Some (tcon "Truthy") }
 
 (** The prelude type alias definitions.
 
@@ -76,26 +80,28 @@ let prelude_aliases : (string * Sig_loader.type_alias) list =
     (* (type list [a] (List a)) - maps lowercase list to built-in List *)
     ( "list",
       {
-        Sig_loader.alias_params = [ "a" ];
+        Sig_loader.alias_params = [ param "a" ];
         alias_body = tapp "List" [ tvar "a" ];
       } );
-    (* (type option [a] (a | nil)) - optional as union, truthy bound on a *)
+    (* (type option [(a : truthy)] (a | nil)) - optional as union, truthy bound
+       prevents nested option: (option (option x)) is an error since
+       (option x) = (x | nil) is not <: truthy. *)
     ( "option",
       {
-        Sig_loader.alias_params = [ "a" ];
+        Sig_loader.alias_params = [ param_truthy "a" ];
         alias_body = Sig_ast.STUnion ([ tvar "a"; tcon "Nil" ], prelude_span);
       } );
     (* (type is [a] (a - nil)) - removes nil from a type via subtraction *)
     ( "is",
       {
-        Sig_loader.alias_params = [ "a" ];
+        Sig_loader.alias_params = [ param "a" ];
         alias_body = tsubtract (tvar "a") (tcon "Nil");
       } );
     (* (type nonempty [a] (is (list a))) - non-empty list, equivalent to
        ((list a) - nil) which yields (cons a (list a)) *)
     ( "nonempty",
       {
-        Sig_loader.alias_params = [ "a" ];
+        Sig_loader.alias_params = [ param "a" ];
         alias_body = tsubtract (tapp "List" [ tvar "a" ]) (tcon "Nil");
       } );
   ]

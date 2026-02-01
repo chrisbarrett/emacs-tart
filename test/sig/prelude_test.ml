@@ -218,6 +218,63 @@ let test_prelude_nonempty_subtraction () =
         "type has list structure" true
         (String.length scheme_str > 0)
 
+(** {1 Bounded Quantifier Tests} *)
+
+(** Test that option with truthy type is accepted *)
+let test_option_truthy_ok () =
+  (* option int should work because int is truthy *)
+  let sig_src = "(defun maybe-int () -> (option int))" in
+  let env = load_sig_with_prelude sig_src in
+  match Type_env.lookup "maybe-int" env with
+  | None -> Alcotest.fail "maybe-int not found"
+  | Some _ -> ()
+
+(** Test that nested option is rejected due to truthy bound violation *)
+let test_option_nested_rejected () =
+  (* option (option int) should fail because (option int) = (int | nil)
+     and (int | nil) is not <: truthy *)
+  let sig_src = "(defun nested () -> (option (option int)))" in
+  try
+    let _ = load_sig_with_prelude sig_src in
+    Alcotest.fail "Expected bound violation error for nested option"
+  with Failure msg ->
+    Alcotest.(check bool)
+      "error mentions bound violation" true
+      (contains_substring msg "Bound violation")
+
+(** Test that option of nullable type is rejected *)
+let test_option_nullable_rejected () =
+  (* option (int | nil) should fail because (int | nil) is not truthy *)
+  let sig_src = "(defun maybe-nullable () -> (option (int | nil)))" in
+  try
+    let _ = load_sig_with_prelude sig_src in
+    Alcotest.fail "Expected bound violation error for nullable in option"
+  with Failure msg ->
+    Alcotest.(check bool)
+      "error mentions bound violation" true
+      (contains_substring msg "Bound violation")
+
+(** Test that option of any is rejected *)
+let test_option_any_rejected () =
+  (* option any should fail because any = (truthy | nil) is not truthy *)
+  let sig_src = "(defun maybe-any () -> (option any))" in
+  try
+    let _ = load_sig_with_prelude sig_src in
+    Alcotest.fail "Expected bound violation error for any in option"
+  with Failure msg ->
+    Alcotest.(check bool)
+      "error mentions bound violation" true
+      (contains_substring msg "Bound violation")
+
+(** Test that option of list is accepted (lists are truthy) *)
+let test_option_list_ok () =
+  (* option (list int) should work because lists are truthy *)
+  let sig_src = "(defun maybe-list () -> (option (list int)))" in
+  let env = load_sig_with_prelude sig_src in
+  match Type_env.lookup "maybe-list" env with
+  | None -> Alcotest.fail "maybe-list not found"
+  | Some _ -> ()
+
 let () =
   Alcotest.run "prelude"
     [
@@ -260,5 +317,16 @@ let () =
           Alcotest.test_case "is removes nil" `Quick test_prelude_is_subtraction;
           Alcotest.test_case "nonempty removes nil from list" `Quick
             test_prelude_nonempty_subtraction;
+        ] );
+      ( "bounded-quantifiers",
+        [
+          Alcotest.test_case "option int ok" `Quick test_option_truthy_ok;
+          Alcotest.test_case "nested option rejected" `Quick
+            test_option_nested_rejected;
+          Alcotest.test_case "option nullable rejected" `Quick
+            test_option_nullable_rejected;
+          Alcotest.test_case "option any rejected" `Quick
+            test_option_any_rejected;
+          Alcotest.test_case "option list ok" `Quick test_option_list_ok;
         ] );
     ]

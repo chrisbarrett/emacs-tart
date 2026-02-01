@@ -594,18 +594,20 @@ let test_invariance_list_any_to_list_any () =
   let result = Check.check_program sexps in
   Alcotest.(check int) "no errors" 0 (List.length result.errors)
 
-(** Test invariance with option type *)
+(** Test invariance with option type. Note: We use (option string) vs (option
+    int) rather than (option any) because any = (truthy | nil) is not truthy and
+    would fail option's bound. *)
 let test_invariance_option () =
   let sexps =
     parse_many
       {|
-(defun takes-option-any (x)
-  (declare (tart ((option any)) -> nil))
+(defun takes-option-string (x)
+  (declare (tart ((option string)) -> nil))
   nil)
 (defun get-option-int ()
   (declare (tart () -> (option int)))
   42)
-(takes-option-any (get-option-int))
+(takes-option-string (get-option-int))
 |}
   in
   let result = Check.check_program sexps in

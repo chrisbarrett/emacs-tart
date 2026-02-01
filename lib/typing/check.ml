@@ -309,9 +309,15 @@ let check_tart_type ~(aliases : Sig_loader.alias_context) (name : string)
   (* Parse the type definition body *)
   match parse_tart_type def_sexp with
   | Some sig_type ->
-      (* Create the alias entry *)
+      (* Create the alias entry.
+         tart-type forms in .el files don't support bounds, so all are None. *)
+      let alias_params =
+        List.map
+          (fun name -> { Sig_loader.ap_name = name; ap_bound = None })
+          params
+      in
       let alias : Sig_loader.type_alias =
-        { alias_params = params; alias_body = sig_type }
+        { alias_params; alias_body = sig_type }
       in
       let aliases' = Sig_loader.add_alias name alias aliases in
       (aliases', TartTypeForm { name; params })

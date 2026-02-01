@@ -61,8 +61,14 @@ val validate_signature_all : Sig_ast.signature -> load_error list
 
 (** {1 Type Alias Context} *)
 
+type alias_param = {
+  ap_name : string;  (** Parameter name (e.g., "a") *)
+  ap_bound : Sig_ast.sig_type option;  (** Upper bound (e.g., truthy) *)
+}
+(** A type parameter with optional bound *)
+
 type type_alias = {
-  alias_params : string list;  (** Type parameters (e.g., [a e] in result) *)
+  alias_params : alias_param list;  (** Type parameters with optional bounds *)
   alias_body : Sig_ast.sig_type;  (** The definition body *)
 }
 (** A type alias definition with optional parameters *)
