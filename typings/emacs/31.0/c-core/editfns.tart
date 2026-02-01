@@ -1,0 +1,351 @@
+;; Type signatures for Emacs editfns.c
+;;
+;; Source: emacs/src/editfns.c
+;; Emacs version: 31.0
+;;
+;; Contains editing functions: point, markers, insertion, deletion, regions.
+
+;; ===========================================================================
+;; Point position queries
+;; ===========================================================================
+
+;; (point) - return current point position
+(defun point () -> int)
+
+;; (point-min) - return minimum permissible point value (usually 1)
+(defun point-min () -> int)
+
+;; (point-max) - return maximum permissible point value
+(defun point-max () -> int)
+
+;; ===========================================================================
+;; Markers
+;; ===========================================================================
+
+;; (point-marker) - return point as a marker
+(defun point-marker () -> any)
+
+;; (point-min-marker) - return point-min as a marker
+(defun point-min-marker () -> any)
+
+;; (point-max-marker) - return point-max as a marker
+(defun point-max-marker () -> any)
+
+;; (mark-marker) - return the mark as a marker
+(defun mark-marker () -> any)
+
+;; ===========================================================================
+;; Point movement
+;; ===========================================================================
+
+;; (goto-char POSITION) - set point to position, return position
+(defun goto-char ((int | any)) -> (int | any))
+
+;; ===========================================================================
+;; Buffer position predicates
+;; ===========================================================================
+
+;; (bobp) - return t if point is at beginning of buffer
+(defun bobp () -> bool)
+
+;; (eobp) - return t if point is at end of buffer
+(defun eobp () -> bool)
+
+;; (bolp) - return t if point is at beginning of line
+(defun bolp () -> bool)
+
+;; (eolp) - return t if point is at end of line
+(defun eolp () -> bool)
+
+;; ===========================================================================
+;; Character access
+;; ===========================================================================
+
+;; (char-after &optional POS) - return character at position (or 0 at end)
+(defun char-after (&optional (int | any)) -> (int | nil))
+
+;; (char-before &optional POS) - return character before position (or 0 at start)
+(defun char-before (&optional (int | any)) -> (int | nil))
+
+;; (following-char) - return character after point (or 0 at end)
+(defun following-char () -> int)
+
+;; (preceding-char) - return character before point (or 0 at start)
+(defun preceding-char () -> int)
+
+;; ===========================================================================
+;; Character comparison
+;; ===========================================================================
+
+;; (char-equal C1 C2) - compare two characters, may ignore case
+(defun char-equal (int int) -> bool)
+
+;; ===========================================================================
+;; Character/string conversion
+;; ===========================================================================
+
+;; (char-to-string CHAR) - convert character to single-character string
+(defun char-to-string (int) -> string)
+
+;; (string-to-char STRING) - return first character of string
+(defun string-to-char (string) -> int)
+
+;; (byte-to-string BYTE) - convert byte to unibyte string
+(defun byte-to-string (int) -> string)
+
+;; ===========================================================================
+;; Buffer size and content
+;; ===========================================================================
+
+;; (buffer-size &optional BUFFER) - return character count
+(defun buffer-size (&optional any) -> int)
+
+;; (buffer-string) - return buffer contents as string
+(defun buffer-string () -> string)
+
+;; (buffer-substring START END) - return substring with text properties
+(defun buffer-substring (int int) -> string)
+
+;; (buffer-substring-no-properties START END) - return substring without properties
+(defun buffer-substring-no-properties (int int) -> string)
+
+;; ===========================================================================
+;; Position/byte conversion
+;; ===========================================================================
+
+;; (position-bytes POSITION) - return byte position for character position
+(defun position-bytes (int) -> (int | nil))
+
+;; (byte-to-position BYTEPOS) - return character position for byte position
+(defun byte-to-position (int) -> (int | nil))
+
+;; ===========================================================================
+;; Line positions
+;; ===========================================================================
+
+;; (line-beginning-position &optional N) - return position of line start (respects fields)
+(defun line-beginning-position (&optional int) -> int)
+
+;; (line-end-position &optional N) - return position of line end (respects fields)
+(defun line-end-position (&optional int) -> int)
+
+;; (pos-bol &optional N) - return position of line start (ignores fields)
+(defun pos-bol (&optional int) -> int)
+
+;; (pos-eol &optional N) - return position of line end (ignores fields)
+(defun pos-eol (&optional int) -> int)
+
+;; ===========================================================================
+;; Region positions
+;; ===========================================================================
+
+;; (region-beginning) - return smaller of point or mark
+(defun region-beginning () -> int)
+
+;; (region-end) - return larger of point or mark
+(defun region-end () -> int)
+
+;; ===========================================================================
+;; Insertion
+;; ===========================================================================
+
+;; (insert &rest ARGS) - insert strings or characters at point
+(defun insert (&rest (string | int)) -> nil)
+
+;; (insert-and-inherit &rest ARGS) - insert, inheriting properties
+(defun insert-and-inherit (&rest (string | int)) -> nil)
+
+;; (insert-before-markers &rest ARGS) - insert, relocating markers
+(defun insert-before-markers (&rest (string | int)) -> nil)
+
+;; (insert-before-markers-and-inherit &rest ARGS) - insert, relocating markers and inheriting
+(defun insert-before-markers-and-inherit (&rest (string | int)) -> nil)
+
+;; (insert-char CHARACTER &optional COUNT INHERIT) - insert COUNT copies of char
+(defun insert-char (int &optional int any) -> nil)
+
+;; (insert-byte BYTE COUNT &optional INHERIT) - insert COUNT copies of byte
+(defun insert-byte (int int &optional any) -> nil)
+
+;; (insert-buffer-substring BUFFER &optional START END) - insert from buffer
+(defun insert-buffer-substring (any &optional int int) -> nil)
+
+;; ===========================================================================
+;; Deletion
+;; ===========================================================================
+
+;; (delete-region START END) - delete text between positions
+(defun delete-region (int int) -> nil)
+
+;; (delete-and-extract-region START END) - delete and return text
+(defun delete-and-extract-region (int int) -> string)
+
+;; ===========================================================================
+;; Fields
+;; ===========================================================================
+
+;; (field-beginning &optional POS ESCAPE-FROM-EDGE LIMIT) - return field start
+(defun field-beginning (&optional any any int) -> int)
+
+;; (field-end &optional POS ESCAPE-FROM-EDGE LIMIT) - return field end
+(defun field-end (&optional any any int) -> int)
+
+;; (field-string &optional POS) - return field contents
+(defun field-string (&optional any) -> string)
+
+;; (field-string-no-properties &optional POS) - return field contents without properties
+(defun field-string-no-properties (&optional any) -> string)
+
+;; (delete-field &optional POS) - delete field around position
+(defun delete-field (&optional any) -> nil)
+
+;; (constrain-to-field NEW-POS OLD-POS &optional ESCAPE-FROM-EDGE ONLY-IN-LINE INHIBIT-CAPTURE-PROPERTY)
+;; Return position closest to NEW-POS in same field as OLD-POS
+(defun constrain-to-field ((int | nil) int &optional any any any) -> int)
+
+;; ===========================================================================
+;; Text properties
+;; ===========================================================================
+
+;; (get-pos-property POSITION PROP &optional OBJECT) - get property at position
+(defun get-pos-property (int symbol &optional any) -> any)
+
+;; (propertize STRING &rest PROPERTIES) - return string with properties added
+(defun propertize (string &rest any) -> string)
+
+;; ===========================================================================
+;; Character substitution
+;; ===========================================================================
+
+;; (subst-char-in-region START END FROMCHAR TOCHAR &optional NOUNDO)
+;; Replace FROMCHAR with TOCHAR in region
+(defun subst-char-in-region (int int int int &optional any) -> nil)
+
+;; (translate-region-internal START END TABLE) - translate chars by table
+(defun translate-region-internal (int int (string | any)) -> int)
+
+;; ===========================================================================
+;; Buffer comparison
+;; ===========================================================================
+
+;; (compare-buffer-substrings BUFFER1 START1 END1 BUFFER2 START2 END2)
+;; Compare two buffer regions, return -N, 0, or +N
+(defun compare-buffer-substrings (any (int | nil) (int | nil) any (int | nil) (int | nil)) -> int)
+
+;; (replace-region-contents BEG END SOURCE &optional MAX-SECS MAX-COSTS INHERIT)
+;; Replace region with SOURCE buffer/string contents non-destructively
+(defun replace-region-contents (int int any &optional (int | nil) (int | nil) any) -> (t | nil))
+
+;; ===========================================================================
+;; Transposition
+;; ===========================================================================
+
+;; (transpose-regions STARTR1 ENDR1 STARTR2 ENDR2 &optional LEAVE-MARKERS)
+;; Transpose two non-overlapping regions
+(defun transpose-regions (int int int int &optional any) -> nil)
+
+;; ===========================================================================
+;; Narrowing
+;; ===========================================================================
+
+;; (narrow-to-region START END) - restrict editing to region
+(defun narrow-to-region (int int) -> nil)
+
+;; (widen) - remove narrowing restrictions
+(defun widen () -> nil)
+
+;; (internal--labeled-narrow-to-region START END LABEL) - internal narrowing
+(defun internal--labeled-narrow-to-region (int int any) -> nil)
+
+;; (internal--labeled-widen LABEL) - internal widen
+(defun internal--labeled-widen (any) -> nil)
+
+;; ===========================================================================
+;; Gap (internal buffer structure)
+;; ===========================================================================
+
+;; (gap-position) - return position of buffer gap
+(defun gap-position () -> int)
+
+;; (gap-size) - return size of buffer gap
+(defun gap-size () -> int)
+
+;; ===========================================================================
+;; Format and messages
+;; ===========================================================================
+
+;; (format STRING &rest OBJECTS) - format string with substitutions
+(defun format (string &rest any) -> string)
+
+;; (format-message STRING &rest OBJECTS) - format with quote conversion
+(defun format-message (string &rest any) -> string)
+
+;; (message FORMAT-STRING &rest ARGS) - display message in echo area
+(defun message ((string | nil) &rest any) -> (string | nil))
+
+;; (message-box FORMAT-STRING &rest ARGS) - display message in dialog box
+(defun message-box ((string | nil) &rest any) -> (string | nil))
+
+;; (message-or-box FORMAT-STRING &rest ARGS) - display message in box or echo area
+(defun message-or-box ((string | nil) &rest any) -> (string | nil))
+
+;; (current-message) - return currently displayed message or nil
+(defun current-message () -> (string | nil))
+
+;; ===========================================================================
+;; Internationalization
+;; ===========================================================================
+
+;; (ngettext MSGID MSGID-PLURAL N) - return translation based on count
+(defun ngettext (string string int) -> string)
+
+;; ===========================================================================
+;; User information
+;; ===========================================================================
+
+;; (user-login-name &optional UID) - return login name
+(defun user-login-name (&optional int) -> (string | nil))
+
+;; (user-real-login-name) - return real login name (ignoring su)
+(defun user-real-login-name () -> string)
+
+;; (user-full-name &optional UID) - return user's full name
+(defun user-full-name (&optional (int | string)) -> (string | nil))
+
+;; (user-uid) - return effective uid
+(defun user-uid () -> int)
+
+;; (user-real-uid) - return real uid
+(defun user-real-uid () -> int)
+
+;; (group-gid) - return effective group id
+(defun group-gid () -> int)
+
+;; (group-real-gid) - return real group id
+(defun group-real-gid () -> int)
+
+;; (group-name GID) - return group name for gid
+(defun group-name ((int | float)) -> (string | nil))
+
+;; ===========================================================================
+;; System information
+;; ===========================================================================
+
+;; (emacs-pid) - return Emacs process id
+(defun emacs-pid () -> int)
+
+;; (system-name) - return host name
+(defun system-name () -> string)
+
+;; ===========================================================================
+;; Special forms (control flow)
+;; ===========================================================================
+
+;; (save-excursion &rest BODY) - save point and buffer, execute body, restore
+(defun save-excursion (&rest any) -> any)
+
+;; (save-current-buffer &rest BODY) - save buffer, execute body, restore
+(defun save-current-buffer (&rest any) -> any)
+
+;; (save-restriction &rest BODY) - save narrowing, execute body, restore
+(defun save-restriction (&rest any) -> any)
