@@ -1,0 +1,100 @@
+;; Type signatures for Emacs minibuf.c
+;;
+;; Source: emacs/src/minibuf.c
+;; Emacs version: 31.0
+;;
+;; Contains minibuffer input and completion functions.
+
+;; ===========================================================================
+;; Type predicates
+;; ===========================================================================
+
+;; (minibufferp &optional BUFFER LIVE) - test if buffer is minibuffer
+(defun minibufferp (&optional any any) -> bool)
+
+;; ===========================================================================
+;; Reading input
+;; ===========================================================================
+
+;; (read-from-minibuffer PROMPT &optional INITIAL KEYMAP READ HIST DEFAULT INHERIT-INPUT-METHOD) - read string
+(defun read-from-minibuffer (string &optional any any any any any any) -> any)
+
+;; (read-string PROMPT &optional INITIAL HISTORY DEFAULT INHERIT-INPUT-METHOD) - read string
+(defun read-string (string &optional any any any any) -> string)
+
+;; (read-buffer PROMPT &optional DEF REQUIRE-MATCH PREDICATE) - read buffer name
+(defun read-buffer (string &optional any any any) -> string)
+
+;; (read-command PROMPT &optional DEFAULT-VALUE) - read command name
+(defun read-command (string &optional any) -> symbol)
+
+;; (read-variable PROMPT &optional DEFAULT-VALUE) - read variable name
+(defun read-variable (string &optional any) -> symbol)
+
+;; (completing-read PROMPT COLLECTION &optional PREDICATE REQUIRE-MATCH INITIAL HIST DEF INHERIT-INPUT-METHOD) - read with completion
+(defun completing-read (string any &optional any any any any any any) -> string)
+
+;; ===========================================================================
+;; Minibuffer state
+;; ===========================================================================
+
+;; (minibuffer-depth) - return current minibuffer depth
+(defun minibuffer-depth () -> int)
+
+;; (minibuffer-prompt) - return prompt string
+(defun minibuffer-prompt () -> (string | nil))
+
+;; (minibuffer-prompt-end) - return position after prompt
+(defun minibuffer-prompt-end () -> int)
+
+;; (minibuffer-contents) - return user input as string
+(defun minibuffer-contents () -> string)
+
+;; (minibuffer-contents-no-properties) - return user input without properties
+(defun minibuffer-contents-no-properties () -> string)
+
+;; (innermost-minibuffer-p) - test if current is innermost minibuffer
+(defun innermost-minibuffer-p () -> bool)
+
+;; (minibuffer-innermost-command-loop-p) - test if in innermost command loop
+(defun minibuffer-innermost-command-loop-p () -> bool)
+
+;; ===========================================================================
+;; Minibuffer window
+;; ===========================================================================
+
+;; (active-minibuffer-window) - return active minibuffer window
+(defun active-minibuffer-window () -> (any | nil))
+
+;; (set-minibuffer-window WINDOW) - set minibuffer window
+(defun set-minibuffer-window (any) -> any)
+
+;; ===========================================================================
+;; Minibuffer control
+;; ===========================================================================
+
+;; (abort-minibuffers) - abort all active minibuffers
+(defun abort-minibuffers () -> nil)
+
+;; ===========================================================================
+;; Completion functions
+;; ===========================================================================
+
+;; (try-completion STRING COLLECTION &optional PREDICATE) - try to complete string
+(defun try-completion (string any &optional any) -> (string | symbol | nil))
+
+;; (all-completions STRING COLLECTION &optional PREDICATE) - get all completions
+(defun all-completions (string any &optional any) -> (list string))
+
+;; (test-completion STRING COLLECTION &optional PREDICATE) - test if valid completion
+(defun test-completion (string any &optional any) -> bool)
+
+;; (internal-complete-buffer STRING PREDICATE FLAG) - internal buffer completion
+(defun internal-complete-buffer (string any any) -> any)
+
+;; ===========================================================================
+;; String utilities
+;; ===========================================================================
+
+;; (assoc-string KEY ALIST &optional CASE-FOLD) - find string in alist
+(defun assoc-string (string (list any) &optional any) -> (any | nil))
