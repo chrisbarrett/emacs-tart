@@ -1443,6 +1443,107 @@ let test_type_scope_hk_kind_enforced () =
         "scheme is polymorphic" true
         (String.length scheme_str > 0)
 
+(** {1 Type Subtraction Tests (R10)}
+
+    Tests for the type subtraction operator (a - b) that removes a type
+    from a union. *)
+
+(** Test basic type subtraction from union *)
+let test_subtract_from_union () =
+  let sig_src =
+    {|
+    (type int-only ((int | string) - string))
+    (defun use-int-only (int-only) -> int)
+  |}
+  in
+  let env = load_sig_str sig_src in
+  match Type_env.lookup "use-int-only" env with
+  | None -> Alcotest.fail "use-int-only not found"
+  | Some scheme ->
+      let scheme_str = Type_env.scheme_to_string scheme in
+      (* The type should resolve to just Int after subtraction *)
+      Alcotest.(check bool)
+        "param is int after subtraction" true
+        (try
+           let _ = Str.search_forward (Str.regexp_string "Int") scheme_str 0 in
+           true
+         with Not_found -> false)
+
+(** Test subtracting nil from truthy|nil yields truthy *)
+let test_subtract_nil_from_any () =
+  let sig_src =
+    {|
+    (type truthy-only ((truthy | nil) - nil))
+    (defun use-truthy (truthy-only) -> int)
+  |}
+  in
+  let env = load_sig_str sig_src in
+  match Type_env.lookup "use-truthy" env with
+  | None -> Alcotest.fail "use-truthy not found"
+  | Some scheme ->
+      let scheme_str = Type_env.scheme_to_string scheme in
+      (* Should be Truthy, not a union *)
+      Alcotest.(check bool)
+        "is truthy" true
+        (try
+           let _ = Str.search_forward (Str.regexp_string "Truthy") scheme_str 0 in
+           true
+         with Not_found -> false)
+
+(** Test subtraction validation works *)
+let test_subtract_validates_types () =
+  let sig_src =
+    {|
+    (type is [a] (a - nil))
+    (defun unwrap [a] ((is a)) -> a)
+  |}
+  in
+  match validate_str sig_src with
+  | Ok () -> ()
+  | Error e -> Alcotest.fail (Printf.sprintf "Unexpected error: %s" e.message)
+
+(** Test subtraction with type variables *)
+let test_subtract_with_type_var () =
+  let sig_src =
+    {|
+    (type is [a] (a - nil))
+    (defun is-identity [a] ((is a)) -> (is a))
+  |}
+  in
+  let env = load_sig_str sig_src in
+  match Type_env.lookup "is-identity" env with
+  | None -> Alcotest.fail "is-identity not found"
+  | Some _ -> ()
+
+(** Test subtraction from 3-way union *)
+let test_subtract_from_3_way_union () =
+  let sig_src =
+    {|
+    (type two-way ((int | string | nil) - nil))
+    (defun use-two-way (two-way) -> nil)
+  |}
+  in
+  let env = load_sig_str sig_src in
+  match Type_env.lookup "use-two-way" env with
+  | None -> Alcotest.fail "use-two-way not found"
+  | Some scheme ->
+      let scheme_str = Type_env.scheme_to_string scheme in
+      (* Should still be a union of Int and String *)
+      Alcotest.(check bool)
+        "has int" true
+        (try
+           let _ = Str.search_forward (Str.regexp_string "Int") scheme_str 0 in
+           true
+         with Not_found -> false);
+      Alcotest.(check bool)
+        "has string" true
+        (try
+           let _ =
+             Str.search_forward (Str.regexp_string "String") scheme_str 0
+           in
+           true
+         with Not_found -> false)
+
 let () =
   Alcotest.run "sig_loader"
     [
@@ -1614,5 +1715,18 @@ let () =
           Alcotest.test_case "HK variable" `Quick test_type_scope_hk_variable;
           Alcotest.test_case "HK kind enforced" `Quick
             test_type_scope_hk_kind_enforced;
+        ] );
+      ( "type-subtraction",
+        [
+          Alcotest.test_case "subtract from union" `Quick
+            test_subtract_from_union;
+          Alcotest.test_case "subtract nil from any" `Quick
+            test_subtract_nil_from_any;
+          Alcotest.test_case "validates types" `Quick
+            test_subtract_validates_types;
+          Alcotest.test_case "with type var" `Quick
+            test_subtract_with_type_var;
+          Alcotest.test_case "from 3-way union" `Quick
+            test_subtract_from_3_way_union;
         ] );
     ]

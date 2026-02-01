@@ -62,6 +62,8 @@ and sig_type =
   | STUnion of sig_type list * span  (** Union type (e.g., [(int | string)]) *)
   | STTuple of sig_type list * span
       (** Tuple type (e.g., [(tuple int string bool)]) *)
+  | STSubtract of sig_type * sig_type * span
+      (** Type subtraction (e.g., [(a - nil)], removes nil from union a) *)
 
 (** Function parameter in signature types *)
 and sig_param =
@@ -231,3 +233,6 @@ val st_union : sig_type list -> span -> sig_type
 
 val st_tuple : sig_type list -> span -> sig_type
 (** Create a tuple type *)
+
+val st_subtract : sig_type -> sig_type -> span -> sig_type
+(** Create a type subtraction *)

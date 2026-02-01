@@ -10,6 +10,8 @@
     - bool: Boolean type (t | nil)
     - list: Homogeneous list ((cons a (list a)) | nil)
     - option: Add nil to a truthy type (a | nil) with bound (a : truthy)
+    - is: Type subtraction (a - nil) - removes nil from a type
+    - nonempty: Non-empty list (is (list a)) - list without nil
 
     The prelude is loaded before any other .tart file and its bindings cannot be
     shadowed (per Spec 07 R17). *)

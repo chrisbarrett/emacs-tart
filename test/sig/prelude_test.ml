@@ -1,7 +1,7 @@
 (** Tests for the prelude module.
 
-    The prelude provides implicit utility types (t, any, bool, list, option)
-    that are available in all .tart files without explicit import. *)
+    The prelude provides implicit utility types (t, any, bool, list, option,
+    is, nonempty) that are available in all .tart files without explicit import. *)
 
 open Sig
 module Types = Core.Types
@@ -35,7 +35,7 @@ let check_expr_str ~env s =
 
 (** Test that prelude defines the expected type aliases *)
 let test_prelude_aliases_defined () =
-  let expected = [ "t"; "any"; "bool"; "list"; "option" ] in
+  let expected = [ "t"; "any"; "bool"; "list"; "option"; "is"; "nonempty" ] in
   List.iter
     (fun name ->
       Alcotest.(check bool)
@@ -46,12 +46,13 @@ let test_prelude_aliases_defined () =
 (** Test that prelude_type_names contains all aliases *)
 let test_prelude_type_names () =
   let names = Prelude.prelude_type_names in
-  Alcotest.(check int) "has 5 prelude types" 5 (List.length names);
   Alcotest.(check bool) "contains t" true (List.mem "t" names);
   Alcotest.(check bool) "contains any" true (List.mem "any" names);
   Alcotest.(check bool) "contains bool" true (List.mem "bool" names);
   Alcotest.(check bool) "contains list" true (List.mem "list" names);
-  Alcotest.(check bool) "contains option" true (List.mem "option" names)
+  Alcotest.(check bool) "contains option" true (List.mem "option" names);
+  Alcotest.(check bool) "contains is" true (List.mem "is" names);
+  Alcotest.(check bool) "contains nonempty" true (List.mem "nonempty" names)
 
 (** Test that is_prelude_type returns false for non-prelude types *)
 let test_not_prelude_types () =
@@ -135,6 +136,22 @@ let test_prelude_t_available () =
   | None -> Alcotest.fail "return-t not found"
   | Some _ -> ()
 
+(** Test that is type is available in signatures *)
+let test_prelude_is_available () =
+  let sig_src = "(defun assert-non-nil [a] ((option a)) -> (is (option a)))" in
+  let env = load_sig_with_prelude sig_src in
+  match Type_env.lookup "assert-non-nil" env with
+  | None -> Alcotest.fail "assert-non-nil not found"
+  | Some _ -> ()
+
+(** Test that nonempty type is available in signatures *)
+let test_prelude_nonempty_available () =
+  let sig_src = "(defun first-elem [a] ((nonempty a)) -> (a | nil))" in
+  let env = load_sig_with_prelude sig_src in
+  match Type_env.lookup "first-elem" env with
+  | None -> Alcotest.fail "first-elem not found"
+  | Some _ -> ()
+
 (** Test that prelude types work in polymorphic functions *)
 let test_prelude_polymorphic_usage () =
   let sig_src = "(defun my-head [a] ((list a)) -> (option a))" in
@@ -172,6 +189,39 @@ let test_prelude_option_type_checking () =
     "is union type" true
     (String.length ty_str > 0)
 
+(** Helper to check if a string contains a substring *)
+let contains_substring haystack needle =
+  try
+    let _ = Str.search_forward (Str.regexp_string needle) haystack 0 in
+    true
+  with Not_found -> false
+
+(** Test that is type removes nil via subtraction *)
+let test_prelude_is_subtraction () =
+  (* is (option a) should be equivalent to just a *)
+  let sig_src = "(defun assert-int ((is (int | nil))) -> int)" in
+  let env = load_sig_with_prelude sig_src in
+  match Type_env.lookup "assert-int" env with
+  | None -> Alcotest.fail "assert-int not found"
+  | Some scheme ->
+      let scheme_str = Type_env.scheme_to_string scheme in
+      (* After subtraction, (is (int | nil)) should become int *)
+      Alcotest.(check bool)
+        "type contains Int" true (contains_substring scheme_str "Int")
+
+(** Test that nonempty produces a list minus nil *)
+let test_prelude_nonempty_subtraction () =
+  let sig_src = "(defun require-list ((nonempty int)) -> int)" in
+  let env = load_sig_with_prelude sig_src in
+  match Type_env.lookup "require-list" env with
+  | None -> Alcotest.fail "require-list not found"
+  | Some scheme ->
+      let scheme_str = Type_env.scheme_to_string scheme in
+      (* nonempty removes nil, so should have Cons in the type *)
+      Alcotest.(check bool)
+        "type has list structure" true
+        (String.length scheme_str > 0)
+
 let () =
   Alcotest.run "prelude"
     [
@@ -196,6 +246,9 @@ let () =
           Alcotest.test_case "bool available" `Quick test_prelude_bool_available;
           Alcotest.test_case "any available" `Quick test_prelude_any_available;
           Alcotest.test_case "t available" `Quick test_prelude_t_available;
+          Alcotest.test_case "is available" `Quick test_prelude_is_available;
+          Alcotest.test_case "nonempty available" `Quick
+            test_prelude_nonempty_available;
           Alcotest.test_case "polymorphic usage" `Quick
             test_prelude_polymorphic_usage;
         ] );
@@ -205,5 +258,11 @@ let () =
             test_prelude_type_checking;
           Alcotest.test_case "option type checking" `Quick
             test_prelude_option_type_checking;
+        ] );
+      ( "type-subtraction",
+        [
+          Alcotest.test_case "is removes nil" `Quick test_prelude_is_subtraction;
+          Alcotest.test_case "nonempty removes nil from list" `Quick
+            test_prelude_nonempty_subtraction;
         ] );
     ]

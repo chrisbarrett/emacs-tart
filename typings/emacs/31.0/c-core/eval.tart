@@ -1,0 +1,223 @@
+;; Type signatures for Emacs eval.c
+;;
+;; Source: emacs/src/eval.c
+;; Emacs version: 31.0
+;;
+;; Contains evaluation, control flow, and error handling primitives.
+;;
+;; Note: Many functions in eval.c are special forms that don't have
+;; straightforward function types. We type them as best we can.
+
+;; ===========================================================================
+;; Special forms (control flow)
+;; ===========================================================================
+
+;; (quote ARG) - return argument unevaluated
+;; Special form - can't be called as function
+(defun quote [a] (arg : a) -> a)
+
+;; (function ARG) - like quote but marks as function
+(defun function [a] (arg : a) -> a)
+
+;; (if COND THEN &rest ELSE) - conditional
+;; The return type depends on which branch is taken
+(defun if [a b] (cond then : a &rest else : (list b)) -> (a | b))
+
+;; (cond &rest CLAUSES) - multi-branch conditional
+(defun cond (&rest clauses) -> any)
+
+;; (progn &rest BODY) - evaluate forms in sequence
+(defun progn [a] (&rest body : (list a)) -> a)
+
+;; (prog1 FIRST &rest BODY) - evaluate and return first
+(defun prog1 [a] (first : a &rest body) -> a)
+
+;; (and &rest CONDITIONS) - short-circuit AND
+(defun and (&rest conditions) -> any)
+
+;; (or &rest CONDITIONS) - short-circuit OR
+(defun or (&rest conditions) -> any)
+
+;; (while TEST &rest BODY) - loop while true
+(defun while (test &rest body) -> nil)
+
+;; (let BINDINGS &rest BODY) - local bindings
+(defun let [a] (bindings &rest body : (list a)) -> a)
+
+;; (let* BINDINGS &rest BODY) - sequential local bindings
+(defun let* [a] (bindings &rest body : (list a)) -> a)
+
+;; ===========================================================================
+;; Variable definitions
+;; ===========================================================================
+
+;; (setq &rest ARGS) - set variables
+(defun setq (&rest args) -> any)
+
+;; (defvar SYMBOL &optional INITVALUE DOCSTRING) - define variable
+(defun defvar (symbol : symbol &optional initvalue docstring : (string | nil)) -> symbol)
+
+;; (defvar-1 SYMBOL INITVALUE DOCSTRING) - internal defvar
+(defun defvar-1 (symbol : symbol initvalue docstring) -> symbol)
+
+;; (defconst SYMBOL INITVALUE &optional DOCSTRING) - define constant
+(defun defconst (symbol : symbol initvalue &optional docstring : (string | nil)) -> symbol)
+
+;; (defconst-1 SYMBOL INITVALUE DOCSTRING) - internal defconst
+(defun defconst-1 (symbol : symbol initvalue docstring) -> symbol)
+
+;; (defvaralias NEW-ALIAS BASE-VAR &optional DOCSTRING) - alias variable
+(defun defvaralias (new-alias : symbol base-var : symbol &optional docstring : (string | nil)) -> symbol)
+
+;; (special-variable-p VAR) - test if special variable
+(defun special-variable-p (var : symbol) -> bool)
+
+;; ===========================================================================
+;; Function application
+;; ===========================================================================
+
+;; (eval FORM &optional LEXICAL) - evaluate form
+(defun eval (form &optional lexical) -> any)
+
+;; (funcall FN &rest ARGS) - call function
+;; Note: Return type depends on FN, typed as any
+(defun funcall (fn &rest args) -> any)
+
+;; (apply FN &rest ARGS) - call with last arg as list
+;; Note: Return type depends on FN, typed as any
+(defun apply (fn &rest args) -> any)
+
+;; (funcall-with-delayed-message TIMEOUT MESSAGE FN &rest ARGS) - call with timeout message
+(defun funcall-with-delayed-message (timeout : num message : string fn &rest args) -> any)
+
+;; (func-arity FN) - return (MIN . MAX) or (MIN . many)
+(defun func-arity (fn) -> (pair int (int | 'many)))
+
+;; (functionp OBJ) - test if callable
+(defun functionp (obj) -> bool)
+
+;; (commandp FN &optional FOR-CALL-INTERACTIVELY) - test if command
+(defun commandp (fn &optional for-call-interactively) -> bool)
+
+;; ===========================================================================
+;; Macros
+;; ===========================================================================
+
+;; (macroexpand FORM &optional ENVIRONMENT) - expand macro
+(defun macroexpand (form &optional environment) -> any)
+
+;; ===========================================================================
+;; Autoload
+;; ===========================================================================
+
+;; (autoload FN FILE &optional DOCSTRING INTERACTIVE TYPE) - set up autoload
+(defun autoload (fn : symbol file : string &optional docstring : (string | nil) interactive type) -> symbol)
+
+;; (autoload-do-load FN &optional MACRO-ONLY IMMEDIATE-LOAD) - load autoload
+(defun autoload-do-load (fn &optional macro-only immediate-load) -> any)
+
+;; ===========================================================================
+;; Error handling
+;; ===========================================================================
+
+;; (signal ERROR DATA) - signal error condition
+(defun signal (error : symbol data) -> never)
+
+;; (condition-case VAR BODYFORM &rest HANDLERS) - catch errors
+(defun condition-case (var bodyform &rest handlers) -> any)
+
+;; (handler-bind-1 HANDLERS-BODY) - internal handler binding
+(defun handler-bind-1 (handlers-body) -> any)
+
+;; (unwind-protect BODYFORM &rest UNWINDFORMS) - cleanup on exit
+(defun unwind-protect [a] (bodyform : a &rest unwindforms) -> a)
+
+;; ===========================================================================
+;; Non-local exits
+;; ===========================================================================
+
+;; (catch TAG &rest BODY) - establish catch point
+(defun catch (tag &rest body) -> any)
+
+;; (throw TAG VALUE) - non-local return
+(defun throw (tag value) -> never)
+
+;; ===========================================================================
+;; Hooks
+;; ===========================================================================
+
+;; (run-hooks &rest HOOKS) - run normal hooks
+(defun run-hooks (&rest hooks : (list symbol)) -> nil)
+
+;; (run-hook-with-args HOOK &rest ARGS) - run hook with arguments
+(defun run-hook-with-args (hook : symbol &rest args) -> any)
+
+;; (run-hook-with-args-until-success HOOK &rest ARGS) - run until non-nil
+(defun run-hook-with-args-until-success (hook : symbol &rest args) -> any)
+
+;; (run-hook-with-args-until-failure HOOK &rest ARGS) - run until nil
+(defun run-hook-with-args-until-failure (hook : symbol &rest args) -> any)
+
+;; (run-hook-wrapped HOOK WRAP-FN &rest ARGS) - run with wrapper
+(defun run-hook-wrapped (hook : symbol wrap-fn &rest args) -> any)
+
+;; ===========================================================================
+;; Closures
+;; ===========================================================================
+
+;; (make-interpreted-closure ARGS BODY ENV &optional DOCSTRING IFORM) - create closure
+(defun make-interpreted-closure (args body env &optional docstring iform) -> any)
+
+;; ===========================================================================
+;; Debugging
+;; ===========================================================================
+
+;; (backtrace-debug LEVEL FLAG) - set debug flag on frame
+(defun backtrace-debug (level : int flag) -> nil)
+
+;; (backtrace-eval EXP NFRAMES &optional BASE) - eval in frame context
+(defun backtrace-eval (exp nframes : int &optional base) -> any)
+
+;; (mapbacktrace FN &optional BASE) - map over backtrace
+(defun mapbacktrace (fn &optional base) -> nil)
+
+;; (debugger-trap) - enter debugger
+(defun debugger-trap () -> nil)
+
+;; ===========================================================================
+;; Internal/private functions
+;; ===========================================================================
+
+;; (backtrace--frames-from-thread THREAD) - internal: frames from thread
+(defun backtrace--frames-from-thread (thread) -> (vector any))
+
+;; (backtrace--locals NFRAMES &optional BASE) - internal: local bindings
+(defun backtrace--locals (nframes : int &optional base) -> any)
+
+;; (backtrace-frame--internal NFRAMES &optional BASE) - internal: frame info
+(defun backtrace-frame--internal (nframes : int &optional base) -> any)
+
+;; (internal--define-uninitialized-variable SYMBOL &optional DOCSTRING) - internal
+(defun internal--define-uninitialized-variable (symbol : symbol &optional docstring) -> symbol)
+
+;; (internal-delete-indirect-variable VARIABLE) - internal
+(defun internal-delete-indirect-variable (variable : symbol) -> nil)
+
+;; (internal-make-var-non-special VARIABLE) - internal
+(defun internal-make-var-non-special (variable : symbol) -> nil)
+
+;; ===========================================================================
+;; Toplevel values
+;; ===========================================================================
+
+;; (default-toplevel-value SYM) - get toplevel default
+(defun default-toplevel-value (sym : symbol) -> any)
+
+;; (set-default-toplevel-value SYM VALUE) - set toplevel default
+(defun set-default-toplevel-value (sym : symbol value) -> nil)
+
+;; (buffer-local-toplevel-value SYM &optional BUFFER) - get buffer toplevel
+(defun buffer-local-toplevel-value (sym : symbol &optional buffer) -> any)
+
+;; (set-buffer-local-toplevel-value SYM VALUE &optional BUFFER) - set buffer toplevel
+(defun set-buffer-local-toplevel-value (sym : symbol value &optional buffer) -> nil)

@@ -184,6 +184,19 @@ let rec infer_sig_type_kind (env : Kind.env) (ty : sig_type) :
           (Ok ()) types
       in
       Ok (Kind.KConcrete Kind.KStar)
+  | STSubtract (minuend, subtrahend, _) ->
+      (* Type subtraction: both operands must be kind *, result is kind * *)
+      let* minuend_kind = infer_sig_type_kind env minuend in
+      let* () =
+        unify_scheme_with_kind minuend_kind Kind.KStar
+          "subtraction minuend"
+      in
+      let* subtrahend_kind = infer_sig_type_kind env subtrahend in
+      let* () =
+        unify_scheme_with_kind subtrahend_kind Kind.KStar
+          "subtraction subtrahend"
+      in
+      Ok (Kind.KConcrete Kind.KStar)
 
 (** Infer the kind of a function parameter type. *)
 and infer_param_kind (env : Kind.env) (param : sig_param) :

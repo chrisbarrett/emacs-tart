@@ -10,6 +10,8 @@
     - bool: Union type (t | nil)
     - list: Alias for built-in List (parameterized)
     - option: Union type (a | nil) with truthy bound on a
+    - is: Type subtraction (a - nil) - removes nil from a type
+    - nonempty: Non-empty list (is (list a)) - list without nil
 
     The prelude is loaded before any other .tart file and its bindings cannot be
     shadowed (per Spec 07 R17). *)
@@ -37,6 +39,10 @@ let tvar name = Sig_ast.STVar (name, prelude_span)
 
 (** Make a type application *)
 let tapp name args = Sig_ast.STApp (name, args, prelude_span)
+
+(** Make a type subtraction *)
+let tsubtract minuend subtrahend =
+  Sig_ast.STSubtract (minuend, subtrahend, prelude_span)
 
 (** Make a type binder (unused but available for future prelude extensions) *)
 let _binder ?bound name =
@@ -78,6 +84,19 @@ let prelude_aliases : (string * Sig_loader.type_alias) list =
       {
         Sig_loader.alias_params = [ "a" ];
         alias_body = Sig_ast.STUnion ([ tvar "a"; tcon "Nil" ], prelude_span);
+      } );
+    (* (type is [a] (a - nil)) - removes nil from a type via subtraction *)
+    ( "is",
+      {
+        Sig_loader.alias_params = [ "a" ];
+        alias_body = tsubtract (tvar "a") (tcon "Nil");
+      } );
+    (* (type nonempty [a] (is (list a))) - non-empty list, equivalent to
+       ((list a) - nil) which yields (cons a (list a)) *)
+    ( "nonempty",
+      {
+        Sig_loader.alias_params = [ "a" ];
+        alias_body = tsubtract (tapp "List" [ tvar "a" ]) (tcon "Nil");
       } );
   ]
 

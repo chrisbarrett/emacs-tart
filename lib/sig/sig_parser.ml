@@ -185,6 +185,8 @@ and parse_list_type (contents : Sexp.t list) (span : Loc.span) : sig_type result
   | Sexp.Symbol ("tuple", _) :: args -> parse_tuple_type args span
   (* Check for union type: (type | type | ...) *)
   | _ when has_pipe_symbol contents -> parse_union_type contents span
+  (* Check for subtraction type: (type - type) *)
+  | _ when has_minus_symbol contents -> parse_subtract_type contents span
   (* Check for arrow type: (params) -> return or [vars] (params) -> return *)
   | _ when has_arrow_symbol contents -> parse_arrow_type contents span
   (* Type application: (type-con args...) *)
@@ -219,6 +221,10 @@ and has_arrow_symbol contents =
 and has_pipe_symbol contents =
   List.exists (function Sexp.Symbol ("|", _) -> true | _ -> false) contents
 
+(** Check if a list contains the minus symbol - (for type subtraction) *)
+and has_minus_symbol contents =
+  List.exists (function Sexp.Symbol ("-", _) -> true | _ -> false) contents
+
 (** Parse a union type: (type1 | type2 | ...) *)
 and parse_union_type (contents : Sexp.t list) (span : Loc.span) :
     sig_type result =
@@ -245,6 +251,31 @@ and parse_union_type (contents : Sexp.t list) (span : Loc.span) :
   | Ok types when List.length types >= 2 -> Ok (STUnion (types, span))
   | Ok _ -> error "Union type requires at least two alternatives" span
   | Error e -> Error e
+
+(** Parse a type subtraction: (type1 - type2)
+
+    Type subtraction removes type2 from union type1. For example:
+    - ((int | string) - int) => string
+    - ((truthy | nil) - nil) => truthy *)
+and parse_subtract_type (contents : Sexp.t list) (span : Loc.span) :
+    sig_type result =
+  (* Find the - and split *)
+  let rec find_minus before = function
+    | [] -> None
+    | Sexp.Symbol ("-", _) :: after -> Some (List.rev before, after)
+    | x :: rest -> find_minus (x :: before) rest
+  in
+  match find_minus [] contents with
+  | None -> error "Expected - in type subtraction" span
+  | Some ([ minuend_sexp ], [ subtrahend_sexp ]) -> (
+      match parse_sig_type minuend_sexp with
+      | Error e -> Error e
+      | Ok minuend -> (
+          match parse_sig_type subtrahend_sexp with
+          | Error e -> Error e
+          | Ok subtrahend -> Ok (STSubtract (minuend, subtrahend, span))))
+  | Some (_, _) ->
+      error "Type subtraction requires exactly two types: (a - b)" span
 
 (** Parse a tuple type: (tuple type1 type2 ...) *)
 and parse_tuple_type (args : Sexp.t list) (span : Loc.span) : sig_type result =

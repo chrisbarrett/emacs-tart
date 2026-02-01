@@ -10,61 +10,17 @@
 
 These tasks fix spec violations in the existing implementation.
 
-### 1.1 Remove Inferred Type Quantifiers
+### 1.1 Remove Inferred Type Quantifiers ✅
 
-**Problem:** `lib/sig/forall_infer.ml` automatically infers `[vars]` quantifiers when missing. Specs 07 and 15 require **explicit quantification only**—unbound type variables must be errors.
+**Status:** COMPLETE (commit cdfc87c)
 
-**Files:**
-- `lib/sig/forall_infer.ml` — DELETE or gut completely
-- `lib/sig/sig_loader.ml` — Remove calls to `Forall_infer.infer_defun` and `Forall_infer.infer_type_decl`
-- `lib/sig/sig_parser.ml` — Ensure parser errors on unbound type variables
+Removed automatic `[vars]` quantifier inference. Unbound type variables now produce errors as required by Specs 07 and 15.
 
-**Changes:**
-1. Remove `Forall_infer` module entirely
-2. Update `sig_loader.ml` lines 1086, 1109-1110, 1153-1154, 1174-1175 to remove inference calls
-3. Make `sig_loader.validate_type` stricter: lowercase names without `[...]` quantifier should error if not a known type
-4. Update all existing `.tart` files to have explicit quantifiers where missing
+### 1.2 Create Prelude (Spec 48) ✅
 
-**Verify:** `(defun identity (a) -> a)` produces error "unbound type variable 'a'"
+**Status:** COMPLETE (commits 927cfb3, b277070, 2e148ad)
 
-### 1.2 Create Prelude (Spec 48)
-
-**Problem:** Prelude types (`list`, `option`, `is`, `nonempty`, `any`, `bool`, `t`) are not implicitly available.
-
-**Files:**
-- `typings/tart-prelude.tart` — CREATE
-- `lib/sig/sig_loader.ml` — Load prelude before other typings
-
-**Content for `tart-prelude.tart`:**
-```lisp
-;; The symbol 't—Elisp's canonical truthy value
-(type t 't)
-
-;; Universal type: any Elisp value
-(type any (truthy | nil))
-
-;; Boolean: t or nil (Elisp's boolean convention)
-(type bool (t | nil))
-
-;; Homogeneous list (recursive, nullable)
-(type list [a] ((cons a (list a)) | nil))
-
-;; Refinement: remove nil from a type
-(type is [a] (a - nil))
-
-;; Optional: add nil to a truthy type
-(type option [(a : truthy)] (a | nil))
-
-;; Non-empty list (list without nil)
-(type nonempty [a] (is (list a)))
-```
-
-**Changes:**
-1. Create the prelude file
-2. Add `load_prelude` function to `sig_loader.ml` that loads prelude before any other typings
-3. Ensure prelude types cannot be shadowed (Spec 07 R17)
-
-**Verify:** Any `.tart` file can use `list`, `option` without explicit import
+Prelude types (`list`, `option`, `is`, `nonempty`, `any`, `bool`, `t`) are now implicitly available. Located at `typings/tart-prelude.tart`.
 
 ### 1.3 Emacs Version Detection (Spec 24)
 
@@ -89,22 +45,11 @@ These tasks fix spec violations in the existing implementation.
 
 ## Phase 2: Core Type System Completeness
 
-### 2.1 Type Subtraction Operator (Spec 11 R10)
+### 2.1 Type Subtraction Operator (Spec 11 R10) ✅
 
-**Problem:** `(a - nil)` syntax not implemented; needed for `is` and `nonempty` prelude types.
+**Status:** COMPLETE (commit 98ff9ac)
 
-**Files:**
-- `lib/sig/sig_ast.ml` — Add `STSubtract` variant
-- `lib/sig/sig_parser.ml` — Parse `-` as type subtraction
-- `lib/core/types.ml` — Add `TSubtract` or handle during normalization
-- `lib/typing/unify.ml` — Handle subtraction during unification
-
-**Changes:**
-1. Parse `(a - b)` as type subtraction
-2. During normalization: `(T1 | T2 | T3) - T2` → `(T1 | T3)`
-3. Error if subtraction produces empty type
-
-**Verify:** `(type nonempty [a] (is (list a)))` expands correctly
+`(a - nil)` syntax implemented. The `is` and `nonempty` prelude types work correctly.
 
 ### 2.2 Bounded Quantifiers Validation (Spec 07 R4, Spec 48 R6)
 
@@ -174,9 +119,25 @@ These tasks fix spec violations in the existing implementation.
 
 ---
 
-## Phase 4: Core Typings Validation
+## Phase 4: Create Emacs Core Typings (Spec 24, Spec 32)
 
-### 4.1 Verbose Coverage Output (Spec 30)
+The previous Emacs typings were deleted to be rewritten using the new type system features (type subtraction, explicit quantification, prelude types).
+
+### 4.1 Directory Structure Setup
+
+**Create:**
+```
+typings/emacs/
+├── BUGS.md                     ; Cross-version issues
+└── 31.0/
+    ├── BUGS.md                 ; Version-specific issues
+    └── c-core/
+        └── (*.tart files)
+```
+
+Note: Targeting 31.0 only for now. The `latest` symlink and older versions (30.1, 29.1) are deferred.
+
+### 4.2 Verbose Coverage Output (Spec 30)
 
 **Problem:** No visibility into what typings are loaded and why.
 
@@ -192,33 +153,56 @@ These tasks fix spec violations in the existing implementation.
 
 **Verify:** `./tart emacs-coverage -v` shows diagnostic info
 
-### 4.2 Validate Existing C-Core Typings (Spec 32)
+### 4.3 Create C-Core Typings (Spec 32)
 
-**Status:** `typings/emacs/{29.1,30.1,31.0}/c-core/*.tart` exist (17 files each)
+Write type signatures for Emacs C primitives from scratch, using the new type system features.
 
-**Task:** Run `./tart check` against Emacs's `lisp/` directory with verbose output. Fix type errors iteratively.
+**Files to create (in priority order):**
 
-**Files to validate (in order):**
-1. `data.tart` — `eq`, `null`, `+`, `-`, `car`, `cdr`, predicates
-2. `fns.tart` — `length`, `concat`, `mapcar`, `assoc`
-3. `alloc.tart` — `cons`, `list`, `make-vector`
-4. `eval.tart` — `funcall`, `apply`, `signal`, `catch`
-5. `buffer.tart` — `current-buffer`, `set-buffer`
-6. `editfns.tart` — `point`, `goto-char`, `insert`
-7. (Continue for remaining files)
+| File | Source | Key Functions |
+|------|--------|---------------|
+| `data.tart` | data.c | `eq`, `null`, `+`, `-`, `car`, `cdr`, predicates, arithmetic |
+| `fns.tart` | fns.c | `length`, `concat`, `mapcar`, `assoc`, utilities |
+| `alloc.tart` | alloc.c | `cons`, `list`, `make-vector`, allocation |
+| `eval.tart` | eval.c | `funcall`, `apply`, `signal`, `catch`, control flow |
+| `buffer.tart` | buffer.c | `current-buffer`, `set-buffer`, buffer ops |
+| `editfns.tart` | editfns.c | `point`, `goto-char`, `insert`, editing |
+| `window.tart` | window.c | `selected-window`, `window-buffer`, window ops |
+| `frame.tart` | frame.c | `selected-frame`, `frame-parameters`, frame ops |
+| `fileio.tart` | fileio.c | `find-file-noselect`, `write-region`, file I/O |
+| `search.tart` | search.c | `re-search-forward`, `match-string`, search |
+| `process.tart` | process.c | `start-process`, `process-send-string`, subprocs |
+| `keyboard.tart` | keyboard.c | `read-key-sequence`, input |
+| `keymap.tart` | keymap.c | `define-key`, `lookup-key`, keymaps |
+| `minibuf.tart` | minibuf.c | `read-string`, `completing-read`, minibuffer |
+| `textprop.tart` | textprop.c | `get-text-property`, `put-text-property`, props |
+| `print.tart` | print.c | `prin1`, `princ`, `message`, output |
 
-**Process per file:**
-1. Run `./tart emacs-coverage -v` to see coverage
-2. Run `./tart check /path/to/emacs/lisp/*.el` (subset)
-3. Analyze type errors
-4. Fix signatures or document in `BUGS.md`
-5. Target: 95%+ success rate per file
+**Workflow per file (Spec 32 workflow):**
+1. **Extract symbols** — Run `tart emacs-coverage -v` to list DEFUNs/DEFVARs from the C file
+2. **Write signatures** — Create `.tart` file with types using prelude types
+3. **Validate** — Run `./tart check` against Emacs `lisp/` directory
+4. **Debug** — Use verbose coverage to confirm signatures loaded
+5. **Iterate** — Fix type errors until 95%+ success rate
+6. **Document gaps** — Log untypeable items to BUGS.md
 
-### 4.3 Create BUGS.md Structure (Spec 32 R5-R8)
+**Type system features to leverage:**
+- `list`, `option`, `nonempty`, `is` from prelude
+- Type subtraction `(a - nil)` for refinements
+- Explicit `[vars]` quantifiers for polymorphism
+- Bounded quantifiers `[(a : truthy)]` where needed
+- Union types `(a | b)` for sum types
 
-**Files:**
-- `typings/emacs/BUGS.md` — CREATE (cross-version issues)
-- `typings/emacs/31.0/BUGS.md` — CREATE (version-specific)
+### 4.4 BUGS.md Documentation (Spec 32 R5-R8)
+
+Document untypeable or problematic symbols using these categories:
+
+| Category | Description |
+|----------|-------------|
+| `type-system-gap` | Needs features tart doesn't have (dependent types, row polymorphism) |
+| `untypeable` | Behavior can't be captured soundly (dynamic dispatch, eval-based) |
+| `ergonomic` | Typeable but awkward (excessive annotations at call sites) |
+| `version-specific` | Signature changed between Emacs versions |
 
 **Format:**
 ```markdown
@@ -233,17 +217,11 @@ These tasks fix spec violations in the existing implementation.
 - **Location:** eval.c:2789
 - **Issue:** Dynamic dispatch
 - **Resolution:** See Spec 34
-
-## ergonomic
-### `mapcar`
-- **Location:** fns.c:2567
-- **Issue:** Requires explicit annotation at most call sites
-
-## version-specific
-### `json-parse-string`
-- **Location:** json.c:523
-- **Issue:** :object-type keyword added in Emacs 28
 ```
+
+### 4.5 Backfill Older Versions (DEFERRED)
+
+Focus on 31.0 only for now. Backfilling 30.1/29.1 is future work after the 31.0 typings are stable and validated.
 
 ---
 
@@ -395,19 +373,19 @@ fi
 ## Dependency Order
 
 ```
-Phase 1.1 (Remove inference) ──┬──→ Phase 1.2 (Prelude)
-                               │
-                               └──→ Phase 2.1 (Type subtraction)
-                                         │
-Phase 1.3 (Version detection) ──────────┬┴──→ Phase 4.2 (Validate typings)
-                                        │
+Phase 1.1 (Remove inference) ✅ ──┬──→ Phase 1.2 (Prelude) ✅
+                                  │
+                                  └──→ Phase 2.1 (Type subtraction) ✅
+                                            │
+Phase 1.3 (Version detection) ─────────────┬┴──→ Phase 4.3 (Create typings)
+                                           │
 Phase 3.1 (Sig sync) ←── Phase 3.2 (Dep graph)
-                                        │
-Phase 2.2 (Bounded quantifiers) ←───────┘
-Phase 2.3 (No-shadowing) ←──────────────┘
+                                           │
+Phase 2.2 (Bounded quantifiers) ←──────────┘
+Phase 2.3 (No-shadowing) ←─────────────────┘
 
-Phase 4.1 (Verbose coverage) → Phase 4.2 (Validate typings)
-Phase 4.3 (BUGS.md) ← Phase 4.2
+Phase 4.1 (Directory setup) → Phase 4.2 (Verbose coverage) → Phase 4.3 (Create typings)
+Phase 4.4 (BUGS.md) ← Phase 4.3
 
 Phase 5.* (Error quality) — parallel, after Phase 2
 Phase 6.* (Testing) — parallel, after Phase 1
@@ -418,13 +396,13 @@ Phase 7.* (CLI polish) — after core functionality
 
 ## Acceptance Criteria
 
-**Milestone 1: Foundation**
-- [ ] Unbound type variables produce errors (no inference)
-- [ ] Prelude types available without import
+**Milestone 1: Foundation** ✅
+- [x] Unbound type variables produce errors (no inference)
+- [x] Prelude types available without import
 - [ ] Emacs version auto-detected
 
 **Milestone 2: Core Types**
-- [ ] Type subtraction works
+- [x] Type subtraction works
 - [ ] Bounded quantifiers enforced
 - [ ] No shadowing of imports
 
@@ -434,7 +412,7 @@ Phase 7.* (CLI polish) — after core functionality
 - [ ] Parse/validation errors in `.tart` files are surfaced (not silently skipped)
 
 **Milestone 4: Typings**
-- [ ] `data.tart`, `fns.tart`, `alloc.tart`, `eval.tart` validated
+- [ ] `data.tart`, `fns.tart`, `alloc.tart`, `eval.tart` created and validated
 - [ ] 95%+ success rate on Emacs lisp/ subset
 - [ ] BUGS.md documents gaps
 

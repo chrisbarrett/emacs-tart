@@ -1,0 +1,114 @@
+;; Type signatures for Emacs alloc.c
+;;
+;; Source: emacs/src/alloc.c
+;; Emacs version: 31.0
+;;
+;; Contains memory allocation primitives.
+
+;; ===========================================================================
+;; Cons cells and lists
+;; ===========================================================================
+
+;; (cons CAR CDR) - create cons cell
+(defun cons [a b] (car : a cdr : b) -> (pair a b))
+
+;; (list &rest OBJECTS) - create list
+(defun list [a] (&rest objects : (list a)) -> (list a))
+
+;; (make-list LENGTH INIT) - create list of given length
+(defun make-list [a] (length : int init : a) -> (list a))
+
+;; ===========================================================================
+;; Vectors
+;; ===========================================================================
+
+;; (vector &rest OBJECTS) - create vector
+(defun vector [a] (&rest objects : (list a)) -> (vector a))
+
+;; (make-vector LENGTH INIT) - create vector of given length
+(defun make-vector [a] (length : int init : a) -> (vector a))
+
+;; ===========================================================================
+;; Records
+;; ===========================================================================
+
+;; (record TYPE &rest SLOTS) - create record
+(defun record (type : symbol &rest slots) -> any)
+
+;; (make-record TYPE LENGTH INIT) - create record with length
+(defun make-record (type : symbol length : int init) -> any)
+
+;; ===========================================================================
+;; Strings
+;; ===========================================================================
+
+;; (make-string LENGTH INIT &optional MULTIBYTE) - create string
+(defun make-string (length : int init : int &optional multibyte) -> string)
+
+;; ===========================================================================
+;; Symbols
+;; ===========================================================================
+
+;; (make-symbol NAME) - create uninterned symbol
+(defun make-symbol (name : string) -> symbol)
+
+;; ===========================================================================
+;; Bool vectors
+;; ===========================================================================
+
+;; (bool-vector &rest OBJECTS) - create bool vector
+(defun bool-vector (&rest objects) -> any)
+
+;; (make-bool-vector LENGTH INIT) - create bool vector
+(defun make-bool-vector (length : int init) -> any)
+
+;; ===========================================================================
+;; Markers
+;; ===========================================================================
+
+;; (make-marker) - create marker
+(defun make-marker () -> any)
+
+;; ===========================================================================
+;; Byte code
+;; ===========================================================================
+
+;; (make-byte-code ARGLIST BYTE-CODE CONSTANTS DEPTH &optional DOCSTRING INTERACTIVE-SPEC &rest ELEMENTS)
+(defun make-byte-code (arglist byte-code constants depth
+                       &optional docstring interactive-spec &rest elements) -> any)
+
+;; (make-closure PROTOTYPE &rest ENVIRONMENT) - create closure
+(defun make-closure (prototype &rest environment) -> any)
+
+;; ===========================================================================
+;; Finalizers
+;; ===========================================================================
+
+;; (make-finalizer FN) - create weak reference with cleanup
+(defun make-finalizer (fn) -> any)
+
+;; ===========================================================================
+;; Garbage collection
+;; ===========================================================================
+
+;; (garbage-collect) - run garbage collection
+(defun garbage-collect () -> (list any))
+
+;; (garbage-collect-maybe FACTOR) - maybe run GC
+(defun garbage-collect-maybe (factor : int) -> nil)
+
+;; ===========================================================================
+;; Memory information
+;; ===========================================================================
+
+;; (memory-info) - return memory usage info
+(defun memory-info () -> ((list int) | nil))
+
+;; (memory-use-counts) - return allocation counts
+(defun memory-use-counts () -> (list int))
+
+;; (malloc-info) - return malloc statistics
+(defun malloc-info () -> (string | nil))
+
+;; (malloc-trim SIZE) - release unused memory
+(defun malloc-trim (size : int) -> bool)
