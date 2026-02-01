@@ -1,0 +1,104 @@
+;; Type signatures for Emacs search.c
+;;
+;; Source: emacs/src/search.c
+;; Emacs version: 31.0
+;;
+;; Contains regexp and string search operations.
+
+;; ===========================================================================
+;; Looking-at operations
+;; ===========================================================================
+
+;; (looking-at REGEXP &optional INHIBIT-MODIFY)
+;; Return t if text after point matches REGEXP.
+(defun looking-at (string &optional any) -> bool)
+
+;; (posix-looking-at REGEXP &optional INHIBIT-MODIFY)
+;; Return t if text after point matches REGEXP using POSIX rules.
+(defun posix-looking-at (string &optional any) -> bool)
+
+;; ===========================================================================
+;; String matching
+;; ===========================================================================
+
+;; (string-match REGEXP STRING &optional START INHIBIT-MODIFY)
+;; Return index of first match in STRING, or nil.
+(defun string-match (string string &optional int any) -> (int | nil))
+
+;; (posix-string-match REGEXP STRING &optional START INHIBIT-MODIFY)
+;; Return index of first match using POSIX rules, or nil.
+(defun posix-string-match (string string &optional int any) -> (int | nil))
+
+;; ===========================================================================
+;; Buffer search operations
+;; ===========================================================================
+
+;; (search-forward STRING &optional BOUND NOERROR COUNT)
+;; Search forward from point for STRING. Return point if found.
+(defun search-forward (string &optional int any int) -> (int | nil))
+
+;; (search-backward STRING &optional BOUND NOERROR COUNT)
+;; Search backward from point for STRING. Return point if found.
+(defun search-backward (string &optional int any int) -> (int | nil))
+
+;; (re-search-forward REGEXP &optional BOUND NOERROR COUNT)
+;; Search forward for REGEXP. Return point if found.
+(defun re-search-forward (string &optional int any int) -> (int | nil))
+
+;; (re-search-backward REGEXP &optional BOUND NOERROR COUNT)
+;; Search backward for REGEXP. Return point if found.
+(defun re-search-backward (string &optional int any int) -> (int | nil))
+
+;; (posix-search-forward REGEXP &optional BOUND NOERROR COUNT)
+;; Search forward for REGEXP using POSIX rules. Return point if found.
+(defun posix-search-forward (string &optional int any int) -> (int | nil))
+
+;; (posix-search-backward REGEXP &optional BOUND NOERROR COUNT)
+;; Search backward for REGEXP using POSIX rules. Return point if found.
+(defun posix-search-backward (string &optional int any int) -> (int | nil))
+
+;; ===========================================================================
+;; Match data operations
+;; ===========================================================================
+
+;; (match-beginning SUBEXP)
+;; Return position of start of text matched by last search.
+;; SUBEXP 0 is entire match; N is Nth group.
+(defun match-beginning (int) -> (int | nil))
+
+;; (match-end SUBEXP)
+;; Return position of end of text matched by last search.
+(defun match-end (int) -> (int | nil))
+
+;; (match-data &optional INTEGERS REUSE RESEAT)
+;; Return list of positions recording text matched by last search.
+(defun match-data (&optional any any any) -> (list any))
+
+;; (set-match-data LIST &optional RESEAT)
+;; Set internal match data from LIST.
+(defun set-match-data ((list any) &optional any) -> nil)
+
+;; ===========================================================================
+;; Replace operations
+;; ===========================================================================
+
+;; (replace-match NEWTEXT &optional FIXEDCASE LITERAL STRING SUBEXP)
+;; Replace text matched by last search with NEWTEXT.
+;; Returns nil when replacing in buffer, string when STRING is provided.
+(defun replace-match (string &optional any any string int) -> (string | nil))
+
+;; ===========================================================================
+;; Regexp utilities
+;; ===========================================================================
+
+;; (regexp-quote STRING)
+;; Return a regexp string which matches exactly STRING.
+(defun regexp-quote (string) -> string)
+
+;; ===========================================================================
+;; Internal/debugging functions
+;; ===========================================================================
+
+;; (newline-cache-check &optional BUFFER)
+;; Check newline cache against buffer contents.
+(defun newline-cache-check (&optional any) -> (any | nil))
