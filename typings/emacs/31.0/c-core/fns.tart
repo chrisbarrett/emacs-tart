@@ -10,395 +10,393 @@
 ;; ===========================================================================
 
 ;; (identity ARG) - return argument unchanged
-(defun identity [a] (arg : a) -> a)
+(defun identity [a] (a) -> a)
 
 ;; (eql A B) - compare using eq for non-numbers, = for numbers
-(defun eql (a b) -> bool)
+(defun eql (any any) -> bool)
 
 ;; (equal A B) - structural equality
-(defun equal (a b) -> bool)
+(defun equal (any any) -> bool)
 
 ;; (equal-including-properties A B) - equality with text properties
-(defun equal-including-properties (a b) -> bool)
+(defun equal-including-properties (any any) -> bool)
 
 ;; ===========================================================================
 ;; Sequence operations
 ;; ===========================================================================
 
 ;; (length SEQ) - return length
-(defun length (seq) -> int)
+(defun length (any) -> int)
 
 ;; (safe-length LIST) - return length, handling cycles
-(defun safe-length (list) -> int)
+(defun safe-length (any) -> int)
 
 ;; (length< SEQ LEN) - test if length less than
-(defun length< (seq len : int) -> bool)
+(defun length< (any int) -> bool)
 
 ;; (length> SEQ LEN) - test if length greater than
-(defun length> (seq len : int) -> bool)
+(defun length> (any int) -> bool)
 
 ;; (length= SEQ LEN) - test if length equal
-(defun length= (seq len : int) -> bool)
+(defun length= (any int) -> bool)
 
 ;; (proper-list-p OBJ) - test if proper list
-(defun proper-list-p (obj) -> (int | nil))
+(defun proper-list-p (any) -> (int | nil))
 
 ;; (elt SEQ N) - element at index
-(defun elt [a] (seq n : int) -> a)
+(defun elt [a] ((list a) int) -> a)
 
 ;; (copy-sequence SEQ) - shallow copy
-(defun copy-sequence [a] (seq : a) -> a)
+(defun copy-sequence [a] (a) -> a)
 
 ;; (reverse SEQ) - return reversed copy
-(defun reverse [a] (seq : (list a)) -> (list a))
+(defun reverse [a] ((list a)) -> (list a))
 
 ;; (nreverse SEQ) - destructive reverse
-(defun nreverse [a] (seq : (list a)) -> (list a))
+(defun nreverse [a] ((list a)) -> (list a))
 
 ;; (sort SEQ PRED) - destructive sort
-(defun sort [a] (seq : (list a) pred) -> (list a))
+(defun sort [a] ((list a) any) -> (list a))
 
 ;; ===========================================================================
 ;; List operations
 ;; ===========================================================================
 
 ;; (nth N LIST) - nth element (0-indexed)
-(defun nth [a] (n : int list : (list a)) -> (a | nil))
+(defun nth [a] (int (list a)) -> (a | nil))
 
 ;; (nthcdr N LIST) - nth cdr of list
-(defun nthcdr [a] (n : int list : (list a)) -> (list a))
+(defun nthcdr [a] (int (list a)) -> (list a))
 
 ;; (take N LIST) - take first n elements (non-destructive)
-(defun take [a] (n : int list : (list a)) -> (list a))
+(defun take [a] (int (list a)) -> (list a))
 
 ;; (ntake N LIST) - take first n elements (destructive)
-(defun ntake [a] (n : int list : (list a)) -> (list a))
+(defun ntake [a] (int (list a)) -> (list a))
 
 ;; (member ELT LIST) - find element using equal
-(defun member [a] (elt list : (list a)) -> (list a))
+(defun member [a] (a (list a)) -> (list a))
 
 ;; (memq ELT LIST) - find element using eq
-(defun memq [a] (elt list : (list a)) -> (list a))
+(defun memq [a] (a (list a)) -> (list a))
 
 ;; (memql ELT LIST) - find element using eql
-(defun memql [a] (elt list : (list a)) -> (list a))
+(defun memql [a] (a (list a)) -> (list a))
 
 ;; (assoc KEY ALIST &optional TESTFN) - find by key using equal
-(defun assoc [k v] (key alist : (list (pair k v)) &optional testfn) -> ((pair k v) | nil))
+(defun assoc [k v] (k (list (pair k v)) &optional any) -> ((pair k v) | nil))
 
 ;; (assq KEY ALIST) - find by key using eq
-(defun assq [k v] (key alist : (list (pair k v))) -> ((pair k v) | nil))
+(defun assq [k v] (k (list (pair k v))) -> ((pair k v) | nil))
 
 ;; (rassoc VALUE ALIST) - find by value using equal
-(defun rassoc [k v] (value alist : (list (pair k v))) -> ((pair k v) | nil))
+(defun rassoc [k v] (v (list (pair k v))) -> ((pair k v) | nil))
 
 ;; (rassq VALUE ALIST) - find by value using eq
-(defun rassq [k v] (value alist : (list (pair k v))) -> ((pair k v) | nil))
+(defun rassq [k v] (v (list (pair k v))) -> ((pair k v) | nil))
 
 ;; (delete ELT SEQ) - remove element using equal (destructive for lists)
-(defun delete [a] (elt seq : (list a)) -> (list a))
+(defun delete [a] (a (list a)) -> (list a))
 
 ;; (delq ELT LIST) - remove element using eq (destructive)
-(defun delq [a] (elt list : (list a)) -> (list a))
+(defun delq [a] (a (list a)) -> (list a))
 
 ;; (copy-alist ALIST) - shallow copy of alist
-(defun copy-alist [k v] (alist : (list (pair k v))) -> (list (pair k v)))
+(defun copy-alist [k v] ((list (pair k v))) -> (list (pair k v)))
 
 ;; ===========================================================================
 ;; List construction
 ;; ===========================================================================
 
 ;; (append &rest SEQS) - concatenate lists
-(defun append [a] (&rest seqs : (list (list a))) -> (list a))
+(defun append [a] (&rest (list (list a))) -> (list a))
 
 ;; (concat &rest SEQS) - concatenate strings
-(defun concat (&rest seqs : (list (string | (list any) | (vector any)))) -> string)
+(defun concat (&rest (list any)) -> string)
 
 ;; (vconcat &rest SEQS) - concatenate to vector
-(defun vconcat (&rest seqs) -> (vector any))
+(defun vconcat (&rest (list any)) -> (vector any))
 
 ;; (nconc &rest LISTS) - destructive append
-(defun nconc [a] (&rest lists : (list (list a))) -> (list a))
+(defun nconc [a] (&rest (list (list a))) -> (list a))
 
 ;; ===========================================================================
 ;; Property list operations
 ;; ===========================================================================
 
 ;; (get SYM PROP &optional DEFAULT) - get symbol property
-(defun get (sym : symbol prop : symbol &optional default) -> any)
+(defun get (symbol symbol &optional any) -> any)
 
 ;; (put SYM PROP VALUE) - set symbol property
-(defun put (sym : symbol prop : symbol value) -> any)
+(defun put (symbol symbol any) -> any)
 
 ;; (plist-get PLIST PROP &optional PREDICATE) - get from plist
-(defun plist-get (plist : (list any) prop &optional predicate) -> any)
+(defun plist-get ((list any) any &optional any) -> any)
 
 ;; (plist-put PLIST PROP VALUE &optional PREDICATE) - put in plist
-(defun plist-put (plist : (list any) prop value &optional predicate) -> (list any))
+(defun plist-put ((list any) any any &optional any) -> (list any))
 
 ;; (plist-member PLIST PROP &optional PREDICATE) - check membership
-(defun plist-member (plist : (list any) prop &optional predicate) -> (list any))
+(defun plist-member ((list any) any &optional any) -> (list any))
 
 ;; ===========================================================================
 ;; Mapping functions
 ;; ===========================================================================
 
 ;; (mapcar FN SEQ) - apply fn to each element
-(defun mapcar [a b] (fn : (-> a b) seq : (list a)) -> (list b))
+(defun mapcar [a b] (((a -> b)) (list a)) -> (list b))
 
 ;; (mapc FN SEQ) - apply fn for side effects
-(defun mapc [a] (fn seq : (list a)) -> (list a))
+(defun mapc [a] (any (list a)) -> (list a))
 
 ;; (mapcan FN SEQ) - mapcar then nconc results
-(defun mapcan [a b] (fn : (-> a (list b)) seq : (list a)) -> (list b))
+(defun mapcan [a b] (((a -> (list b))) (list a)) -> (list b))
 
 ;; (mapconcat FN SEQ &optional SEP) - map and join with separator
-(defun mapconcat [a] (fn : (-> a string) seq : (list a) &optional sep : (string | nil)) -> string)
+(defun mapconcat [a] (((a -> string)) (list a) &optional (string | nil)) -> string)
 
 ;; ===========================================================================
 ;; Array operations
 ;; ===========================================================================
 
 ;; (fillarray ARRAY VALUE) - fill array with value
-(defun fillarray [a] (array value : a) -> (vector a))
+(defun fillarray [a] ((vector a) a) -> (vector a))
 
 ;; ===========================================================================
 ;; String operations
 ;; ===========================================================================
 
 ;; (substring STRING &optional FROM TO) - extract substring
-(defun substring (string : string &optional from : (int | nil) to : (int | nil)) -> string)
+(defun substring (string &optional (int | nil) (int | nil)) -> string)
 
 ;; (substring-no-properties STRING &optional FROM TO) - substring without props
-(defun substring-no-properties (string : string &optional from : (int | nil) to : (int | nil)) -> string)
+(defun substring-no-properties (string &optional (int | nil) (int | nil)) -> string)
 
 ;; (string-equal S1 S2) - compare strings
-(defun string-equal (s1 : (string | symbol) s2 : (string | symbol)) -> bool)
+(defun string-equal ((string | symbol) (string | symbol)) -> bool)
 
 ;; (string-lessp S1 S2) - lexicographic comparison
-(defun string-lessp (s1 : (string | symbol) s2 : (string | symbol)) -> bool)
+(defun string-lessp ((string | symbol) (string | symbol)) -> bool)
 
 ;; (string-version-lessp S1 S2) - version-aware comparison
-(defun string-version-lessp (s1 : string s2 : string) -> bool)
+(defun string-version-lessp (string string) -> bool)
 
 ;; (string-collate-lessp S1 S2 &optional LOCALE IGNORE-CASE) - locale-aware <
-(defun string-collate-lessp (s1 : string s2 : string &optional locale ignore-case) -> bool)
+(defun string-collate-lessp (string string &optional any any) -> bool)
 
 ;; (string-collate-equalp S1 S2 &optional LOCALE IGNORE-CASE) - locale-aware =
-(defun string-collate-equalp (s1 : string s2 : string &optional locale ignore-case) -> bool)
+(defun string-collate-equalp (string string &optional any any) -> bool)
 
 ;; (string-distance S1 S2 &optional BYTECOMPARE) - Levenshtein distance
-(defun string-distance (s1 : string s2 : string &optional bytecompare) -> int)
+(defun string-distance (string string &optional any) -> int)
 
 ;; (string-search NEEDLE HAYSTACK &optional START-POS) - find substring
-(defun string-search (needle : string haystack : string &optional start-pos : (int | nil)) -> (int | nil))
+(defun string-search (string string &optional (int | nil)) -> (int | nil))
 
 ;; (compare-strings S1 START1 END1 S2 START2 END2 &optional IGNORE-CASE)
-(defun compare-strings (s1 : string start1 : (int | nil) end1 : (int | nil)
-                        s2 : string start2 : (int | nil) end2 : (int | nil)
-                        &optional ignore-case) -> (int | t))
+(defun compare-strings (string (int | nil) (int | nil) string (int | nil) (int | nil) &optional any) -> (int | t))
 
 ;; (string-bytes STRING) - byte length
-(defun string-bytes (string : string) -> int)
+(defun string-bytes (string) -> int)
 
 ;; ===========================================================================
 ;; String encoding conversion
 ;; ===========================================================================
 
 ;; (string-as-unibyte STRING) - interpret as unibyte
-(defun string-as-unibyte (string : string) -> string)
+(defun string-as-unibyte (string) -> string)
 
 ;; (string-as-multibyte STRING) - interpret as multibyte
-(defun string-as-multibyte (string : string) -> string)
+(defun string-as-multibyte (string) -> string)
 
 ;; (string-make-unibyte STRING) - convert to unibyte
-(defun string-make-unibyte (string : string) -> string)
+(defun string-make-unibyte (string) -> string)
 
 ;; (string-make-multibyte STRING) - convert to multibyte
-(defun string-make-multibyte (string : string) -> string)
+(defun string-make-multibyte (string) -> string)
 
 ;; (string-to-unibyte STRING) - convert to unibyte
-(defun string-to-unibyte (string : string) -> string)
+(defun string-to-unibyte (string) -> string)
 
 ;; (string-to-multibyte STRING) - convert to multibyte
-(defun string-to-multibyte (string : string) -> string)
+(defun string-to-multibyte (string) -> string)
 
 ;; (clear-string STRING) - fill with nulls
-(defun clear-string (string : string) -> nil)
+(defun clear-string (string) -> nil)
 
 ;; ===========================================================================
 ;; Hash tables
 ;; ===========================================================================
 
 ;; (make-hash-table &rest ARGS) - create hash table
-(defun make-hash-table (&rest args) -> (hashtable any any))
+(defun make-hash-table (&rest (list any)) -> (hashtable any any))
 
 ;; (hash-table-p OBJ) - test if hash table
-(defun hash-table-p (obj) -> bool)
+(defun hash-table-p (any) -> bool)
 
 ;; (gethash KEY TABLE &optional DEFAULT) - get value
-(defun gethash [k v] (key : k table : (hashtable k v) &optional default : (v | nil)) -> (v | nil))
+(defun gethash [k v] (k (hashtable k v) &optional (v | nil)) -> (v | nil))
 
 ;; (puthash KEY VALUE TABLE) - put value
-(defun puthash [k v] (key : k value : v table : (hashtable k v)) -> v)
+(defun puthash [k v] (k v (hashtable k v)) -> v)
 
 ;; (remhash KEY TABLE) - remove key
-(defun remhash [k v] (key : k table : (hashtable k v)) -> nil)
+(defun remhash [k v] (k (hashtable k v)) -> nil)
 
 ;; (clrhash TABLE) - clear table
-(defun clrhash [k v] (table : (hashtable k v)) -> (hashtable k v))
+(defun clrhash [k v] ((hashtable k v)) -> (hashtable k v))
 
 ;; (maphash FN TABLE) - iterate over table
-(defun maphash [k v] (fn table : (hashtable k v)) -> nil)
+(defun maphash [k v] (any (hashtable k v)) -> nil)
 
 ;; (copy-hash-table TABLE) - shallow copy
-(defun copy-hash-table [k v] (table : (hashtable k v)) -> (hashtable k v))
+(defun copy-hash-table [k v] ((hashtable k v)) -> (hashtable k v))
 
 ;; (hash-table-count TABLE) - number of entries
-(defun hash-table-count (table : (hashtable any any)) -> int)
+(defun hash-table-count ((hashtable any any)) -> int)
 
 ;; (hash-table-size TABLE) - current capacity
-(defun hash-table-size (table : (hashtable any any)) -> int)
+(defun hash-table-size ((hashtable any any)) -> int)
 
 ;; (hash-table-test TABLE) - test function name
-(defun hash-table-test (table : (hashtable any any)) -> symbol)
+(defun hash-table-test ((hashtable any any)) -> symbol)
 
 ;; (hash-table-weakness TABLE) - weakness type
-(defun hash-table-weakness (table : (hashtable any any)) -> (symbol | nil))
+(defun hash-table-weakness ((hashtable any any)) -> (symbol | nil))
 
 ;; (hash-table-rehash-size TABLE) - rehash size
-(defun hash-table-rehash-size (table : (hashtable any any)) -> float)
+(defun hash-table-rehash-size ((hashtable any any)) -> float)
 
 ;; (hash-table-rehash-threshold TABLE) - rehash threshold
-(defun hash-table-rehash-threshold (table : (hashtable any any)) -> float)
+(defun hash-table-rehash-threshold ((hashtable any any)) -> float)
 
 ;; (define-hash-table-test NAME TEST HASH) - define custom test
-(defun define-hash-table-test (name : symbol test hash) -> nil)
+(defun define-hash-table-test (symbol any any) -> nil)
 
 ;; ===========================================================================
 ;; Hash functions
 ;; ===========================================================================
 
 ;; (sxhash-eq OBJ) - hash using eq
-(defun sxhash-eq (obj) -> int)
+(defun sxhash-eq (any) -> int)
 
 ;; (sxhash-eql OBJ) - hash using eql
-(defun sxhash-eql (obj) -> int)
+(defun sxhash-eql (any) -> int)
 
 ;; (sxhash-equal OBJ) - hash using equal
-(defun sxhash-equal (obj) -> int)
+(defun sxhash-equal (any) -> int)
 
 ;; (sxhash-equal-including-properties OBJ) - hash with text props
-(defun sxhash-equal-including-properties (obj) -> int)
+(defun sxhash-equal-including-properties (any) -> int)
 
 ;; ===========================================================================
 ;; Value comparison
 ;; ===========================================================================
 
 ;; (value< A B) - generic comparison
-(defun value< (a b) -> bool)
+(defun value< (any any) -> bool)
 
 ;; ===========================================================================
 ;; Features and requirements
 ;; ===========================================================================
 
 ;; (featurep FEATURE &optional SUBFEATURE) - test if feature present
-(defun featurep (feature : symbol &optional subfeature : (symbol | nil)) -> bool)
+(defun featurep (symbol &optional (symbol | nil)) -> bool)
 
 ;; (provide FEATURE &optional SUBFEATURES) - provide feature
-(defun provide (feature : symbol &optional subfeatures : ((list symbol) | nil)) -> symbol)
+(defun provide (symbol &optional ((list symbol) | nil)) -> symbol)
 
 ;; (require FEATURE &optional FILENAME NOERROR) - require feature
-(defun require (feature : symbol &optional filename : (string | nil) noerror) -> symbol)
+(defun require (symbol &optional (string | nil) any) -> symbol)
 
 ;; ===========================================================================
 ;; Base64 encoding
 ;; ===========================================================================
 
 ;; (base64-encode-region START END &optional NO-LINE-BREAK) - encode region
-(defun base64-encode-region (start end &optional no-line-break) -> int)
+(defun base64-encode-region (any any &optional any) -> int)
 
 ;; (base64-encode-string STRING &optional NO-LINE-BREAK) - encode string
-(defun base64-encode-string (string : string &optional no-line-break) -> string)
+(defun base64-encode-string (string &optional any) -> string)
 
 ;; (base64url-encode-region START END &optional NO-PAD) - URL-safe encode
-(defun base64url-encode-region (start end &optional no-pad) -> int)
+(defun base64url-encode-region (any any &optional any) -> int)
 
 ;; (base64url-encode-string STRING &optional NO-PAD) - URL-safe encode string
-(defun base64url-encode-string (string : string &optional no-pad) -> string)
+(defun base64url-encode-string (string &optional any) -> string)
 
 ;; (base64-decode-region START END &optional BASE64URL IGNORE-INVALID) - decode
-(defun base64-decode-region (start end &optional base64url ignore-invalid) -> int)
+(defun base64-decode-region (any any &optional any any) -> int)
 
 ;; (base64-decode-string STRING &optional BASE64URL IGNORE-INVALID) - decode
-(defun base64-decode-string (string : string &optional base64url ignore-invalid) -> (string | nil))
+(defun base64-decode-string (string &optional any any) -> (string | nil))
 
 ;; ===========================================================================
 ;; Cryptographic hashing
 ;; ===========================================================================
 
 ;; (md5 OBJ &optional START END CODING NOERROR) - MD5 hash
-(defun md5 (obj &optional start end coding noerror) -> string)
+(defun md5 (any &optional any any any any) -> string)
 
 ;; (secure-hash ALGO OBJ &optional START END BINARY) - secure hash
-(defun secure-hash (algo : symbol obj &optional start end binary) -> string)
+(defun secure-hash (symbol any &optional any any any) -> string)
 
 ;; (secure-hash-algorithms) - list available algorithms
 (defun secure-hash-algorithms () -> (list symbol))
 
 ;; (buffer-hash &optional BUFFER-OR-NAME) - hash buffer contents
-(defun buffer-hash (&optional buffer-or-name) -> string)
+(defun buffer-hash (&optional any) -> string)
 
 ;; ===========================================================================
 ;; Text property intervals
 ;; ===========================================================================
 
 ;; (object-intervals OBJ) - get property intervals
-(defun object-intervals (obj) -> (list any))
+(defun object-intervals (any) -> (list any))
 
 ;; ===========================================================================
 ;; Random numbers
 ;; ===========================================================================
 
 ;; (random &optional LIMIT) - generate random number
-(defun random (&optional limit : (int | t | nil)) -> int)
+(defun random (&optional (int | t | nil)) -> int)
 
 ;; ===========================================================================
 ;; System information
 ;; ===========================================================================
 
 ;; (load-average &optional USE-FLOAT) - system load average
-(defun load-average (&optional use-float) -> (list num))
+(defun load-average (&optional any) -> (list num))
 
 ;; (locale-info ITEM) - locale information
-(defun locale-info (item : symbol) -> (string | nil))
+(defun locale-info (symbol) -> (string | nil))
 
 ;; ===========================================================================
 ;; Buffer statistics
 ;; ===========================================================================
 
 ;; (buffer-line-statistics &optional BUFFER POSITION) - line stats
-(defun buffer-line-statistics (&optional buffer position) -> (vector int))
+(defun buffer-line-statistics (&optional any any) -> (vector int))
 
 ;; (line-number-at-pos &optional POS ABSOLUTE) - line number
-(defun line-number-at-pos (&optional pos absolute) -> int)
+(defun line-number-at-pos (&optional any any) -> int)
 
 ;; ===========================================================================
 ;; User interaction
 ;; ===========================================================================
 
 ;; (yes-or-no-p PROMPT) - ask yes/no question
-(defun yes-or-no-p (prompt : string) -> bool)
+(defun yes-or-no-p (string) -> bool)
 
 ;; ===========================================================================
 ;; Internal functions
 ;; ===========================================================================
 
 ;; (internal--hash-table-buckets TABLE) - internal: get buckets
-(defun internal--hash-table-buckets (table) -> (vector any))
+(defun internal--hash-table-buckets (any) -> (vector any))
 
 ;; (internal--hash-table-histogram TABLE) - internal: bucket histogram
-(defun internal--hash-table-histogram (table) -> (vector int))
+(defun internal--hash-table-histogram (any) -> (vector int))
 
 ;; (internal--hash-table-index-size TABLE) - internal: index size
-(defun internal--hash-table-index-size (table) -> int)
+(defun internal--hash-table-index-size (any) -> int)

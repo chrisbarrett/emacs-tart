@@ -10,57 +10,57 @@
 ;; ===========================================================================
 
 ;; (cons CAR CDR) - create cons cell
-(defun cons [a b] (car : a cdr : b) -> (pair a b))
+(defun cons [a b] (a b) -> (pair a b))
 
 ;; (list &rest OBJECTS) - create list
-(defun list [a] (&rest objects : (list a)) -> (list a))
+(defun list [a] (&rest (list a)) -> (list a))
 
 ;; (make-list LENGTH INIT) - create list of given length
-(defun make-list [a] (length : int init : a) -> (list a))
+(defun make-list [a] (int a) -> (list a))
 
 ;; ===========================================================================
 ;; Vectors
 ;; ===========================================================================
 
 ;; (vector &rest OBJECTS) - create vector
-(defun vector [a] (&rest objects : (list a)) -> (vector a))
+(defun vector [a] (&rest (list a)) -> (vector a))
 
 ;; (make-vector LENGTH INIT) - create vector of given length
-(defun make-vector [a] (length : int init : a) -> (vector a))
+(defun make-vector [a] (int a) -> (vector a))
 
 ;; ===========================================================================
 ;; Records
 ;; ===========================================================================
 
 ;; (record TYPE &rest SLOTS) - create record
-(defun record (type : symbol &rest slots) -> any)
+(defun record (symbol &rest (list any)) -> any)
 
 ;; (make-record TYPE LENGTH INIT) - create record with length
-(defun make-record (type : symbol length : int init) -> any)
+(defun make-record (symbol int any) -> any)
 
 ;; ===========================================================================
 ;; Strings
 ;; ===========================================================================
 
 ;; (make-string LENGTH INIT &optional MULTIBYTE) - create string
-(defun make-string (length : int init : int &optional multibyte) -> string)
+(defun make-string (int int &optional any) -> string)
 
 ;; ===========================================================================
 ;; Symbols
 ;; ===========================================================================
 
 ;; (make-symbol NAME) - create uninterned symbol
-(defun make-symbol (name : string) -> symbol)
+(defun make-symbol (string) -> symbol)
 
 ;; ===========================================================================
 ;; Bool vectors
 ;; ===========================================================================
 
 ;; (bool-vector &rest OBJECTS) - create bool vector
-(defun bool-vector (&rest objects) -> any)
+(defun bool-vector (&rest (list any)) -> any)
 
 ;; (make-bool-vector LENGTH INIT) - create bool vector
-(defun make-bool-vector (length : int init) -> any)
+(defun make-bool-vector (int any) -> any)
 
 ;; ===========================================================================
 ;; Markers
@@ -74,18 +74,17 @@
 ;; ===========================================================================
 
 ;; (make-byte-code ARGLIST BYTE-CODE CONSTANTS DEPTH &optional DOCSTRING INTERACTIVE-SPEC &rest ELEMENTS)
-(defun make-byte-code (arglist byte-code constants depth
-                       &optional docstring interactive-spec &rest elements) -> any)
+(defun make-byte-code (any any any any &optional any any &rest (list any)) -> any)
 
 ;; (make-closure PROTOTYPE &rest ENVIRONMENT) - create closure
-(defun make-closure (prototype &rest environment) -> any)
+(defun make-closure (any &rest (list any)) -> any)
 
 ;; ===========================================================================
 ;; Finalizers
 ;; ===========================================================================
 
 ;; (make-finalizer FN) - create weak reference with cleanup
-(defun make-finalizer (fn) -> any)
+(defun make-finalizer (any) -> any)
 
 ;; ===========================================================================
 ;; Garbage collection
@@ -95,7 +94,7 @@
 (defun garbage-collect () -> (list any))
 
 ;; (garbage-collect-maybe FACTOR) - maybe run GC
-(defun garbage-collect-maybe (factor : int) -> nil)
+(defun garbage-collect-maybe (int) -> nil)
 
 ;; ===========================================================================
 ;; Memory information
@@ -111,4 +110,4 @@
 (defun malloc-info () -> (string | nil))
 
 ;; (malloc-trim SIZE) - release unused memory
-(defun malloc-trim (size : int) -> bool)
+(defun malloc-trim (int) -> bool)
