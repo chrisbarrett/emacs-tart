@@ -229,7 +229,7 @@ let validate_file path : (unit, Tart.File_error.t) result =
   Tart.File_error.check_file path
 
 (** Check subcommand: type-check files *)
-let run_check format _emacs_version files =
+let run_check format emacs_version files =
   if files = [] then (
     let err =
       Tart.Error.cli_error ~message:"no input files"
@@ -248,8 +248,23 @@ let run_check format _emacs_version files =
   in
   let valid_files = List.rev valid_files in
   let file_errors = List.rev file_errors in
-  (* Type-check valid files *)
-  let initial_env = Tart.Check.default_env () in
+  (* Build initial environment with c-core signatures *)
+  let typings_root = find_typings_root ~verbose:false in
+  let version =
+    match emacs_version with
+    | Some v -> v
+    | None -> (
+        match Tart.Emacs_version.detect () with
+        | Tart.Emacs_version.Detected v -> v
+        | _ -> Tart.Emacs_version.latest)
+  in
+  let search_path =
+    Tart.Search_path.empty
+    |> Tart.Search_path.with_typings_root typings_root
+    |> Tart.Search_path.with_emacs_version version
+  in
+  let base_env = Tart.Check.default_env () in
+  let initial_env = Tart.Search_path.load_c_core ~search_path base_env in
   let _, type_errors =
     List.fold_left
       (fun (env, acc_errors) file ->
