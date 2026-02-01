@@ -1,0 +1,86 @@
+;; Type signatures for Emacs textprop.c
+;;
+;; Source: emacs/src/textprop.c
+;; Emacs version: 31.0
+;;
+;; Contains text property manipulation functions.
+
+;; ===========================================================================
+;; Getting properties
+;; ===========================================================================
+
+;; (text-properties-at POSITION &optional OBJECT) - get all properties at position
+(defun text-properties-at (int &optional any) -> (list any))
+
+;; (get-text-property POSITION PROP &optional OBJECT) - get property value
+(defun get-text-property (int any &optional any) -> any)
+
+;; (get-char-property POSITION PROP &optional OBJECT) - get char property (checks overlays)
+(defun get-char-property (int any &optional any) -> any)
+
+;; (get-char-property-and-overlay POSITION PROP &optional OBJECT) - get property and overlay
+(defun get-char-property-and-overlay (int any &optional any) -> (list any))
+
+;; ===========================================================================
+;; Setting properties
+;; ===========================================================================
+
+;; (put-text-property START END PROPERTY VALUE &optional OBJECT) - set one property
+(defun put-text-property (int int any any &optional any) -> nil)
+
+;; (add-text-properties START END PROPERTIES &optional OBJECT) - add properties
+(defun add-text-properties (int int (list any) &optional any) -> bool)
+
+;; (set-text-properties START END PROPERTIES &optional OBJECT) - replace all properties
+(defun set-text-properties (int int (any | nil) &optional any) -> bool)
+
+;; (add-face-text-property START END FACE &optional APPEND OBJECT) - add face property
+(defun add-face-text-property (int int any &optional any any) -> nil)
+
+;; ===========================================================================
+;; Removing properties
+;; ===========================================================================
+
+;; (remove-text-properties START END PROPERTIES &optional OBJECT) - remove properties
+(defun remove-text-properties (int int (list any) &optional any) -> bool)
+
+;; (remove-list-of-text-properties START END LIST-OF-PROPERTIES &optional OBJECT) - remove property list
+(defun remove-list-of-text-properties (int int (list any) &optional any) -> bool)
+
+;; ===========================================================================
+;; Property change navigation
+;; ===========================================================================
+
+;; (next-property-change POSITION &optional OBJECT LIMIT) - find next change
+(defun next-property-change (int &optional any int) -> (int | nil))
+
+;; (previous-property-change POSITION &optional OBJECT LIMIT) - find previous change
+(defun previous-property-change (int &optional any int) -> (int | nil))
+
+;; (next-single-property-change POSITION PROP &optional OBJECT LIMIT) - find next change of one property
+(defun next-single-property-change (int any &optional any int) -> (int | nil))
+
+;; (previous-single-property-change POSITION PROP &optional OBJECT LIMIT) - find previous change of one property
+(defun previous-single-property-change (int any &optional any int) -> (int | nil))
+
+;; (next-char-property-change POSITION &optional LIMIT) - find next char property change
+(defun next-char-property-change (int &optional int) -> int)
+
+;; (previous-char-property-change POSITION &optional LIMIT) - find previous char property change
+(defun previous-char-property-change (int &optional int) -> int)
+
+;; (next-single-char-property-change POSITION PROP &optional OBJECT LIMIT) - find next single char property change
+(defun next-single-char-property-change (int any &optional any int) -> int)
+
+;; (previous-single-char-property-change POSITION PROP &optional OBJECT LIMIT) - find previous single char property change
+(defun previous-single-char-property-change (int any &optional any int) -> int)
+
+;; ===========================================================================
+;; Property search
+;; ===========================================================================
+
+;; (text-property-any START END PROPERTY VALUE &optional OBJECT) - search for property value
+(defun text-property-any (int int any any &optional any) -> (int | nil))
+
+;; (text-property-not-all START END PROPERTY VALUE &optional OBJECT) - search for non-matching property
+(defun text-property-not-all (int int any any &optional any) -> (int | nil))
