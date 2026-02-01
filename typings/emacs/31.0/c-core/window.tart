@@ -1,0 +1,408 @@
+;; Type signatures for Emacs window.c
+;;
+;; Source: emacs/src/window.c
+;; Emacs version: 31.0
+;;
+;; Contains window management functions.
+
+;; ===========================================================================
+;; Window predicates
+;; ===========================================================================
+
+;; (windowp OBJ) - test if object is a window
+(defun windowp (any) -> bool)
+
+;; (window-valid-p OBJ) - test if object is a valid window
+(defun window-valid-p (any) -> bool)
+
+;; (window-live-p OBJ) - test if object is a live window
+(defun window-live-p (any) -> bool)
+
+;; (window-minibuffer-p &optional WINDOW) - test if window is minibuffer
+(defun window-minibuffer-p (&optional any) -> bool)
+
+;; ===========================================================================
+;; Window selection and navigation
+;; ===========================================================================
+
+;; (selected-window) - return the selected window
+(defun selected-window () -> any)
+
+;; (minibuffer-window &optional FRAME) - return minibuffer window for frame
+(defun minibuffer-window (&optional any) -> any)
+
+;; (select-window WINDOW &optional NORECORD) - select window
+(defun select-window (any &optional any) -> any)
+
+;; (next-window &optional WINDOW MINIBUF ALL-FRAMES) - next window in cycle
+(defun next-window (&optional any any any) -> any)
+
+;; (previous-window &optional WINDOW MINIBUF ALL-FRAMES) - previous window in cycle
+(defun previous-window (&optional any any any) -> any)
+
+;; ===========================================================================
+;; Window listing
+;; ===========================================================================
+
+;; (window-list &optional FRAME MINIBUF WINDOW) - list of windows on frame
+(defun window-list (&optional any any any) -> (list any))
+
+;; (window-list-1 &optional WINDOW MINIBUF ALL-FRAMES) - list of live windows
+(defun window-list-1 (&optional any any any) -> (list any))
+
+;; ===========================================================================
+;; Window-buffer relationship
+;; ===========================================================================
+
+;; (window-buffer &optional WINDOW) - return buffer displayed in window
+(defun window-buffer (&optional any) -> (any | nil))
+
+;; (get-buffer-window &optional BUFFER-OR-NAME ALL-FRAMES) - find window displaying buffer
+(defun get-buffer-window (&optional any any) -> (any | nil))
+
+;; (set-window-buffer WINDOW BUFFER-OR-NAME &optional KEEP-MARGINS) - set buffer for window
+(defun set-window-buffer (any any &optional any) -> nil)
+
+;; ===========================================================================
+;; Window frame relationship
+;; ===========================================================================
+
+;; (window-frame &optional WINDOW) - return frame containing window
+(defun window-frame (&optional any) -> any)
+
+;; (frame-first-window &optional FRAME-OR-WINDOW) - first window on frame
+(defun frame-first-window (&optional any) -> any)
+
+;; (frame-root-window &optional FRAME-OR-WINDOW) - root window of frame
+(defun frame-root-window (&optional any) -> any)
+
+;; (frame-selected-window &optional FRAME-OR-WINDOW) - selected window of frame
+(defun frame-selected-window (&optional any) -> any)
+
+;; ===========================================================================
+;; Window tree structure
+;; ===========================================================================
+
+;; (window-parent &optional WINDOW) - parent window
+(defun window-parent (&optional any) -> (any | nil))
+
+;; (window-child WINDOW) - first child window (internal function)
+(defun window-child (any) -> (any | nil))
+
+;; (window-next-sibling &optional WINDOW) - next sibling window
+(defun window-next-sibling (&optional any) -> (any | nil))
+
+;; (window-prev-sibling &optional WINDOW) - previous sibling window
+(defun window-prev-sibling (&optional any) -> (any | nil))
+
+;; (window-top-child &optional WINDOW) - topmost child of vertical combination
+(defun window-top-child (&optional any) -> (any | nil))
+
+;; (window-left-child &optional WINDOW) - leftmost child of horizontal combination
+(defun window-left-child (&optional any) -> (any | nil))
+
+;; (window-combination-limit WINDOW) - return combination limit
+(defun window-combination-limit (any) -> any)
+
+;; ===========================================================================
+;; Window position and size (lines/columns)
+;; ===========================================================================
+
+;; (window-total-height &optional WINDOW ROUND) - total height in lines
+(defun window-total-height (&optional any any) -> int)
+
+;; (window-total-width &optional WINDOW ROUND) - total width in columns
+(defun window-total-width (&optional any any) -> int)
+
+;; (window-body-height &optional WINDOW PIXELWISE) - text area height
+(defun window-body-height (&optional any any) -> int)
+
+;; (window-body-width &optional WINDOW PIXELWISE) - text area width
+(defun window-body-width (&optional any any) -> int)
+
+;; (window-text-height &optional WINDOW PIXELWISE) - text height
+(defun window-text-height (&optional any any) -> int)
+
+;; (window-text-width &optional WINDOW PIXELWISE) - text width
+(defun window-text-width (&optional any any) -> int)
+
+;; (window-left-column &optional WINDOW) - left column position
+(defun window-left-column (&optional any) -> int)
+
+;; (window-top-line &optional WINDOW) - top line position
+(defun window-top-line (&optional any) -> int)
+
+;; (window-normal-size &optional WINDOW HORIZONTAL) - normal size (0.0-1.0)
+(defun window-normal-size (&optional any any) -> float)
+
+;; ===========================================================================
+;; Window position and size (pixels)
+;; ===========================================================================
+
+;; (window-pixel-height &optional WINDOW) - pixel height
+(defun window-pixel-height (&optional any) -> int)
+
+;; (window-pixel-width &optional WINDOW) - pixel width
+(defun window-pixel-width (&optional any) -> int)
+
+;; (window-pixel-left &optional WINDOW) - left pixel edge
+(defun window-pixel-left (&optional any) -> int)
+
+;; (window-pixel-top &optional WINDOW) - top pixel edge
+(defun window-pixel-top (&optional any) -> int)
+
+;; ===========================================================================
+;; Window old sizes (for change detection)
+;; ===========================================================================
+
+;; (window-old-pixel-height &optional WINDOW) - old pixel height
+(defun window-old-pixel-height (&optional any) -> int)
+
+;; (window-old-pixel-width &optional WINDOW) - old pixel width
+(defun window-old-pixel-width (&optional any) -> int)
+
+;; (window-old-body-pixel-height &optional WINDOW) - old body pixel height
+(defun window-old-body-pixel-height (&optional any) -> int)
+
+;; (window-old-body-pixel-width &optional WINDOW) - old body pixel width
+(defun window-old-body-pixel-width (&optional any) -> int)
+
+;; ===========================================================================
+;; Window buffer history
+;; ===========================================================================
+
+;; (window-old-buffer &optional WINDOW) - previous buffer
+(defun window-old-buffer (&optional any) -> (any | nil | t))
+
+;; (window-old-point &optional WINDOW) - old point value
+(defun window-old-point (&optional any) -> int)
+
+;; (window-prev-buffers &optional WINDOW) - previously shown buffers
+(defun window-prev-buffers (&optional any) -> (list any))
+
+;; (window-next-buffers &optional WINDOW) - buffers to re-show
+(defun window-next-buffers (&optional any) -> (list any))
+
+;; ===========================================================================
+;; Window point and display positions
+;; ===========================================================================
+
+;; (window-point &optional WINDOW) - current point in window
+(defun window-point (&optional any) -> int)
+
+;; (window-start &optional WINDOW) - display start position
+(defun window-start (&optional any) -> int)
+
+;; (window-end &optional WINDOW UPDATE) - display end position
+(defun window-end (&optional any any) -> (int | nil))
+
+;; (set-window-point WINDOW POS) - set point in window
+(defun set-window-point (any int) -> int)
+
+;; (set-window-start WINDOW POS &optional NOFORCE) - set display start
+(defun set-window-start (any int &optional any) -> int)
+
+;; ===========================================================================
+;; Horizontal scrolling
+;; ===========================================================================
+
+;; (window-hscroll &optional WINDOW) - horizontal scroll amount
+(defun window-hscroll (&optional any) -> int)
+
+;; (set-window-hscroll WINDOW NCOL) - set horizontal scroll
+(defun set-window-hscroll (any int) -> int)
+
+;; (window-vscroll &optional WINDOW PIXELS-P) - vertical scroll amount
+(defun window-vscroll (&optional any any) -> (int | float))
+
+;; (scroll-left &optional ARG SET-MINIMUM) - scroll left
+(defun scroll-left (&optional any any) -> int)
+
+;; (scroll-right &optional ARG SET-MINIMUM) - scroll right
+(defun scroll-right (&optional any any) -> int)
+
+;; (scroll-up &optional ARG) - scroll text up
+(defun scroll-up (&optional any) -> nil)
+
+;; (scroll-down &optional ARG) - scroll text down
+(defun scroll-down (&optional any) -> nil)
+
+;; ===========================================================================
+;; Window display properties
+;; ===========================================================================
+
+;; (window-display-table &optional WINDOW) - return display table
+(defun window-display-table (&optional any) -> (any | nil))
+
+;; (window-fringes &optional WINDOW) - return fringe settings
+(defun window-fringes (&optional any) -> (list any))
+
+;; (window-margins &optional WINDOW) - return margin widths
+(defun window-margins (&optional any) -> (pair (int | nil) (int | nil)))
+
+;; (window-scroll-bars &optional WINDOW) - return scroll bar settings
+(defun window-scroll-bars (&optional any) -> (list any))
+
+;; (window-cursor-type &optional WINDOW) - return cursor type
+(defun window-cursor-type (&optional any) -> any)
+
+;; ===========================================================================
+;; Window dividers
+;; ===========================================================================
+
+;; (window-bottom-divider-width &optional WINDOW) - bottom divider width
+(defun window-bottom-divider-width (&optional any) -> int)
+
+;; (window-right-divider-width &optional WINDOW) - right divider width
+(defun window-right-divider-width (&optional any) -> int)
+
+;; ===========================================================================
+;; Mode line and header line
+;; ===========================================================================
+
+;; (window-mode-line-height &optional WINDOW) - mode line height
+(defun window-mode-line-height (&optional any) -> int)
+
+;; (window-header-line-height &optional WINDOW) - header line height
+(defun window-header-line-height (&optional any) -> int)
+
+;; (window-tab-line-height &optional WINDOW) - tab line height
+(defun window-tab-line-height (&optional any) -> int)
+
+;; (window-scroll-bar-height &optional WINDOW) - horizontal scroll bar height
+(defun window-scroll-bar-height (&optional any) -> int)
+
+;; (window-scroll-bar-width &optional WINDOW) - vertical scroll bar width
+(defun window-scroll-bar-width (&optional any) -> int)
+
+;; ===========================================================================
+;; Window dedication
+;; ===========================================================================
+
+;; (window-dedicated-p &optional WINDOW) - test if dedicated to buffer
+(defun window-dedicated-p (&optional any) -> any)
+
+;; ===========================================================================
+;; Window parameters
+;; ===========================================================================
+
+;; (window-parameter WINDOW PARAMETER) - get window parameter
+(defun window-parameter (any symbol) -> any)
+
+;; (window-parameters &optional WINDOW) - get all window parameters
+(defun window-parameters (&optional any) -> (list any))
+
+;; ===========================================================================
+;; Window use time
+;; ===========================================================================
+
+;; (window-use-time &optional WINDOW) - return use time
+(defun window-use-time (&optional any) -> int)
+
+;; (window-bump-use-time &optional WINDOW) - mark as second most recently used
+(defun window-bump-use-time (&optional any) -> (int | nil))
+
+;; ===========================================================================
+;; Window creation and deletion
+;; ===========================================================================
+
+;; (delete-window &optional WINDOW) - delete window
+(defun delete-window (&optional any) -> nil)
+
+;; (split-window &optional WINDOW SIZE SIDE PIXELWISE REFER) - split window
+(defun split-window (&optional any any any any any) -> any)
+
+;; ===========================================================================
+;; Window resizing
+;; ===========================================================================
+
+;; (window-resize-apply &optional FRAME HORIZONTAL) - apply resize values
+(defun window-resize-apply (&optional any any) -> bool)
+
+;; (window-resize-apply-total &optional FRAME HORIZONTAL) - apply total sizes
+(defun window-resize-apply-total (&optional any any) -> any)
+
+;; (window-new-pixel &optional WINDOW) - new pixel size
+(defun window-new-pixel (&optional any) -> int)
+
+;; (window-new-total &optional WINDOW) - new total size
+(defun window-new-total (&optional any) -> int)
+
+;; (window-new-normal &optional WINDOW) - new normal size
+(defun window-new-normal (&optional any) -> (float | nil))
+
+;; ===========================================================================
+;; Window buffer management
+;; ===========================================================================
+
+;; (window-discard-buffer-from-window BUFFER WINDOW &optional KILL) - discard buffer from window
+(defun window-discard-buffer-from-window (any any &optional any) -> any)
+
+;; ===========================================================================
+;; Window configuration
+;; ===========================================================================
+
+;; (window-configuration-p OBJ) - test if object is window configuration
+(defun window-configuration-p (any) -> bool)
+
+;; (window-configuration-frame CONFIG) - return frame of configuration
+(defun window-configuration-frame (any) -> any)
+
+;; (window-configuration-equal-p X Y) - compare window configurations
+(defun window-configuration-equal-p (any any) -> bool)
+
+;; (current-window-configuration &optional FRAME) - save window configuration
+(defun current-window-configuration (&optional any) -> any)
+
+;; (set-window-configuration CONFIG &optional DONT-SET-FRAME DONT-SET-MINIWINDOW) - restore configuration
+(defun set-window-configuration (any &optional any any) -> (t | nil))
+
+;; ===========================================================================
+;; Coordinates and visibility
+;; ===========================================================================
+
+;; (window-at X Y &optional FRAME) - window at coordinates
+(defun window-at (int int &optional any) -> (any | nil))
+
+;; (coordinates-in-window-p COORDINATES WINDOW) - test if coords in window
+(defun coordinates-in-window-p ((pair int int) any) -> any)
+
+;; (pos-visible-in-window-p &optional POS WINDOW PARTIALLY) - test if position visible
+(defun pos-visible-in-window-p (&optional any any any) -> any)
+
+;; ===========================================================================
+;; Point movement relative to window
+;; ===========================================================================
+
+;; (recenter &optional ARG REDISPLAY) - center point in window
+(defun recenter (&optional any any) -> nil)
+
+;; (move-to-window-line ARG) - move point to window line
+(defun move-to-window-line ((int | nil)) -> int)
+
+;; ===========================================================================
+;; Window display metrics
+;; ===========================================================================
+
+;; (window-line-height &optional LINE WINDOW) - height of text line
+(defun window-line-height (&optional any any) -> (list int))
+
+;; (window-text-pixel-size &optional WINDOW FROM TO X-LIMIT Y-LIMIT MODE-LINES IGNORE-LINE-AT-END) - text dimensions
+(defun window-text-pixel-size (&optional any any any any any any any) -> (pair int int))
+
+;; (window-lines-pixel-dimensions &optional WINDOW FIRST LAST BODY INVERSE LEFT) - line dimensions
+(defun window-lines-pixel-dimensions (&optional any any any any any any) -> (list any))
+
+;; ===========================================================================
+;; Display system
+;; ===========================================================================
+
+;; (window-system &optional FRAME) - return window system type
+(defun window-system (&optional any) -> (symbol | nil))
+
+;; ===========================================================================
+;; Force redisplay
+;; ===========================================================================
+
+;; (force-window-update &optional OBJECT) - force window update
+(defun force-window-update (&optional any) -> bool)
