@@ -1,0 +1,373 @@
+;; Type signatures for Emacs data.c
+;;
+;; Source: emacs/src/data.c
+;; Emacs version: 31.0
+;;
+;; Contains fundamental predicates, accessors, and arithmetic.
+
+;; ===========================================================================
+;; Equality and identity
+;; ===========================================================================
+
+;; (eq A B) - identity comparison
+(defun eq (a b) -> bool)
+
+;; (null OBJ) - test if nil
+(defun null (obj) -> bool)
+
+;; ===========================================================================
+;; Type predicates - return t or nil
+;; ===========================================================================
+
+;; Symbol predicates
+(defun symbolp (obj) -> bool)
+(defun keywordp (obj) -> bool)
+(defun bare-symbol-p (obj) -> bool)
+(defun symbol-with-pos-p (obj) -> bool)
+
+;; Numeric predicates
+(defun integerp (obj) -> bool)
+(defun floatp (obj) -> bool)
+(defun numberp (obj) -> bool)
+(defun natnump (obj) -> bool)
+(defun number-or-marker-p (obj) -> bool)
+(defun integer-or-marker-p (obj) -> bool)
+
+;; List/cons predicates
+(defun consp (obj) -> bool)
+(defun atom (obj) -> bool)
+(defun listp (obj) -> bool)
+(defun nlistp (obj) -> bool)
+
+;; Sequence predicates
+(defun arrayp (obj) -> bool)
+(defun vectorp (obj) -> bool)
+(defun stringp (obj) -> bool)
+(defun multibyte-string-p (obj) -> bool)
+(defun char-table-p (obj) -> bool)
+(defun vector-or-char-table-p (obj) -> bool)
+(defun bool-vector-p (obj) -> bool)
+(defun sequencep (obj) -> bool)
+(defun recordp (obj) -> bool)
+
+;; Other type predicates
+(defun bufferp (obj) -> bool)
+(defun markerp (obj) -> bool)
+(defun user-ptrp (obj) -> bool)
+(defun char-or-string-p (obj) -> bool)
+(defun subrp (obj) -> bool)
+(defun byte-code-function-p (obj) -> bool)
+(defun interpreted-function-p (obj) -> bool)
+(defun closurep (obj) -> bool)
+(defun native-comp-function-p (obj) -> bool)
+(defun module-function-p (obj) -> bool)
+(defun threadp (obj) -> bool)
+(defun mutexp (obj) -> bool)
+(defun condition-variable-p (obj) -> bool)
+
+;; ===========================================================================
+;; Type introspection
+;; ===========================================================================
+
+;; (type-of OBJ) - return type symbol
+(defun type-of (obj) -> symbol)
+
+;; (cl-type-of OBJ) - CL-style type
+(defun cl-type-of (obj) -> symbol)
+
+;; (subr-arity SUBR) - return (MIN . MAX) or (MIN . many)
+(defun subr-arity (subr) -> (pair int (int | 'many)))
+
+;; (subr-name SUBR) - return symbol name
+(defun subr-name (subr) -> symbol)
+
+;; (subr-type SUBR) - return function type
+(defun subr-type (subr) -> any)
+
+;; ===========================================================================
+;; Cons cell operations
+;; ===========================================================================
+
+;; (car LIST) - first element, nil if not a cons
+(defun car [a] ((pair a any) | nil) -> (a | nil))
+
+;; (cdr LIST) - rest of list, nil if not a cons
+(defun cdr [a b] ((pair a b) | nil) -> (b | nil))
+
+;; (car-safe OBJ) - car or nil if not a cons
+(defun car-safe [a] (obj) -> (a | nil))
+
+;; (cdr-safe OBJ) - cdr or nil if not a cons
+(defun cdr-safe [a] (obj) -> (a | nil))
+
+;; (setcar CELL NEWCAR) - destructive update
+(defun setcar [a b] ((pair a any) newcar : b) -> b)
+
+;; (setcdr CELL NEWCDR) - destructive update
+(defun setcdr [a b] ((pair any a) newcdr : b) -> b)
+
+;; ===========================================================================
+;; Array operations
+;; ===========================================================================
+
+;; (aref ARRAY INDEX) - element access
+;; Works on vectors, strings, char-tables, bool-vectors
+(defun aref [a] ((vector a) idx : int) -> a)
+
+;; (aset ARRAY INDEX VALUE) - element mutation
+(defun aset [a] ((vector a) idx : int value : a) -> a)
+
+;; ===========================================================================
+;; Symbol operations
+;; ===========================================================================
+
+;; (symbol-name SYM) - return name as string
+(defun symbol-name (sym : symbol) -> string)
+
+;; (symbol-value SYM) - return current value
+(defun symbol-value (sym : symbol) -> any)
+
+;; (symbol-function SYM) - return function binding
+(defun symbol-function (sym : symbol) -> any)
+
+;; (symbol-plist SYM) - return property list
+(defun symbol-plist (sym : symbol) -> (list any))
+
+;; (setplist SYM PLIST) - set property list
+(defun setplist (sym : symbol plist : (list any)) -> (list any))
+
+;; (boundp SYM) - test if variable is bound
+(defun boundp (sym : symbol) -> bool)
+
+;; (fboundp SYM) - test if function is bound
+(defun fboundp (sym : symbol) -> bool)
+
+;; (fset SYM DEF) - set function binding
+(defun fset (sym : symbol def) -> any)
+
+;; (defalias SYM DEF &optional DOC) - define function alias
+(defun defalias (sym : symbol def &optional doc : (string | nil)) -> symbol)
+
+;; (set SYM VALUE) - set symbol value
+(defun set (sym : symbol value) -> any)
+
+;; (makunbound SYM) - remove variable binding
+(defun makunbound (sym : symbol) -> symbol)
+
+;; (fmakunbound SYM) - remove function binding
+(defun fmakunbound (sym : symbol) -> symbol)
+
+;; (default-value SYM) - return default value
+(defun default-value (sym : symbol) -> any)
+
+;; (default-boundp SYM) - test if default is bound
+(defun default-boundp (sym : symbol) -> bool)
+
+;; (set-default SYM VALUE) - set default value
+(defun set-default (sym : symbol value) -> any)
+
+;; ===========================================================================
+;; Local variables
+;; ===========================================================================
+
+;; (make-local-variable SYM) - make buffer-local
+(defun make-local-variable (sym : symbol) -> symbol)
+
+;; (kill-local-variable SYM) - remove buffer-local binding
+(defun kill-local-variable (sym : symbol) -> symbol)
+
+;; (make-variable-buffer-local SYM) - make automatically buffer-local
+(defun make-variable-buffer-local (sym : symbol) -> symbol)
+
+;; (local-variable-p SYM &optional BUFFER) - test if buffer-local
+(defun local-variable-p (sym : symbol &optional buffer) -> bool)
+
+;; (local-variable-if-set-p SYM &optional BUFFER) - test if would be local
+(defun local-variable-if-set-p (sym : symbol &optional buffer) -> bool)
+
+;; (variable-binding-locus SYM) - return binding location
+(defun variable-binding-locus (sym : symbol) -> any)
+
+;; ===========================================================================
+;; Indirect access
+;; ===========================================================================
+
+;; (indirect-function FN) - resolve symbol chain to function
+(defun indirect-function (fn) -> any)
+
+;; (indirect-variable SYM) - resolve symbol chain to variable
+(defun indirect-variable (sym : symbol) -> symbol)
+
+;; ===========================================================================
+;; Function introspection
+;; ===========================================================================
+
+;; (interactive-form FN) - return interactive spec
+(defun interactive-form (fn) -> any)
+
+;; (command-modes FN) - return command modes
+(defun command-modes (fn) -> (list symbol))
+
+;; ===========================================================================
+;; Arithmetic
+;; ===========================================================================
+
+;; (+ &rest NUMBERS) - addition
+(defun + (&rest numbers : (list num)) -> num)
+
+;; (- &optional N &rest NUMBERS) - subtraction or negation
+(defun - (n : num &rest numbers : (list num)) -> num)
+
+;; (* &rest NUMBERS) - multiplication
+(defun * (&rest numbers : (list num)) -> num)
+
+;; (/ N &rest DIVISORS) - division
+(defun / (n : num &rest divisors : (list num)) -> num)
+
+;; (% N D) - modulo
+(defun % (n : int d : int) -> int)
+
+;; (mod N D) - modulo (always positive)
+(defun mod (n : num d : num) -> num)
+
+;; (1+ N) - increment
+(defun 1+ (n : num) -> num)
+
+;; (1- N) - decrement
+(defun 1- (n : num) -> num)
+
+;; (max &rest NUMBERS) - maximum
+(defun max (n : num &rest numbers : (list num)) -> num)
+
+;; (min &rest NUMBERS) - minimum
+(defun min (n : num &rest numbers : (list num)) -> num)
+
+;; ===========================================================================
+;; Numeric comparison
+;; ===========================================================================
+
+;; (= N1 N2 &rest NS) - numeric equality
+(defun = (n1 : num n2 : num &rest ns : (list num)) -> bool)
+
+;; (< N1 N2 &rest NS) - less than
+(defun < (n1 : num n2 : num &rest ns : (list num)) -> bool)
+
+;; (> N1 N2 &rest NS) - greater than
+(defun > (n1 : num n2 : num &rest ns : (list num)) -> bool)
+
+;; (<= N1 N2 &rest NS) - less or equal
+(defun <= (n1 : num n2 : num &rest ns : (list num)) -> bool)
+
+;; (>= N1 N2 &rest NS) - greater or equal
+(defun >= (n1 : num n2 : num &rest ns : (list num)) -> bool)
+
+;; (/= N1 N2) - not equal
+(defun /= (n1 : num n2 : num) -> bool)
+
+;; ===========================================================================
+;; Bitwise operations
+;; ===========================================================================
+
+;; (ash N COUNT) - arithmetic shift
+(defun ash (n : int count : int) -> int)
+
+;; (logand &rest INTS) - bitwise AND
+(defun logand (&rest ints : (list int)) -> int)
+
+;; (logior &rest INTS) - bitwise OR
+(defun logior (&rest ints : (list int)) -> int)
+
+;; (logxor &rest INTS) - bitwise XOR
+(defun logxor (&rest ints : (list int)) -> int)
+
+;; (lognot N) - bitwise NOT
+(defun lognot (n : int) -> int)
+
+;; (logcount N) - count 1 bits
+(defun logcount (n : int) -> int)
+
+;; ===========================================================================
+;; Number conversion
+;; ===========================================================================
+
+;; (number-to-string N) - convert to string
+(defun number-to-string (n : num) -> string)
+
+;; (string-to-number S &optional BASE) - parse number
+(defun string-to-number (s : string &optional base : (int | nil)) -> num)
+
+;; (byteorder) - return byte order indicator
+(defun byteorder () -> int)
+
+;; ===========================================================================
+;; Bool vector operations
+;; ===========================================================================
+
+;; (bool-vector-exclusive-or A B &optional C) - XOR bool vectors
+(defun bool-vector-exclusive-or (a b &optional c) -> any)
+
+;; (bool-vector-union A B &optional C) - OR bool vectors
+(defun bool-vector-union (a b &optional c) -> any)
+
+;; (bool-vector-intersection A B &optional C) - AND bool vectors
+(defun bool-vector-intersection (a b &optional c) -> any)
+
+;; (bool-vector-set-difference A B &optional C) - set difference
+(defun bool-vector-set-difference (a b &optional c) -> any)
+
+;; (bool-vector-not A &optional B) - NOT bool vector
+(defun bool-vector-not (a &optional b) -> any)
+
+;; (bool-vector-subsetp A B) - subset test
+(defun bool-vector-subsetp (a b) -> bool)
+
+;; (bool-vector-count-consecutive A B I) - count consecutive
+(defun bool-vector-count-consecutive (a b i : int) -> int)
+
+;; (bool-vector-count-population A) - count true values
+(defun bool-vector-count-population (a) -> int)
+
+;; ===========================================================================
+;; Variable watchers
+;; ===========================================================================
+
+;; (add-variable-watcher SYM FN) - add watcher
+(defun add-variable-watcher (sym : symbol fn) -> nil)
+
+;; (remove-variable-watcher SYM FN) - remove watcher
+(defun remove-variable-watcher (sym : symbol fn) -> nil)
+
+;; (get-variable-watchers SYM) - get watchers
+(defun get-variable-watchers (sym : symbol) -> (list any))
+
+;; ===========================================================================
+;; Symbol position operations
+;; ===========================================================================
+
+;; (bare-symbol SYM) - remove position info
+(defun bare-symbol (sym : symbol) -> symbol)
+
+;; (position-symbol SYM POS) - add position info
+(defun position-symbol (sym : symbol pos : int) -> symbol)
+
+;; (remove-pos-from-symbol SYM) - remove position info (alias)
+(defun remove-pos-from-symbol (sym : symbol) -> symbol)
+
+;; (symbol-with-pos-pos SYM) - get position
+(defun symbol-with-pos-pos (sym : symbol) -> int)
+
+;; ===========================================================================
+;; Native compilation introspection
+;; ===========================================================================
+
+;; (subr-native-comp-unit SUBR) - get compilation unit
+(defun subr-native-comp-unit (subr) -> any)
+
+;; (subr-native-lambda-list SUBR) - get lambda list
+(defun subr-native-lambda-list (subr) -> any)
+
+;; (native-comp-unit-file UNIT) - get file path
+(defun native-comp-unit-file (unit) -> (string | nil))
+
+;; (native-comp-unit-set-file UNIT PATH) - set file path
+(defun native-comp-unit-set-file (unit path) -> nil)
