@@ -1,0 +1,59 @@
+;; Type signatures for Emacs print.c
+;;
+;; Source: emacs/src/print.c
+;; Emacs version: 31.0
+;;
+;; Contains printing and output functions.
+
+;; ===========================================================================
+;; Basic output
+;; ===========================================================================
+
+;; (write-char CHARACTER &optional PRINTCHARFUN) - output character
+(defun write-char (int &optional any) -> int)
+
+;; (terpri &optional PRINTCHARFUN ENSURE) - output newline
+(defun terpri (&optional any any) -> bool)
+
+;; ===========================================================================
+;; Printing objects
+;; ===========================================================================
+
+;; (prin1 OBJECT &optional PRINTCHARFUN OVERRIDES) - print with quoting
+(defun prin1 (any &optional any any) -> any)
+
+;; (princ OBJECT &optional PRINTCHARFUN) - print without quoting
+(defun princ (any &optional any) -> any)
+
+;; (print OBJECT &optional PRINTCHARFUN) - print with newlines
+(defun print (any &optional any) -> any)
+
+;; (prin1-to-string OBJECT &optional NOESCAPE OVERRIDES) - print to string
+(defun prin1-to-string (any &optional any any) -> string)
+
+;; ===========================================================================
+;; Error messages
+;; ===========================================================================
+
+;; (error-message-string ERROR-VALUE) - convert error to message
+(defun error-message-string (any) -> string)
+
+;; ===========================================================================
+;; Debugging output
+;; ===========================================================================
+
+;; (external-debugging-output CHARACTER) - write to stderr
+(defun external-debugging-output (int) -> int)
+
+;; (redirect-debugging-output FILE &optional APPEND) - redirect debug output
+(defun redirect-debugging-output (string &optional any) -> nil)
+
+;; (flush-standard-output) - flush standard output
+(defun flush-standard-output () -> nil)
+
+;; ===========================================================================
+;; Internal functions
+;; ===========================================================================
+
+;; (print--preprocess OBJECT) - internal preprocessing
+(defun print--preprocess (any) -> nil)
