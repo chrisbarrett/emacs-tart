@@ -1,0 +1,250 @@
+;; Type signatures for Emacs process.c
+;;
+;; Source: emacs/src/process.c
+;; Emacs version: 31.0
+;;
+;; Contains subprocess and network process management.
+
+;; ===========================================================================
+;; Type predicates
+;; ===========================================================================
+
+;; (processp OBJ) - test if object is a process
+(defun processp (any) -> bool)
+
+;; ===========================================================================
+;; Process lookup
+;; ===========================================================================
+
+;; (get-process NAME) - return process with NAME, or nil
+(defun get-process ((string | any)) -> (any | nil))
+
+;; (get-buffer-process BUFFER) - return process for BUFFER, or nil
+(defun get-buffer-process (any) -> (any | nil))
+
+;; (process-list) - return list of all processes
+(defun process-list () -> (list any))
+
+;; ===========================================================================
+;; Process properties
+;; ===========================================================================
+
+;; (process-name PROCESS) - return name of PROCESS
+(defun process-name (any) -> string)
+
+;; (process-id PROCESS) - return PID, or nil for network/serial
+(defun process-id (any) -> (int | nil))
+
+;; (process-command PROCESS) - return command list
+(defun process-command (any) -> (list any))
+
+;; (process-buffer PROCESS) - return associated buffer
+(defun process-buffer (any) -> (any | nil))
+
+;; (process-mark PROCESS) - return marker for end of output
+(defun process-mark (any) -> any)
+
+;; (process-status PROCESS) - return status symbol
+(defun process-status (any) -> symbol)
+
+;; (process-exit-status PROCESS) - return exit code
+(defun process-exit-status (any) -> int)
+
+;; (process-type PROCESS) - return type symbol
+(defun process-type (any) -> symbol)
+
+;; (process-tty-name PROCESS &optional STREAM) - return TTY name
+(defun process-tty-name (any &optional any) -> (string | nil))
+
+;; (process-contact PROCESS &optional KEY NO-BLOCK) - return connection info
+(defun process-contact (any &optional any any) -> any)
+
+;; (process-connection PROCESS) - return connection type
+(defun process-connection (any) -> any)
+
+;; (process-plist PROCESS) - return property list
+(defun process-plist (any) -> (list any))
+
+;; (process-coding-system PROCESS) - return (DECODE . ENCODE)
+(defun process-coding-system (any) -> (pair any any))
+
+;; (process-running-child-p PROCESS &optional COMPLETELY) - test if child running
+(defun process-running-child-p (&optional any any) -> bool)
+
+;; (process-datagram-address PROCESS) - return datagram address
+(defun process-datagram-address (any) -> (any | nil))
+
+;; ===========================================================================
+;; Process property setters
+;; ===========================================================================
+
+;; (set-process-buffer PROCESS BUFFER) - set associated buffer
+(defun set-process-buffer (any any) -> any)
+
+;; (set-process-plist PROCESS PLIST) - set property list
+(defun set-process-plist (any (list any)) -> (list any))
+
+;; (set-process-coding-system PROCESS &optional DECODE ENCODE) - set coding
+(defun set-process-coding-system (any &optional any any) -> nil)
+
+;; (set-process-window-size PROCESS LINES COLS) - set PTY window size
+(defun set-process-window-size (any int int) -> nil)
+
+;; (set-process-datagram-address PROCESS ADDRESS) - set datagram address
+(defun set-process-datagram-address (any any) -> any)
+
+;; ===========================================================================
+;; Filter and sentinel
+;; ===========================================================================
+
+;; (process-filter PROCESS) - return filter function
+(defun process-filter (any) -> any)
+
+;; (set-process-filter PROCESS FILTER) - set filter function
+(defun set-process-filter (any any) -> nil)
+
+;; (process-sentinel PROCESS) - return sentinel function
+(defun process-sentinel (any) -> any)
+
+;; (set-process-sentinel PROCESS SENTINEL) - set sentinel function
+(defun set-process-sentinel (any any) -> nil)
+
+;; ===========================================================================
+;; Thread assignment
+;; ===========================================================================
+
+;; (process-thread PROCESS) - return assigned thread
+(defun process-thread (any) -> (any | nil))
+
+;; (set-process-thread PROCESS THREAD) - assign to thread
+(defun set-process-thread (any any) -> nil)
+
+;; ===========================================================================
+;; Process flags
+;; ===========================================================================
+
+;; (process-query-on-exit-flag PROCESS) - return query flag
+(defun process-query-on-exit-flag (any) -> bool)
+
+;; (set-process-query-on-exit-flag PROCESS FLAG) - set query flag
+(defun set-process-query-on-exit-flag (any any) -> any)
+
+;; (process-inherit-coding-system-flag PROCESS) - return inherit flag
+(defun process-inherit-coding-system-flag (any) -> bool)
+
+;; (set-process-inherit-coding-system-flag PROCESS FLAG) - set inherit flag
+(defun set-process-inherit-coding-system-flag (any any) -> any)
+
+;; ===========================================================================
+;; Process creation
+;; ===========================================================================
+
+;; (make-process &rest ARGS) - create subprocess
+(defun make-process (&rest any) -> any)
+
+;; (make-network-process &rest ARGS) - create network connection
+(defun make-network-process (&rest any) -> any)
+
+;; (make-pipe-process &rest ARGS) - create pipe process
+(defun make-pipe-process (&rest any) -> any)
+
+;; (make-serial-process &rest ARGS) - create serial connection
+(defun make-serial-process (&rest any) -> any)
+
+;; (serial-process-configure &rest ARGS) - configure serial process
+(defun serial-process-configure (&rest any) -> nil)
+
+;; (set-network-process-option PROCESS OPTION VALUE &optional NO-ERROR) - set option
+(defun set-network-process-option (any any any &optional any) -> nil)
+
+;; ===========================================================================
+;; Process lifecycle
+;; ===========================================================================
+
+;; (delete-process PROCESS) - delete and forget process
+(defun delete-process (&optional any) -> nil)
+
+;; (interrupt-process PROCESS &optional CURRENT-GROUP) - send SIGINT
+(defun interrupt-process (&optional any any) -> any)
+
+;; (kill-process PROCESS &optional CURRENT-GROUP) - send SIGKILL
+(defun kill-process (&optional any any) -> any)
+
+;; (quit-process PROCESS &optional CURRENT-GROUP) - send SIGQUIT
+(defun quit-process (&optional any any) -> any)
+
+;; (stop-process PROCESS &optional CURRENT-GROUP) - send SIGSTOP
+(defun stop-process (&optional any any) -> any)
+
+;; (continue-process PROCESS &optional CURRENT-GROUP) - send SIGCONT
+(defun continue-process (&optional any any) -> any)
+
+;; (signal-process PROCESS SIGCODE &optional REMOTE) - send signal
+(defun signal-process (any any &optional any) -> any)
+
+;; ===========================================================================
+;; Process I/O
+;; ===========================================================================
+
+;; (process-send-string PROCESS STRING) - send string to process
+(defun process-send-string (any string) -> nil)
+
+;; (process-send-region PROCESS START END) - send region to process
+(defun process-send-region (any int int) -> nil)
+
+;; (process-send-eof PROCESS) - send EOF to process
+(defun process-send-eof (&optional any) -> any)
+
+;; (accept-process-output PROCESS &optional SECONDS MILLISEC JUST-THIS-ONE) - wait for output
+(defun accept-process-output (&optional any any any any) -> bool)
+
+;; (waiting-for-user-input-p) - test if waiting for input
+(defun waiting-for-user-input-p () -> bool)
+
+;; ===========================================================================
+;; Network utilities
+;; ===========================================================================
+
+;; (network-interface-list &optional FULL FAMILY) - list network interfaces
+(defun network-interface-list (&optional any any) -> (list any))
+
+;; (network-interface-info IFNAME) - get interface info
+(defun network-interface-info (string) -> (list any))
+
+;; (network-lookup-address-info NAME &optional FAMILY HINTS) - DNS lookup
+(defun network-lookup-address-info (string &optional any any) -> (list any))
+
+;; (format-network-address ADDRESS &optional OMIT-PORT) - format address
+(defun format-network-address (any &optional any) -> (string | nil))
+
+;; ===========================================================================
+;; System information
+;; ===========================================================================
+
+;; (list-system-processes) - return list of PIDs
+(defun list-system-processes () -> (list int))
+
+;; (process-attributes PID) - return process attributes
+(defun process-attributes (int) -> (list any))
+
+;; (num-processors &optional QUERY) - return number of processors
+(defun num-processors (&optional any) -> int)
+
+;; (signal-names) - return alist of signal numbers to names
+(defun signal-names () -> (list any))
+
+;; ===========================================================================
+;; Internal functions
+;; ===========================================================================
+
+;; (internal-default-process-filter PROC TEXT) - default filter
+(defun internal-default-process-filter (any string) -> nil)
+
+;; (internal-default-process-sentinel PROC MSG) - default sentinel
+(defun internal-default-process-sentinel (any string) -> nil)
+
+;; (internal-default-interrupt-process PROC &optional CURRENT-GROUP) - default interrupt
+(defun internal-default-interrupt-process (&optional any any) -> any)
+
+;; (internal-default-signal-process PROC SIGCODE &optional REMOTE) - default signal
+(defun internal-default-signal-process (any any &optional any) -> any)
