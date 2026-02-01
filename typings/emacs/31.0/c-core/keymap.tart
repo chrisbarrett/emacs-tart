@@ -1,0 +1,129 @@
+;; Type signatures for Emacs keymap.c
+;;
+;; Source: emacs/src/keymap.c
+;; Emacs version: 31.0
+;;
+;; Contains keymap creation and manipulation.
+
+;; ===========================================================================
+;; Type predicates
+;; ===========================================================================
+
+;; (keymapp OBJ) - test if object is a keymap
+(defun keymapp (any) -> bool)
+
+;; ===========================================================================
+;; Keymap creation
+;; ===========================================================================
+
+;; (make-keymap &optional STRING) - create full keymap
+(defun make-keymap (&optional string) -> (list any))
+
+;; (make-sparse-keymap &optional STRING) - create sparse keymap
+(defun make-sparse-keymap (&optional string) -> (list any))
+
+;; (copy-keymap KEYMAP) - return copy of keymap
+(defun copy-keymap (any) -> (list any))
+
+;; ===========================================================================
+;; Keymap hierarchy
+;; ===========================================================================
+
+;; (keymap-parent KEYMAP) - return parent keymap
+(defun keymap-parent (any) -> (any | nil))
+
+;; (set-keymap-parent KEYMAP PARENT) - set parent keymap
+(defun set-keymap-parent (any any) -> any)
+
+;; (keymap-prompt KEYMAP) - return prompt string
+(defun keymap-prompt (any) -> (string | nil))
+
+;; ===========================================================================
+;; Key binding
+;; ===========================================================================
+
+;; (define-key KEYMAP KEY DEF &optional REMOVE) - define key in keymap
+(defun define-key (any any any &optional any) -> any)
+
+;; (lookup-key KEYMAP KEY &optional ACCEPT-DEFAULT) - look up key
+(defun lookup-key (any any &optional any) -> any)
+
+;; (key-binding KEY &optional ACCEPT-DEFAULT NO-REMAP POSITION) - get active binding
+(defun key-binding (any &optional any any any) -> any)
+
+;; (minor-mode-key-binding KEY &optional ACCEPT-DEFAULT) - get minor mode bindings
+(defun minor-mode-key-binding (any &optional any) -> (list any))
+
+;; (command-remapping COMMAND &optional POSITION KEYMAPS) - get command remapping
+(defun command-remapping (any &optional any any) -> (any | nil))
+
+;; ===========================================================================
+;; Current keymaps
+;; ===========================================================================
+
+;; (current-global-map) - return global keymap
+(defun current-global-map () -> any)
+
+;; (current-local-map) - return buffer's local keymap
+(defun current-local-map () -> (any | nil))
+
+;; (current-minor-mode-maps) - return list of minor mode keymaps
+(defun current-minor-mode-maps () -> (list any))
+
+;; (current-active-maps &optional OLDDEP POSITION) - return all active keymaps
+(defun current-active-maps (&optional any any) -> (list any))
+
+;; (use-global-map KEYMAP) - set global keymap
+(defun use-global-map (any) -> nil)
+
+;; (use-local-map KEYMAP) - set buffer's local keymap
+(defun use-local-map (any) -> nil)
+
+;; ===========================================================================
+;; Keymap traversal
+;; ===========================================================================
+
+;; (map-keymap FUNCTION KEYMAP) - call function for each binding
+(defun map-keymap (any any) -> nil)
+
+;; (map-keymap-internal FUNCTION KEYMAP) - internal map function
+(defun map-keymap-internal (any any) -> nil)
+
+;; (accessible-keymaps KEYMAP &optional PREFIX) - get accessible keymaps
+(defun accessible-keymaps (any &optional any) -> (list any))
+
+;; (where-is-internal DEFINITION &optional KEYMAP FIRSTONLY NOINDIRECT NO-REMAP) - find key for command
+(defun where-is-internal (any &optional any any any any) -> (list any))
+
+;; ===========================================================================
+;; Key descriptions
+;; ===========================================================================
+
+;; (key-description KEYS &optional PREFIX) - convert keys to string
+(defun key-description (any &optional any) -> string)
+
+;; (single-key-description KEY &optional NO-ANGLES) - describe single key
+(defun single-key-description (any &optional any) -> string)
+
+;; (text-char-description CHAR) - describe character
+(defun text-char-description (int) -> string)
+
+;; ===========================================================================
+;; Help/describe functions
+;; ===========================================================================
+
+;; (describe-buffer-bindings BUFFER &optional PREFIX MENUS) - describe bindings
+(defun describe-buffer-bindings (any &optional any any) -> nil)
+
+;; (describe-vector VECTOR &optional DESCRIBER) - describe vector
+(defun describe-vector (any &optional any) -> nil)
+
+;; (help--describe-vector VECTOR PREFIX TRANSL PARTIAL SHADOW ENTIRE-MAP MENTION-SHADOW MENTION-ONLY-MODS KEYMAP-P FIRST-DONE) - internal describe
+(defun help--describe-vector (any any any any any any any any any any) -> any)
+
+;; ===========================================================================
+;; Internal functions
+;; ===========================================================================
+
+;; (keymap--get-keyelt ELT &optional AUTOLOAD) - get keymap element
+(defun keymap--get-keyelt (any &optional any) -> any)
