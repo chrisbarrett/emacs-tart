@@ -1,0 +1,218 @@
+;; Type signatures for Emacs buffer.c
+;;
+;; Source: emacs/src/buffer.c
+;; Emacs version: 31.0
+;;
+;; Contains buffer management functions.
+
+;; ===========================================================================
+;; Buffer predicates and queries
+;; ===========================================================================
+
+;; (buffer-live-p OBJ) - test if buffer is live
+(defun buffer-live-p (any) -> bool)
+
+;; (buffer-list &optional FRAME) - return list of all live buffers
+(defun buffer-list (&optional any) -> (list any))
+
+;; (current-buffer) - return current buffer
+(defun current-buffer () -> any)
+
+;; ===========================================================================
+;; Buffer lookup
+;; ===========================================================================
+
+;; (get-buffer BUFFER-OR-NAME) - return buffer by name or nil
+(defun get-buffer ((string | any)) -> (any | nil))
+
+;; (get-file-buffer FILENAME) - find buffer visiting file
+(defun get-file-buffer (string) -> (any | nil))
+
+;; (get-truename-buffer FILENAME) - find buffer by file truename
+(defun get-truename-buffer (string) -> (any | nil))
+
+;; (find-buffer VARIABLE VALUE) - find buffer where variable equals value
+(defun find-buffer (symbol any) -> (any | nil))
+
+;; (other-buffer &optional BUFFER VISIBLE-OK FRAME) - return another buffer
+(defun other-buffer (&optional any any any) -> any)
+
+;; ===========================================================================
+;; Buffer creation
+;; ===========================================================================
+
+;; (get-buffer-create BUFFER-OR-NAME &optional INHIBIT-BUFFER-HOOKS) - get or create buffer
+(defun get-buffer-create ((string | any) &optional any) -> any)
+
+;; (make-indirect-buffer BASE-BUFFER NAME &optional CLONE INHIBIT-BUFFER-HOOKS) - create indirect buffer
+(defun make-indirect-buffer (any string &optional any any) -> any)
+
+;; (generate-new-buffer-name NAME &optional IGNORE) - generate unique buffer name
+(defun generate-new-buffer-name (string &optional (string | nil)) -> string)
+
+;; ===========================================================================
+;; Buffer names
+;; ===========================================================================
+
+;; (buffer-name &optional BUFFER) - return buffer name
+(defun buffer-name (&optional any) -> (string | nil))
+
+;; (buffer-last-name &optional BUFFER) - return previous name
+(defun buffer-last-name (&optional any) -> (string | nil))
+
+;; (buffer-file-name &optional BUFFER) - return file being visited
+(defun buffer-file-name (&optional any) -> (string | nil))
+
+;; (rename-buffer NEWNAME &optional UNIQUE) - rename buffer
+(defun rename-buffer (string &optional any) -> string)
+
+;; ===========================================================================
+;; Indirect buffers
+;; ===========================================================================
+
+;; (buffer-base-buffer &optional BUFFER) - return base of indirect buffer
+(defun buffer-base-buffer (&optional any) -> (any | nil))
+
+;; ===========================================================================
+;; Buffer-local variables
+;; ===========================================================================
+
+;; (buffer-local-value VARIABLE BUFFER) - get buffer-local value
+(defun buffer-local-value (symbol any) -> any)
+
+;; (buffer-local-variables &optional BUFFER) - list buffer-local variables
+(defun buffer-local-variables (&optional any) -> (list any))
+
+;; (kill-all-local-variables &optional KEEP-FUNDAMENTAL) - reset to fundamental mode
+(defun kill-all-local-variables (&optional any) -> nil)
+
+;; ===========================================================================
+;; Buffer modification
+;; ===========================================================================
+
+;; (buffer-modified-p &optional BUFFER) - test if buffer modified
+(defun buffer-modified-p (&optional any) -> (any | nil))
+
+;; (set-buffer-modified-p FLAG) - set buffer modification flag
+(defun set-buffer-modified-p (any) -> any)
+
+;; (restore-buffer-modified-p FLAG) - restore modified flag without redisplay
+(defun restore-buffer-modified-p (any) -> any)
+
+;; (buffer-modified-tick &optional BUFFER) - return modification count
+(defun buffer-modified-tick (&optional any) -> int)
+
+;; (internal--set-buffer-modified-tick TICK &optional BUFFER) - set modification count
+(defun internal--set-buffer-modified-tick (int &optional any) -> nil)
+
+;; (buffer-chars-modified-tick &optional BUFFER) - return char-change count
+(defun buffer-chars-modified-tick (&optional any) -> int)
+
+;; ===========================================================================
+;; Buffer switching
+;; ===========================================================================
+
+;; (set-buffer BUFFER-OR-NAME) - make buffer current
+(defun set-buffer (any) -> any)
+
+;; (set-buffer-major-mode BUFFER) - set appropriate major mode
+(defun set-buffer-major-mode (any) -> any)
+
+;; ===========================================================================
+;; Buffer undo
+;; ===========================================================================
+
+;; (buffer-enable-undo &optional BUFFER) - enable undo for buffer
+(defun buffer-enable-undo (&optional any) -> nil)
+
+;; ===========================================================================
+;; Buffer killing and burying
+;; ===========================================================================
+
+;; (kill-buffer &optional BUFFER-OR-NAME) - kill buffer
+(defun kill-buffer (&optional any) -> (t | nil))
+
+;; (bury-buffer-internal BUFFER) - move buffer to end of list
+(defun bury-buffer-internal (any) -> nil)
+
+;; ===========================================================================
+;; Buffer content
+;; ===========================================================================
+
+;; (erase-buffer) - delete all content
+(defun erase-buffer () -> nil)
+
+;; (buffer-swap-text BUFFER) - swap text with another buffer
+(defun buffer-swap-text (any) -> nil)
+
+;; (set-buffer-multibyte FLAG) - set multibyte mode
+(defun set-buffer-multibyte (any) -> any)
+
+;; ===========================================================================
+;; Mode line
+;; ===========================================================================
+
+;; (force-mode-line-update &optional ALL) - force mode line redisplay
+(defun force-mode-line-update (&optional any) -> any)
+
+;; ===========================================================================
+;; Read-only
+;; ===========================================================================
+
+;; (barf-if-buffer-read-only &optional POSITION) - signal if read-only
+(defun barf-if-buffer-read-only (&optional any) -> nil)
+
+;; ===========================================================================
+;; Overlays
+;; ===========================================================================
+
+;; (make-overlay BEG END &optional BUFFER FRONT-ADVANCE REAR-ADVANCE) - create overlay
+(defun make-overlay (int int &optional any any any) -> any)
+
+;; (move-overlay OVERLAY BEG END &optional BUFFER) - move overlay
+(defun move-overlay (any int int &optional any) -> any)
+
+;; (delete-overlay OVERLAY) - delete overlay
+(defun delete-overlay (any) -> nil)
+
+;; (delete-all-overlays &optional BUFFER) - delete all overlays in buffer
+(defun delete-all-overlays (&optional any) -> nil)
+
+;; (overlay-start OVERLAY) - return overlay start position
+(defun overlay-start (any) -> (int | nil))
+
+;; (overlay-end OVERLAY) - return overlay end position
+(defun overlay-end (any) -> (int | nil))
+
+;; (overlay-buffer OVERLAY) - return overlay's buffer
+(defun overlay-buffer (any) -> (any | nil))
+
+;; (overlay-properties OVERLAY) - return overlay's property list
+(defun overlay-properties (any) -> (list any))
+
+;; (overlays-at POS &optional SORTED) - return overlays at position
+(defun overlays-at (int &optional any) -> (list any))
+
+;; (overlays-in BEG END) - return overlays in range
+(defun overlays-in (int int) -> (list any))
+
+;; (next-overlay-change POS) - next position where overlays change
+(defun next-overlay-change (int) -> int)
+
+;; (previous-overlay-change POS) - previous position where overlays change
+(defun previous-overlay-change (int) -> int)
+
+;; (overlay-lists) - return overlay lists for current buffer
+(defun overlay-lists () -> (pair (list any) (list any)))
+
+;; (overlay-recenter POS) - recenter overlays around position
+(defun overlay-recenter (int) -> nil)
+
+;; (overlay-get OVERLAY PROP) - get overlay property
+(defun overlay-get (any symbol) -> any)
+
+;; (overlay-put OVERLAY PROP VALUE) - set overlay property
+(defun overlay-put (any symbol any) -> any)
+
+;; (overlayp OBJ) - test if object is overlay
+(defun overlayp (any) -> bool)
