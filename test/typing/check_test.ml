@@ -119,7 +119,8 @@ let test_builtin_car_returns_option () =
   (* Uses default environment which includes built-in types *)
   Alcotest.(check int) "no errors" 0 (List.length errors);
   (* car returns (a | nil) where a is inferred from the list; quoted list gives (Or Truthy Nil) *)
-  Alcotest.(check string) "car returns Option Any" "(Or (Or Truthy Nil) Nil)" (to_string ty)
+  Alcotest.(check string)
+    "car returns Option Any" "(Or (Or Truthy Nil) Nil)" (to_string ty)
 
 (** Test that (+ 1 "x") produces a type error. The built-in + expects Int
     arguments, not String. *)
@@ -184,8 +185,8 @@ let test_declare_tart_return_mismatch () =
   (* Should have type error: Int (x) doesn't match String (return) *)
   Alcotest.(check bool) "has error" true (List.length result.errors > 0)
 
-(** Test that polymorphic declare tart works correctly.
-    Requires explicit [a] quantifier - implicit inference was removed. *)
+(** Test that polymorphic declare tart works correctly. Requires explicit [a]
+    quantifier - implicit inference was removed. *)
 let test_declare_tart_polymorphic () =
   let sexps =
     parse_many
@@ -507,7 +508,8 @@ let test_tart_type_parameterized_usage () =
   Alcotest.(check int) "no errors" 0 (List.length result.errors);
   match result.forms with
   | [ _; Check.DefvarForm { var_type; _ } ] ->
-      Alcotest.(check string) "type" "(-> (Int) (Or T Nil))" (to_string var_type)
+      Alcotest.(check string)
+        "type" "(-> (Int) (Or T Nil))" (to_string var_type)
   | _ -> Alcotest.fail "expected TartTypeForm then DefvarForm"
 
 (** Test multi-param tart-type *)
@@ -711,8 +713,7 @@ let test_at_type_in_program () =
   let result = Check.check_program sexps in
   Alcotest.(check int) "no errors" 0 (List.length result.errors)
 
-(** Test HK type constructor instantiation: (tart [list int string] fmap ...)
-*)
+(** Test HK type constructor instantiation: (tart [list int string] fmap ...) *)
 let test_at_type_hk_instantiation () =
   (* fmap : [f a b] (((a -> b)) (f a)) -> (f b)
      where f is a type constructor of kind * -> * *)
@@ -735,9 +736,7 @@ let test_at_type_hk_instantiation () =
       env
   in
   let env = Env.extend_mono "my-list" (TApp (TCon "List", [ Prim.int ])) env in
-  let sexp =
-    parse {|(tart [list int string] fmap number-to-string my-list)|}
-  in
+  let sexp = parse {|(tart [list int string] fmap number-to-string my-list)|} in
   let ty, errors = Check.check_expr ~env sexp in
   Alcotest.(check int) "no errors" 0 (List.length errors);
   Alcotest.(check string) "returns (List String)" "(List String)" (to_string ty)

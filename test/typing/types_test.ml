@@ -326,7 +326,8 @@ let test_option_of_checked_any_fails () =
   match option_of_checked Prim.any with
   | Ok _ -> Alcotest.fail "Option Any should be invalid"
   | Error (NonTruthyOptionArg ty) ->
-      Alcotest.(check string) "error contains Any" "(Or Truthy Nil)" (to_string ty)
+      Alcotest.(check string)
+        "error contains Any" "(Or Truthy Nil)" (to_string ty)
 
 let test_option_of_checked_bool_fails () =
   (* Bool is NOT truthy (includes Nil), so Option Bool should fail *)

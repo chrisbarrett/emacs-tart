@@ -327,7 +327,9 @@ let test_nested_invariance () =
   (* List (Vector Int) should not unify with List (Vector String) *)
   Alcotest.(check bool)
     "(List (Vector Int)) != (List (Vector String))" true
-    (unify_fails (list_of (vector_of Prim.int)) (list_of (vector_of Prim.string)))
+    (unify_fails
+       (list_of (vector_of Prim.int))
+       (list_of (vector_of Prim.string)))
 
 (** Test invariance with hash tables (multiple type params) *)
 let test_hash_table_invariance () =

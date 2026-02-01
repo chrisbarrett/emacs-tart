@@ -1,7 +1,7 @@
 (** Tests for the prelude module.
 
-    The prelude provides implicit utility types (t, any, bool, list, option,
-    is, nonempty) that are available in all .tart files without explicit import. *)
+    The prelude provides implicit utility types (t, any, bool, list, option, is,
+    nonempty) that are available in all .tart files without explicit import. *)
 
 open Sig
 module Types = Core.Types
@@ -40,7 +40,8 @@ let test_prelude_aliases_defined () =
     (fun name ->
       Alcotest.(check bool)
         (name ^ " is prelude type")
-        true (Prelude.is_prelude_type name))
+        true
+        (Prelude.is_prelude_type name))
     expected
 
 (** Test that prelude_type_names contains all aliases *)
@@ -100,9 +101,7 @@ let test_prelude_list_available () =
   | Some scheme ->
       let scheme_str = Type_env.scheme_to_string scheme in
       (* List should be expanded *)
-      Alcotest.(check bool)
-        "uses List type" true
-        (String.length scheme_str > 0)
+      Alcotest.(check bool) "uses List type" true (String.length scheme_str > 0)
 
 (** Test that option type is available in signatures *)
 let test_prelude_option_available () =
@@ -161,9 +160,7 @@ let test_prelude_polymorphic_usage () =
   | Some scheme ->
       (* Should be a polymorphic scheme *)
       let scheme_str = Type_env.scheme_to_string scheme in
-      Alcotest.(check bool)
-        "is polymorphic" true
-        (String.length scheme_str > 5)
+      Alcotest.(check bool) "is polymorphic" true (String.length scheme_str > 5)
 
 (** {1 Type Checking with Prelude Tests} *)
 
@@ -185,9 +182,7 @@ let test_prelude_option_type_checking () =
   Alcotest.(check int) "no type errors" 0 (List.length errors);
   (* Result should be a union containing nil *)
   let ty_str = Types.to_string ty in
-  Alcotest.(check bool)
-    "is union type" true
-    (String.length ty_str > 0)
+  Alcotest.(check bool) "is union type" true (String.length ty_str > 0)
 
 (** Helper to check if a string contains a substring *)
 let contains_substring haystack needle =
@@ -207,7 +202,8 @@ let test_prelude_is_subtraction () =
       let scheme_str = Type_env.scheme_to_string scheme in
       (* After subtraction, (is (int | nil)) should become int *)
       Alcotest.(check bool)
-        "type contains Int" true (contains_substring scheme_str "Int")
+        "type contains Int" true
+        (contains_substring scheme_str "Int")
 
 (** Test that nonempty produces a list minus nil *)
 let test_prelude_nonempty_subtraction () =

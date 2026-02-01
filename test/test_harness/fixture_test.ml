@@ -112,7 +112,8 @@ let () =
         @ (if Sys.file_exists regression_dir && Sys.is_directory regression_dir
            then
              [
-               ("regression", fixture_tests_for_dir ~tart_bin ~dir:regression_dir);
+               ( "regression",
+                 fixture_tests_for_dir ~tart_bin ~dir:regression_dir );
              ]
            else [])
         @ error_tests

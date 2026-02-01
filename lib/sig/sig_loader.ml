@@ -546,14 +546,16 @@ let rec sig_type_to_typ_with_ctx (ctx : type_context) (tvar_names : string list)
          E.g., ((int | string) - int) => string
          E.g., ((truthy | nil) - nil) => truthy *)
       let minuend_type = sig_type_to_typ_with_ctx ctx tvar_names minuend in
-      let subtrahend_type = sig_type_to_typ_with_ctx ctx tvar_names subtrahend in
+      let subtrahend_type =
+        sig_type_to_typ_with_ctx ctx tvar_names subtrahend
+      in
       subtract_type minuend_type subtrahend_type
 
 (** Subtract a type from another type.
 
     For union types, removes all occurrences of the subtrahend from the union.
-    For non-union types, returns the minuend unchanged if it's not equal to
-    the subtrahend, otherwise returns an empty union (TUnion []).
+    For non-union types, returns the minuend unchanged if it's not equal to the
+    subtrahend, otherwise returns an empty union (TUnion []).
 
     Examples:
     - (int | string) - int => string
@@ -563,28 +565,31 @@ and subtract_type (minuend : Types.typ) (subtrahend : Types.typ) : Types.typ =
   let minuend = Types.repr minuend in
   let subtrahend = Types.repr subtrahend in
   match minuend with
-  | Types.TUnion members ->
+  | Types.TUnion members -> (
       (* Filter out members that match the subtrahend *)
       let remaining =
-        List.filter (fun m -> not (types_equal (Types.repr m) subtrahend)) members
+        List.filter
+          (fun m -> not (types_equal (Types.repr m) subtrahend))
+          members
       in
-      (match remaining with
-       | [] -> Types.TUnion [] (* Empty type - all members removed *)
-       | [ single ] -> single (* Single type - unwrap union *)
-       | _ -> Types.TUnion remaining)
+      match remaining with
+      | [] -> Types.TUnion [] (* Empty type - all members removed *)
+      | [ single ] -> single (* Single type - unwrap union *)
+      | _ -> Types.TUnion remaining)
   | _ ->
       (* Non-union type - return unchanged if not equal to subtrahend *)
       if types_equal minuend subtrahend then Types.TUnion [] (* Empty type *)
       else minuend
 
-(** Check if two types are structurally equal (for subtraction purposes).
-    This is a simple structural equality, not a full unification. *)
+(** Check if two types are structurally equal (for subtraction purposes). This
+    is a simple structural equality, not a full unification. *)
 and types_equal (t1 : Types.typ) (t2 : Types.typ) : bool =
   match (t1, t2) with
   | Types.TCon n1, Types.TCon n2 -> n1 = n2
   | Types.TVar tv1, Types.TVar tv2 -> tv1 == tv2 (* Physical equality *)
   | Types.TApp (con1, args1), Types.TApp (con2, args2) ->
-      types_equal con1 con2 && List.length args1 = List.length args2
+      types_equal con1 con2
+      && List.length args1 = List.length args2
       && List.for_all2 types_equal args1 args2
   | Types.TArrow (params1, ret1), Types.TArrow (params2, ret2) ->
       List.length params1 = List.length params2

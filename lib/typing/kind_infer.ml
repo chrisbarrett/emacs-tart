@@ -188,8 +188,7 @@ let rec infer_sig_type_kind (env : Kind.env) (ty : sig_type) :
       (* Type subtraction: both operands must be kind *, result is kind * *)
       let* minuend_kind = infer_sig_type_kind env minuend in
       let* () =
-        unify_scheme_with_kind minuend_kind Kind.KStar
-          "subtraction minuend"
+        unify_scheme_with_kind minuend_kind Kind.KStar "subtraction minuend"
       in
       let* subtrahend_kind = infer_sig_type_kind env subtrahend in
       let* () =

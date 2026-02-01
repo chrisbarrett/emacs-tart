@@ -1,0 +1,234 @@
+;; Type signatures for Emacs fileio.c
+;;
+;; Source: emacs/src/fileio.c
+;; Emacs version: 31.0
+;;
+;; Contains file I/O operations and file name manipulation.
+
+;; ===========================================================================
+;; File name components and manipulation
+;; ===========================================================================
+
+;; (file-name-directory FILENAME) - return directory component
+(defun file-name-directory (string) -> (string | nil))
+
+;; (file-name-nondirectory FILENAME) - return non-directory component
+(defun file-name-nondirectory (string) -> string)
+
+;; (file-name-as-directory FILE) - convert to directory form (with trailing /)
+(defun file-name-as-directory (string) -> string)
+
+;; (directory-file-name DIRECTORY) - convert from directory form (strip trailing /)
+(defun directory-file-name (string) -> string)
+
+;; (directory-name-p NAME) - test if name ends with directory separator
+(defun directory-name-p (string) -> bool)
+
+;; (file-name-concat DIRECTORY &rest COMPONENTS) - concatenate path components
+(defun file-name-concat (string &rest string) -> string)
+
+;; (expand-file-name NAME &optional DEFAULT-DIRECTORY) - expand to absolute path
+(defun expand-file-name (string &optional string) -> string)
+
+;; (substitute-in-file-name FILENAME) - substitute environment variables
+(defun substitute-in-file-name (string) -> string)
+
+;; (file-name-absolute-p FILENAME) - test if path is absolute
+(defun file-name-absolute-p (string) -> bool)
+
+;; (unhandled-file-name-directory FILENAME) - return local directory for remote paths
+(defun unhandled-file-name-directory (string) -> (string | nil))
+
+;; ===========================================================================
+;; File handler dispatch
+;; ===========================================================================
+
+;; (find-file-name-handler FILENAME OPERATION) - find handler for file operation
+(defun find-file-name-handler (string symbol) -> (any | nil))
+
+;; ===========================================================================
+;; Temporary files
+;; ===========================================================================
+
+;; (make-temp-name PREFIX) - generate unique temp file name
+(defun make-temp-name (string) -> string)
+
+;; (make-temp-file-internal PREFIX DIR-FLAG SUFFIX TEXT) - internal temp file creation
+(defun make-temp-file-internal (string any (string | nil) (string | nil)) -> string)
+
+;; ===========================================================================
+;; File existence and attribute predicates
+;; ===========================================================================
+
+;; (file-exists-p FILENAME) - test if file exists
+(defun file-exists-p (string) -> bool)
+
+;; (file-readable-p FILENAME) - test if file is readable
+(defun file-readable-p (string) -> bool)
+
+;; (file-writable-p FILENAME) - test if file is writable
+(defun file-writable-p (string) -> bool)
+
+;; (file-executable-p FILENAME) - test if file is executable
+(defun file-executable-p (string) -> bool)
+
+;; (file-directory-p FILENAME) - test if path is a directory
+(defun file-directory-p (string) -> bool)
+
+;; (file-regular-p FILENAME) - test if path is a regular file
+(defun file-regular-p (string) -> bool)
+
+;; (file-accessible-directory-p FILENAME) - test if directory is accessible
+(defun file-accessible-directory-p (string) -> bool)
+
+;; (file-symlink-p FILENAME) - test if file is a symlink, return target or nil
+(defun file-symlink-p (string) -> (string | nil))
+
+;; (file-name-case-insensitive-p FILENAME) - test if filesystem is case-insensitive
+(defun file-name-case-insensitive-p (string) -> bool)
+
+;; (access-file FILENAME STRING) - signal error if file not accessible
+(defun access-file (string string) -> nil)
+
+;; ===========================================================================
+;; File comparison
+;; ===========================================================================
+
+;; (file-newer-than-file-p FILE1 FILE2) - test if file1 is newer than file2
+(defun file-newer-than-file-p (string string) -> bool)
+
+;; ===========================================================================
+;; File modes and permissions
+;; ===========================================================================
+
+;; (file-modes FILENAME &optional FLAG) - return file permission bits
+(defun file-modes (string &optional symbol) -> (int | nil))
+
+;; (set-file-modes FILENAME MODE &optional FLAG) - set file permission bits
+(defun set-file-modes (string int &optional symbol) -> nil)
+
+;; (default-file-modes) - return default file creation mode
+(defun default-file-modes () -> int)
+
+;; (set-default-file-modes MODE) - set default file creation mode
+(defun set-default-file-modes (int) -> nil)
+
+;; ===========================================================================
+;; File timestamps
+;; ===========================================================================
+
+;; (set-file-times FILENAME &optional TIMESTAMP FLAG) - set file modification time
+(defun set-file-times (string &optional any symbol) -> bool)
+
+;; ===========================================================================
+;; SELinux context
+;; ===========================================================================
+
+;; (file-selinux-context FILENAME) - return SELinux context as list
+(defun file-selinux-context (string) -> (list any))
+
+;; (set-file-selinux-context FILENAME CONTEXT) - set SELinux context
+(defun set-file-selinux-context (string (list any)) -> bool)
+
+;; ===========================================================================
+;; ACL (Access Control Lists)
+;; ===========================================================================
+
+;; (file-acl FILENAME) - return file ACL as string
+(defun file-acl (string) -> (string | nil))
+
+;; (set-file-acl FILENAME ACL-STRING) - set file ACL
+(defun set-file-acl (string (string | nil)) -> bool)
+
+;; ===========================================================================
+;; File operations
+;; ===========================================================================
+
+;; (copy-file FILE NEWNAME &optional OK-IF-EXISTS KEEP-TIME PRESERVE-UID-GID PRESERVE-PERMISSIONS)
+(defun copy-file (string string &optional any any any any) -> nil)
+
+;; (rename-file FILE NEWNAME &optional OK-IF-ALREADY-EXISTS)
+(defun rename-file (string string &optional any) -> nil)
+
+;; (add-name-to-file FILE NEWNAME &optional OK-IF-ALREADY-EXISTS) - create hard link
+(defun add-name-to-file (string string &optional any) -> nil)
+
+;; (make-symbolic-link TARGET LINKNAME &optional OK-IF-ALREADY-EXISTS) - create symlink
+(defun make-symbolic-link (string string &optional any) -> nil)
+
+;; (delete-file-internal FILENAME) - internal file deletion
+(defun delete-file-internal (string) -> nil)
+
+;; ===========================================================================
+;; Directory operations
+;; ===========================================================================
+
+;; (make-directory-internal DIRECTORY) - create directory
+(defun make-directory-internal (string) -> nil)
+
+;; (delete-directory-internal DIRECTORY) - delete directory
+(defun delete-directory-internal (string) -> nil)
+
+;; ===========================================================================
+;; File content I/O
+;; ===========================================================================
+
+;; (insert-file-contents FILENAME &optional VISIT BEG END REPLACE) - insert file contents
+;; Returns (ABSOLUTE-FILE-NAME . BYTES-INSERTED)
+(defun insert-file-contents (string &optional any int int any) -> (pair string int))
+
+;; (write-region START END FILENAME &optional APPEND VISIT LOCKNAME MUSTBENEW)
+;; Write region to file. Returns nil.
+(defun write-region (any any string &optional any any string symbol) -> nil)
+
+;; ===========================================================================
+;; Visited file modification tracking
+;; ===========================================================================
+
+;; (verify-visited-file-modtime &optional BUF) - check if file changed on disk
+(defun verify-visited-file-modtime (&optional any) -> bool)
+
+;; (visited-file-modtime) - return modification time of visited file
+(defun visited-file-modtime () -> any)
+
+;; (set-visited-file-modtime &optional TIME-FLAG) - set visited file modification time
+(defun set-visited-file-modtime (&optional any) -> nil)
+
+;; ===========================================================================
+;; Auto-save
+;; ===========================================================================
+
+;; (do-auto-save &optional NO-MESSAGE CURRENT-ONLY) - auto-save all modified buffers
+(defun do-auto-save (&optional any any) -> nil)
+
+;; (set-buffer-auto-saved) - mark buffer as auto-saved
+(defun set-buffer-auto-saved () -> nil)
+
+;; (clear-buffer-auto-save-failure) - clear auto-save failure flag
+(defun clear-buffer-auto-save-failure () -> nil)
+
+;; (recent-auto-save-p) - test if buffer was recently auto-saved
+(defun recent-auto-save-p () -> bool)
+
+;; ===========================================================================
+;; Miscellaneous
+;; ===========================================================================
+
+;; (unix-sync) - sync filesystem buffers to disk
+(defun unix-sync () -> nil)
+
+;; (next-read-file-uses-dialog-p) - test if next file read should use dialog
+(defun next-read-file-uses-dialog-p () -> bool)
+
+;; (set-binary-mode STREAM MODE) - set binary/text mode for stream
+;; STREAM is 'stdin, 'stdout, or 'stderr
+;; MODE is t for binary, nil for text
+(defun set-binary-mode (symbol any) -> any)
+
+;; (file-system-info FILENAME) - return filesystem info as list
+;; Returns (TOTAL FREE AVAIL) in bytes, or nil
+(defun file-system-info (string) -> ((list int) | nil))
+
+;; (car-less-than-car A B) - compare car of two conses
+;; Used for sorting alists
+(defun car-less-than-car (any any) -> bool)

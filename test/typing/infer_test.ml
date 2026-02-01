@@ -86,7 +86,8 @@ let test_quoted_symbol () =
   Alcotest.(check string) "quoted symbol" "Symbol" (infer_type "'foo")
 
 let test_quoted_list () =
-  Alcotest.(check string) "quoted list" "(List (Or Truthy Nil))" (infer_type "'(1 2 3)")
+  Alcotest.(check string)
+    "quoted list" "(List (Or Truthy Nil))" (infer_type "'(1 2 3)")
 
 let test_quoted_int () =
   Alcotest.(check string) "quoted int" "Int" (infer_type "'42")
@@ -553,7 +554,8 @@ let test_at_type_generates_constraints () =
   in
   let count = constraint_count ~env "(tart [int] identity 42)" in
   (* 1 constraint for fn type, 1 for the argument *)
-  Alcotest.(check bool) "tart instantiation generates constraints" true (count >= 2)
+  Alcotest.(check bool)
+    "tart instantiation generates constraints" true (count >= 2)
 
 let test_at_type_with_placeholder () =
   (* (tart [_] identity 42) uses placeholder for inference *)
