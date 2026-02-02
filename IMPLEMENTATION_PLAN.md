@@ -395,7 +395,7 @@ Phase 7.* (CLI polish) — after core functionality
 
 **Milestone 4: Typings**
 - [x] All 16 c-core files created and validated
-- [ ] 95%+ success rate on Emacs lisp/ subset (BLOCKED: needs BUG-001 fix)
+- [ ] 95%+ success rate on Emacs lisp/ subset (BUG-001 fixed, needs validation)
 - [x] BUGS.md documents gaps
 
 **Final: E2E**
