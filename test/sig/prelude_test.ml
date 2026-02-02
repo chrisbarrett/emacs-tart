@@ -17,7 +17,8 @@ let parse_sig_str ?(module_name = "test") s =
   | Error _ -> failwith "Parse error in test"
   | Ok sig_file -> sig_file
 
-(** Helper to load a signature with prelude types available and shadowing check *)
+(** Helper to load a signature with prelude types available and shadowing check
+*)
 let load_sig_with_prelude ?(env = Type_env.empty) s =
   let sig_file = parse_sig_str s in
   let prelude_ctx = Prelude.prelude_type_context () in
@@ -380,6 +381,7 @@ let () =
             test_cannot_redefine_option;
           Alcotest.test_case "cannot redefine bool" `Quick
             test_cannot_redefine_bool;
-          Alcotest.test_case "can define new type" `Quick test_can_define_new_type;
+          Alcotest.test_case "can define new type" `Quick
+            test_can_define_new_type;
         ] );
     ]

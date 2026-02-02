@@ -1014,10 +1014,10 @@ let test_parse_search_tart () =
   | None -> Alcotest.fail "search.tart failed to parse"
   | Some sig_file ->
       Alcotest.(check string) "module name" "search" sig_file.sig_module;
-      (* Should have declarations for search operations *)
+      (* Should have declarations for search operations (17 defuns in search.c) *)
       Alcotest.(check bool)
         "has declarations" true
-        (List.length sig_file.sig_decls > 20);
+        (List.length sig_file.sig_decls >= 15);
       (* Check specific required functions from search.c *)
       let has_defun name =
         List.exists
@@ -1032,7 +1032,7 @@ let test_parse_search_tart () =
         (has_defun "re-search-backward");
       Alcotest.(check bool) "has looking-at" true (has_defun "looking-at");
       Alcotest.(check bool) "has string-match" true (has_defun "string-match");
-      Alcotest.(check bool) "has match-string" true (has_defun "match-string");
+      (* match-string is in subr.el, not search.c *)
       Alcotest.(check bool)
         "has match-beginning" true
         (has_defun "match-beginning");
@@ -1063,9 +1063,9 @@ let test_load_search_tart () =
       (match Type_env.lookup "re-search-forward" env with
       | None -> Alcotest.fail "re-search-forward not found in env"
       | Some _ -> ());
-      (* Check that match-string is loaded *)
-      (match Type_env.lookup "match-string" env with
-      | None -> Alcotest.fail "match-string not found in env"
+      (* Check that match-beginning is loaded (match-string is in subr.el) *)
+      (match Type_env.lookup "match-beginning" env with
+      | None -> Alcotest.fail "match-beginning not found in env"
       | Some _ -> ());
       (* Check that looking-at is loaded *)
       match Type_env.lookup "looking-at" env with
@@ -1080,21 +1080,22 @@ let test_parse_process_tart () =
   | None -> Alcotest.fail "process.tart failed to parse"
   | Some sig_file ->
       Alcotest.(check string) "module name" "process" sig_file.sig_module;
-      (* Should have declarations for process operations *)
+      (* Should have declarations for process operations (64 defuns in process.c) *)
       Alcotest.(check bool)
         "has declarations" true
-        (List.length sig_file.sig_decls > 30);
+        (List.length sig_file.sig_decls >= 50);
       (* Check specific required functions from process.c *)
+      (* Note: start-process and call-process are in callproc.c, not process.c *)
       let has_defun name =
         List.exists
           (function Sig_ast.DDefun d -> d.defun_name = name | _ -> false)
           sig_file.sig_decls
       in
-      Alcotest.(check bool) "has start-process" true (has_defun "start-process");
+      Alcotest.(check bool) "has make-process" true (has_defun "make-process");
       Alcotest.(check bool)
         "has process-send-string" true
         (has_defun "process-send-string");
-      Alcotest.(check bool) "has call-process" true (has_defun "call-process");
+      Alcotest.(check bool) "has processp" true (has_defun "processp");
       Alcotest.(check bool) "has process-list" true (has_defun "process-list");
       Alcotest.(check bool)
         "has delete-process" true
@@ -1124,17 +1125,17 @@ let test_load_process_tart () =
   with
   | None -> Alcotest.fail "failed to load process module"
   | Some env -> (
-      (* Check that start-process is loaded *)
-      (match Type_env.lookup "start-process" env with
-      | None -> Alcotest.fail "start-process not found in env"
+      (* Check that make-process is loaded (start-process is in callproc.c) *)
+      (match Type_env.lookup "make-process" env with
+      | None -> Alcotest.fail "make-process not found in env"
       | Some _ -> ());
       (* Check that process-send-string is loaded *)
       (match Type_env.lookup "process-send-string" env with
       | None -> Alcotest.fail "process-send-string not found in env"
       | Some _ -> ());
-      (* Check that call-process is loaded *)
-      match Type_env.lookup "call-process" env with
-      | None -> Alcotest.fail "call-process not found in env"
+      (* Check that processp is loaded (call-process is in callproc.c) *)
+      match Type_env.lookup "processp" env with
+      | None -> Alcotest.fail "processp not found in env"
       | Some _ -> ())
 
 (** Test that keyboard.tart parses successfully (Spec 24 R5) *)
@@ -1145,11 +1146,12 @@ let test_parse_keyboard_tart () =
   | None -> Alcotest.fail "keyboard.tart failed to parse"
   | Some sig_file ->
       Alcotest.(check string) "module name" "keyboard" sig_file.sig_module;
-      (* Should have declarations for keyboard operations *)
+      (* Should have declarations for keyboard operations (37 defuns in keyboard.c) *)
       Alcotest.(check bool)
         "has declarations" true
-        (List.length sig_file.sig_decls > 20);
+        (List.length sig_file.sig_decls >= 30);
       (* Check specific required functions from keyboard.c *)
+      (* Note: sit-for is in dispnew.c, not keyboard.c *)
       let has_defun name =
         List.exists
           (function Sig_ast.DDefun d -> d.defun_name = name | _ -> false)
@@ -1169,7 +1171,7 @@ let test_parse_keyboard_tart () =
       Alcotest.(check bool)
         "has input-pending-p" true
         (has_defun "input-pending-p");
-      Alcotest.(check bool) "has sit-for" true (has_defun "sit-for")
+      Alcotest.(check bool) "has discard-input" true (has_defun "discard-input")
 
 (** Test that keyboard.tart can be loaded into type environment *)
 let test_load_keyboard_tart () =
@@ -1200,9 +1202,9 @@ let test_load_keyboard_tart () =
       (match Type_env.lookup "read-event" env with
       | None -> Alcotest.fail "read-event not found in env"
       | Some _ -> ());
-      (* Check that sit-for is loaded *)
-      match Type_env.lookup "sit-for" env with
-      | None -> Alcotest.fail "sit-for not found in env"
+      (* Check that discard-input is loaded (sit-for is in dispnew.c) *)
+      match Type_env.lookup "discard-input" env with
+      | None -> Alcotest.fail "discard-input not found in env"
       | Some _ -> ())
 
 (** Test that keymap.tart parses successfully (Spec 24 R5) *)
@@ -1275,11 +1277,12 @@ let test_parse_minibuf_tart () =
   | None -> Alcotest.fail "minibuf.tart failed to parse"
   | Some sig_file ->
       Alcotest.(check string) "module name" "minibuf" sig_file.sig_module;
-      (* Should have declarations for minibuffer operations *)
+      (* Should have declarations for minibuffer operations (22 defuns in minibuf.c) *)
       Alcotest.(check bool)
         "has declarations" true
-        (List.length sig_file.sig_decls > 20);
+        (List.length sig_file.sig_decls >= 15);
       (* Check specific required functions from minibuf.c *)
+      (* Note: yes-or-no-p and y-or-n-p are in fns.c, not minibuf.c *)
       let has_defun name =
         List.exists
           (function Sig_ast.DDefun d -> d.defun_name = name | _ -> false)
@@ -1292,12 +1295,16 @@ let test_parse_minibuf_tart () =
       Alcotest.(check bool)
         "has completing-read" true
         (has_defun "completing-read");
-      Alcotest.(check bool) "has yes-or-no-p" true (has_defun "yes-or-no-p");
-      Alcotest.(check bool) "has y-or-n-p" true (has_defun "y-or-n-p");
+      Alcotest.(check bool)
+        "has try-completion" true
+        (has_defun "try-completion");
+      Alcotest.(check bool)
+        "has all-completions" true
+        (has_defun "all-completions");
       Alcotest.(check bool) "has minibufferp" true (has_defun "minibufferp");
       Alcotest.(check bool)
-        "has minibuffer-window" true
-        (has_defun "minibuffer-window")
+        "has active-minibuffer-window" true
+        (has_defun "active-minibuffer-window")
 
 (** Test that minibuf.tart can be loaded into type environment *)
 let test_load_minibuf_tart () =
@@ -1328,9 +1335,9 @@ let test_load_minibuf_tart () =
       (match Type_env.lookup "completing-read" env with
       | None -> Alcotest.fail "completing-read not found in env"
       | Some _ -> ());
-      (* Check that yes-or-no-p is loaded *)
-      match Type_env.lookup "yes-or-no-p" env with
-      | None -> Alcotest.fail "yes-or-no-p not found in env"
+      (* Check that try-completion is loaded (yes-or-no-p is in fns.c) *)
+      match Type_env.lookup "try-completion" env with
+      | None -> Alcotest.fail "try-completion not found in env"
       | Some _ -> ())
 
 (** Test that textprop.tart parses successfully (Spec 24 R5) *)
@@ -1341,11 +1348,12 @@ let test_parse_textprop_tart () =
   | None -> Alcotest.fail "textprop.tart failed to parse"
   | Some sig_file ->
       Alcotest.(check string) "module name" "textprop" sig_file.sig_module;
-      (* Should have declarations for text property operations *)
+      (* Should have declarations for text property operations (20 defuns in textprop.c) *)
       Alcotest.(check bool)
         "has declarations" true
-        (List.length sig_file.sig_decls > 20);
+        (List.length sig_file.sig_decls >= 15);
       (* Check specific required functions from textprop.c *)
+      (* Note: propertize is in fns.c, not textprop.c *)
       let has_defun name =
         List.exists
           (function Sig_ast.DDefun d -> d.defun_name = name | _ -> false)
@@ -1366,7 +1374,9 @@ let test_parse_textprop_tart () =
       Alcotest.(check bool)
         "has next-property-change" true
         (has_defun "next-property-change");
-      Alcotest.(check bool) "has propertize" true (has_defun "propertize")
+      Alcotest.(check bool)
+        "has text-property-any" true
+        (has_defun "text-property-any")
 
 (** Test that textprop.tart can be loaded into type environment *)
 let test_load_textprop_tart () =
@@ -1397,9 +1407,9 @@ let test_load_textprop_tart () =
       (match Type_env.lookup "put-text-property" env with
       | None -> Alcotest.fail "put-text-property not found in env"
       | Some _ -> ());
-      (* Check that propertize is loaded *)
-      match Type_env.lookup "propertize" env with
-      | None -> Alcotest.fail "propertize not found in env"
+      (* Check that text-property-any is loaded (propertize is in fns.c) *)
+      match Type_env.lookup "text-property-any" env with
+      | None -> Alcotest.fail "text-property-any not found in env"
       | Some _ -> ())
 
 (** Test that print.tart parses successfully (Spec 24 R5) *)
@@ -1410,11 +1420,12 @@ let test_parse_print_tart () =
   | None -> Alcotest.fail "print.tart failed to parse"
   | Some sig_file ->
       Alcotest.(check string) "module name" "print" sig_file.sig_module;
-      (* Should have declarations for print operations *)
+      (* Should have declarations for print operations (11 defuns in print.c) *)
       Alcotest.(check bool)
         "has declarations" true
-        (List.length sig_file.sig_decls > 10);
+        (List.length sig_file.sig_decls >= 8);
       (* Check specific required functions from print.c *)
+      (* Note: message and format are in editfns.c, not print.c *)
       let has_defun name =
         List.exists
           (function Sig_ast.DDefun d -> d.defun_name = name | _ -> false)
@@ -1423,8 +1434,8 @@ let test_parse_print_tart () =
       Alcotest.(check bool) "has prin1" true (has_defun "prin1");
       Alcotest.(check bool) "has princ" true (has_defun "princ");
       Alcotest.(check bool) "has print" true (has_defun "print");
-      Alcotest.(check bool) "has message" true (has_defun "message");
-      Alcotest.(check bool) "has format" true (has_defun "format");
+      Alcotest.(check bool) "has write-char" true (has_defun "write-char");
+      Alcotest.(check bool) "has terpri" true (has_defun "terpri");
       Alcotest.(check bool)
         "has prin1-to-string" true
         (has_defun "prin1-to-string")
@@ -1452,13 +1463,13 @@ let test_load_print_tart () =
       (match Type_env.lookup "prin1" env with
       | None -> Alcotest.fail "prin1 not found in env"
       | Some _ -> ());
-      (* Check that message is loaded *)
-      (match Type_env.lookup "message" env with
-      | None -> Alcotest.fail "message not found in env"
+      (* Check that write-char is loaded (message is in editfns.c) *)
+      (match Type_env.lookup "write-char" env with
+      | None -> Alcotest.fail "write-char not found in env"
       | Some _ -> ());
-      (* Check that format is loaded *)
-      match Type_env.lookup "format" env with
-      | None -> Alcotest.fail "format not found in env"
+      (* Check that terpri is loaded (format is in editfns.c) *)
+      match Type_env.lookup "terpri" env with
+      | None -> Alcotest.fail "terpri not found in env"
       | Some _ -> ())
 
 (** Test that list_c_core_files finds all c-core files *)
