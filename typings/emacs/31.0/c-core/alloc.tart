@@ -13,7 +13,7 @@
 (defun cons [a b] (a b) -> (pair a b))
 
 ;; (list &rest OBJECTS) - create list
-(defun list [a] (&rest (list a)) -> (list a))
+(defun list [a] (&rest a) -> (list a))
 
 ;; (make-list LENGTH INIT) - create list of given length
 (defun make-list [a] (int a) -> (list a))
@@ -23,7 +23,7 @@
 ;; ===========================================================================
 
 ;; (vector &rest OBJECTS) - create vector
-(defun vector [a] (&rest (list a)) -> (vector a))
+(defun vector [a] (&rest a) -> (vector a))
 
 ;; (make-vector LENGTH INIT) - create vector of given length
 (defun make-vector [a] (int a) -> (vector a))
@@ -33,7 +33,7 @@
 ;; ===========================================================================
 
 ;; (record TYPE &rest SLOTS) - create record
-(defun record (symbol &rest (list any)) -> any)
+(defun record (symbol &rest any) -> any)
 
 ;; (make-record TYPE LENGTH INIT) - create record with length
 (defun make-record (symbol int any) -> any)
@@ -57,7 +57,7 @@
 ;; ===========================================================================
 
 ;; (bool-vector &rest OBJECTS) - create bool vector
-(defun bool-vector (&rest (list any)) -> any)
+(defun bool-vector (&rest any) -> any)
 
 ;; (make-bool-vector LENGTH INIT) - create bool vector
 (defun make-bool-vector (int any) -> any)
@@ -74,10 +74,10 @@
 ;; ===========================================================================
 
 ;; (make-byte-code ARGLIST BYTE-CODE CONSTANTS DEPTH &optional DOCSTRING INTERACTIVE-SPEC &rest ELEMENTS)
-(defun make-byte-code (any any any any &optional any any &rest (list any)) -> any)
+(defun make-byte-code (any any any any &optional any any &rest any) -> any)
 
 ;; (make-closure PROTOTYPE &rest ENVIRONMENT) - create closure
-(defun make-closure (any &rest (list any)) -> any)
+(defun make-closure (any &rest any) -> any)
 
 ;; ===========================================================================
 ;; Finalizers

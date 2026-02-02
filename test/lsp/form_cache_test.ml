@@ -224,13 +224,15 @@ let test_config_change_invalidates_cache () =
 let test_check_returns_valid_result () =
   let cache = Form_cache.create () in
   let config = Typing.Module_check.default_config () in
+  (* Use undefined-symbol to trigger an error without requiring c-core.
+     Calling a symbol that doesn't exist produces an undefined variable error. *)
   let sexps =
     [
       Syntax.Sexp.List
         ( [
-            Syntax.Sexp.Symbol ("+", Syntax.Location.dummy_span);
+            Syntax.Sexp.Symbol
+              ("undefined-function-xyz", Syntax.Location.dummy_span);
             Syntax.Sexp.Int (1, Syntax.Location.dummy_span);
-            Syntax.Sexp.String ("hello", Syntax.Location.dummy_span);
           ],
           Syntax.Location.dummy_span );
     ]
@@ -239,8 +241,10 @@ let test_check_returns_valid_result () =
     Form_cache.check_with_cache ~cache ~config ~filename:"/test.el"
       ~uri:"file:///test.el" ~sibling_sig_content:None sexps
   in
-  (* Should detect type error *)
-  Alcotest.(check bool) "has type errors" true (result.type_errors <> [])
+  (* Should detect undefined function error (in undefined_errors, not type_errors) *)
+  Alcotest.(check bool)
+    "has undefined errors" true
+    (result.undefined_errors <> [])
 
 let () =
   Alcotest.run "form_cache"

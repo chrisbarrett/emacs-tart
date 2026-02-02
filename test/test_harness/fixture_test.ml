@@ -17,10 +17,10 @@ let find_tart_bin () : string option =
   | _ ->
       let candidates =
         [
+          (* From workspace root (chdir %{project_root}) *)
+          "_build/default/bin/main.exe";
           (* From test directory in _build/default/test/test_harness/ *)
           "../../bin/main.exe";
-          (* From workspace root *)
-          "_build/default/bin/main.exe";
         ]
       in
       List.find_opt Sys.file_exists candidates
@@ -38,10 +38,10 @@ let find_fixtures_dir () : string option =
   | _ ->
       let candidates =
         [
+          (* From workspace root (chdir %{project_root}) *)
+          "test/fixtures/typing";
           (* From test directory - fixtures are copied as dependency *)
           "../fixtures/typing";
-          (* From workspace root *)
-          "test/fixtures/typing";
         ]
       in
       List.find_opt Sys.file_exists candidates

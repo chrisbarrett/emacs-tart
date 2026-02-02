@@ -213,16 +213,16 @@
 ;; ===========================================================================
 
 ;; (+ &rest NUMBERS) - addition
-(defun + (&rest (list num)) -> num)
+(defun + (&rest num) -> num)
 
 ;; (- N &rest NUMBERS) - subtraction or negation
-(defun - (num &rest (list num)) -> num)
+(defun - (num &rest num) -> num)
 
 ;; (* &rest NUMBERS) - multiplication
-(defun * (&rest (list num)) -> num)
+(defun * (&rest num) -> num)
 
 ;; (/ N &rest DIVISORS) - division
-(defun / (num &rest (list num)) -> num)
+(defun / (num &rest num) -> num)
 
 ;; (% N D) - modulo
 (defun % (int int) -> int)
@@ -236,30 +236,33 @@
 ;; (1- N) - decrement
 (defun 1- (num) -> num)
 
+;; (abs N) - absolute value
+(defun abs (num) -> num)
+
 ;; (max N &rest NUMBERS) - maximum
-(defun max (num &rest (list num)) -> num)
+(defun max (num &rest num) -> num)
 
 ;; (min N &rest NUMBERS) - minimum
-(defun min (num &rest (list num)) -> num)
+(defun min (num &rest num) -> num)
 
 ;; ===========================================================================
 ;; Numeric comparison
 ;; ===========================================================================
 
 ;; (= N1 N2 &rest NS) - numeric equality
-(defun = (num num &rest (list num)) -> bool)
+(defun = (num num &rest num) -> bool)
 
 ;; (< N1 N2 &rest NS) - less than
-(defun < (num num &rest (list num)) -> bool)
+(defun < (num num &rest num) -> bool)
 
 ;; (> N1 N2 &rest NS) - greater than
-(defun > (num num &rest (list num)) -> bool)
+(defun > (num num &rest num) -> bool)
 
 ;; (<= N1 N2 &rest NS) - less or equal
-(defun <= (num num &rest (list num)) -> bool)
+(defun <= (num num &rest num) -> bool)
 
 ;; (>= N1 N2 &rest NS) - greater or equal
-(defun >= (num num &rest (list num)) -> bool)
+(defun >= (num num &rest num) -> bool)
 
 ;; (/= N1 N2) - not equal
 (defun /= (num num) -> bool)
@@ -272,13 +275,13 @@
 (defun ash (int int) -> int)
 
 ;; (logand &rest INTS) - bitwise AND
-(defun logand (&rest (list int)) -> int)
+(defun logand (&rest int) -> int)
 
 ;; (logior &rest INTS) - bitwise OR
-(defun logior (&rest (list int)) -> int)
+(defun logior (&rest int) -> int)
 
 ;; (logxor &rest INTS) - bitwise XOR
-(defun logxor (&rest (list int)) -> int)
+(defun logxor (&rest int) -> int)
 
 ;; (lognot N) - bitwise NOT
 (defun lognot (int) -> int)

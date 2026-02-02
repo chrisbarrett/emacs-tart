@@ -145,9 +145,14 @@ let rec unify ?(invariant = false) t1 t2 loc : unit internal_result =
           if is_any t1 && is_any t2 then Ok ()
           else Error (ITypeMismatch (t1, t2, loc))
         else Ok ()
-    (* Type constants must match exactly *)
+    (* Type constants: handle numeric subtyping.
+       Int <: Num and Float <: Num (Int/Float are subtypes of Num).
+       This allows integer literals to be passed where Num is expected. *)
     | TCon n1, TCon n2 ->
-        if n1 = n2 then Ok () else Error (ITypeMismatch (t1, t2, loc))
+        if n1 = n2 then Ok ()
+        else if n1 = "Num" && (n2 = "Int" || n2 = "Float") then Ok ()
+        else if n2 = "Num" && (n1 = "Int" || n1 = "Float") then Ok ()
+        else Error (ITypeMismatch (t1, t2, loc))
     (* Type applications: constructor and args must match.
        For HK types, the constructor may be a type variable that unifies
        with a concrete constructor. Arguments are unified with invariant=true

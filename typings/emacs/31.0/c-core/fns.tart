@@ -68,6 +68,9 @@
 ;; (nthcdr N LIST) - nth cdr of list
 (defun nthcdr [a] (int (list a)) -> (list a))
 
+;; (last LIST &optional N) - return last link of list
+(defun last [a] ((list a) &optional (int | nil)) -> (list a))
+
 ;; (take N LIST) - take first n elements (non-destructive)
 (defun take [a] (int (list a)) -> (list a))
 
@@ -109,16 +112,16 @@
 ;; ===========================================================================
 
 ;; (append &rest SEQS) - concatenate lists
-(defun append [a] (&rest (list (list a))) -> (list a))
+(defun append [a] (&rest (list a)) -> (list a))
 
 ;; (concat &rest SEQS) - concatenate strings
-(defun concat (&rest (list any)) -> string)
+(defun concat (&rest any) -> string)
 
 ;; (vconcat &rest SEQS) - concatenate to vector
-(defun vconcat (&rest (list any)) -> (vector any))
+(defun vconcat (&rest any) -> (vector any))
 
 ;; (nconc &rest LISTS) - destructive append
-(defun nconc [a] (&rest (list (list a))) -> (list a))
+(defun nconc [a] (&rest (list a)) -> (list a))
 
 ;; ===========================================================================
 ;; Property list operations
@@ -171,6 +174,13 @@
 
 ;; (substring-no-properties STRING &optional FROM TO) - substring without props
 (defun substring-no-properties (string &optional (int | nil) (int | nil)) -> string)
+
+;; (string-length STRING) - return length of string
+;; NOTE: In Emacs this is the same as `length` for strings, kept for compat
+(defun string-length (string) -> int)
+
+;; (string-to-list STRING) - convert string to list of character codes
+(defun string-to-list (string) -> (list int))
 
 ;; (string-equal S1 S2) - compare strings
 (defun string-equal ((string | symbol) (string | symbol)) -> bool)
@@ -229,7 +239,7 @@
 ;; ===========================================================================
 
 ;; (make-hash-table &rest ARGS) - create hash table
-(defun make-hash-table (&rest (list any)) -> (hashtable any any))
+(defun make-hash-table (&rest any) -> (hashtable any any))
 
 ;; (hash-table-p OBJ) - test if hash table
 (defun hash-table-p (any) -> bool)

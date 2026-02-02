@@ -4,7 +4,13 @@
 
 (test
  (name server_test)
- (libraries tart str alcotest))
+ (libraries tart str alcotest)
+ (deps
+  (source_tree %{project_root}/typings))
+ (action
+  (chdir
+   %{project_root}
+   (run %{test}))))
 
 (test
  (name document_test)
@@ -12,7 +18,13 @@
 
 (test
  (name form_cache_test)
- (libraries tart alcotest))
+ (libraries tart alcotest)
+ (deps
+  (source_tree %{project_root}/typings))
+ (action
+  (chdir
+   %{project_root}
+   (run %{test}))))
 
 (test
  (name graph_tracker_test)

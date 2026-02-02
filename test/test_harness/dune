@@ -7,4 +7,9 @@
  (libraries test_harness alcotest)
  (deps
   %{bin:tart}
-  (source_tree ../fixtures/typing)))
+  (source_tree ../fixtures/typing)
+  (source_tree ../../typings))
+ (action
+  (chdir
+   %{project_root}
+   (run %{test}))))

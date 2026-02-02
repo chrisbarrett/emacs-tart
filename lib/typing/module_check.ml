@@ -269,6 +269,38 @@ let extract_defun_spans (sexps : Syntax.Sexp.t list) :
 
 (** {1 Implementation Verification} *)
 
+(** Instantiate a TForall type with fresh type variables. Returns the body with
+    bound variables substituted. *)
+let instantiate_forall (ty : Types.typ) : Types.typ =
+  match ty with
+  | Types.TForall (vars, body) ->
+      (* Create fresh type variables for each bound variable.
+         Level 0 is fine since we're just doing a one-off comparison. *)
+      let subst = List.map (fun v -> (v, Types.fresh_tvar 0)) vars in
+      (* Substitute bound variables (which appear as TCon) with fresh tvars *)
+      let rec substitute ty =
+        match ty with
+        | Types.TCon name -> (
+            match List.assoc_opt name subst with Some tv -> tv | None -> ty)
+        | Types.TVar { contents = Types.Link t } -> substitute t
+        | Types.TVar _ -> ty
+        | Types.TApp (con, args) ->
+            Types.TApp (substitute con, List.map substitute args)
+        | Types.TArrow (params, ret) ->
+            Types.TArrow (List.map substitute_param params, substitute ret)
+        | Types.TForall (vs, t) -> Types.TForall (vs, substitute t)
+        | Types.TUnion tys -> Types.TUnion (List.map substitute tys)
+        | Types.TTuple tys -> Types.TTuple (List.map substitute tys)
+      and substitute_param (p : Types.param) : Types.param =
+        match p with
+        | Types.PPositional t -> Types.PPositional (substitute t)
+        | Types.POptional t -> Types.POptional (substitute t)
+        | Types.PRest t -> Types.PRest (substitute t)
+        | Types.PKey (name, t) -> Types.PKey (name, substitute t)
+      in
+      substitute body
+  | _ -> ty
+
 (** Check if a defun's inferred type is compatible with its declared type.
 
     This performs a simple structural check. The declared type should be an
@@ -279,9 +311,11 @@ let verify_defun_type ~(name : string) ~(declared : Types.typ)
   (* Reset type variable counter for fresh comparison *)
   Types.reset_tvar_counter ();
 
-  (* Create fresh copies of both types for comparison *)
-  let declared' = Types.repr declared in
-  let inferred' = Types.repr inferred in
+  (* Instantiate polymorphic types before comparison.
+     If the inferred type is forall a. a -> a and declared is int -> int,
+     we instantiate to get ?a -> ?a, then unify with int -> int. *)
+  let declared' = instantiate_forall (Types.repr declared) in
+  let inferred' = instantiate_forall (Types.repr inferred) in
 
   (* Try to unify the declared type with the inferred type.
      The declared type should be compatible with (possibly more specific than)
@@ -370,6 +404,9 @@ let check_module ~(config : config) ~(filename : string)
     | Some (env, sig_ast) -> (env, Some sig_ast)
     | None -> (Builtin_types.initial_env (), None)
   in
+
+  (* Step 2b: Load c-core signatures (Emacs primitives like +, car, etc.) *)
+  let base_env = Search.load_c_core ~search_path:config.search_path base_env in
 
   (* Step 3: Load signatures for required modules *)
   let required_modules = extract_requires sexps in

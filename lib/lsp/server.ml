@@ -50,12 +50,16 @@ let detect_emacs_and_build_config () :
   in
   let stdlib_dir = List.find_opt Sys.file_exists stdlib_candidates in
 
-  (* Find typings root for versioned c-core *)
+  (* Find typings root for versioned c-core.
+     Search relative to executable, parent of executable, share/tart,
+     and current working directory (for development/testing). *)
   let typings_candidates =
     [
       Filename.concat exe_dir "typings/emacs";
       Filename.concat (Filename.dirname exe_dir) "typings/emacs";
       Filename.concat exe_dir "../share/tart/typings/emacs";
+      "typings/emacs";
+      (* Current working directory *)
     ]
   in
   let typings_root = List.find_opt Sys.file_exists typings_candidates in

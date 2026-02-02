@@ -615,8 +615,9 @@ let test_suggest_name () =
     (Lev.suggest_name ~query:"xyz" ~candidates)
 
 let test_end_to_end_undefined_variable () =
-  (* Type-check (+ unknwon 1) where unknwon is not defined *)
-  let sexp = parse "(+ unknwon 1)" in
+  (* Type-check (unknwon 1 2) where unknwon is not defined.
+     Note: We use unknwon as the function to avoid depending on c-core for +. *)
+  let sexp = parse "(unknwon 1 2)" in
   let result = Check.check_program [ sexp ] in
   Alcotest.(check bool) "has undefined" true (List.length result.undefineds > 0);
   let undef = List.hd result.undefineds in
@@ -763,8 +764,17 @@ let test_arity_mismatch_no_context () =
    ============================================================================= *)
 
 let test_check_expr_error_diagnostic () =
-  let sexp = parse "(+ 1 \"hello\")" in
-  let _, errors = Check.check_expr sexp in
+  (* Test type error by using if with incompatible branch types.
+     if requires both branches to unify. Here we use string vs int. *)
+  let env =
+    Tart.Type_env.extend_mono "get-string"
+      (Types.arrow [] Types.Prim.string)
+      (Tart.Type_env.extend_mono "get-int"
+         (Types.arrow [] Types.Prim.int)
+         Tart.Type_env.empty)
+  in
+  let sexp = parse "(if t (get-int) (get-string))" in
+  let _, errors = Check.check_expr ~env sexp in
   Alcotest.(check bool) "has error" true (List.length errors > 0);
   let diagnostics = Diag.of_unify_errors errors in
   Alcotest.(check bool) "has diagnostic" true (List.length diagnostics > 0);
@@ -774,8 +784,18 @@ let test_check_expr_error_diagnostic () =
   Alcotest.(check bool) "non-empty message" true (String.length str > 0)
 
 let test_diagnostic_has_source_location () =
-  let sexp = parse "(+ 1 \"hello\")" in
-  let _, errors = Check.check_expr sexp in
+  (* Test that diagnostics have proper source location.
+     Use a simple type error that doesn't depend on c-core. *)
+  let env =
+    Tart.Type_env.extend_mono "get-string"
+      (Types.arrow [] Types.Prim.string)
+      (Tart.Type_env.extend_mono "get-int"
+         (Types.arrow [] Types.Prim.int)
+         Tart.Type_env.empty)
+  in
+  let sexp = parse "(if t (get-int) (get-string))" in
+  let _, errors = Check.check_expr ~env sexp in
+  Alcotest.(check bool) "has errors" true (List.length errors > 0);
   let diagnostics = Diag.of_unify_errors errors in
   let d = List.hd diagnostics in
   (* The span should be from our test file *)

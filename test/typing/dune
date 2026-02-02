@@ -16,7 +16,13 @@
 
 (test
  (name check_test)
- (libraries tart alcotest str))
+ (libraries tart alcotest str)
+ (deps
+  (source_tree %{project_root}/typings))
+ (action
+  (chdir
+   %{project_root}
+   (run %{test}))))
 
 (test
  (name diagnostic_test)
@@ -24,7 +30,13 @@
 
 (test
  (name module_check_test)
- (libraries tart alcotest unix))
+ (libraries tart alcotest unix)
+ (deps
+  (source_tree %{project_root}/typings))
+ (action
+  (chdir
+   %{project_root}
+   (run %{test}))))
 
 (test
  (name exhaustiveness_test)

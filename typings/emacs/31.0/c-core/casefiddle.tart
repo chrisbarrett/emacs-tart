@@ -1,0 +1,48 @@
+;; Type signatures for Emacs casefiddle.c
+;;
+;; Source: emacs/src/casefiddle.c
+;; Emacs version: 31.0
+;;
+;; Contains case conversion functions.
+
+;; ===========================================================================
+;; Case conversion (string or character)
+;; ===========================================================================
+
+;; (upcase OBJ) - convert string or character to upper case
+(defun upcase ((string | int)) -> (string | int))
+
+;; (downcase OBJ) - convert string or character to lower case
+(defun downcase ((string | int)) -> (string | int))
+
+;; (capitalize OBJ) - capitalize string or character
+(defun capitalize ((string | int)) -> (string | int))
+
+;; (upcase-initials OBJ) - convert initials to upper case
+(defun upcase-initials ((string | int)) -> (string | int))
+
+;; ===========================================================================
+;; Region case conversion
+;; ===========================================================================
+
+;; (upcase-region BEG END &optional REGION-NONCONTIGUOUS-P) - upcase region
+(defun upcase-region (int int &optional any) -> nil)
+
+;; (downcase-region BEG END &optional REGION-NONCONTIGUOUS-P) - downcase region
+(defun downcase-region (int int &optional any) -> nil)
+
+;; (capitalize-region BEG END &optional REGION-NONCONTIGUOUS-P) - capitalize region
+(defun capitalize-region (int int &optional any) -> nil)
+
+;; ===========================================================================
+;; Word case conversion
+;; ===========================================================================
+
+;; (upcase-word ARG) - upcase from point to end of word
+(defun upcase-word (int) -> nil)
+
+;; (downcase-word ARG) - downcase from point to end of word
+(defun downcase-word (int) -> nil)
+
+;; (capitalize-word ARG) - capitalize from point to end of word
+(defun capitalize-word (int) -> nil)

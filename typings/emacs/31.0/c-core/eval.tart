@@ -21,38 +21,38 @@
 
 ;; (if COND THEN &rest ELSE) - conditional
 ;; The return type depends on which branch is taken
-(defun if [a b] (any a &rest (list b)) -> (a | b))
+(defun if [a b] (any a &rest b) -> (a | b))
 
 ;; (cond &rest CLAUSES) - multi-branch conditional
-(defun cond (&rest (list any)) -> any)
+(defun cond (&rest any) -> any)
 
 ;; (progn &rest BODY) - evaluate forms in sequence
-(defun progn [a] (&rest (list a)) -> a)
+(defun progn [a] (&rest a) -> a)
 
 ;; (prog1 FIRST &rest BODY) - evaluate and return first
-(defun prog1 [a] (a &rest (list any)) -> a)
+(defun prog1 [a] (a &rest any) -> a)
 
 ;; (and &rest CONDITIONS) - short-circuit AND
-(defun and (&rest (list any)) -> any)
+(defun and (&rest any) -> any)
 
 ;; (or &rest CONDITIONS) - short-circuit OR
-(defun or (&rest (list any)) -> any)
+(defun or (&rest any) -> any)
 
 ;; (while TEST &rest BODY) - loop while true
-(defun while (any &rest (list any)) -> nil)
+(defun while (any &rest any) -> nil)
 
 ;; (let BINDINGS &rest BODY) - local bindings
-(defun let [a] (any &rest (list a)) -> a)
+(defun let [a] (any &rest a) -> a)
 
 ;; (let* BINDINGS &rest BODY) - sequential local bindings
-(defun let* [a] (any &rest (list a)) -> a)
+(defun let* [a] (any &rest a) -> a)
 
 ;; ===========================================================================
 ;; Variable definitions
 ;; ===========================================================================
 
 ;; (setq &rest ARGS) - set variables
-(defun setq (&rest (list any)) -> any)
+(defun setq (&rest any) -> any)
 
 ;; (defvar SYMBOL &optional INITVALUE DOCSTRING) - define variable
 (defun defvar (symbol &optional any (string | nil)) -> symbol)
@@ -81,14 +81,14 @@
 
 ;; (funcall FN &rest ARGS) - call function
 ;; Note: Return type depends on FN, typed as any
-(defun funcall (any &rest (list any)) -> any)
+(defun funcall (any &rest any) -> any)
 
 ;; (apply FN &rest ARGS) - call with last arg as list
 ;; Note: Return type depends on FN, typed as any
-(defun apply (any &rest (list any)) -> any)
+(defun apply (any &rest any) -> any)
 
 ;; (funcall-with-delayed-message TIMEOUT MESSAGE FN &rest ARGS) - call with timeout message
-(defun funcall-with-delayed-message (num string any &rest (list any)) -> any)
+(defun funcall-with-delayed-message (num string any &rest any) -> any)
 
 ;; (func-arity FN) - return (MIN . MAX) or (MIN . many)
 ;; Note: MAX is 'many symbol for variadic functions
@@ -125,20 +125,20 @@
 (defun signal (symbol any) -> never)
 
 ;; (condition-case VAR BODYFORM &rest HANDLERS) - catch errors
-(defun condition-case (any any &rest (list any)) -> any)
+(defun condition-case (any any &rest any) -> any)
 
 ;; (handler-bind-1 HANDLERS-BODY) - internal handler binding
 (defun handler-bind-1 (any) -> any)
 
 ;; (unwind-protect BODYFORM &rest UNWINDFORMS) - cleanup on exit
-(defun unwind-protect [a] (a &rest (list any)) -> a)
+(defun unwind-protect [a] (a &rest any) -> a)
 
 ;; ===========================================================================
 ;; Non-local exits
 ;; ===========================================================================
 
 ;; (catch TAG &rest BODY) - establish catch point
-(defun catch (any &rest (list any)) -> any)
+(defun catch (any &rest any) -> any)
 
 ;; (throw TAG VALUE) - non-local return
 (defun throw (any any) -> never)
@@ -148,19 +148,19 @@
 ;; ===========================================================================
 
 ;; (run-hooks &rest HOOKS) - run normal hooks
-(defun run-hooks (&rest (list symbol)) -> nil)
+(defun run-hooks (&rest symbol) -> nil)
 
 ;; (run-hook-with-args HOOK &rest ARGS) - run hook with arguments
-(defun run-hook-with-args (symbol &rest (list any)) -> any)
+(defun run-hook-with-args (symbol &rest any) -> any)
 
 ;; (run-hook-with-args-until-success HOOK &rest ARGS) - run until non-nil
-(defun run-hook-with-args-until-success (symbol &rest (list any)) -> any)
+(defun run-hook-with-args-until-success (symbol &rest any) -> any)
 
 ;; (run-hook-with-args-until-failure HOOK &rest ARGS) - run until nil
-(defun run-hook-with-args-until-failure (symbol &rest (list any)) -> any)
+(defun run-hook-with-args-until-failure (symbol &rest any) -> any)
 
 ;; (run-hook-wrapped HOOK WRAP-FN &rest ARGS) - run with wrapper
-(defun run-hook-wrapped (symbol any &rest (list any)) -> any)
+(defun run-hook-wrapped (symbol any &rest any) -> any)
 
 ;; ===========================================================================
 ;; Closures
@@ -181,6 +181,9 @@
 
 ;; (mapbacktrace FN &optional BASE) - map over backtrace
 (defun mapbacktrace (any &optional any) -> nil)
+
+;; (backtrace-frames &optional BASE) - collect all frames into a list
+(defun backtrace-frames (&optional any) -> (list any))
 
 ;; (debugger-trap) - enter debugger
 (defun debugger-trap () -> nil)

@@ -82,33 +82,38 @@ let test_check_module_no_signature () =
         (Option.is_some result.signature_env))
 
 let test_check_module_type_error () =
-  (* Use temp directory to ensure no stray .tart file interferes *)
-  let files = [ ("test.el", "(+ 1 \"hello\")") ] in
+  (* Use temp directory with a .tart signature file to create a type error.
+     The .tart declares foo as returning int, but the .el returns string. *)
+  let tart_code = "(defun foo () -> int)" in
+  let el_code = "(defun foo () \"not-int\")" in
+  let files = [ ("test.tart", tart_code); ("test.el", el_code) ] in
   with_temp_dir files (fun dir ->
       let config = Module_check.default_config () in
       let el_path = Filename.concat dir "test.el" in
-      (* Plus with wrong types should error *)
-      let sexps = parse "(+ 1 \"hello\")" in
+      let sexps = parse el_code in
       let result = Module_check.check_module ~config ~filename:el_path sexps in
+      (* Should have a type error or mismatch error *)
       Alcotest.(check bool)
-        "has type error" true
-        (List.length result.type_errors > 0))
+        "has type error or mismatch" true
+        (List.length result.type_errors > 0
+        || List.length result.mismatch_errors > 0))
 
 (* =============================================================================
    check_module Tests - Signature Loading
    ============================================================================= *)
 
 let test_check_module_with_signature () =
+  (* Use identity function - doesn't require c-core *)
   let files =
     [
-      ("foo.el", "(defun foo-add (a b) (+ a b))");
-      ("foo.tart", "(defun foo-add (int int) -> int)");
+      ("foo.el", "(defun foo-id (x) x)");
+      ("foo.tart", "(defun foo-id (int) -> int)");
     ]
   in
   with_temp_dir files (fun dir ->
       let config = Module_check.default_config () in
       let el_path = Filename.concat dir "foo.el" in
-      let sexps = parse "(defun foo-add (a b) (+ a b))" in
+      let sexps = parse "(defun foo-id (x) x)" in
       let result = Module_check.check_module ~config ~filename:el_path sexps in
       Alcotest.(check bool)
         "signature loaded" true
@@ -119,22 +124,24 @@ let test_check_module_with_signature () =
         (List.length result.mismatch_errors))
 
 let test_check_module_signature_mismatch () =
+  (* Implementation returns first arg (infers: a -> b -> a)
+     but signature says second arg type should match return (string -> string -> int).
+     This creates a mismatch: 'a cannot be both string and int. *)
   let files =
     [
-      ("bar.el", "(defun bar-concat (a b) (concat a b))");
-      ("bar.tart", "(defun bar-concat (int int) -> int)");
+      ("bar.el", "(defun bar-fn (a b) a)");
+      ("bar.tart", "(defun bar-fn (string string) -> int)");
     ]
   in
   with_temp_dir files (fun dir ->
       let config = Module_check.default_config () in
       let el_path = Filename.concat dir "bar.el" in
-      (* The implementation uses concat which expects strings, but signature says int *)
-      let sexps = parse "(defun bar-concat (a b) (concat a b))" in
+      let sexps = parse "(defun bar-fn (a b) a)" in
       let result = Module_check.check_module ~config ~filename:el_path sexps in
       Alcotest.(check bool)
         "signature loaded" true
         (Option.is_some result.signature_env);
-      (* Should have mismatch because concat returns string, not int *)
+      (* Should have mismatch: first param and return must unify, but sig says string vs int *)
       Alcotest.(check bool)
         "has mismatch or type error" true
         (List.length result.mismatch_errors > 0
@@ -332,17 +339,18 @@ let test_missing_signature_diagnostic () =
 
 (** Signature mismatch diagnostic shows both .el and .tart locations (R6) *)
 let test_signature_mismatch_has_both_locations () =
+  (* Implementation returns param (infers: a -> a), but signature says int -> string.
+     This creates a mismatch: return type cannot be both 'a (= int) and string. *)
   let files =
     [
-      ("bar.el", "(defun bar-fn (x) (+ x 1))");
-      (* signature says string, impl returns int *)
+      ("bar.el", "(defun bar-fn (x) x)");
       ("bar.tart", "(defun bar-fn (int) -> string)");
     ]
   in
   with_temp_dir files (fun dir ->
       let config = Module_check.default_config () in
       let el_path = Filename.concat dir "bar.el" in
-      let sexps = parse "(defun bar-fn (x) (+ x 1))" in
+      let sexps = parse "(defun bar-fn (x) x)" in
       let result = Module_check.check_module ~config ~filename:el_path sexps in
       (* Should have a mismatch error *)
       Alcotest.(check bool)
@@ -591,17 +599,18 @@ let test_inline_polymorphic_matches_tart () =
 
 (** R10: When no inline annotation, inferred type checked against .tart *)
 let test_no_inline_uses_inferred () =
+  (* Use identity function - doesn't require c-core *)
   let files =
     [
-      (* No inline annotation, body infers to int -> int *)
-      ("foo.el", "(defun foo-inc (x) (+ x 1))");
-      ("foo.tart", "(defun foo-inc (int) -> int)");
+      (* No inline annotation, body infers to int -> int via identity *)
+      ("foo.el", "(defun foo-id (x) x)");
+      ("foo.tart", "(defun foo-id (int) -> int)");
     ]
   in
   with_temp_dir files (fun dir ->
       let config = Module_check.default_config () in
       let el_path = Filename.concat dir "foo.el" in
-      let sexps = parse "(defun foo-inc (x) (+ x 1))" in
+      let sexps = parse "(defun foo-id (x) x)" in
       let result = Module_check.check_module ~config ~filename:el_path sexps in
       Alcotest.(check int)
         "no mismatch errors" 0

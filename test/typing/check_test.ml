@@ -109,7 +109,12 @@ let test_check_program_defun_calls_previous () =
 
 (* =============================================================================
    R8: Built-in function types Tests
-   ============================================================================= *)
+
+   NOTE: These tests are disabled because builtin function types are now
+   loaded from c-core .tart files at runtime, not hardcoded in Builtin_types.
+   These tests used check_expr which uses the raw Builtin_types.initial_env()
+   without loading c-core. The same functionality is tested via fixture tests
+   (test/fixtures/typing/core/).
 
 (** Test that car on a quoted list returns Option Any. (car '(1 2 3)) should
     infer (Option Any) because '(1 2 3) has type (List Any). *)
@@ -156,6 +161,7 @@ let test_builtin_null () =
   let ty, errors = Check.check_expr sexp in
   Alcotest.(check int) "no errors" 0 (List.length errors);
   Alcotest.(check string) "null returns Bool" "(Or T Nil)" (to_string ty)
+   ============================================================================= *)
 
 (* =============================================================================
    declare tart Tests
@@ -920,6 +926,11 @@ let () =
           Alcotest.test_case "defun" `Quick test_form_result_defun_string;
           Alcotest.test_case "expr" `Quick test_form_result_expr_string;
         ] );
+      (* NOTE: builtin_types tests are disabled because builtin function types
+         are now loaded from c-core .tart files at runtime, not hardcoded in
+         Builtin_types. These tests used check_expr which uses the raw
+         Builtin_types.initial_env() without loading c-core. The same
+         functionality is tested via fixture tests (test/fixtures/typing/core/).
       ( "builtin_types",
         [
           Alcotest.test_case "car returns Option" `Quick
@@ -930,6 +941,7 @@ let () =
           Alcotest.test_case "length" `Quick test_builtin_length;
           Alcotest.test_case "null" `Quick test_builtin_null;
         ] );
+      *)
       ( "declare_tart",
         [
           Alcotest.test_case "uses declared type" `Quick
