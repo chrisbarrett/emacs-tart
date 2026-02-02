@@ -136,6 +136,9 @@ val is_option : typ -> typ option
     Returns [Some inner] if the type is [(inner | nil)], [None] otherwise. Used
     in diagnostics to detect nullable types. *)
 
+val is_union : typ -> bool
+(** Check if a type is a union type. *)
+
 val arrow : typ list -> typ -> typ
 (** [arrow params ret] creates a function type with positional parameters. *)
 

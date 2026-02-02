@@ -173,12 +173,27 @@ let rec unify ?(invariant = false) t1 t2 loc : unit internal_result =
           (* Unify bodies directly - this is simplified.
              A full implementation would alpha-rename. *)
           unify ~invariant b1 b2 loc
-    (* Union types: for now, require structural equality.
-       Full union handling would need subtyping. *)
+    (* Union types: structural equality for unions on both sides *)
     | TUnion ts1, TUnion ts2 ->
-        if List.length ts1 <> List.length ts2 then
-          Error (ITypeMismatch (t1, t2, loc))
-        else unify_list ~invariant ts1 ts2 loc
+        if List.length ts1 = List.length ts2 then
+          unify_list ~invariant ts1 ts2 loc
+        else Error (ITypeMismatch (t1, t2, loc))
+    (* Union on left (from signature), non-union on right (from arg):
+       This is the "safe" direction - passing a more specific type where
+       a union is expected. Succeeds if the arg type matches any member.
+
+       Example: message expects (string | nil), we pass string → OK
+       because string ⊆ (string | nil) *)
+    | TUnion ts, t when not (is_union t) ->
+        if List.exists (fun ti -> Result.is_ok (unify ~invariant ti t loc)) ts
+        then Ok ()
+        else Error (ITypeMismatch (t1, t2, loc))
+    (* Non-union on left (from signature), union on right (from arg):
+       This is UNSOUND - passing a potentially-nil value where non-nil
+       is expected. We do NOT allow this. Falls through to catch-all.
+
+       Example: upcase expects string, we pass (string | nil) → ERROR
+       because nil might be passed at runtime *)
     (* Tuple types: element-wise unification *)
     | TTuple ts1, TTuple ts2 ->
         if List.length ts1 <> List.length ts2 then

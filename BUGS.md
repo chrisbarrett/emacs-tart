@@ -6,30 +6,24 @@ This document tracks known limitations and bugs in the tart type checker.
 
 ### BUG-001: No union subtyping
 
-**Status:** Open
+**Status:** FIXED
 **Severity:** High
 **Impact:** Many Emacs C-core signatures expect `(T | nil)` but callers often
-pass just `T`. This causes false positive type errors.
+pass just `T`. This caused false positive type errors.
 
 **Example:**
 ```elisp
-(message "Hello")  ; Error: expected (string | nil), found string
+(message "Hello")  ; Previously: Error: expected (string | nil), found string
+                   ; Now: OK (string matches (string | nil))
 ```
 
-**Root cause:** The type system uses strict equality for unification. When
-comparing `string` with `(string | nil)`, unification fails because they are
-structurally different types.
+**Fix implemented:** Added asymmetric union handling in `lib/typing/unify.ml`:
+1. `TUnion ts, t` (union expected, non-union provided): succeeds if t matches
+   any member of the union. This is the safe direction.
+2. `t, TUnion ts` (non-union expected, union provided): fails, preserving
+   soundness (nil might be passed at runtime).
 
-**Expected behavior:** `T` should be a subtype of `(T | nil)`. The call above
-should succeed.
-
-**Workaround:** None currently. Signatures can be loosened (e.g., `string`
-instead of `(string | nil)`), but this loses precision.
-
-**Fix required:**
-1. Add subtype checking during unification
-2. `T <: (T | U)` for any T, U
-3. Update constraint solving to use subtype constraints where appropriate
+Added `is_union : typ -> bool` helper to `lib/core/types.ml`
 
 ---
 

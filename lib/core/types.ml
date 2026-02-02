@@ -131,6 +131,9 @@ let is_option ty =
       | _ -> None)
   | _ -> None
 
+(** Check if a type is a union type *)
+let is_union ty = match repr ty with TUnion _ -> true | _ -> false
+
 (** Create a function type with positional parameters *)
 let arrow params ret = TArrow (List.map (fun p -> PPositional p) params, ret)
 
