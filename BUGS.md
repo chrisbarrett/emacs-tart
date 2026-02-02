@@ -44,19 +44,17 @@ yet typed:
 
 ### GAP-002: `nil` not recognized as literal
 
-**Status:** Open
+**Status:** FIXED
 **Severity:** Medium
 
-The symbol `nil` is not recognized as a literal with type `Nil`. Currently,
-code like `(defun foo () nil)` produces "variable `nil` is not defined".
+The symbol `nil` is now recognized as a literal with type `Nil`.
+The symbol `t` is also recognized as a literal with type `T`.
 
-In Elisp, `nil` is:
-1. A type (the nil/empty-list type)
-2. A value that evaluates to itself
+**Fix implemented:** Added special cases in `lib/typing/infer.ml` for `nil` and
+`t` symbols to return `Prim.nil` and `Prim.t` respectively.
 
-**Workaround:** Use `()` or `'()` instead of `nil` (equivalent in Elisp).
-
-**Fix required:** Handle `nil` as a special literal in `lib/typing/infer.ml`.
+**Note:** `nil` as empty list (`(cons 1 nil)`) needs separate handling since
+`Nil` is not the same as `(List a)`. This is expected behavior for now.
 
 ---
 

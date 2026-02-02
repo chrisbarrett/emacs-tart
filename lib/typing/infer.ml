@@ -74,6 +74,9 @@ let rec infer (env : Env.t) (sexp : Syntax.Sexp.t) : result =
   | String (_, _) -> pure Prim.string
   | Char (_, _) -> pure Prim.int (* Characters are integers in Elisp *)
   | Keyword (_, _) -> pure Prim.keyword
+  (* === Special symbols nil and t === *)
+  | Symbol ("nil", _) -> pure Prim.nil
+  | Symbol ("t", _) -> pure Prim.t
   (* === Variables === *)
   | Symbol (name, span) -> (
       match Env.lookup name env with
