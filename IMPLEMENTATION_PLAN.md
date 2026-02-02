@@ -42,33 +42,17 @@ Version detection and fallback chain implemented:
 
 `(a - nil)` syntax implemented. The `is` and `nonempty` prelude types work correctly.
 
-### 2.2 Bounded Quantifiers Validation (Spec 07 R4, Spec 48 R6)
+### 2.2 Bounded Quantifiers Validation (Spec 07 R4, Spec 48 R6) ✅
 
-**Problem:** Bounds like `[(a : truthy)]` are parsed but not enforced at instantiation.
+**Status:** COMPLETE (commit 6eb5818)
 
-**Files:**
-- `lib/typing/infer.ml` — Check bounds when instantiating polymorphic types
-- `lib/typing/unify.ml` — Subtype check for bounds
+Bounded quantifier constraints are now enforced at type alias expansion time. The `option` type has a truthy bound that prevents `(option (option x))`.
 
-**Changes:**
-1. When instantiating `option [a]` with `(int | nil)`, check `(int | nil) <: truthy` fails
-2. Emit clear error: "bound violation: (int | nil) not <: truthy"
+### 2.3 No-Shadowing Rule (Spec 07 R17) ✅
 
-**Verify:** `(option (option string))` produces type error
+**Status:** COMPLETE (commit 2e7afa2)
 
-### 2.3 No-Shadowing Rule (Spec 07 R17)
-
-**Problem:** User can redefine imported bindings including prelude types.
-
-**Files:**
-- `lib/sig/sig_loader.ml` — Track imported names, error on redefinition
-
-**Changes:**
-1. Maintain set of imported names (from prelude, opens, includes)
-2. When processing `DType`, `DDefun`, `DDefvar`, check name not in imported set
-3. Error: "cannot redefine imported binding 'list'"
-
-**Verify:** `(type list int)` in a `.tart` file produces error
+Names imported from prelude, open, or include cannot be redefined. Error message: "cannot redefine imported binding 'name'"
 
 ---
 
@@ -399,10 +383,10 @@ Phase 7.* (CLI polish) — after core functionality
 - [x] Prelude types available without import
 - [x] Emacs version auto-detected
 
-**Milestone 2: Core Types**
+**Milestone 2: Core Types** ✅
 - [x] Type subtraction works
-- [ ] Bounded quantifiers enforced
-- [ ] No shadowing of imports
+- [x] Bounded quantifiers enforced
+- [x] No shadowing of imports
 
 **Milestone 3: LSP**
 - [ ] Editing `.tart` updates `.el` diagnostics
