@@ -97,6 +97,46 @@ Equivalences:
   bool = (t | nil)
 ```
 
+### Discipline: When to Use `any`
+
+The `any` type is a prelude alias for `(truthy | nil)`—not a primitive. The
+actual top types are `truthy` and `nil`; `any` is merely a convenience for
+"accepts any Elisp value."
+
+Every use of `any` must be justified—treat it with absolute suspicion.
+
+**Legitimate uses (input positions):**
+
+```lisp
+;; Predicates that accept any value
+(defun null (any) -> bool)
+(defun stringp (any) -> bool)
+(defun type-of (any) -> symbol)
+```
+
+**Illegitimate uses (output positions):**
+
+```lisp
+;; WRONG: funcall's return type depends on the function argument
+(defun funcall (any &rest any) -> any)
+
+;; WRONG: length accepts specific sequence types, not any
+(defun length (any) -> int)
+```
+
+**Correct alternatives:**
+
+- For `funcall`/`apply`: special type-checker handling extracts return type
+  from the function argument (see Spec 34)
+- For `length`: use precise union of accepted types:
+  `((list any) | string | (vector any) | bool-vector | char-table) -> int`
+- For dynamic lookups like `symbol-value`: `any` may be legitimate since the
+  stored value is truly dynamic at runtime
+
+**Rule of thumb:** If you can enumerate the possible types, use a union. Only
+use `any` when the type is genuinely unknowable at compile time AND the value
+is in input position for a predicate.
+
 ## Output
 
 ```

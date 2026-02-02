@@ -17,6 +17,7 @@ Agents systematically create type signatures for all Emacs C primitives, with qu
 | Version-scoped | Typings target the user's current Emacs version |
 | Verified | All signatures validated against Emacs's lisp/ directory |
 | Documented gaps | Untypeable items logged to BUGS.md |
+| Precise types | Avoid `any`; use unions of specific types (see Spec 48) |
 
 ## Directory Structure
 
@@ -127,6 +128,23 @@ C source files map 1:1 to `.tart` files per Spec 24.
 **Then** they can document the enhancement needed for future implementation
 
 **Verify:** Agents report tooling gaps with specific improvement suggestions
+
+### R10: Avoid `any` in signatures
+
+**Given** a function signature being written
+**When** choosing types
+**Then** avoid `any` except in input positions for predicates
+
+**Guidelines:**
+- **Input position OK:** `(null any) -> bool`, `(type-of any) -> symbol`
+- **Output position WRONG:** `-> any` is almost always incorrect
+- **Input union preferred:** `(length ((list any) | string | (vector any))) -> int`
+  not `(length any) -> int`
+
+If you cannot avoid `any` in output position, document in BUGS.md why the type
+is genuinely dynamic (e.g., `symbol-value` returns whatever was stored).
+
+**Verify:** `grep '-> any)' *.tart` returns only justified cases
 
 ## BUGS.md Format Example
 

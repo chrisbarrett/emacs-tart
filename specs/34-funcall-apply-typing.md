@@ -238,6 +238,20 @@ sharp-quote, but type-check identically.
 - Higher-rank polymorphism in function arguments
 - Gradual typing escape hatches
 
+## Anti-Pattern: Do NOT Use `any` Return Types
+
+`funcall` and `apply` must NOT be implemented via signatures like:
+
+```elisp
+;; WRONG - loses all type information
+(defun funcall (any &rest any) -> any)
+(defun apply (any &rest any) -> any)
+```
+
+These forms require special-case handling in the type checker that extracts the
+return type from the function argument. A signature returning `any` defeats the
+purpose of the type system. See Spec 48 for general `any` discipline.
+
 ## Tasks
 
 - [ ] [R1] Add separate function env to type environment
@@ -254,5 +268,5 @@ sharp-quote, but type-check identically.
 - [ ] [R12] Implement occurrence typing for type predicates
 - [ ] [R13] Thread narrowed types through funcall
 - [ ] [R14] Ensure unification errors rather than widens
-- [ ] Update builtin_types.ml to remove weak funcall/apply signatures
+- [ ] Remove funcall/apply from builtin_types.ml entirely (no signatures, only type-checker special-casing)
 - [ ] Add test fixtures for all requirements

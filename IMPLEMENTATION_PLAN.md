@@ -402,3 +402,233 @@ Phase 7.* (CLI polish) — after core functionality
 - [ ] Open `simple.el` from Emacs, get accurate hover types
 - [ ] Open `subr.el` from Emacs, get accurate hover types
 - [ ] Type errors in user code show helpful messages with source excerpts
+
+---
+
+## Phase 8: Remove Redundant Built-in Types
+
+### Problem
+
+`lib/typing/builtin_types.ml` contains 60+ hardcoded function signatures that
+duplicate and conflict with the c-core `.tart` typings in `typings/emacs/31.0/c-core/`.
+
+**Current loading order:**
+1. `Builtin_types.initial_env()` creates base environment with hardcoded types
+2. `Search_path.load_c_core` extends that environment with `.tart` signatures
+
+When a function exists in both, the c-core definition wins (loaded second), but
+the existence of duplicate hardcoded types:
+- Causes confusion about source of truth
+- Makes DESIGN.md documentation inconsistent with c-core
+- Bloats the codebase with unmaintained duplicates
+
+**Example conflict:**
+- `builtin_types.ml`: `length : (List a) -> Int` (too narrow—rejects strings)
+- `fns.tart`: `length : any -> int` (too permissive—accepts anything)
+
+The correct signature is a union of all sequence types that `length` accepts:
+```elisp
+(defun length (((list any) | string | (vector any) | bool-vector | char-table)) -> int)
+```
+
+**Principle:** Every use of `any` must be treated with absolute suspicion. Even
+`funcall`/`apply` should NOT return `any`—they should extract the return type
+from their function argument. The only legitimate use of `any` is in input
+positions for truly polymorphic predicates like `(null any) -> bool`.
+
+For functions like `length`, use precise union types of the accepted inputs.
+
+### Goal
+
+Remove **all** function typings from `builtin_types.ml`:
+
+1. **`funcall`/`apply`** — These need special type-checker handling per Spec 34,
+   not signatures. The type checker must extract the return type from the
+   function argument, not return `any` or a polymorphic variable.
+2. **`function`** — Already handled as a special form in the type checker.
+3. **Everything else** — Comes from c-core `.tart` files.
+
+`builtin_types.ml` should become empty or be deleted entirely.
+
+### 8.1 Verify C-Core Coverage
+
+Confirm all functions being removed have corresponding definitions:
+
+| builtin_types.ml | c-core file | Notes |
+|------------------|-------------|-------|
+| car, cdr, cons | data.tart | ✓ polymorphic |
+| list | alloc.tart | ✓ polymorphic |
+| length, nth, nthcdr | fns.tart | ⚠️ `length` needs union type fix |
+| append, reverse, last | fns.tart | ✓ polymorphic |
+| mapcar, member, memq | fns.tart | ✓ polymorphic |
+| assoc, assq | fns.tart | ✓ polymorphic |
+| +, -, *, /, mod, % | data.tart | ✓ uses `num` type |
+| abs, max, min, 1+, 1- | data.tart | ✓ uses `num` type |
+| logand, logior, logxor, lognot | data.tart | ✓ |
+| <, >, <=, >=, = | data.tart | ✓ comparison |
+| null, atom, listp, consp | data.tart | ✓ predicates |
+| symbolp, stringp, numberp, integerp, floatp | data.tart | ✓ predicates |
+| vectorp, functionp | data.tart | ✓ predicates |
+| eq, equal, not | data.tart, fns.tart | ✓ |
+| concat, substring, string-length | fns.tart | ✓ |
+| upcase, downcase | editfns.tart | Need to add if missing |
+| string-to-list | fns.tart | Need to add if missing |
+| format | editfns.tart | ✓ |
+| vector, aref, aset | data.tart | ✓ polymorphic |
+| symbol-name | data.tart | ✓ |
+| number-to-string, string-to-number | data.tart | ✓ |
+| run-hooks, run-hook-with-args | eval.tart | ✓ |
+| commandp, macroexpand, backtrace-frames | eval.tart | ✓ |
+
+### 8.2 Delete or empty builtin_types.ml
+
+**Files:**
+- `lib/typing/builtin_types.ml` — Delete or make empty
+- `lib/typing/builtin_types.mli` — Update interface
+
+**Option A: Delete entirely**
+
+Remove `builtin_types.ml` and update all callers of `initial_env()` to use
+`Type_env.empty` directly.
+
+**Option B: Keep as empty placeholder**
+
+```ocaml
+(** Built-in type signatures.
+
+    This module is intentionally empty. All Elisp function types are defined in
+    .tart signature files under typings/emacs/{version}/c-core/.
+
+    Special forms (funcall, apply, function, if, let, etc.) are handled directly
+    by the type checker, not via signatures. See Spec 34 for funcall/apply. *)
+
+module Env = Core.Type_env
+
+let initial_env () : Env.t = Env.empty
+```
+
+**Note on funcall/apply:** These must NOT have signatures returning `any` or
+unbound type variables. Per Spec 34, the type checker must:
+1. Require the first argument to be a function type `(-> (T1 ... Tn) R)`
+2. Check remaining arguments against `T1 ... Tn`
+3. Return `R` as the result type
+
+This requires special-case handling in the type checker, not a signature.
+
+### 8.3 Add Missing Types and Signatures
+
+**Missing primitive types:**
+
+Add `BoolVector` and `CharTable` to `lib/core/types.ml` Prim module, and
+corresponding lowercase aliases to the prelude. These are needed for precise
+typing of sequence operations like `length`.
+
+**Fix `length` signature in `fns.tart`:**
+
+Current (wrong):
+```elisp
+(defun length (any) -> int)
+```
+
+Correct:
+```elisp
+(defun length (((list any) | string | (vector any) | bool-vector | char-table)) -> int)
+```
+
+**Missing signatures:**
+
+1. `upcase`, `downcase` — from `casefiddle.c`, need new file `casefiddle.tart`
+2. `string-to-list` — from `fns.c`, add to `fns.tart`
+
+**Create `typings/emacs/31.0/c-core/casefiddle.tart`:**
+```elisp
+;; Type signatures for Emacs casefiddle.c
+;;
+;; Source: emacs/src/casefiddle.c
+;; Emacs version: 31.0
+;;
+;; Contains case conversion functions.
+
+;; (upcase OBJ) - convert string or char to uppercase
+(defun upcase ((string | int)) -> (string | int))
+
+;; (downcase OBJ) - convert string or char to lowercase
+(defun downcase ((string | int)) -> (string | int))
+
+;; (capitalize OBJ) - capitalize string or char
+(defun capitalize ((string | int)) -> (string | int))
+
+;; (upcase-initials OBJ) - upcase initials in string
+(defun upcase-initials ((string | int)) -> (string | int))
+
+;; (upcase-region START END &optional REGION-NONCONTIGUOUS-P) - upcase region
+(defun upcase-region (int int &optional any) -> nil)
+
+;; (downcase-region START END &optional REGION-NONCONTIGUOUS-P) - downcase region
+(defun downcase-region (int int &optional any) -> nil)
+
+;; (capitalize-region START END &optional REGION-NONCONTIGUOUS-P) - capitalize region
+(defun capitalize-region (int int &optional any) -> nil)
+
+;; (upcase-word ARG) - upcase word(s) from point
+(defun upcase-word (int) -> nil)
+
+;; (downcase-word ARG) - downcase word(s) from point
+(defun downcase-word (int) -> nil)
+
+;; (capitalize-word ARG) - capitalize word(s) from point
+(defun capitalize-word (int) -> nil)
+```
+
+**Add to `typings/emacs/31.0/c-core/fns.tart`:**
+```elisp
+;; (string-to-list STRING) - convert string to list of character codes
+(defun string-to-list (string) -> (list int))
+```
+
+### 8.4 Update DESIGN.md
+
+Update "Built-in Function Types" section to explain the new architecture:
+- Intrinsics (`funcall`, `apply`, `function`) in `builtin_types.ml`
+- Standard library in `typings/emacs/{version}/c-core/*.tart`
+
+### 8.5 Run Tests
+
+```bash
+nix develop --command dune build 2>&1
+nix develop --command dune test 2>&1
+./tart check test/fixtures/**/*.el
+```
+
+### 8.6 Validate with Real Elisp
+
+```bash
+./tart check /path/to/emacs/lisp/simple.el
+```
+
+### 8.7 Audit `-> any` Return Types in C-Core
+
+Many c-core signatures return `any` inappropriately. Audit and fix:
+
+**Likely legitimate (truly dynamic):**
+- `symbol-value` — stored value is dynamic
+- `symbol-function` — could be any function type
+- `eval` — result depends on runtime form
+
+**Likely fixable:**
+- `selected-frame` → should return `frame` type
+- `frame-first-window`, `frame-root-window` → should return `window` type
+- `car-safe`, `cdr-safe` → could use polymorphism with option
+- Bool-vector operations → should use `bool-vector` type once added
+
+Run `grep '-> any)' typings/emacs/31.0/c-core/*.tart` and review each case.
+
+### Acceptance Criteria
+
+- [ ] `builtin_types.ml` is empty (returns `Type_env.empty`)
+- [ ] `BoolVector` and `CharTable` primitive types added
+- [ ] `length` uses precise union type
+- [ ] All `-> any` return types audited and justified or fixed
+- [ ] All tests pass
+- [ ] `./tart check` works correctly on test fixtures
+- [ ] No regression in type errors for real Elisp files
