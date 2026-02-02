@@ -17,11 +17,12 @@ let parse_sig_str ?(module_name = "test") s =
   | Error _ -> failwith "Parse error in test"
   | Ok sig_file -> sig_file
 
-(** Helper to load a signature with prelude types available *)
+(** Helper to load a signature with prelude types available and shadowing check *)
 let load_sig_with_prelude ?(env = Type_env.empty) s =
   let sig_file = parse_sig_str s in
   let prelude_ctx = Prelude.prelude_type_context () in
-  Sig_loader.load_signature_with_resolver ~prelude_ctx
+  let prelude_type_names = Prelude.prelude_type_names in
+  Sig_loader.load_signature_with_resolver ~prelude_ctx ~prelude_type_names
     ~resolver:Sig_loader.no_resolver env sig_file
 
 (** Helper to parse and type-check an expression *)
@@ -275,6 +276,48 @@ let test_option_list_ok () =
   | None -> Alcotest.fail "maybe-list not found"
   | Some _ -> ()
 
+(** {1 No-Shadowing Rule Tests} *)
+
+(** Test that redefining 'list' type is rejected *)
+let test_cannot_redefine_list () =
+  let sig_src = "(type list int)" in
+  try
+    let _ = load_sig_with_prelude sig_src in
+    Alcotest.fail "Expected shadowing error for 'list'"
+  with Failure msg ->
+    Alcotest.(check bool)
+      "error mentions cannot redefine" true
+      (contains_substring msg "cannot redefine imported binding 'list'")
+
+(** Test that redefining 'option' type is rejected *)
+let test_cannot_redefine_option () =
+  let sig_src = "(type option [a] a)" in
+  try
+    let _ = load_sig_with_prelude sig_src in
+    Alcotest.fail "Expected shadowing error for 'option'"
+  with Failure msg ->
+    Alcotest.(check bool)
+      "error mentions cannot redefine" true
+      (contains_substring msg "cannot redefine imported binding 'option'")
+
+(** Test that redefining 'bool' type is rejected *)
+let test_cannot_redefine_bool () =
+  let sig_src = "(type bool (int | string))" in
+  try
+    let _ = load_sig_with_prelude sig_src in
+    Alcotest.fail "Expected shadowing error for 'bool'"
+  with Failure msg ->
+    Alcotest.(check bool)
+      "error mentions cannot redefine" true
+      (contains_substring msg "cannot redefine imported binding 'bool'")
+
+(** Test that defining a new non-prelude type is allowed *)
+let test_can_define_new_type () =
+  let sig_src = "(type my-pair [a b] (a | b))" in
+  let _ = load_sig_with_prelude sig_src in
+  (* If no exception, test passes *)
+  ()
+
 let () =
   Alcotest.run "prelude"
     [
@@ -328,5 +371,15 @@ let () =
           Alcotest.test_case "option any rejected" `Quick
             test_option_any_rejected;
           Alcotest.test_case "option list ok" `Quick test_option_list_ok;
+        ] );
+      ( "no-shadowing",
+        [
+          Alcotest.test_case "cannot redefine list" `Quick
+            test_cannot_redefine_list;
+          Alcotest.test_case "cannot redefine option" `Quick
+            test_cannot_redefine_option;
+          Alcotest.test_case "cannot redefine bool" `Quick
+            test_cannot_redefine_bool;
+          Alcotest.test_case "can define new type" `Quick test_can_define_new_type;
         ] );
     ]

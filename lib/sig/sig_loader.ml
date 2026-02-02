@@ -905,6 +905,10 @@ type load_state = {
   ls_loaded : string list;  (** Modules already loaded (cycle detection) *)
   ls_scope_tvars : (string * Types.typ) list;
       (** Type variables from enclosing type-scope blocks *)
+  ls_imported_types : string list;
+      (** Type names imported from prelude/open/include (for shadowing check) *)
+  ls_imported_values : string list;
+      (** Value names imported from include (for shadowing check) *)
 }
 (** State accumulated during loading *)
 
@@ -912,8 +916,11 @@ type load_state = {
 
     @param type_ctx
       Initial type context (prelude or empty). When provided, prelude type
-      aliases are available for use in the signature being loaded. *)
-let init_load_state ~type_ctx ~resolver ~base_env ~module_name =
+      aliases are available for use in the signature being loaded.
+    @param imported_types
+      Initial set of imported type names (e.g., from prelude). *)
+let init_load_state ~type_ctx ~resolver ~base_env ~module_name
+    ?(imported_types = []) ?(imported_values = []) () =
   {
     ls_type_ctx = type_ctx;
     ls_env = base_env;
@@ -921,6 +928,8 @@ let init_load_state ~type_ctx ~resolver ~base_env ~module_name =
     ls_loaded = [ module_name ];
     (* Mark self as loaded to prevent self-import *)
     ls_scope_tvars = [];
+    ls_imported_types = imported_types;
+    ls_imported_values = imported_values;
   }
 
 (** Add a type alias to the load state *)
@@ -940,6 +949,26 @@ let add_value_to_state name scheme state =
 (** Add a function binding to the load state (function namespace) *)
 let add_fn_to_state name scheme state =
   { state with ls_env = Type_env.extend_fn name scheme state.ls_env }
+
+(** {1 Shadowing Checks}
+
+    Names imported via prelude, open, or include cannot be redefined in the
+    current signature file. This prevents accidental shadowing of standard
+    types like `list` or `option`. *)
+
+(** Check if a type name would shadow an imported binding *)
+let is_imported_type name state = List.mem name state.ls_imported_types
+
+(** Check if a value name would shadow an imported binding *)
+let is_imported_value name state = List.mem name state.ls_imported_values
+
+(** Add a type name to the imported set *)
+let mark_type_imported name state =
+  { state with ls_imported_types = name :: state.ls_imported_types }
+
+(** Add a value name to the imported set *)
+let mark_value_imported name state =
+  { state with ls_imported_values = name :: state.ls_imported_values }
 
 (** {1 Import-Struct Processing}
 
@@ -1147,6 +1176,18 @@ let load_data (module_name : string) (d : data_decl) (state : load_state) :
     - include: Inline all declarations (types available AND values re-exported)
 *)
 
+(** Check that a type name doesn't shadow an imported binding.
+    Raises Failure if shadowing is detected. *)
+let check_type_not_shadowing name state =
+  if is_imported_type name state then
+    failwith (Printf.sprintf "cannot redefine imported binding '%s'" name)
+
+(** Check that a value name doesn't shadow an imported binding.
+    Raises Failure if shadowing is detected. *)
+let check_value_not_shadowing name state =
+  if is_imported_value name state then
+    failwith (Printf.sprintf "cannot redefine imported binding '%s'" name)
+
 (** Process an 'open' directive. Imports types from another module for use in
     type expressions. Types are NOT re-exported; they are only available for
     signature writing.
@@ -1170,14 +1211,18 @@ let process_open (module_name : string) (state : load_state) : load_state =
         let aliases = build_alias_context opened_sig in
         let state =
           List.fold_left
-            (fun s (name, alias) -> add_alias_to_state name alias s)
+            (fun s (name, alias) ->
+              let s = add_alias_to_state name alias s in
+              mark_type_imported name s)
             state aliases
         in
         (* Import opaque types from opened module *)
         let opaques = build_opaque_context opened_sig.sig_module opened_sig in
         let state =
           List.fold_left
-            (fun s (name, opaque) -> add_opaque_to_state name opaque s)
+            (fun s (name, opaque) ->
+              let s = add_opaque_to_state name opaque s in
+              mark_type_imported name s)
             state opaques
         in
         (* Note: we do NOT add values to ls_env - open only imports types *)
@@ -1202,58 +1247,107 @@ let rec process_include (module_name : string) (state : load_state) : load_state
     | Some included_sig ->
         (* Mark as loaded *)
         let state = { state with ls_loaded = module_name :: state.ls_loaded } in
-        (* Process the included signature's declarations recursively *)
-        load_decls_into_state included_sig state
+        (* Process the included signature's declarations recursively.
+           Mark as from_include so names are tracked as imported. *)
+        load_decls_into_state ~from_include:true included_sig state
 
 (** Load declarations from a signature into the load state. Handles all
     declaration types including open/include recursively. Forall inference is
     applied per-declaration using the accumulated type context, so types from
-    includes/opens are known. *)
-and load_decls_into_state (sig_file : signature) (state : load_state) :
-    load_state =
+    includes/opens are known.
+
+    @param from_include
+      If true, declarations come from an include and should be marked as
+      imported (preventing shadowing by later declarations in the including
+      file). If false, declarations are from the current file and should be
+      checked against the imported set. *)
+and load_decls_into_state ?(from_include = false) (sig_file : signature)
+    (state : load_state) : load_state =
   List.fold_left
     (fun state decl ->
       match decl with
       | DOpen (name, _) -> process_open name state
       | DInclude (name, _) -> process_include name state
       | DType d -> (
+          (* Check shadowing if from current file *)
+          if not from_include then check_type_not_shadowing d.type_name state;
           (* Add to type context *)
-          match d.type_body with
-          | Some body ->
-              (* Type alias *)
-              let alias =
-                {
-                  alias_params = List.map binder_to_alias_param d.type_params;
-                  alias_body = body;
-                }
-              in
-              add_alias_to_state d.type_name alias state
-          | None ->
-              (* Opaque type - use the original module name for the constructor *)
-              let opaque =
-                {
-                  opaque_params = List.map (fun b -> b.name) d.type_params;
-                  opaque_con = opaque_con_name sig_file.sig_module d.type_name;
-                }
-              in
-              add_opaque_to_state d.type_name opaque state)
+          let state =
+            match d.type_body with
+            | Some body ->
+                (* Type alias *)
+                let alias =
+                  {
+                    alias_params = List.map binder_to_alias_param d.type_params;
+                    alias_body = body;
+                  }
+                in
+                add_alias_to_state d.type_name alias state
+            | None ->
+                (* Opaque type - use the original module name for the constructor *)
+                let opaque =
+                  {
+                    opaque_params = List.map (fun b -> b.name) d.type_params;
+                    opaque_con = opaque_con_name sig_file.sig_module d.type_name;
+                  }
+                in
+                add_opaque_to_state d.type_name opaque state
+          in
+          (* Mark as imported if from include *)
+          if from_include then mark_type_imported d.type_name state else state)
       | DDefun d ->
+          (* Check shadowing if from current file *)
+          if not from_include then check_value_not_shadowing d.defun_name state;
           let scheme = load_defun_with_ctx state.ls_type_ctx d in
           (* Add to function namespace for Lisp-2 semantics *)
-          add_fn_to_state d.defun_name scheme state
+          let state = add_fn_to_state d.defun_name scheme state in
+          (* Mark as imported if from include *)
+          if from_include then mark_value_imported d.defun_name state else state
       | DDefvar d ->
+          (* Check shadowing if from current file *)
+          if not from_include then check_value_not_shadowing d.defvar_name state;
           let scheme = load_defvar_with_ctx state.ls_type_ctx d in
-          add_value_to_state d.defvar_name scheme state
-      | DImportStruct d -> load_import_struct sig_file.sig_module d state
-      | DData d -> load_data sig_file.sig_module d state
-      | DTypeScope d -> load_type_scope sig_file d state)
+          let state = add_value_to_state d.defvar_name scheme state in
+          (* Mark as imported if from include *)
+          if from_include then mark_value_imported d.defvar_name state else state
+      | DImportStruct d ->
+          (* import-struct generates type + multiple values *)
+          if not from_include then check_type_not_shadowing d.struct_name state;
+          let state = load_import_struct sig_file.sig_module d state in
+          if from_include then (
+            let state = mark_type_imported d.struct_name state in
+            (* Also mark generated functions as imported *)
+            let state = mark_value_imported ("make-" ^ d.struct_name) state in
+            let state = mark_value_imported (d.struct_name ^ "-p") state in
+            List.fold_left
+              (fun s (slot_name, _) ->
+                mark_value_imported (d.struct_name ^ "-" ^ slot_name) s)
+              state d.struct_slots)
+          else state
+      | DData d ->
+          (* data generates type + constructor functions *)
+          if not from_include then check_type_not_shadowing d.data_name state;
+          let state = load_data sig_file.sig_module d state in
+          if from_include then (
+            let state = mark_type_imported d.data_name state in
+            (* Mark constructor functions and predicates as imported *)
+            List.fold_left
+              (fun s (ctor : ctor_decl) ->
+                let s = mark_value_imported ctor.ctor_name s in
+                mark_value_imported
+                  (d.data_name ^ "-" ^ String.lowercase_ascii ctor.ctor_name
+                 ^ "-p")
+                  s)
+              state d.data_ctors)
+          else state
+      | DTypeScope d -> load_type_scope ~from_include sig_file d state)
     state sig_file.sig_decls
 
 (** Load a type-scope block. Creates fresh type variables for the scope's
     binders and processes each inner declaration with those variables available
     in the type context. *)
-and load_type_scope (sig_file : signature) (scope : type_scope_decl)
-    (state : load_state) : load_state =
+and load_type_scope ?(from_include = false) (sig_file : signature)
+    (scope : type_scope_decl) (state : load_state) : load_state =
   (* Create fresh TVars for each scope binder.
      Level 0 is used for signature-level type variables. *)
   let scope_tvars =
@@ -1267,49 +1361,83 @@ and load_type_scope (sig_file : signature) (scope : type_scope_decl)
   in
   (* Process inner declarations with the scope context *)
   List.fold_left
-    (fun st decl -> load_scoped_decl sig_file scope_tvars decl st)
+    (fun st decl -> load_scoped_decl ~from_include sig_file scope_tvars decl st)
     state_with_scope scope.scope_decls
 
 (** Load a declaration inside a type-scope. Adds scope type variables to the
     defun's quantifier list. *)
-and load_scoped_decl (sig_file : signature)
+and load_scoped_decl ?(from_include = false) (sig_file : signature)
     (scope_tvars : (string * Types.typ) list) (decl : decl) (state : load_state)
     : load_state =
   match decl with
   | DOpen (name, _) -> process_open name state
   | DInclude (name, _) -> process_include name state
   | DType d -> (
+      (* Check shadowing if from current file *)
+      if not from_include then check_type_not_shadowing d.type_name state;
       (* Type declarations in scopes work the same way *)
-      match d.type_body with
-      | Some body ->
-          let alias =
-            {
-              alias_params = List.map binder_to_alias_param d.type_params;
-              alias_body = body;
-            }
-          in
-          add_alias_to_state d.type_name alias state
-      | None ->
-          let opaque =
-            {
-              opaque_params = List.map (fun b -> b.name) d.type_params;
-              opaque_con = opaque_con_name sig_file.sig_module d.type_name;
-            }
-          in
-          add_opaque_to_state d.type_name opaque state)
+      let state =
+        match d.type_body with
+        | Some body ->
+            let alias =
+              {
+                alias_params = List.map binder_to_alias_param d.type_params;
+                alias_body = body;
+              }
+            in
+            add_alias_to_state d.type_name alias state
+        | None ->
+            let opaque =
+              {
+                opaque_params = List.map (fun b -> b.name) d.type_params;
+                opaque_con = opaque_con_name sig_file.sig_module d.type_name;
+              }
+            in
+            add_opaque_to_state d.type_name opaque state
+      in
+      if from_include then mark_type_imported d.type_name state else state)
   | DDefun d ->
+      (* Check shadowing if from current file *)
+      if not from_include then check_value_not_shadowing d.defun_name state;
       (* For defuns in scope, combine scope tvars with function's own tvars *)
       let scheme = load_defun_with_scope state.ls_type_ctx scope_tvars d in
       (* Add to function namespace for Lisp-2 semantics *)
-      add_fn_to_state d.defun_name scheme state
+      let state = add_fn_to_state d.defun_name scheme state in
+      if from_include then mark_value_imported d.defun_name state else state
   | DDefvar d ->
+      (* Check shadowing if from current file *)
+      if not from_include then check_value_not_shadowing d.defvar_name state;
       let scheme = load_defvar_with_ctx state.ls_type_ctx d in
-      add_value_to_state d.defvar_name scheme state
-  | DImportStruct d -> load_import_struct sig_file.sig_module d state
-  | DData d -> load_data sig_file.sig_module d state
+      let state = add_value_to_state d.defvar_name scheme state in
+      if from_include then mark_value_imported d.defvar_name state else state
+  | DImportStruct d ->
+      if not from_include then check_type_not_shadowing d.struct_name state;
+      let state = load_import_struct sig_file.sig_module d state in
+      if from_include then (
+        let state = mark_type_imported d.struct_name state in
+        let state = mark_value_imported ("make-" ^ d.struct_name) state in
+        let state = mark_value_imported (d.struct_name ^ "-p") state in
+        List.fold_left
+          (fun s (slot_name, _) ->
+            mark_value_imported (d.struct_name ^ "-" ^ slot_name) s)
+          state d.struct_slots)
+      else state
+  | DData d ->
+      if not from_include then check_type_not_shadowing d.data_name state;
+      let state = load_data sig_file.sig_module d state in
+      if from_include then (
+        let state = mark_type_imported d.data_name state in
+        List.fold_left
+          (fun s (ctor : ctor_decl) ->
+            let s = mark_value_imported ctor.ctor_name s in
+            mark_value_imported
+              (d.data_name ^ "-" ^ String.lowercase_ascii ctor.ctor_name ^ "-p")
+              s)
+          state d.data_ctors)
+      else state
   | DTypeScope nested ->
       (* Handle nested scopes recursively *)
-      load_type_scope sig_file nested state
+      load_type_scope ~from_include sig_file nested state
 
 (** {1 Signature Loading}
 
@@ -1323,16 +1451,19 @@ and load_scoped_decl (sig_file : signature)
 
     @param resolver Function to resolve module names to signatures
     @param prelude_ctx Optional prelude type context for implicit prelude types
+    @param prelude_type_names
+      Optional list of prelude type names (for shadowing check)
     @param env Base type environment to extend
     @param sig_file The signature to load *)
-let load_signature_with_resolver ?prelude_ctx ~(resolver : module_resolver)
-    (env : Type_env.t) (sig_file : signature) : Type_env.t =
+let load_signature_with_resolver ?prelude_ctx ?(prelude_type_names = [])
+    ~(resolver : module_resolver) (env : Type_env.t) (sig_file : signature) :
+    Type_env.t =
   let type_ctx =
     match prelude_ctx with Some ctx -> ctx | None -> empty_type_context
   in
   let state =
     init_load_state ~type_ctx ~resolver ~base_env:env
-      ~module_name:sig_file.sig_module
+      ~module_name:sig_file.sig_module ~imported_types:prelude_type_names ()
   in
   let final_state = load_decls_into_state sig_file state in
   final_state.ls_env

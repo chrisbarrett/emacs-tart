@@ -171,6 +171,7 @@ val no_resolver : module_resolver
 
 val load_signature_with_resolver :
   ?prelude_ctx:type_context ->
+  ?prelude_type_names:string list ->
   resolver:module_resolver ->
   Core.Type_env.t ->
   Sig_ast.signature ->
@@ -187,6 +188,9 @@ val load_signature_with_resolver :
       Optional prelude type context. When provided, prelude type aliases (list,
       option, etc.) are available for use in the signature without explicit
       import.
+    @param prelude_type_names
+      Optional list of prelude type names. When provided, these names cannot be
+      redefined by the signature (no-shadowing rule, Spec 07 R17).
     @param resolver Function to resolve module names to signatures
     @param env Base type environment to extend
     @param sig_file The signature to load *)
