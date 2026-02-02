@@ -388,15 +388,15 @@ Phase 7.* (CLI polish) — after core functionality
 - [x] Bounded quantifiers enforced
 - [x] No shadowing of imports
 
-**Milestone 3: LSP**
-- [ ] Editing `.tart` updates `.el` diagnostics
-- [ ] Dependency graph tracks invalidation
-- [ ] Parse/validation errors in `.tart` files are surfaced (not silently skipped)
+**Milestone 3: LSP** ✅
+- [x] Editing `.tart` updates `.el` diagnostics
+- [x] Dependency graph tracks invalidation
+- [x] Parse/validation errors in `.tart` files are surfaced (not silently skipped)
 
-**Milestone 4: Typings** ✅
+**Milestone 4: Typings**
 - [x] All 16 c-core files created and validated
-- [ ] 95%+ success rate on Emacs lisp/ subset
-- [ ] BUGS.md documents gaps
+- [ ] 95%+ success rate on Emacs lisp/ subset (BLOCKED: needs BUG-001 fix)
+- [x] BUGS.md documents gaps
 
 **Final: E2E**
 - [ ] Open `simple.el` from Emacs, get accurate hover types
