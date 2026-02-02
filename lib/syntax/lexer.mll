@@ -198,7 +198,10 @@ let rec parse_char_literal s =
       | 'e' -> 27  (* escape *)
       | 's' -> 32  (* space *)
       | 'd' -> 127 (* delete *)
-      | '(' | ')' | '[' | ']' | '"' | '\'' | '`' | ',' | '.' | ';' | '#' | '?' as c ->
+      | '(' | ')' | '[' | ']' | '"' | '\'' | '`' | ',' | '.' | ';' | '#' | '?' | '|'
+      | '+' | '-' | '*' | '/' | '=' | '<' | '>' | '!' | '@' | '$' | '%' | '&' | '~'
+      | ':' | '{' | '}' as c ->
+        (* Escaped punctuation returns the character itself *)
         Char.code c
       | 'x' ->
         (* Hex escape *)
@@ -306,7 +309,8 @@ rule token = parse
                    { Parser.CHAR (parse_char_literal (String.sub s 1 (String.length s - 1))) }
   (* Escaped characters with modifiers like ?\C-x, ?\M-x, ?\s-x (super) etc. *)
   (* Note: ?\C- (space) is valid - control-space *)
-  | "?" ("\\" ['C' 'M' 'S' 'H' 'A' 's'] '-')+ (' ' | "\\" _? | [^ ' ' '\t' '\n' '\r']) as s
+  (* The trailing char can be: space, \^x (caret control), \x (escape), or plain char *)
+  | "?" ("\\" ['C' 'M' 'S' 'H' 'A' 's'] '-')+ (' ' | "\\" '^' _ | "\\" _? | [^ ' ' '\t' '\n' '\r']) as s
                    { Parser.CHAR (parse_char_literal (String.sub s 1 (String.length s - 1))) }
   (* \s (space) - match 3 chars and check if next is dash *)
   | "?\\s"         { (* Check if followed by dash (super modifier) vs standalone (space) *)
@@ -320,8 +324,11 @@ rule token = parse
                        raise (Lexer_error ("incomplete super modifier", span_of_lexbuf lexbuf))
                      end else
                        Parser.CHAR 32 (* space *) }
-  (* Simple escapes like ?\n, ?\t, ?\\ etc. (excluding modifiers C M S H A s and hex/unicode) *)
-  | "?\\" [^ 'x' '0'-'7' 'C' 'M' 'S' 'H' 'A' 's' 'u' 'U'] as s
+  (* Simple escapes like ?\n, ?\t, ?\\ etc. (excluding modifiers C M S H A s and hex/unicode/caret) *)
+  | "?\\" [^ 'x' '0'-'7' 'C' 'M' 'S' 'H' 'A' 's' 'u' 'U' '^'] as s
+                   { Parser.CHAR (parse_char_literal (String.sub s 1 (String.length s - 1))) }
+  (* Caret control sequence like ?\^H (control-H) *)
+  | "?\\^" _ as s
                    { Parser.CHAR (parse_char_literal (String.sub s 1 (String.length s - 1))) }
   (* Octal escapes like ?\012 *)
   | "?\\" (octal_digit octal_digit? octal_digit?) as s
