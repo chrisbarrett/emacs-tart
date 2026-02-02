@@ -244,6 +244,68 @@ let lsp_diagnostic_of_parse_error (err : Syntax.Read.parse_error) :
     related_information = [];
   }
 
+(** Convert a signature error to an LSP diagnostic *)
+let lsp_diagnostic_of_sig_error (err : Sig.Search_path.sig_error) :
+    Protocol.diagnostic =
+  let message =
+    match err.kind with
+    | Sig.Search_path.LexerError msg -> msg
+    | Sig.Search_path.ParseError msg -> msg
+    | Sig.Search_path.ValidationError msg -> msg
+    | Sig.Search_path.IOError msg -> msg
+  in
+  {
+    Protocol.range = range_of_span err.span;
+    severity = Some Protocol.Error;
+    code = None;
+    message;
+    source = Some "tart";
+    related_information = [];
+  }
+
+(** Check a .tart signature file and return LSP diagnostics.
+
+    Validates the signature file for:
+    - Lexer errors (invalid characters)
+    - Parse errors (invalid syntax)
+    - Validation errors (unbound type variables, invalid types) *)
+let check_tart_document (text : string) (uri : string) :
+    Protocol.diagnostic list =
+  let filename = filename_of_uri uri in
+  let parse_result = Syntax.Read.parse_string ~filename text in
+  (* Check for lexer errors first *)
+  if parse_result.errors <> [] then
+    List.map lsp_diagnostic_of_parse_error parse_result.errors
+  else
+    (* Parse the signature *)
+    let basename = Filename.basename filename in
+    let module_name =
+      if Filename.check_suffix basename ".tart" then
+        Filename.chop_suffix basename ".tart"
+      else basename
+    in
+    match Sig.Sig_parser.parse_signature ~module_name parse_result.sexps with
+    | Error errors ->
+        List.map
+          (fun (e : Sig.Sig_parser.parse_error) ->
+            lsp_diagnostic_of_sig_error
+              { path = filename; kind = ParseError e.message; span = e.span })
+          errors
+    | Ok sig_file ->
+        (* Validate the signature *)
+        let validation_errors =
+          Sig.Sig_loader.validate_signature_all sig_file
+        in
+        List.map
+          (fun (e : Sig.Sig_loader.load_error) ->
+            lsp_diagnostic_of_sig_error
+              {
+                path = filename;
+                kind = ValidationError e.message;
+                span = e.span;
+              })
+          validation_errors
+
 (** Try to read the content of a sibling .tart file for cache invalidation.
 
     Checks the signature tracker first (for open buffers), then falls back to
@@ -313,13 +375,21 @@ let publish_diagnostics (server : t) (uri : string) (version : int option) :
   match Document.get_doc server.documents uri with
   | None -> ()
   | Some doc ->
+      (* Check file type and use appropriate checker *)
+      let is_tart = Signature_tracker.is_tart_file uri in
       let diagnostics, stats =
-        check_document ~config:server.module_config ~cache:server.form_cache
-          ~sig_tracker:server.signature_tracker uri doc.text
+        if is_tart then
+          (* For .tart files, check signature syntax and validation *)
+          (check_tart_document doc.text uri, None)
+        else
+          (* For .el files, do full type checking *)
+          check_document ~config:server.module_config ~cache:server.form_cache
+            ~sig_tracker:server.signature_tracker uri doc.text
       in
-      (* Check for dependency cycles *)
+      (* Check for dependency cycles (only for .el files) *)
       let cycle_diagnostics =
-        Graph_tracker.check_cycles_for_module server.dependency_graph ~uri
+        if is_tart then []
+        else Graph_tracker.check_cycles_for_module server.dependency_graph ~uri
       in
       let all_diagnostics = diagnostics @ cycle_diagnostics in
       let params : Protocol.publish_diagnostics_params =

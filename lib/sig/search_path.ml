@@ -176,26 +176,109 @@ let find_sibling (el_path : string) (module_name : string) : string option =
   let dir = Filename.dirname el_path in
   find_in_dir module_name dir
 
+(** {1 Signature Errors} *)
+
+(** Error kind for signature file issues *)
+type sig_error_kind =
+  | LexerError of string  (** Lexer error (e.g., invalid character) *)
+  | ParseError of string  (** Parser error (e.g., invalid syntax) *)
+  | ValidationError of string  (** Validation error (e.g., unbound type var) *)
+  | IOError of string  (** File read error *)
+
+type sig_error = {
+  path : string;  (** Path to the .tart file *)
+  kind : sig_error_kind;  (** Type of error *)
+  span : Loc.span;  (** Location in the file *)
+}
+(** An error that occurred while loading a signature file *)
+
+(** Format a sig_error for display *)
+let string_of_sig_error (e : sig_error) : string =
+  let kind_str =
+    match e.kind with
+    | LexerError msg -> Printf.sprintf "Lexer error: %s" msg
+    | ParseError msg -> Printf.sprintf "Parse error: %s" msg
+    | ValidationError msg -> Printf.sprintf "Validation error: %s" msg
+    | IOError msg -> Printf.sprintf "I/O error: %s" msg
+  in
+  Printf.sprintf "%s:%d:%d: %s" e.path e.span.start_pos.line
+    e.span.start_pos.col kind_str
+
 (** {1 Module Resolution} *)
+
+(** Parse a `.tart` file and return its signature AST or errors.
+
+    @param path Path to the `.tart` file
+    @return Ok signature or Error list of errors *)
+let parse_signature_file_with_errors (path : string) :
+    (Sig_ast.signature, sig_error list) result =
+  try
+    let content = In_channel.with_open_text path In_channel.input_all in
+    let parse_result = Syntax.Read.parse_string ~filename:path content in
+    (* Check for lexer errors *)
+    if parse_result.errors <> [] then
+      Error
+        (List.map
+           (fun (e : Syntax.Read.parse_error) ->
+             { path; kind = LexerError e.message; span = e.span })
+           parse_result.errors)
+    else
+      (* Extract module name from filename *)
+      let basename = Filename.basename path in
+      let module_name = Filename.chop_suffix basename ".tart" in
+      match Sig_parser.parse_signature ~module_name parse_result.sexps with
+      | Ok sig_file -> Ok sig_file
+      | Error errors ->
+          Error
+            (List.map
+               (fun (e : Sig_parser.parse_error) ->
+                 { path; kind = ParseError e.message; span = e.span })
+               errors)
+  with
+  | Sys_error msg ->
+      Error [ { path; kind = IOError msg; span = Loc.dummy_span } ]
+  | _ ->
+      Error
+        [
+          {
+            path;
+            kind = IOError "Unknown error reading file";
+            span = Loc.dummy_span;
+          };
+        ]
+
+(** Parse and validate a `.tart` file, returning all errors.
+
+    This function combines parsing and validation to catch all issues:
+    - Lexer errors (invalid characters)
+    - Parser errors (invalid syntax)
+    - Validation errors (unbound type variables, invalid types)
+
+    @param path Path to the `.tart` file
+    @return Ok signature or Error list of all errors *)
+let parse_and_validate_signature (path : string) :
+    (Sig_ast.signature, sig_error list) result =
+  match parse_signature_file_with_errors path with
+  | Error errors -> Error errors
+  | Ok sig_file ->
+      (* Now validate the parsed signature *)
+      let validation_errors = Sig_loader.validate_signature_all sig_file in
+      if validation_errors = [] then Ok sig_file
+      else
+        Error
+          (List.map
+             (fun (e : Sig_loader.load_error) ->
+               { path; kind = ValidationError e.message; span = e.span })
+             validation_errors)
 
 (** Parse a `.tart` file and return its signature AST.
 
     @param path Path to the `.tart` file
     @return The parsed signature, or None if parsing fails *)
 let parse_signature_file (path : string) : Sig_ast.signature option =
-  try
-    let content = In_channel.with_open_text path In_channel.input_all in
-    let parse_result = Syntax.Read.parse_string ~filename:path content in
-    (* Check for parse errors *)
-    if parse_result.errors <> [] then None
-    else
-      (* Extract module name from filename *)
-      let basename = Filename.basename path in
-      let module_name = Filename.chop_suffix basename ".tart" in
-      match Sig_parser.parse_signature ~module_name parse_result.sexps with
-      | Ok sig_file -> Some sig_file
-      | Error _ -> None
-  with _ -> None
+  match parse_signature_file_with_errors path with
+  | Ok sig_file -> Some sig_file
+  | Error _ -> None
 
 (** Create a module resolver from a search path configuration. This resolver
     implements the full discovery order: 1. Sibling `.tart` next to the current

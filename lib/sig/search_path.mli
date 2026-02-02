@@ -74,7 +74,45 @@ val find_sibling : string -> string -> string option
     @param module_name The required module name
     @return The path to the sibling `.tart` file, if found *)
 
+(** {1 Signature Errors} *)
+
+(** Error kind for signature file issues *)
+type sig_error_kind =
+  | LexerError of string  (** Lexer error (e.g., invalid character) *)
+  | ParseError of string  (** Parser error (e.g., invalid syntax) *)
+  | ValidationError of string  (** Validation error (e.g., unbound type var) *)
+  | IOError of string  (** File read error *)
+
+type sig_error = {
+  path : string;  (** Path to the .tart file *)
+  kind : sig_error_kind;  (** Type of error *)
+  span : Syntax.Location.span;  (** Location in the file *)
+}
+(** An error that occurred while loading a signature file *)
+
+val string_of_sig_error : sig_error -> string
+(** Format a sig_error for display *)
+
 (** {1 Module Resolution} *)
+
+val parse_signature_file_with_errors :
+  string -> (Sig_ast.signature, sig_error list) result
+(** Parse a `.tart` file and return its signature AST or errors.
+
+    @param path Path to the `.tart` file
+    @return Ok signature or Error list of errors *)
+
+val parse_and_validate_signature :
+  string -> (Sig_ast.signature, sig_error list) result
+(** Parse and validate a `.tart` file, returning all errors.
+
+    This function combines parsing and validation to catch all issues:
+    - Lexer errors (invalid characters)
+    - Parser errors (invalid syntax)
+    - Validation errors (unbound type variables, invalid types)
+
+    @param path Path to the `.tart` file
+    @return Ok signature or Error list of all errors *)
 
 val parse_signature_file : string -> Sig_ast.signature option
 (** Parse a `.tart` file and return its signature AST.
