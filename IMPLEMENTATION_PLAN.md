@@ -46,7 +46,7 @@ type definitions (which should be in .tart files).
 - `%tart-intrinsic%Int`, `%tart-intrinsic%Float`, `%tart-intrinsic%Num` — numeric types
 - `%tart-intrinsic%String`, `%tart-intrinsic%Symbol`, `%tart-intrinsic%Keyword` — atom types
 - `%tart-intrinsic%Nil`, `%tart-intrinsic%T`, `%tart-intrinsic%Truthy`, `%tart-intrinsic%Never` — special types
-- `%tart-intrinsic%List`, `%tart-intrinsic%Vector`, `%tart-intrinsic%Pair`, `%tart-intrinsic%HashTable` — parameterized containers
+- `%tart-intrinsic%List`, `%tart-intrinsic%Vector`, `%tart-intrinsic%Cons`, `%tart-intrinsic%HashTable` — parameterized containers
 
 **tart-prelude.tart becomes:**
 ```lisp
@@ -64,7 +64,7 @@ type definitions (which should be in .tart files).
 ;; Parameterized intrinsics
 (type list [a] (%tart-intrinsic%List a))
 (type vector [a] (%tart-intrinsic%Vector a))
-(type pair [a b] (%tart-intrinsic%Pair a b))
+(type cons [a b] (%tart-intrinsic%Cons a b))
 (type hash-table [k v] (%tart-intrinsic%HashTable k v))
 
 ;; Derived types (built on intrinsics)
@@ -75,10 +75,18 @@ type definitions (which should be in .tart files).
 (type is [a] (a - nil))
 (type nonempty [a] (is (list a)))
 
+;; Homogeneous map types (Spec 11)
+;; Row-polymorphic forms like (alist {name string & r}) added in Phase 2.4
+(type alist [k v] (list (cons k v)))   ; association list
+(type plist [k v] (list any))          ; property list (simplified until Phase 2.4)
+
 ;; Opaque types (no intrinsic backing)
 (type bool-vector)
 (type char-table)
 ```
+
+**Additional cleanup:**
+- Rename `pair` → `cons` in all c-core .tart files (currently use `pair` for cons cells)
 
 **Changes required:**
 
@@ -140,6 +148,71 @@ Bounded quantifier constraints are now enforced at type alias expansion time. Th
 **Status:** COMPLETE (commit 2e7afa2)
 
 Names imported from prelude, open, or include cannot be redefined. Error message: "cannot redefine imported binding 'name'"
+
+### 2.4 Union Types and Row Polymorphism (Spec 11)
+
+**Status:** NOT STARTED (except R10 type subtraction, complete)
+
+**Goal:** Type-safe structural typing for Elisp's idiomatic alist/plist patterns.
+Elisp represents structured data as alists `((name . "Alice") (age . 30))` and
+plists `(:name "Alice" :age 30)`. Row polymorphism types these patterns directly.
+
+**Requirements from Spec 11:**
+
+| Req | Description | Status |
+|-----|-------------|--------|
+| R1 | Union type representation and subtyping | Not started |
+| R2 | Type narrowing in pcase branches | Not started |
+| R3 | Exhaustiveness checking for unions | Not started |
+| R4 | Row-polymorphic alist types `(alist {name string & r})` | Not started |
+| R5 | Row-polymorphic plist types `(plist {:name string & r})` | Not started |
+| R6 | Map pattern exhaustiveness | Not started |
+| R7 | Closed unions vs open row types | Not started |
+| R8 | Row type inference from field access | Not started |
+| R9 | Literal types with deferred widening | Not started |
+| R10 | Type subtraction operator | ✅ Complete |
+
+**Type forms to support:**
+
+```lisp
+;; Homogeneous (all keys/values share types)
+(alist k v)                      ; e.g., (alist symbol int)
+(plist k v)                      ; e.g., (plist keyword string)
+
+;; Record-style (specific fields via row types)
+(alist {name string age int})    ; closed—exactly these fields
+(alist {name string & r})        ; open—at least these fields
+(plist {:name string :age int})  ; closed plist
+(plist {:name string & r})       ; open plist
+
+;; Generic map supertype
+(map {name string & r})          ; any map-like with these fields
+```
+
+**Key implementation points:**
+
+1. **Row variables** (`& r`) enable structural subtyping—a record with extra
+   fields can be passed where fewer fields are required
+
+2. **Literal vs variable key inference:**
+   - `(alist-get 'name x)` → infer `x : (alist {name a & r})`
+   - `(alist-get key x)` → infer `x : (alist k v)`, `key : k`
+
+3. **Map supertype** allows functions to accept alist, plist, or hash-table:
+   ```lisp
+   (defun get-name (person)
+     (declare (tart ((map {name string & r}) -> string)))
+     (map-elt person 'name))
+   ```
+
+**Files likely affected:**
+- `lib/core/types.ml` — Add row type representation
+- `lib/typing/unify.ml` — Row unification
+- `lib/typing/infer.ml` — Infer row types from field access
+- `lib/sig/sig_loader.ml` — Parse row type syntax
+- `lib/sig/sig_parser.ml` — Row type grammar
+
+**Verify:** See Spec 11 for detailed test scenarios.
 
 ---
 
@@ -458,15 +531,18 @@ Phase 2.3 (No-shadowing) ←─────────────────�
 Phase 4.1 (Directory setup) → Phase 4.2 (Verbose coverage) → Phase 4.3 (Create typings)
 Phase 4.4 (BUGS.md) ← Phase 4.3
 
+Phase 2.4 (Row polymorphism) — after Phase 2.1, enables precise alist/plist typing
+
 Phase 5.* (Error quality) — parallel, after Phase 2
 Phase 6.* (Testing) — parallel, after Phase 1
 Phase 7.* (CLI polish) — after core functionality
 Phase 8.* (Remove builtins) — after Phase 1.4
 ```
 
-**Note:** Phase 1.4 is high priority because it enables adding new types (like `bool-vector`,
-`char-table`) by editing .tart files instead of OCaml code. Phase 8 depends on 1.4 being
-complete.
+**Notes:**
+- Phase 1.4 is high priority—enables adding new types by editing .tart files instead of OCaml
+- Phase 2.4 enables row-polymorphic alist/plist types (Spec 11)—improves c-core typing accuracy
+- Phase 8 depends on 1.4 being complete
 
 ---
 
