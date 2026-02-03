@@ -214,6 +214,63 @@ plists `(:name "Alice" :age 30)`. Row polymorphism types these patterns directly
 
 **Verify:** See Spec 11 for detailed test scenarios.
 
+### 2.5 Funcall and Apply Typing (Spec 34)
+
+**Status:** NOT STARTED
+
+**Goal:** Type `funcall` and `apply` accurately instead of returning `any`.
+These are fundamental Lisp primitives that currently lose all type information.
+
+**Key insight:** `funcall`/`apply` must NOT have signatures—they need special
+type-checker handling that extracts the return type from the function argument.
+
+**Requirements from Spec 34:**
+
+| Req | Description | Status |
+|-----|-------------|--------|
+| R1 | Dual namespace (function vs variable bindings) | Not started |
+| R2 | `#'name` and `'name` lookup in function namespace | Not started |
+| R3 | Variable references use variable namespace | Not started |
+| R4 | Funcall type checking (infer f, verify args, return result type) | Not started |
+| R5 | Style warning for `'name` vs `#'name` in funcall | Not started |
+| R6 | Funcall-specific error messages | Not started |
+| R7 | Apply with `&rest` functions | Not started |
+| R8 | Apply with fixed-arity functions (tuple argument) | Not started |
+| R9 | Tuple `<:` list subtyping | Not started |
+| R10 | Context-sensitive tuple inference for list literals | Not started |
+| R11 | Union function types (dynamic dispatch) | Not started |
+| R12 | Occurrence typing for type predicates | Not started |
+| R13 | Thread narrowed types through funcall | Not started |
+| R14 | Never widen to top type (error instead) | Not started |
+
+**Example of correct typing:**
+
+```elisp
+(defun add1 (x) (+ x 1))    ; add1 : (-> (Int) Int)
+(funcall #'add1 5)          ; result: Int (not any!)
+
+(apply #'+ '(1 2 3))        ; + : (-> (&rest Int) Int), result: Int
+(apply #'cons '(1 (2 3)))   ; infer tuple (Tuple Int (List Int)), result: (List Int)
+```
+
+**Anti-pattern (current state):**
+```elisp
+;; WRONG - this is what we have now, loses type info
+(defun funcall (any &rest any) -> any)
+```
+
+**Files likely affected:**
+- `lib/typing/type_env.ml` — Add separate function namespace
+- `lib/typing/infer.ml` — Special-case funcall/apply, occurrence typing
+- `lib/typing/unify.ml` — Tuple <: list subtyping
+- `lib/typing/builtin_types.ml` — Remove funcall/apply signatures entirely
+
+**Note:** Spec 34 lists HKT (Spec 17) as a dependency, but most requirements
+don't need it. HKT is only needed for the most polymorphic cases. Basic
+funcall/apply typing can proceed without HKT.
+
+**Verify:** See Spec 34 for detailed test scenarios.
+
 ---
 
 ## Phase 3: LSP Infrastructure
@@ -532,6 +589,7 @@ Phase 4.1 (Directory setup) → Phase 4.2 (Verbose coverage) → Phase 4.3 (Crea
 Phase 4.4 (BUGS.md) ← Phase 4.3
 
 Phase 2.4 (Row polymorphism) — after Phase 2.1, enables precise alist/plist typing
+Phase 2.5 (Funcall/apply) — enables accurate typing of funcall/apply (currently return any)
 
 Phase 5.* (Error quality) — parallel, after Phase 2
 Phase 6.* (Testing) — parallel, after Phase 1
