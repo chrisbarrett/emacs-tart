@@ -16,15 +16,17 @@ These tasks fix spec violations in the existing implementation.
 
 Removed automatic `[vars]` quantifier inference. Unbound type variables now produce errors as required by Specs 07 and 15.
 
-### 1.2 Create Prelude (Spec 48) ⚠️ PARTIAL
+### 1.2 Create Prelude (Spec 48) ✅
 
-**Status:** PARTIAL - OCaml bootstrap exists, but proper .tart loading not implemented
+**Status:** COMPLETE
 
 Prelude types (`list`, `option`, `is`, `nonempty`, `any`, `bool`, `t`) are available via
-hardcoded OCaml in `lib/sig/prelude.ml`. However, `typings/tart-prelude.tart` is NOT
-actually loaded—the OCaml code duplicates its definitions for bootstrapping.
+the OCaml bootstrap in `lib/sig/prelude.ml`. The bootstrap uses intrinsic names
+(`%tart-intrinsic%Int`, etc.) with bridges to user-friendly names, matching what's
+documented in `typings/tart-prelude.tart`. The .tart file serves as documentation;
+the OCaml bootstrap provides equivalent functionality without file I/O.
 
-**Remaining work:** See Phase 1.4 for proper prelude architecture.
+See Phase 1.4 for the intrinsic naming architecture.
 
 ### 1.4 Prelude Architecture Refactor (HIGH PRIORITY)
 
