@@ -16,11 +16,98 @@ These tasks fix spec violations in the existing implementation.
 
 Removed automatic `[vars]` quantifier inference. Unbound type variables now produce errors as required by Specs 07 and 15.
 
-### 1.2 Create Prelude (Spec 48) ✅
+### 1.2 Create Prelude (Spec 48) ⚠️ PARTIAL
 
-**Status:** COMPLETE (commits 927cfb3, b277070, 2e148ad)
+**Status:** PARTIAL - OCaml bootstrap exists, but proper .tart loading not implemented
 
-Prelude types (`list`, `option`, `is`, `nonempty`, `any`, `bool`, `t`) are now implicitly available. Located at `typings/tart-prelude.tart`.
+Prelude types (`list`, `option`, `is`, `nonempty`, `any`, `bool`, `t`) are available via
+hardcoded OCaml in `lib/sig/prelude.ml`. However, `typings/tart-prelude.tart` is NOT
+actually loaded—the OCaml code duplicates its definitions for bootstrapping.
+
+**Remaining work:** See Phase 1.4 for proper prelude architecture.
+
+### 1.4 Prelude Architecture Refactor (HIGH PRIORITY)
+
+**Status:** NOT STARTED
+
+**Problem:** The prelude is currently implemented as hardcoded OCaml (`lib/sig/prelude.ml`)
+that duplicates what should be in `typings/tart-prelude.tart`. The .tart file exists but
+isn't loaded. This conflates intrinsics (built into the type checker) with user-level
+type definitions (which should be in .tart files).
+
+**Goal:** Clean separation between intrinsics and user-level types:
+1. **Intrinsics** — Primitive types built into the type checker, with distinctive names
+   that can't occur in real elisp (e.g., `%tart-intrinsic%Int`, `%tart-intrinsic%List`)
+2. **tart-prelude.tart** — Actually loaded by the system, bridges intrinsic names to
+   user-friendly names
+3. **Everything else** — Defined in .tart files on top of the prelude
+
+**Intrinsic naming convention:** Use `%tart-intrinsic%` prefix for intrinsics:
+- `%tart-intrinsic%Int`, `%tart-intrinsic%Float`, `%tart-intrinsic%Num` — numeric types
+- `%tart-intrinsic%String`, `%tart-intrinsic%Symbol`, `%tart-intrinsic%Keyword` — atom types
+- `%tart-intrinsic%Nil`, `%tart-intrinsic%T`, `%tart-intrinsic%Truthy`, `%tart-intrinsic%Never` — special types
+- `%tart-intrinsic%List`, `%tart-intrinsic%Vector`, `%tart-intrinsic%Pair`, `%tart-intrinsic%HashTable` — parameterized containers
+
+**tart-prelude.tart becomes:**
+```lisp
+;; Bridge intrinsics to user-level names
+(type int %tart-intrinsic%Int)
+(type float %tart-intrinsic%Float)
+(type num %tart-intrinsic%Num)
+(type string %tart-intrinsic%String)
+(type symbol %tart-intrinsic%Symbol)
+(type keyword %tart-intrinsic%Keyword)
+(type nil %tart-intrinsic%Nil)
+(type truthy %tart-intrinsic%Truthy)
+(type never %tart-intrinsic%Never)
+
+;; Parameterized intrinsics
+(type list [a] (%tart-intrinsic%List a))
+(type vector [a] (%tart-intrinsic%Vector a))
+(type pair [a b] (%tart-intrinsic%Pair a b))
+(type hash-table [k v] (%tart-intrinsic%HashTable k v))
+
+;; Derived types (built on intrinsics)
+(type t 't)
+(type any (truthy | nil))
+(type bool (t | nil))
+(type option [(a : truthy)] (a | nil))
+(type is [a] (a - nil))
+(type nonempty [a] (is (list a)))
+
+;; Opaque types (no intrinsic backing)
+(type bool-vector)
+(type char-table)
+```
+
+**Changes required:**
+
+1. **lib/core/types.ml** — Rename `Prim` constants to use `%tart-intrinsic%` prefix:
+   - `int` → `TCon "%tart-intrinsic%Int"` (or keep internal names, just change how they're referenced)
+
+2. **lib/sig/sig_loader.ml** — Remove `sig_name_to_prim` hardcoded mappings. Instead:
+   - `%tart-intrinsic%Foo` in .tart → `TCon "%tart-intrinsic%Foo"` (passed through as-is)
+   - Unknown names → look up in prelude/aliases/opaques
+
+3. **lib/sig/prelude.ml** — Replace hardcoded aliases with code that:
+   - Locates `typings/tart-prelude.tart`
+   - Parses and loads it as the prelude context
+   - Caches the result
+
+4. **lib/sig/search_path.ml** — Ensure prelude is loaded before other .tart files
+
+5. **typings/tart-prelude.tart** — Update with intrinsic bridges and opaque types
+
+**Benefits:**
+- Clear separation of concerns (intrinsics vs user types)
+- Prelude is self-documenting .tart, not hidden OCaml
+- Adding new types (like `bool-vector`) is just editing the .tart file
+- Intrinsic prefix makes it obvious what's built-in vs user-defined
+
+**Verify:**
+- `./tart check` works with prelude loaded from .tart file
+- `bool-vector` and `char-table` available after adding to prelude
+- Error messages show user-friendly names, not `%tart-intrinsic%` prefixed intrinsics
 
 ### 1.3 Emacs Version Detection (Spec 24) ✅
 
@@ -355,11 +442,13 @@ fi
 ## Dependency Order
 
 ```
-Phase 1.1 (Remove inference) ✅ ──┬──→ Phase 1.2 (Prelude) ✅
-                                  │
+Phase 1.1 (Remove inference) ✅ ──┬──→ Phase 1.2 (Prelude bootstrap) ⚠️
+                                  │              │
+                                  │              └──→ Phase 1.4 (Prelude architecture) ★ HIGH PRIORITY
+                                  │                          │
                                   └──→ Phase 2.1 (Type subtraction) ✅
-                                            │
-Phase 1.3 (Version detection) ─────────────┬┴──→ Phase 4.3 (Create typings)
+                                            │               │
+Phase 1.3 (Version detection) ─────────────┬┴───────────────┴──→ Phase 4.3 (Create typings)
                                            │
 Phase 3.1 (Sig sync) ←── Phase 3.2 (Dep graph)
                                            │
@@ -372,15 +461,21 @@ Phase 4.4 (BUGS.md) ← Phase 4.3
 Phase 5.* (Error quality) — parallel, after Phase 2
 Phase 6.* (Testing) — parallel, after Phase 1
 Phase 7.* (CLI polish) — after core functionality
+Phase 8.* (Remove builtins) — after Phase 1.4
 ```
+
+**Note:** Phase 1.4 is high priority because it enables adding new types (like `bool-vector`,
+`char-table`) by editing .tart files instead of OCaml code. Phase 8 depends on 1.4 being
+complete.
 
 ---
 
 ## Acceptance Criteria
 
-**Milestone 1: Foundation** ✅
+**Milestone 1: Foundation** ⚠️
 - [x] Unbound type variables produce errors (no inference)
-- [x] Prelude types available without import
+- [x] Prelude types available without import (via OCaml bootstrap)
+- [ ] Prelude loaded from .tart file with intrinsic bridging (Phase 1.4)
 - [x] Emacs version auto-detected
 
 **Milestone 2: Core Types** ✅
@@ -517,11 +612,21 @@ This requires special-case handling in the type checker, not a signature.
 
 ### 8.3 Add Missing Types and Signatures
 
-**Missing primitive types:**
+**Add opaque types to prelude:**
 
-Add `BoolVector` and `CharTable` to `lib/core/types.ml` Prim module, and
-corresponding lowercase aliases to the prelude. These are needed for precise
-typing of sequence operations like `length`.
+Add `bool-vector` and `char-table` as opaque types in `typings/tart-prelude.tart`:
+```lisp
+;; Opaque types (no intrinsic backing needed)
+(type bool-vector)
+(type char-table)
+```
+
+These don't need to be intrinsics—they have no special type-checker behavior
+(no subtyping rules, no special truthiness handling). As opaque types, they
+produce `TCon` values that only unify with themselves.
+
+**Prerequisite:** Phase 1.4 (Prelude Architecture Refactor) must be complete for
+`tart-prelude.tart` to actually be loaded by the system.
 
 **Fix `length` signature in `fns.tart`:**
 
@@ -625,8 +730,10 @@ Run `grep '-> any)' typings/emacs/31.0/c-core/*.tart` and review each case.
 
 ### Acceptance Criteria
 
+**Prerequisite:** Phase 1.4 (Prelude Architecture Refactor) must be complete.
+
 - [ ] `builtin_types.ml` is empty (returns `Type_env.empty`)
-- [ ] `BoolVector` and `CharTable` primitive types added
+- [ ] `bool-vector` and `char-table` opaque types added to `tart-prelude.tart`
 - [ ] `length` uses precise union type
 - [ ] All `-> any` return types audited and justified or fixed
 - [ ] All tests pass
