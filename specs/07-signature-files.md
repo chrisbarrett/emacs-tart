@@ -16,6 +16,18 @@ enabling type checking at module boundaries.
 - **Declarative**: No executable code; pure type declarations
 - **Extensible**: Support type aliases, struct imports, bounded quantifiers
 
+## Loading Sequence
+
+| file                                       | defines                                    |
+| ------------------------------------------ | ------------------------------------------ |
+| `typings/tart-prelude.tart`                | userspace names for compiler intrinsics    |
+| `typings/emacs/{version}/c-core/*.tart`    | data structures, functions, variables, etc |
+| `typings/emacs/{version}/lisp-core/*.tart` | functions, variables, etc                  |
+
+Primitives without special type-checker support → opaque types.
+
+`(include)` de-duplicates identical definitions across emacs versions.
+
 ## Output
 
 ```
@@ -26,9 +38,8 @@ tart/
 │       ├── sig_parser.ml  ; Parse .tart to AST
 │       └── sig_loader.ml  ; Load signatures into type env
 ├── typings/
-│   ├── builtins.tart       ; Emacs primitives
-│   ├── cl-lib.tart         ; cl-lib signatures
-│   └── seq.tart            ; seq.el signatures
+│   ├── tart-prelude.tart   ; Implicit prelude (Spec 48)
+│   └── emacs/{version}/    ; Versioned core typings (Spec 24)
 └── test/
     └── sig/
         └── sig_test.ml

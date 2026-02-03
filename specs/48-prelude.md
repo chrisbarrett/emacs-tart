@@ -174,10 +174,16 @@ lib/sig/
 
 **Given** the signature loading process
 **When** typings are loaded
-**Then** prelude loads first, before:
-1. Version-specific Emacs typings (`typings/emacs/{version}/`)
-2. User typings (via `tart-type-path`)
-3. Project-local sibling `.tart` files
+**Then** they load in this sequence:
+
+| file                                       | defines                                    |
+| ------------------------------------------ | ------------------------------------------ |
+| `typings/tart-prelude.tart`                | userspace names for compiler intrinsics    |
+| `typings/emacs/{version}/c-core/*.tart`    | data structures, functions, variables, etc |
+| `typings/emacs/{version}/lisp-core/*.tart` | functions, variables, etc                  |
+
+After these, user typings (via `tart-type-path`) and project-local sibling
+`.tart` files load.
 
 **Verify:** Prelude types available in all subsequent signature files
 

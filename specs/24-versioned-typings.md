@@ -20,6 +20,18 @@ Auto-detect Emacs version, load matching typings.
 | Override         | `--emacs-version` flag for explicit selection   |
 | Bundled          | Ship in tart repo; separate repo is future work |
 
+## Loading Sequence
+
+| file                                       | defines                                    |
+| ------------------------------------------ | ------------------------------------------ |
+| `typings/tart-prelude.tart`                | userspace names for compiler intrinsics    |
+| `typings/emacs/{version}/c-core/*.tart`    | data structures, functions, variables, etc |
+| `typings/emacs/{version}/lisp-core/*.tart` | functions, variables, etc                  |
+
+Primitives without special type-checker support → opaque types.
+
+`(include)` de-duplicates identical definitions across emacs versions.
+
 ## Directory Structure
 
 ```

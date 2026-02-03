@@ -19,6 +19,18 @@ Agents systematically create type signatures for all Emacs C primitives, with qu
 | Documented gaps | Untypeable items logged to BUGS.md |
 | Precise types | Avoid `any`; use unions of specific types (see Spec 48) |
 
+## Loading Sequence
+
+| file                                       | defines                                    |
+| ------------------------------------------ | ------------------------------------------ |
+| `typings/tart-prelude.tart`                | userspace names for compiler intrinsics    |
+| `typings/emacs/{version}/c-core/*.tart`    | data structures, functions, variables, etc |
+| `typings/emacs/{version}/lisp-core/*.tart` | functions, variables, etc                  |
+
+Primitives without special type-checker support → opaque types.
+
+`(include)` de-duplicates identical definitions across emacs versions.
+
 ## Directory Structure
 
 ```

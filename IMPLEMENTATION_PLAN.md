@@ -6,6 +6,24 @@
 
 ---
 
+## Type Definitions
+
+OCaml defines minimal intrinsics; everything else bootstraps in user-land.
+
+Loading sequence:
+
+| file                                       | defines                                    |
+| ------------------------------------------ | ------------------------------------------ |
+| `typings/tart-prelude.tart`                | userspace names for compiler intrinsics    |
+| `typings/emacs/{version}/c-core/*.tart`    | data structures, functions, variables, etc |
+| `typings/emacs/{version}/lisp-core/*.tart` | functions, variables, etc                  |
+
+Primitives without special type-checker support → opaque types.
+
+`(include)` de-duplicates identical definitions across emacs versions.
+
+---
+
 ## Phase 1: Foundation Fixes (Critical Refactoring)
 
 These tasks fix spec violations in the existing implementation.
