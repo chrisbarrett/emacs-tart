@@ -455,8 +455,10 @@ let check_module ~(config : config) ~(filename : string)
                       | Env.Mono ty -> ty
                       | Env.Poly (vars, ty) -> Types.TForall (vars, ty)
                     in
-                    (* Get the declared type from the signature *)
-                    let declared = Loader.load_defun d in
+                    (* Get the declared type from the signature, using prelude
+                       context to resolve primitive type names to intrinsics *)
+                    let prelude_ctx = Sig.Prelude.prelude_type_context () in
+                    let declared = Loader.load_defun_with_ctx prelude_ctx d in
                     let declared_ty =
                       match declared with
                       | Env.Mono ty -> ty

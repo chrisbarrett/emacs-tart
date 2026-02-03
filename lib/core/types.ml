@@ -86,48 +86,88 @@ let rec repr ty =
 (** Check if a type is a type variable (after following links) *)
 let is_tvar ty = match repr ty with TVar _ -> true | _ -> false
 
-(** Primitive type constants *)
+(** Intrinsic prefix for built-in types.
+
+    All built-in types use this prefix to distinguish them from user-defined
+    types. The prelude (tart-prelude.tart) bridges these intrinsic names to
+    user-friendly names like `int`, `string`, etc. *)
+let intrinsic_prefix = "%tart-intrinsic%"
+
+(** Create an intrinsic type name *)
+let intrinsic name = intrinsic_prefix ^ name
+
+(** Check if a type name is an intrinsic *)
+let is_intrinsic_name name =
+  String.length name > String.length intrinsic_prefix
+  && String.sub name 0 (String.length intrinsic_prefix) = intrinsic_prefix
+
+(** Get the base name from an intrinsic (e.g., "%tart-intrinsic%Int" -> "Int")
+*)
+let intrinsic_base_name name =
+  if is_intrinsic_name name then
+    String.sub name
+      (String.length intrinsic_prefix)
+      (String.length name - String.length intrinsic_prefix)
+  else name
+
+(** Convert intrinsic base name to user-friendly display name. E.g., "HashTable"
+    -> "hash-table", "Int" -> "int" *)
+let intrinsic_display_name base_name =
+  match base_name with
+  | "HashTable" -> "hash-table"
+  | other -> String.lowercase_ascii other
+
+(** Primitive type constants.
+
+    These use the %tart-intrinsic% prefix to distinguish them from user types.
+    The prelude bridges these to user-friendly names. *)
 module Prim = struct
-  let int = TCon "Int"
-  let float = TCon "Float"
-  let num = TCon "Num"
-  let string = TCon "String"
-  let symbol = TCon "Symbol"
-  let keyword = TCon "Keyword"
-  let nil = TCon "Nil"
-  let t = TCon "T"
-  let truthy = TCon "Truthy"
+  let int = TCon (intrinsic "Int")
+  let float = TCon (intrinsic "Float")
+  let num = TCon (intrinsic "Num")
+  let string = TCon (intrinsic "String")
+  let symbol = TCon (intrinsic "Symbol")
+  let keyword = TCon (intrinsic "Keyword")
+  let nil = TCon (intrinsic "Nil")
+  let t = TCon (intrinsic "T")
+  let truthy = TCon (intrinsic "Truthy")
   let bool = TUnion [ t; nil ]
   let any = TUnion [ truthy; nil ]
-  let never = TCon "Never"
+  let never = TCon (intrinsic "Never")
 end
 
 (** Construct common types *)
-let list_of elem = TApp (TCon "List", [ elem ])
+let list_of elem = TApp (TCon (intrinsic "List"), [ elem ])
 
-let vector_of elem = TApp (TCon "Vector", [ elem ])
+let vector_of elem = TApp (TCon (intrinsic "Vector"), [ elem ])
 let option_of elem = TUnion [ elem; Prim.nil ]
-let pair_of a b = TApp (TCon "Pair", [ a; b ])
-let hash_table_of k v = TApp (TCon "HashTable", [ k; v ])
+let pair_of a b = TApp (TCon (intrinsic "Pair"), [ a; b ])
+let hash_table_of k v = TApp (TCon (intrinsic "HashTable"), [ k; v ])
 
 (** Check if a type is the "any" type (truthy | nil). Used in unification to
     maintain top-type semantics. *)
 let is_any ty =
+  let truthy_name = intrinsic "Truthy" in
+  let nil_name = intrinsic "Nil" in
   match repr ty with
   | TUnion [ t1; t2 ] -> (
       match (repr t1, repr t2) with
-      | TCon "Truthy", TCon "Nil" | TCon "Nil", TCon "Truthy" -> true
+      | TCon n1, TCon n2
+        when (n1 = truthy_name && n2 = nil_name)
+             || (n1 = nil_name && n2 = truthy_name) ->
+          true
       | _ -> false)
   | _ -> false
 
 (** Check if a type is an option type (a | nil) and return the inner type. Used
     in diagnostics to detect nullable types. *)
 let is_option ty =
+  let nil_name = intrinsic "Nil" in
   match repr ty with
   | TUnion [ t1; t2 ] -> (
       match (repr t1, repr t2) with
-      | _, TCon "Nil" -> Some t1
-      | TCon "Nil", _ -> Some t2
+      | _, TCon n when n = nil_name -> Some t1
+      | TCon n, _ when n = nil_name -> Some t2
       | _ -> None)
   | _ -> None
 
@@ -140,14 +180,21 @@ let arrow params ret = TArrow (List.map (fun p -> PPositional p) params, ret)
 (** Create a simple polymorphic type *)
 let forall vars ty = TForall (vars, ty)
 
-(** Pretty-print a type to string *)
+(** Pretty-print a type to string.
+
+    For user-facing output, intrinsic types are shown with their base name
+    (lowercase) rather than the internal %tart-intrinsic% prefix. *)
 let rec to_string ty =
   match repr ty with
   | TVar tv -> (
       match !tv with
       | Unbound (id, _) -> Printf.sprintf "'_%d" id
       | Link _ -> failwith "repr should have followed link")
-  | TCon name -> name
+  | TCon name ->
+      (* Show user-friendly names for intrinsics *)
+      if is_intrinsic_name name then
+        intrinsic_display_name (intrinsic_base_name name)
+      else name
   | TApp (con, args) ->
       Printf.sprintf "(%s %s)" (to_string con)
         (String.concat " " (List.map to_string args))
@@ -241,22 +288,29 @@ let rec is_truthy ty =
       (* Unresolved type variables: we don't know yet, so conservatively false.
          During unification, this will be resolved. *)
       false
-  | TCon name -> (
-      match name with
-      | "Nil" -> false (* Nil is the falsy value *)
-      (* All other primitives are truthy *)
-      | "Int" | "Float" | "Num" | "String" | "Symbol" | "Keyword" | "T"
-      | "Truthy" | "Never" ->
-          true
-      (* Unknown type constants: conservatively assume truthy
-         (user-defined types without Nil) *)
-      | _ -> true)
+  | TCon name ->
+      (* Check if it's the Nil intrinsic - only falsy type *)
+      if name = intrinsic "Nil" then false
+        (* Check if it's a known truthy intrinsic *)
+      else if is_intrinsic_name name then
+        let base = intrinsic_base_name name in
+        match base with
+        | "Int" | "Float" | "Num" | "String" | "Symbol" | "Keyword" | "T"
+        | "Truthy" | "Never" | "List" | "Vector" | "Pair" | "HashTable" ->
+            true
+        | _ -> true (* Unknown intrinsics: assume truthy *)
+      else
+        (* User-defined types: conservatively assume truthy *)
+        true
   | TApp (con, _args) -> (
       match repr con with
-      | TCon ("List" | "Vector" | "Pair" | "HashTable") ->
-          (* Container types are truthy - empty list is still non-nil in Elisp.
-             Note: This differs from some languages where empty containers are falsy. *)
-          true
+      | TCon name when is_intrinsic_name name -> (
+          (* Intrinsic container types are truthy *)
+          let base = intrinsic_base_name name in
+          match base with
+          | "List" | "Vector" | "Pair" | "HashTable" -> true
+          | _ -> true
+          (* Unknown intrinsic apps: assume truthy *))
       | TCon _ ->
           (* Unknown type constructors: assume truthy *)
           true

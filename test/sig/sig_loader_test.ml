@@ -37,17 +37,25 @@ let parse_sig_str_no_validate ?(module_name = "test") s =
   | Error _ -> failwith "Parse error in test"
   | Ok sig_file -> sig_file
 
-(** Helper to parse a signature string and load it into an environment *)
+(** Helper to parse a signature string and load it into an environment. Uses
+    prelude context so that primitive type names (int, string, etc.) are
+    recognized via prelude aliases. *)
 let load_sig_str ?(env = Type_env.empty) s =
   let sig_file = parse_sig_str s in
-  Sig_loader.load_signature env sig_file
+  let prelude_ctx = Prelude.prelude_type_context () in
+  let prelude_type_names = Prelude.prelude_type_names in
+  Sig_loader.load_signature_with_resolver ~prelude_ctx ~prelude_type_names
+    ~resolver:Sig_loader.no_resolver env sig_file
 
 (** Helper to load a signature with a module resolver. Note: Validation is
     skipped because external types from opened/included modules aren't known at
-    parse time. *)
+    parse time. Uses prelude context for primitive types. *)
 let load_sig_str_with_resolver ?(env = Type_env.empty) ~resolver s =
   let sig_file = parse_sig_str_no_validate s in
-  Sig_loader.load_signature_with_resolver ~resolver env sig_file
+  let prelude_ctx = Prelude.prelude_type_context () in
+  let prelude_type_names = Prelude.prelude_type_names in
+  Sig_loader.load_signature_with_resolver ~prelude_ctx ~prelude_type_names
+    ~resolver env sig_file
 
 (** Helper to parse and type-check an expression *)
 let check_expr_str ~env s =
@@ -196,7 +204,7 @@ let test_defun_signature_used_for_calls () =
   (* Call with correct types should succeed *)
   let ty, errors = check_expr_str ~env "(my-add 1 2)" in
   Alcotest.(check int) "no type errors" 0 (List.length errors);
-  Alcotest.(check string) "result type is Int" "Int" (Types.to_string ty)
+  Alcotest.(check string) "result type is int" "int" (Types.to_string ty)
 
 (** Test that defun signature causes type error with wrong argument types. R5:
     Type checker uses loaded signature to detect type errors. *)
@@ -215,11 +223,11 @@ let test_poly_defun_signature () =
   (* Call with int *)
   let ty1, errors1 = check_expr_str ~env "(identity 42)" in
   Alcotest.(check int) "no errors for int" 0 (List.length errors1);
-  Alcotest.(check string) "returns Int" "Int" (Types.to_string ty1);
+  Alcotest.(check string) "returns int" "int" (Types.to_string ty1);
   (* Call with string *)
   let ty2, errors2 = check_expr_str ~env "(identity \"hello\")" in
   Alcotest.(check int) "no errors for string" 0 (List.length errors2);
-  Alcotest.(check string) "returns String" "String" (Types.to_string ty2)
+  Alcotest.(check string) "returns string" "string" (Types.to_string ty2)
 
 (** Test that defvar declarations are loaded and used for variable references.
     R6: "Verify: References to my-var have type string" *)
@@ -230,7 +238,7 @@ let test_defvar_type_used () =
   let ty, errors = check_expr_str ~env "my-config" in
   Alcotest.(check int) "no type errors" 0 (List.length errors);
   Alcotest.(check string)
-    "variable type is String" "String" (Types.to_string ty)
+    "variable type is string" "string" (Types.to_string ty)
 
 (** Test that defvar with complex type works. R6: Function-typed variables are
     usable. *)
@@ -240,7 +248,7 @@ let test_defvar_function_type () =
   (* Variable is a function, can be called *)
   let ty, errors = check_expr_str ~env "(my-handler \"test\")" in
   Alcotest.(check int) "no type errors" 0 (List.length errors);
-  Alcotest.(check string) "result type is Int" "Int" (Types.to_string ty)
+  Alcotest.(check string) "result type is int" "int" (Types.to_string ty)
 
 (** Test that multiple declarations can be loaded together. R5, R6: Both defun
     and defvar work in the same signature. *)
@@ -256,11 +264,11 @@ let test_combined_declarations () =
   let ty1, errors1 = check_expr_str ~env "debug-mode" in
   Alcotest.(check int) "no errors for defvar" 0 (List.length errors1);
   Alcotest.(check string)
-    "defvar type is Bool" "(Or T Nil)" (Types.to_string ty1);
+    "defvar type is bool" "(Or t nil)" (Types.to_string ty1);
   (* Check defun *)
   let ty2, errors2 = check_expr_str ~env "(process \"input\")" in
   Alcotest.(check int) "no errors for defun" 0 (List.length errors2);
-  Alcotest.(check string) "defun result is Int" "Int" (Types.to_string ty2)
+  Alcotest.(check string) "defun result is int" "int" (Types.to_string ty2)
 
 (** {1 Type Alias Tests (R7, R8)}
 
@@ -279,7 +287,7 @@ let test_simple_type_alias () =
   (* Function parameter should accept (list int) *)
   let ty, errors = check_expr_str ~env "(sum (list 1 2 3))" in
   Alcotest.(check int) "no type errors" 0 (List.length errors);
-  Alcotest.(check string) "result type is Int" "Int" (Types.to_string ty)
+  Alcotest.(check string) "result type is int" "int" (Types.to_string ty)
 
 (** Test type alias used in return type. R7: Alias in return position expands
     correctly. *)
@@ -293,8 +301,8 @@ let test_type_alias_return () =
   let env = load_sig_str sig_src in
   let ty, errors = check_expr_str ~env "(make-ints)" in
   Alcotest.(check int) "no type errors" 0 (List.length errors);
-  (* Return type should be (List Int) after expansion *)
-  Alcotest.(check string) "result is list int" "(List Int)" (Types.to_string ty)
+  (* Return type should be (list int) after expansion *)
+  Alcotest.(check string) "result is list int" "(list int)" (Types.to_string ty)
 
 (** Test parameterized type alias. R8: (result int string) expands with
     substitution. *)
@@ -308,9 +316,9 @@ let test_parameterized_type_alias () =
   let env = load_sig_str sig_src in
   let ty, errors = check_expr_str ~env "(parse \"42\")" in
   Alcotest.(check int) "no type errors" 0 (List.length errors);
-  (* Should expand to union type (Or (ok Int) (err String)) *)
+  (* Should expand to union type (Or (ok int) (err string)) *)
   Alcotest.(check string)
-    "result is union" "(Or (ok Int) (err String))" (Types.to_string ty)
+    "result is union" "(Or (ok int) (err string))" (Types.to_string ty)
 
 (** Test type alias in variable declaration. R7: defvar with alias type works.
 *)
@@ -325,24 +333,26 @@ let test_type_alias_defvar () =
   let ty, errors = check_expr_str ~env "names" in
   Alcotest.(check int) "no type errors" 0 (List.length errors);
   Alcotest.(check string)
-    "variable type is list string" "(List String)" (Types.to_string ty)
+    "variable type is list string" "(list string)" (Types.to_string ty)
 
 (** Test nested type alias expansion. R7, R8: Alias referencing another alias.
+    Note: We use `my-pair` instead of `pair` since `pair` is now a prelude type.
 *)
 let test_nested_type_alias () =
   let sig_src =
     {|
-    (type pair [a b] (tuple a b))
-    (type int-pair (pair int int))
+    (type my-pair [a b] (tuple a b))
+    (type int-pair (my-pair int int))
     (defun make-pair () -> int-pair)
   |}
   in
   let env = load_sig_str sig_src in
   let ty, errors = check_expr_str ~env "(make-pair)" in
   Alcotest.(check int) "no type errors" 0 (List.length errors);
-  (* int-pair -> (pair int int) -> (tuple int int) *)
+  (* int-pair -> (my-pair int int) -> (tuple int int) *)
+  (* Type names are lowercase for intrinsics *)
   Alcotest.(check string)
-    "result is tuple" "(Tuple Int Int)" (Types.to_string ty)
+    "result is tuple" "(Tuple int int)" (Types.to_string ty)
 
 (** Test type alias with polymorphic function. R7, R8: Alias works within
     polymorphic signatures. Note: This test checks that alias expansion in
@@ -358,8 +368,8 @@ let test_type_alias_with_poly_fn () =
   let env = load_sig_str sig_src in
   let ty, errors = check_expr_str ~env "(wrap 42)" in
   Alcotest.(check int) "no type errors" 0 (List.length errors);
-  (* (wrapper Int) expands to (List Int) *)
-  Alcotest.(check string) "result is list int" "(List Int)" (Types.to_string ty)
+  (* (wrapper int) expands to (list int) *)
+  Alcotest.(check string) "result is list int" "(list int)" (Types.to_string ty)
 
 (** Test type alias in parameter position with polymorphic function. This
     verifies that aliases are expanded in parameter position. Note: We check the
@@ -378,11 +388,11 @@ let test_type_alias_in_param_position () =
   | None -> Alcotest.fail "process-seq not found"
   | Some scheme ->
       let scheme_str = Type_env.scheme_to_string scheme in
-      (* Should contain "List" not "seq" *)
+      (* Should contain "list" not "seq" *)
       Alcotest.(check bool)
         "scheme contains List" true
         (try
-           let _ = Str.search_forward (Str.regexp_string "List") scheme_str 0 in
+           let _ = Str.search_forward (Str.regexp_string "list") scheme_str 0 in
            true
          with Not_found -> false);
       Alcotest.(check bool)
@@ -504,7 +514,7 @@ let test_opaque_with_polymorphism () =
   (* Boxing and unboxing should preserve the inner type *)
   let ty, errors = check_expr_str ~env "(unbox (box 42))" in
   Alcotest.(check int) "no type errors" 0 (List.length errors);
-  Alcotest.(check string) "unbox returns inner type" "Int" (Types.to_string ty)
+  Alcotest.(check string) "unbox returns inner type" "int" (Types.to_string ty)
 
 (** {1 Open Directive Tests (R12)}
 
@@ -536,11 +546,11 @@ let test_open_imports_type_aliases () =
   | None -> Alcotest.fail "process-seq not found"
   | Some scheme ->
       let scheme_str = Type_env.scheme_to_string scheme in
-      (* The scheme should contain "List" (the expanded type), not "seq" *)
+      (* The scheme should contain "list" (the expanded type), not "seq" *)
       Alcotest.(check bool)
         "seq alias expanded to List" true
         (try
-           let _ = Str.search_forward (Str.regexp_string "List") scheme_str 0 in
+           let _ = Str.search_forward (Str.regexp_string "list") scheme_str 0 in
            true
          with Not_found -> false);
       Alcotest.(check bool)
@@ -703,11 +713,11 @@ let test_include_reexports_types () =
   | None -> Alcotest.fail "make-list should be re-exported via include"
   | Some scheme ->
       let scheme_str = Type_env.scheme_to_string scheme in
-      (* int-list should expand to (List Int) *)
+      (* int-list should expand to (list int) *)
       Alcotest.(check bool)
         "make-list returns expanded type" true
         (try
-           let _ = Str.search_forward (Str.regexp_string "List") scheme_str 0 in
+           let _ = Str.search_forward (Str.regexp_string "list") scheme_str 0 in
            true
          with Not_found -> false));
   (* Verify sum-list was loaded with expanded alias *)
@@ -715,11 +725,11 @@ let test_include_reexports_types () =
   | None -> Alcotest.fail "sum-list not found"
   | Some scheme ->
       let scheme_str = Type_env.scheme_to_string scheme in
-      (* int-list should expand to (List Int) *)
+      (* int-list should expand to (list int) *)
       Alcotest.(check bool)
         "sum-list param has expanded type" true
         (try
-           let _ = Str.search_forward (Str.regexp_string "List") scheme_str 0 in
+           let _ = Str.search_forward (Str.regexp_string "list") scheme_str 0 in
            true
          with Not_found -> false)
 
@@ -744,7 +754,7 @@ let test_include_reexports_variables () =
   (* default-value should be re-exported *)
   let ty, errors = check_expr_str ~env "default-value" in
   Alcotest.(check int) "no type errors" 0 (List.length errors);
-  Alcotest.(check string) "variable type is Int" "Int" (Types.to_string ty)
+  Alcotest.(check string) "variable type is int" "int" (Types.to_string ty)
 
 (** Test that include handles opaque types correctly. R13: Opaque types preserve
     their module-qualified names *)
@@ -908,22 +918,22 @@ let test_import_struct_generates_predicate () =
   | None -> Alcotest.fail "person-p not found"
   | Some scheme ->
       let scheme_str = Type_env.scheme_to_string scheme in
-      (* Should be (Or Truthy Nil) -> (Or T Nil) *)
+      (* Should be (Or truthy nil) -> (Or t nil) *)
       Alcotest.(check bool)
         "predicate takes Any" true
         (try
            let _ =
              Str.search_forward
-               (Str.regexp_string "(Or Truthy Nil)")
+               (Str.regexp_string "(Or truthy nil)")
                scheme_str 0
            in
            true
          with Not_found -> false);
       Alcotest.(check bool)
-        "predicate returns Bool" true
+        "predicate returns bool" true
         (try
            let _ =
-             Str.search_forward (Str.regexp_string "(Or T Nil)") scheme_str 0
+             Str.search_forward (Str.regexp_string "(Or t nil)") scheme_str 0
            in
            true
          with Not_found -> false)
@@ -961,13 +971,13 @@ let test_import_struct_accessor_types () =
   in
   Alcotest.(check int) "no type errors for name" 0 (List.length errors1);
   Alcotest.(check string)
-    "name accessor returns String" "String" (Types.to_string ty1);
+    "name accessor returns string" "string" (Types.to_string ty1);
   (* Access age from a person - should return int *)
   let ty2, errors2 =
     check_expr_str ~env "(person-age (make-person \"Alice\" 30))"
   in
   Alcotest.(check int) "no type errors for age" 0 (List.length errors2);
-  Alcotest.(check string) "age accessor returns Int" "Int" (Types.to_string ty2)
+  Alcotest.(check string) "age accessor returns int" "int" (Types.to_string ty2)
 
 (** Test that accessors require the correct struct type. R11: Accessors reject
     wrong types *)
@@ -1065,20 +1075,24 @@ let test_data_constructor_type_check () =
     "Err returns result" true
     (string_starts_with "(test/result" (Types.to_string ty2))
 
+(* Note: Use `my-bool` instead of `bool` since `bool` is now a prelude type *)
+
 (** Test that data with nullary constructors works. *)
 let test_data_nullary_constructors () =
   let sig_src = {|
-    (data bool (True) (False))
+    (data my-bool (True) (False))
   |} in
   let env = load_sig_str sig_src in
   (* True is a function taking no args *)
   let ty1, errors1 = check_expr_str ~env "(True)" in
   Alcotest.(check int) "no type errors for True" 0 (List.length errors1);
-  Alcotest.(check string) "True returns bool" "test/bool" (Types.to_string ty1);
+  Alcotest.(check string)
+    "True returns my-bool" "test/my-bool" (Types.to_string ty1);
   (* False is a function taking no args *)
   let ty2, errors2 = check_expr_str ~env "(False)" in
   Alcotest.(check int) "no type errors for False" 0 (List.length errors2);
-  Alcotest.(check string) "False returns bool" "test/bool" (Types.to_string ty2)
+  Alcotest.(check string)
+    "False returns my-bool" "test/my-bool" (Types.to_string ty2)
 
 (** Test that data with multi-field constructors works. R6: Multi-field *)
 let test_data_multi_field_constructor () =
@@ -1150,7 +1164,7 @@ let test_data_predicate_type () =
   let ty, errors = check_expr_str ~env {|(result-ok-p 42)|} in
   Alcotest.(check int) "no type errors" 0 (List.length errors);
   Alcotest.(check string)
-    "predicate returns bool" "(Or T Nil)" (Types.to_string ty)
+    "predicate returns bool" "(Or t nil)" (Types.to_string ty)
 
 (** Test that predicates work with ADT values *)
 let test_data_predicate_with_adt () =
@@ -1162,27 +1176,27 @@ let test_data_predicate_with_adt () =
   let ty, errors = check_expr_str ~env {|(result-ok-p (Ok 42))|} in
   Alcotest.(check int) "no type errors" 0 (List.length errors);
   Alcotest.(check string)
-    "predicate returns bool" "(Or T Nil)" (Types.to_string ty)
+    "predicate returns bool" "(Or t nil)" (Types.to_string ty)
 
 (** Test nullary data predicates *)
 let test_data_nullary_predicates () =
   let sig_src = {|
-    (data bool (True) (False))
+    (data my-bool (True) (False))
   |} in
   let env = load_sig_str sig_src in
-  (* Check bool-true-p predicate *)
-  (match Type_env.lookup "bool-true-p" env with
-  | None -> Alcotest.fail "bool-true-p predicate not found"
+  (* Check my-bool-true-p predicate *)
+  (match Type_env.lookup "my-bool-true-p" env with
+  | None -> Alcotest.fail "my-bool-true-p predicate not found"
   | Some _ -> ());
-  (* Check bool-false-p predicate *)
-  (match Type_env.lookup "bool-false-p" env with
-  | None -> Alcotest.fail "bool-false-p predicate not found"
+  (* Check my-bool-false-p predicate *)
+  (match Type_env.lookup "my-bool-false-p" env with
+  | None -> Alcotest.fail "my-bool-false-p predicate not found"
   | Some _ -> ());
   (* Test predicate type *)
-  let ty, errors = check_expr_str ~env {|(bool-true-p (True))|} in
+  let ty, errors = check_expr_str ~env {|(my-bool-true-p (True))|} in
   Alcotest.(check int) "no type errors" 0 (List.length errors);
   Alcotest.(check string)
-    "predicate returns bool" "(Or T Nil)" (Types.to_string ty)
+    "predicate returns bool" "(Or t nil)" (Types.to_string ty)
 
 (** Test predicate naming uses lowercase constructor *)
 let test_data_predicate_lowercase () =
@@ -1222,7 +1236,7 @@ let test_data_accessor_type () =
   (* Accessor should take ADT value and return the field type *)
   let ty, errors = check_expr_str ~env {|(result-ok-value (Ok 42))|} in
   Alcotest.(check int) "no type errors" 0 (List.length errors);
-  Alcotest.(check string) "accessor returns Int" "Int" (Types.to_string ty)
+  Alcotest.(check string) "accessor returns int" "int" (Types.to_string ty)
 
 (** Test accessor with ADT value returns correct type *)
 let test_data_accessor_with_adt () =
@@ -1234,12 +1248,12 @@ let test_data_accessor_with_adt () =
   let ty, errors = check_expr_str ~env {|(result-err-value (Err "error"))|} in
   Alcotest.(check int) "no type errors" 0 (List.length errors);
   Alcotest.(check string)
-    "accessor returns String" "String" (Types.to_string ty)
+    "accessor returns string" "string" (Types.to_string ty)
 
 (** Test nullary constructors have no accessors *)
 let test_data_nullary_no_accessor () =
   let sig_src = {|
-    (data bool (True) (False))
+    (data my-bool (True) (False))
   |} in
   let env = load_sig_str sig_src in
   (* Nullary constructors should NOT have accessors *)
@@ -1285,10 +1299,10 @@ let test_data_multi_field_accessor_type () =
   (* Both accessors should return Int *)
   let ty1, errors1 = check_expr_str ~env {|(point-point2d-1 (Point2D 1 2))|} in
   Alcotest.(check int) "no type errors" 0 (List.length errors1);
-  Alcotest.(check string) "accessor 1 returns Int" "Int" (Types.to_string ty1);
+  Alcotest.(check string) "accessor 1 returns int" "int" (Types.to_string ty1);
   let ty2, errors2 = check_expr_str ~env {|(point-point2d-2 (Point2D 1 2))|} in
   Alcotest.(check int) "no type errors" 0 (List.length errors2);
-  Alcotest.(check string) "accessor 2 returns Int" "Int" (Types.to_string ty2)
+  Alcotest.(check string) "accessor 2 returns int" "int" (Types.to_string ty2)
 
 (** Test accessor naming uses lowercase constructor *)
 let test_data_accessor_lowercase () =
@@ -1475,7 +1489,7 @@ let test_subtract_from_union () =
       Alcotest.(check bool)
         "param is int after subtraction" true
         (try
-           let _ = Str.search_forward (Str.regexp_string "Int") scheme_str 0 in
+           let _ = Str.search_forward (Str.regexp_string "int") scheme_str 0 in
            true
          with Not_found -> false)
 
@@ -1492,12 +1506,12 @@ let test_subtract_nil_from_any () =
   | None -> Alcotest.fail "use-truthy not found"
   | Some scheme ->
       let scheme_str = Type_env.scheme_to_string scheme in
-      (* Should be Truthy, not a union *)
+      (* Should be truthy, not a union *)
       Alcotest.(check bool)
         "is truthy" true
         (try
            let _ =
-             Str.search_forward (Str.regexp_string "Truthy") scheme_str 0
+             Str.search_forward (Str.regexp_string "truthy") scheme_str 0
            in
            true
          with Not_found -> false)
@@ -1518,8 +1532,8 @@ let test_subtract_validates_types () =
 let test_subtract_with_type_var () =
   let sig_src =
     {|
-    (type is [a] (a - nil))
-    (defun is-identity [a] ((is a)) -> (is a))
+    (type my-is [a] (a - nil))
+    (defun is-identity [a] ((my-is a)) -> (my-is a))
   |}
   in
   let env = load_sig_str sig_src in
@@ -1544,14 +1558,14 @@ let test_subtract_from_3_way_union () =
       Alcotest.(check bool)
         "has int" true
         (try
-           let _ = Str.search_forward (Str.regexp_string "Int") scheme_str 0 in
+           let _ = Str.search_forward (Str.regexp_string "int") scheme_str 0 in
            true
          with Not_found -> false);
       Alcotest.(check bool)
         "has string" true
         (try
            let _ =
-             Str.search_forward (Str.regexp_string "String") scheme_str 0
+             Str.search_forward (Str.regexp_string "string") scheme_str 0
            in
            true
          with Not_found -> false)

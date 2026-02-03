@@ -445,10 +445,12 @@ let check_form (env : Env.t) (sexp : Syntax.Sexp.t) :
     with built-in types unless overridden. *)
 let check_program ?(env = default_env ()) (forms : Syntax.Sexp.t list) :
     check_result =
+  (* Initialize aliases with prelude to recognize primitive type names *)
+  let prelude_aliases = Sig.Prelude.prelude_alias_context () in
   let init_state =
     {
       st_env = env;
-      st_aliases = Sig_loader.empty_aliases;
+      st_aliases = prelude_aliases;
       st_errors = [];
       st_undefineds = [];
       st_forms = [];

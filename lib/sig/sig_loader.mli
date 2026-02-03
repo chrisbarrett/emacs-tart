@@ -151,12 +151,27 @@ val sig_param_to_param : string list -> Sig_ast.sig_param -> Core.Types.param
 (** {1 Declaration Loading} *)
 
 val load_defun : Sig_ast.defun_decl -> Core.Type_env.scheme
-(** Convert a defun declaration to a type scheme. Returns a Poly scheme if the
-    function has type parameters, otherwise a Mono scheme with an arrow type. *)
+(** Convert a defun declaration to a type scheme without alias expansion.
+    Returns a Poly scheme if the function has type parameters, otherwise a Mono
+    scheme with an arrow type. For proper intrinsic type name resolution, prefer
+    [load_defun_with_ctx] with the prelude context. *)
+
+val load_defun_with_ctx :
+  type_context -> Sig_ast.defun_decl -> Core.Type_env.scheme
+(** Convert a defun declaration to a type scheme with alias expansion. Use this
+    with the prelude context to ensure primitive type names (int, string, etc.)
+    are resolved to their intrinsic representations. *)
 
 val load_defvar : Sig_ast.defvar_decl -> Core.Type_env.scheme
-(** Convert a defvar declaration to a type scheme. The type may be polymorphic
-    if it contains a forall. *)
+(** Convert a defvar declaration to a type scheme without alias expansion. The
+    type may be polymorphic if it contains a forall. For proper intrinsic type
+    name resolution, prefer [load_defvar_with_ctx] with the prelude context. *)
+
+val load_defvar_with_ctx :
+  type_context -> Sig_ast.defvar_decl -> Core.Type_env.scheme
+(** Convert a defvar declaration to a type scheme with alias expansion. Use this
+    with the prelude context to ensure primitive type names (int, string, etc.)
+    are resolved to their intrinsic representations. *)
 
 (** {1 Module Resolution} *)
 

@@ -35,9 +35,37 @@ let check_expr_str ~env s =
 
 (** {1 Prelude Type Tests} *)
 
-(** Test that prelude defines the expected type aliases *)
+(** Test that prelude defines the expected type aliases. The prelude now
+    includes both primitive bridges (int, string, etc.) and derived types (list,
+    option, is, nonempty). *)
 let test_prelude_aliases_defined () =
-  let expected = [ "t"; "any"; "bool"; "list"; "option"; "is"; "nonempty" ] in
+  let expected =
+    [
+      (* Primitive bridges *)
+      "int";
+      "float";
+      "num";
+      "string";
+      "symbol";
+      "keyword";
+      "nil";
+      "truthy";
+      "never";
+      "t";
+      (* Container bridges *)
+      "list";
+      "vector";
+      "pair";
+      "cons";
+      "hash-table";
+      (* Derived types *)
+      "any";
+      "bool";
+      "option";
+      "is";
+      "nonempty";
+    ]
+  in
   List.iter
     (fun name ->
       Alcotest.(check bool)
@@ -57,12 +85,16 @@ let test_prelude_type_names () =
   Alcotest.(check bool) "contains is" true (List.mem "is" names);
   Alcotest.(check bool) "contains nonempty" true (List.mem "nonempty" names)
 
-(** Test that is_prelude_type returns false for non-prelude types *)
+(** Test that is_prelude_type returns false for non-prelude types. Note: int,
+    string, etc. ARE now prelude types (they bridge to intrinsics). Only truly
+    user-defined types like "buffer" are not prelude types. *)
 let test_not_prelude_types () =
-  Alcotest.(check bool) "int not prelude" false (Prelude.is_prelude_type "int");
+  (* int, string, etc. ARE prelude types now - they bridge intrinsics *)
+  Alcotest.(check bool) "int IS prelude" true (Prelude.is_prelude_type "int");
   Alcotest.(check bool)
-    "string not prelude" false
+    "string IS prelude" true
     (Prelude.is_prelude_type "string");
+  (* User-defined types are NOT prelude types *)
   Alcotest.(check bool)
     "buffer not prelude" false
     (Prelude.is_prelude_type "buffer")
@@ -173,7 +205,7 @@ let test_prelude_type_checking () =
   (* Call with a list literal *)
   let ty, errors = check_expr_str ~env "(sum (list 1 2 3))" in
   Alcotest.(check int) "no type errors" 0 (List.length errors);
-  Alcotest.(check string) "returns Int" "Int" (Types.to_string ty)
+  Alcotest.(check string) "returns int" "int" (Types.to_string ty)
 
 (** Test that option integrates with type checking *)
 let test_prelude_option_type_checking () =
@@ -204,8 +236,8 @@ let test_prelude_is_subtraction () =
       let scheme_str = Type_env.scheme_to_string scheme in
       (* After subtraction, (is (int | nil)) should become int *)
       Alcotest.(check bool)
-        "type contains Int" true
-        (contains_substring scheme_str "Int")
+        "type contains int" true
+        (contains_substring scheme_str "int")
 
 (** Test that nonempty produces a list minus nil *)
 let test_prelude_nonempty_subtraction () =

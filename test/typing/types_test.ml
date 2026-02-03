@@ -44,7 +44,8 @@ let test_repr_linked () =
       (* Link to Int *)
       tvar_ref := Link Prim.int;
       let result = repr tv in
-      Alcotest.(check string) "repr follows link" "Int" (to_string result)
+      (* Intrinsic types display as lowercase for user-facing output *)
+      Alcotest.(check string) "repr follows link" "int" (to_string result)
   | _ -> Alcotest.fail "expected TVar"
 
 let test_repr_chain () =
@@ -60,12 +61,13 @@ let test_repr_chain () =
       r1 := Link tv2
   | _ -> Alcotest.fail "expected TVars");
   (* repr should reach Int through the chain *)
-  Alcotest.(check string) "repr follows chain" "Int" (to_string (repr tv1));
+  (* Intrinsic types display as lowercase for user-facing output *)
+  Alcotest.(check string) "repr follows chain" "int" (to_string (repr tv1));
   (* Path compression should update links *)
   match tv1 with
   | TVar r1 -> (
       match !r1 with
-      | Link t -> Alcotest.(check string) "path compressed" "Int" (to_string t)
+      | Link t -> Alcotest.(check string) "path compressed" "int" (to_string t)
       | _ -> Alcotest.fail "expected Link after repr")
   | _ -> Alcotest.fail "expected TVar"
 
@@ -74,31 +76,36 @@ let test_repr_chain () =
    ============================================================================= *)
 
 let test_primitive_types () =
-  Alcotest.(check string) "Int" "Int" (to_string Prim.int);
-  Alcotest.(check string) "String" "String" (to_string Prim.string);
-  Alcotest.(check string) "Nil" "Nil" (to_string Prim.nil);
-  Alcotest.(check string) "T" "T" (to_string Prim.t);
-  Alcotest.(check string) "Bool" "(Or T Nil)" (to_string Prim.bool);
-  Alcotest.(check string) "Any" "(Or Truthy Nil)" (to_string Prim.any);
-  Alcotest.(check string) "Truthy" "Truthy" (to_string Prim.truthy);
-  Alcotest.(check string) "Never" "Never" (to_string Prim.never)
+  (* Intrinsic types display as lowercase for user-facing output *)
+  Alcotest.(check string) "int" "int" (to_string Prim.int);
+  Alcotest.(check string) "string" "string" (to_string Prim.string);
+  Alcotest.(check string) "nil" "nil" (to_string Prim.nil);
+  Alcotest.(check string) "t" "t" (to_string Prim.t);
+  Alcotest.(check string) "bool" "(Or t nil)" (to_string Prim.bool);
+  Alcotest.(check string) "any" "(Or truthy nil)" (to_string Prim.any);
+  Alcotest.(check string) "truthy" "truthy" (to_string Prim.truthy);
+  Alcotest.(check string) "never" "never" (to_string Prim.never)
 
 let test_list_type () =
   let ty = list_of Prim.int in
-  Alcotest.(check string) "List Int" "(List Int)" (to_string ty)
+  (* Intrinsic types display as lowercase for user-facing output *)
+  Alcotest.(check string) "list int" "(list int)" (to_string ty)
 
 let test_option_type () =
   let ty = option_of Prim.string in
-  Alcotest.(check string) "Option String" "(Or String Nil)" (to_string ty)
+  (* Intrinsic types display as lowercase for user-facing output *)
+  Alcotest.(check string) "option string" "(Or string nil)" (to_string ty)
 
 let test_pair_type () =
   let ty = pair_of Prim.string Prim.int in
-  Alcotest.(check string) "Pair String Int" "(Pair String Int)" (to_string ty)
+  (* Intrinsic types display as lowercase for user-facing output *)
+  Alcotest.(check string) "pair string int" "(pair string int)" (to_string ty)
 
 let test_nested_type () =
   let ty = list_of (option_of Prim.int) in
+  (* Intrinsic types display as lowercase for user-facing output *)
   Alcotest.(check string)
-    "List (Option Int)" "(List (Or Int Nil))" (to_string ty)
+    "list (option int)" "(list (Or int nil))" (to_string ty)
 
 (* =============================================================================
    Function Type Tests
@@ -106,30 +113,35 @@ let test_nested_type () =
 
 let test_arrow_simple () =
   let ty = arrow [ Prim.int; Prim.int ] Prim.int in
+  (* Intrinsic types display as lowercase for user-facing output *)
   Alcotest.(check string)
-    "Int -> Int -> Int" "(-> (Int Int) Int)" (to_string ty)
+    "int -> int -> int" "(-> (int int) int)" (to_string ty)
 
 let test_arrow_no_args () =
   let ty = arrow [] Prim.int in
-  Alcotest.(check string) "() -> Int" "(-> () Int)" (to_string ty)
+  (* Intrinsic types display as lowercase for user-facing output *)
+  Alcotest.(check string) "() -> int" "(-> () int)" (to_string ty)
 
 let test_arrow_with_optional () =
   let ty =
     TArrow
       ([ PPositional Prim.string; POptional (option_of Prim.int) ], Prim.string)
   in
+  (* Intrinsic types display as lowercase for user-facing output *)
   Alcotest.(check string)
-    "with optional" "(-> (String &optional (Or Int Nil)) String)" (to_string ty)
+    "with optional" "(-> (string &optional (Or int nil)) string)" (to_string ty)
 
 let test_arrow_with_rest () =
   let ty = TArrow ([ PRest Prim.string ], Prim.string) in
+  (* Intrinsic types display as lowercase for user-facing output *)
   Alcotest.(check string)
-    "with rest" "(-> (&rest String) String)" (to_string ty)
+    "with rest" "(-> (&rest string) string)" (to_string ty)
 
 let test_arrow_with_key () =
   let ty = TArrow ([ PKey (":name", Prim.string) ], Prim.nil) in
+  (* Intrinsic types display as lowercase for user-facing output *)
   Alcotest.(check string)
-    "with keyword" "(-> (&key :name String) Nil)" (to_string ty)
+    "with keyword" "(-> (&key :name string) nil)" (to_string ty)
 
 (* =============================================================================
    Polymorphic Type Tests
@@ -147,8 +159,9 @@ let test_forall_multi_vars () =
 
 let test_forall_list_length () =
   let ty = forall [ "a" ] (arrow [ list_of (TCon "a") ] Prim.int) in
+  (* Intrinsic types display as lowercase for user-facing output *)
   Alcotest.(check string)
-    "list length type" "(forall (a) (-> ((List a)) Int))" (to_string ty)
+    "list length type" "(forall (a) (-> ((list a)) int))" (to_string ty)
 
 (* =============================================================================
    Union Type Tests
@@ -156,27 +169,29 @@ let test_forall_list_length () =
 
 let test_union_simple () =
   let ty = TUnion [ Prim.int; Prim.string ] in
-  Alcotest.(check string) "Or Int String" "(Or Int String)" (to_string ty)
+  (* Intrinsic types display as lowercase for user-facing output *)
+  Alcotest.(check string) "Or int string" "(Or int string)" (to_string ty)
 
 let test_tuple_type () =
   let ty = TTuple [ Prim.string; Prim.int; Prim.bool ] in
+  (* Intrinsic types display as lowercase for user-facing output *)
   Alcotest.(check string)
-    "Tuple String Int Bool" "(Tuple String Int (Or T Nil))" (to_string ty)
+    "Tuple string int bool" "(Tuple string int (Or t nil))" (to_string ty)
 
 (* =============================================================================
    Type Equality Tests
    ============================================================================= *)
 
 let test_equal_primitives () =
-  Alcotest.(check bool) "Int = Int" true (equal Prim.int Prim.int);
-  Alcotest.(check bool) "Int <> String" false (equal Prim.int Prim.string)
+  Alcotest.(check bool) "Int = int" true (equal Prim.int Prim.int);
+  Alcotest.(check bool) "Int <> string" false (equal Prim.int Prim.string)
 
 let test_equal_tapp () =
   let t1 = list_of Prim.int in
   let t2 = list_of Prim.int in
   let t3 = list_of Prim.string in
-  Alcotest.(check bool) "List Int = List Int" true (equal t1 t2);
-  Alcotest.(check bool) "List Int <> List String" false (equal t1 t3)
+  Alcotest.(check bool) "List Int = List int" true (equal t1 t2);
+  Alcotest.(check bool) "List Int <> List string" false (equal t1 t3)
 
 let test_equal_arrow () =
   let t1 = arrow [ Prim.int ] Prim.int in
@@ -203,7 +218,7 @@ let test_equal_linked_tvar () =
    ============================================================================= *)
 
 let test_truthy_primitives () =
-  (* Truthy primitives *)
+  (* truthy primitives *)
   Alcotest.(check bool) "Int is truthy" true (is_truthy Prim.int);
   Alcotest.(check bool) "Float is truthy" true (is_truthy Prim.float);
   Alcotest.(check bool) "Num is truthy" true (is_truthy Prim.num);
@@ -211,7 +226,7 @@ let test_truthy_primitives () =
   Alcotest.(check bool) "Symbol is truthy" true (is_truthy Prim.symbol);
   Alcotest.(check bool) "Keyword is truthy" true (is_truthy Prim.keyword);
   Alcotest.(check bool) "T is truthy" true (is_truthy Prim.t);
-  Alcotest.(check bool) "Truthy is truthy" true (is_truthy Prim.truthy);
+  Alcotest.(check bool) "truthy is truthy" true (is_truthy Prim.truthy);
   Alcotest.(check bool) "Never is truthy" true (is_truthy Prim.never)
 
 let test_falsy_types () =
@@ -234,7 +249,7 @@ let test_truthy_containers () =
     (is_truthy (hash_table_of Prim.symbol Prim.string))
 
 let test_option_not_truthy () =
-  (* Option types are NOT truthy (they include Nil) *)
+  (* Option types are NOT truthy (they include nil) *)
   Alcotest.(check bool)
     "Option String is NOT truthy" false
     (is_truthy (option_of Prim.string))
@@ -295,54 +310,61 @@ let test_option_of_checked_string () =
   (* String is truthy, so Option String should succeed *)
   match option_of_checked Prim.string with
   | Ok ty ->
+      (* Intrinsic types display as lowercase for user-facing output *)
       Alcotest.(check string)
-        "Option String valid" "(Or String Nil)" (to_string ty)
-  | Error _ -> Alcotest.fail "Option String should be valid"
+        "option string valid" "(Or string nil)" (to_string ty)
+  | Error _ -> Alcotest.fail "option string should be valid"
 
 let test_option_of_checked_int () =
   (* Int is truthy, so Option Int should succeed *)
   match option_of_checked Prim.int with
   | Ok ty ->
-      Alcotest.(check string) "Option Int valid" "(Or Int Nil)" (to_string ty)
-  | Error _ -> Alcotest.fail "Option Int should be valid"
+      (* Intrinsic types display as lowercase for user-facing output *)
+      Alcotest.(check string) "option int valid" "(Or int nil)" (to_string ty)
+  | Error _ -> Alcotest.fail "option int should be valid"
 
 let test_option_of_checked_list () =
-  (* List is truthy, so Option (List a) should succeed *)
+  (* List is truthy, so Option (list a) should succeed *)
   match option_of_checked (list_of Prim.int) with
   | Ok ty ->
+      (* Intrinsic types display as lowercase for user-facing output *)
       Alcotest.(check string)
-        "Option (List Int) valid" "(Or (List Int) Nil)" (to_string ty)
-  | Error _ -> Alcotest.fail "Option (List Int) should be valid"
+        "option (list int) valid" "(Or (list int) nil)" (to_string ty)
+  | Error _ -> Alcotest.fail "option (list int) should be valid"
 
 let test_option_of_checked_nil_fails () =
   (* Nil is NOT truthy, so Option Nil should fail *)
   match option_of_checked Prim.nil with
-  | Ok _ -> Alcotest.fail "Option Nil should be invalid"
+  | Ok _ -> Alcotest.fail "option nil should be invalid"
   | Error (NonTruthyOptionArg ty) ->
-      Alcotest.(check string) "error contains Nil" "Nil" (to_string ty)
+      (* Intrinsic types display as lowercase for user-facing output *)
+      Alcotest.(check string) "error contains nil" "nil" (to_string ty)
 
 let test_option_of_checked_any_fails () =
   (* Any is NOT truthy, so Option Any should fail *)
   match option_of_checked Prim.any with
-  | Ok _ -> Alcotest.fail "Option Any should be invalid"
+  | Ok _ -> Alcotest.fail "option any should be invalid"
   | Error (NonTruthyOptionArg ty) ->
+      (* Intrinsic types display as lowercase for user-facing output *)
       Alcotest.(check string)
-        "error contains Any" "(Or Truthy Nil)" (to_string ty)
+        "error contains any" "(Or truthy nil)" (to_string ty)
 
 let test_option_of_checked_bool_fails () =
-  (* Bool is NOT truthy (includes Nil), so Option Bool should fail *)
+  (* Bool is NOT truthy (includes nil), so Option Bool should fail *)
   match option_of_checked Prim.bool with
-  | Ok _ -> Alcotest.fail "Option Bool should be invalid"
+  | Ok _ -> Alcotest.fail "option bool should be invalid"
   | Error (NonTruthyOptionArg ty) ->
-      Alcotest.(check string) "error contains Bool" "(Or T Nil)" (to_string ty)
+      (* Intrinsic types display as lowercase for user-facing output *)
+      Alcotest.(check string) "error contains bool" "(Or t nil)" (to_string ty)
 
 let test_option_of_checked_option_fails () =
-  (* Option String is NOT truthy, so Option (Option String) should fail *)
+  (* Option String is NOT truthy, so Option (Option string) should fail *)
   match option_of_checked (option_of Prim.string) with
-  | Ok _ -> Alcotest.fail "Option (Option String) should be invalid"
+  | Ok _ -> Alcotest.fail "option (option string) should be invalid"
   | Error (NonTruthyOptionArg ty) ->
+      (* Intrinsic types display as lowercase for user-facing output *)
       Alcotest.(check string)
-        "error contains Option" "(Or String Nil)" (to_string ty)
+        "error contains option" "(Or string nil)" (to_string ty)
 
 let test_validation_error_message () =
   (* Test error message formatting *)
@@ -425,7 +447,7 @@ let () =
             test_option_of_checked_string;
           Alcotest.test_case "Option Int succeeds" `Quick
             test_option_of_checked_int;
-          Alcotest.test_case "Option (List Int) succeeds" `Quick
+          Alcotest.test_case "Option (list int) succeeds" `Quick
             test_option_of_checked_list;
           Alcotest.test_case "Option Nil fails" `Quick
             test_option_of_checked_nil_fails;

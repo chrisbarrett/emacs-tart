@@ -32,16 +32,16 @@ let unify_fails t1 t2 =
    ============================================================================= *)
 
 let test_same_tcon () =
-  Alcotest.(check bool) "Int = Int" true (unify_ok Prim.int Prim.int)
+  Alcotest.(check bool) "Int = int" true (unify_ok Prim.int Prim.int)
 
 let test_different_tcon () =
-  Alcotest.(check bool) "Int != String" true (unify_fails Prim.int Prim.string)
+  Alcotest.(check bool) "Int != string" true (unify_fails Prim.int Prim.string)
 
 let test_nil_nil () =
-  Alcotest.(check bool) "Nil = Nil" true (unify_ok Prim.nil Prim.nil)
+  Alcotest.(check bool) "Nil = nil" true (unify_ok Prim.nil Prim.nil)
 
 let test_bool_bool () =
-  Alcotest.(check bool) "Bool = Bool" true (unify_ok Prim.bool Prim.bool)
+  Alcotest.(check bool) "Bool = bool" true (unify_ok Prim.bool Prim.bool)
 
 (* =============================================================================
    Type Variable Tests
@@ -50,9 +50,9 @@ let test_bool_bool () =
 let test_tvar_unifies_with_tcon () =
   setup ();
   let tv = fresh () in
-  Alcotest.(check bool) "'a = Int" true (unify_ok tv Prim.int);
-  (* After unification, tv should resolve to Int *)
-  Alcotest.(check string) "tv resolves to Int" "Int" (to_string tv)
+  Alcotest.(check bool) "'a = int" true (unify_ok tv Prim.int);
+  (* After unification, tv should resolve to int (lowercase for intrinsics) *)
+  Alcotest.(check string) "tv resolves to int" "int" (to_string tv)
 
 let test_tvar_unifies_with_tvar () =
   setup ();
@@ -74,11 +74,12 @@ let test_linked_tvar () =
   let tv1 = fresh () in
   let tv2 = fresh () in
   let tv3 = fresh () in
-  (* tv1 = tv2, tv2 = Int -> all should be Int *)
+  (* tv1 = tv2, tv2 = int -> all should be int *)
   let _ = unify_ok tv1 tv2 in
   let _ = unify_ok tv2 Prim.int in
   let _ = unify_ok tv3 tv1 in
-  Alcotest.(check string) "chained unification" "Int" (to_string tv3)
+  (* Lowercase for intrinsic types *)
+  Alcotest.(check string) "chained unification" "int" (to_string tv3)
 
 (* =============================================================================
    Occurs Check Tests
@@ -95,14 +96,14 @@ let test_occurs_check_simple () =
 let test_occurs_check_nested () =
   setup ();
   let tv = fresh () in
-  (* tv = Option (List tv) should fail *)
+  (* tv = Option (list tv) should fail *)
   let nested = option_of (list_of tv) in
   Alcotest.(check bool) "occurs check nested" true (unify_fails tv nested)
 
 let test_occurs_check_in_arrow () =
   setup ();
   let tv = fresh () in
-  (* tv = (tv -> Int) should fail *)
+  (* tv = (tv -> int) should fail *)
   let fn_type = arrow [ tv ] Prim.int in
   Alcotest.(check bool) "occurs check in arrow" true (unify_fails tv fn_type)
 
@@ -120,30 +121,30 @@ let test_no_occurs_check_different_tvars () =
 
 let test_list_int_list_int () =
   Alcotest.(check bool)
-    "List Int = List Int" true
+    "List Int = List int" true
     (unify_ok (list_of Prim.int) (list_of Prim.int))
 
 let test_list_int_list_string () =
   Alcotest.(check bool)
-    "List Int != List String" true
+    "List Int != List string" true
     (unify_fails (list_of Prim.int) (list_of Prim.string))
 
 let test_list_tvar_list_int () =
   setup ();
   let tv = fresh () in
   Alcotest.(check bool)
-    "List 'a = List Int" true
+    "List 'a = List int" true
     (unify_ok (list_of tv) (list_of Prim.int));
-  Alcotest.(check string) "tv = Int" "Int" (to_string tv)
+  Alcotest.(check string) "tv = int" "int" (to_string tv)
 
 let test_option_string () =
   Alcotest.(check bool)
-    "Option String = Option String" true
+    "Option String = Option string" true
     (unify_ok (option_of Prim.string) (option_of Prim.string))
 
 let test_different_constructors () =
   Alcotest.(check bool)
-    "List Int != Option Int" true
+    "List Int != Option int" true
     (unify_fails (list_of Prim.int) (option_of Prim.int))
 
 let test_pair_unification () =
@@ -152,9 +153,9 @@ let test_pair_unification () =
   let tv2 = fresh () in
   let p1 = pair_of tv1 tv2 in
   let p2 = pair_of Prim.int Prim.string in
-  Alcotest.(check bool) "Pair 'a 'b = Pair Int String" true (unify_ok p1 p2);
-  Alcotest.(check string) "tv1 = Int" "Int" (to_string tv1);
-  Alcotest.(check string) "tv2 = String" "String" (to_string tv2)
+  Alcotest.(check bool) "Pair 'a 'b = Pair Int string" true (unify_ok p1 p2);
+  Alcotest.(check string) "tv1 = int" "int" (to_string tv1);
+  Alcotest.(check string) "tv2 = string" "string" (to_string tv2)
 
 (* =============================================================================
    Arrow Type Tests
@@ -163,25 +164,25 @@ let test_pair_unification () =
 let test_arrow_same () =
   let fn = arrow [ Prim.int ] Prim.string in
   Alcotest.(check bool)
-    "(Int -> String) = (Int -> String)" true (unify_ok fn fn)
+    "(Int -> string) = (Int -> string)" true (unify_ok fn fn)
 
 let test_arrow_different_return () =
   let fn1 = arrow [ Prim.int ] Prim.string in
   let fn2 = arrow [ Prim.int ] Prim.int in
   Alcotest.(check bool)
-    "(Int -> String) != (Int -> Int)" true (unify_fails fn1 fn2)
+    "(Int -> string) != (Int -> int)" true (unify_fails fn1 fn2)
 
 let test_arrow_different_param () =
   let fn1 = arrow [ Prim.int ] Prim.string in
   let fn2 = arrow [ Prim.string ] Prim.string in
   Alcotest.(check bool)
-    "(Int -> String) != (String -> String)" true (unify_fails fn1 fn2)
+    "(Int -> string) != (String -> string)" true (unify_fails fn1 fn2)
 
 let test_arrow_different_arity () =
   let fn1 = arrow [ Prim.int ] Prim.string in
   let fn2 = arrow [ Prim.int; Prim.int ] Prim.string in
   Alcotest.(check bool)
-    "(Int -> String) != (Int Int -> String)" true (unify_fails fn1 fn2)
+    "(Int -> string) != (Int Int -> string)" true (unify_fails fn1 fn2)
 
 let test_arrow_with_tvars () =
   setup ();
@@ -189,14 +190,14 @@ let test_arrow_with_tvars () =
   let tv2 = fresh () in
   let fn1 = arrow [ tv1 ] tv2 in
   let fn2 = arrow [ Prim.int ] Prim.string in
-  Alcotest.(check bool) "('a -> 'b) = (Int -> String)" true (unify_ok fn1 fn2);
-  Alcotest.(check string) "tv1 = Int" "Int" (to_string tv1);
-  Alcotest.(check string) "tv2 = String" "String" (to_string tv2)
+  Alcotest.(check bool) "('a -> 'b) = (Int -> string)" true (unify_ok fn1 fn2);
+  Alcotest.(check string) "tv1 = int" "int" (to_string tv1);
+  Alcotest.(check string) "tv2 = string" "string" (to_string tv2)
 
 let test_arrow_nullary () =
   let fn1 = arrow [] Prim.int in
   let fn2 = arrow [] Prim.int in
-  Alcotest.(check bool) "(() -> Int) = (() -> Int)" true (unify_ok fn1 fn2)
+  Alcotest.(check bool) "(() -> int) = (() -> int)" true (unify_ok fn1 fn2)
 
 (* =============================================================================
    Constraint Solving Tests
@@ -214,7 +215,7 @@ let test_solve_single () =
   Alcotest.(check bool)
     "solve single constraint" true
     (match Unify.solve [ c ] with Ok () -> true | Error _ -> false);
-  Alcotest.(check string) "tv = Int" "Int" (to_string tv)
+  Alcotest.(check string) "tv = int" "int" (to_string tv)
 
 let test_solve_multiple () =
   setup ();
@@ -225,8 +226,8 @@ let test_solve_multiple () =
   Alcotest.(check bool)
     "solve multiple constraints" true
     (match Unify.solve [ c1; c2 ] with Ok () -> true | Error _ -> false);
-  Alcotest.(check string) "tv1 = Int" "Int" (to_string tv1);
-  Alcotest.(check string) "tv2 = String" "String" (to_string tv2)
+  Alcotest.(check string) "tv1 = int" "int" (to_string tv1);
+  Alcotest.(check string) "tv2 = string" "string" (to_string tv2)
 
 let test_solve_chained () =
   setup ();
@@ -237,7 +238,7 @@ let test_solve_chained () =
   Alcotest.(check bool)
     "solve chained constraints" true
     (match Unify.solve [ c1; c2 ] with Ok () -> true | Error _ -> false);
-  Alcotest.(check string) "tv1 = Int" "Int" (to_string tv1)
+  Alcotest.(check string) "tv1 = int" "int" (to_string tv1)
 
 let test_solve_conflicting () =
   setup ();
@@ -255,26 +256,26 @@ let test_solve_conflicting () =
 let test_tuple_same () =
   let t1 = TTuple [ Prim.int; Prim.string ] in
   let t2 = TTuple [ Prim.int; Prim.string ] in
-  Alcotest.(check bool) "(Int, String) = (Int, String)" true (unify_ok t1 t2)
+  Alcotest.(check bool) "(Int, string) = (Int, string)" true (unify_ok t1 t2)
 
 let test_tuple_different () =
   let t1 = TTuple [ Prim.int; Prim.string ] in
   let t2 = TTuple [ Prim.string; Prim.int ] in
   Alcotest.(check bool)
-    "(Int, String) != (String, Int)" true (unify_fails t1 t2)
+    "(Int, string) != (String, int)" true (unify_fails t1 t2)
 
 let test_tuple_different_length () =
   let t1 = TTuple [ Prim.int ] in
   let t2 = TTuple [ Prim.int; Prim.string ] in
-  Alcotest.(check bool) "(Int) != (Int, String)" true (unify_fails t1 t2)
+  Alcotest.(check bool) "(int) != (Int, string)" true (unify_fails t1 t2)
 
 let test_tuple_with_tvars () =
   setup ();
   let tv = fresh () in
   let t1 = TTuple [ tv; Prim.string ] in
   let t2 = TTuple [ Prim.int; Prim.string ] in
-  Alcotest.(check bool) "('a, String) = (Int, String)" true (unify_ok t1 t2);
-  Alcotest.(check string) "tv = Int" "Int" (to_string tv)
+  Alcotest.(check bool) "('a, string) = (Int, string)" true (unify_ok t1 t2);
+  Alcotest.(check string) "tv = int" "int" (to_string tv)
 
 (* =============================================================================
    Union Tests
@@ -283,14 +284,14 @@ let test_tuple_with_tvars () =
 let test_union_same () =
   let t1 = TUnion [ Prim.int; Prim.string ] in
   let t2 = TUnion [ Prim.int; Prim.string ] in
-  Alcotest.(check bool) "(Int | String) = (Int | String)" true (unify_ok t1 t2)
+  Alcotest.(check bool) "(Int | string) = (Int | string)" true (unify_ok t1 t2)
 
 let test_union_different_order () =
   (* For now, unions must be structurally equal *)
   let t1 = TUnion [ Prim.int; Prim.string ] in
   let t2 = TUnion [ Prim.string; Prim.int ] in
   Alcotest.(check bool)
-    "(Int | String) != (String | Int)" true (unify_fails t1 t2)
+    "(Int | string) != (String | int)" true (unify_fails t1 t2)
 
 (* =============================================================================
    Invariance Tests (Any inside type applications)
@@ -298,35 +299,35 @@ let test_union_different_order () =
 
 (** Test that Any at top level unifies with anything *)
 let test_any_top_level () =
-  Alcotest.(check bool) "Any = Int" true (unify_ok Prim.any Prim.int);
+  Alcotest.(check bool) "Any = int" true (unify_ok Prim.any Prim.int);
   Alcotest.(check bool) "Int = Any" true (unify_ok Prim.int Prim.any);
-  Alcotest.(check bool) "Any = String" true (unify_ok Prim.any Prim.string)
+  Alcotest.(check bool) "Any = string" true (unify_ok Prim.any Prim.string)
 
 (** Test that Any inside List does NOT unify with other types (invariance) *)
 let test_list_int_not_list_any () =
   (* (list int) should NOT unify with (list any) - enforces invariance *)
   Alcotest.(check bool)
-    "(List Int) != (List Any)" true
+    "(list int) != (list Any)" true
     (unify_fails (list_of Prim.int) (list_of Prim.any))
 
 (** Test that (list any) unifies with itself *)
 let test_list_any_list_any () =
   Alcotest.(check bool)
-    "(List Any) = (List Any)" true
+    "(list Any) = (list Any)" true
     (unify_ok (list_of Prim.any) (list_of Prim.any))
 
 (** Test invariance with Vector type *)
 let test_vector_int_not_vector_string () =
-  (* (Vector Int) should NOT unify with (Vector String) - enforces invariance *)
+  (* (vector int) should NOT unify with (vector string) - enforces invariance *)
   Alcotest.(check bool)
-    "(Vector Int) != (Vector String)" true
+    "(vector int) != (vector string)" true
     (unify_fails (vector_of Prim.int) (vector_of Prim.string))
 
 (** Test invariance with nested type applications *)
 let test_nested_invariance () =
-  (* List (Vector Int) should not unify with List (Vector String) *)
+  (* List (vector int) should not unify with List (vector string) *)
   Alcotest.(check bool)
-    "(List (Vector Int)) != (List (Vector String))" true
+    "(list (vector int)) != (list (vector string))" true
     (unify_fails
        (list_of (vector_of Prim.int))
        (list_of (vector_of Prim.string)))
@@ -335,13 +336,13 @@ let test_nested_invariance () =
 let test_hash_table_invariance () =
   (* (hash-table string int) != (hash-table any int) *)
   Alcotest.(check bool)
-    "(HashTable String Int) != (HashTable Any Int)" true
+    "(hash-table String int) != (hash-table Any int)" true
     (unify_fails
        (hash_table_of Prim.string Prim.int)
        (hash_table_of Prim.any Prim.int));
   (* (hash-table string int) != (hash-table string any) *)
   Alcotest.(check bool)
-    "(HashTable String Int) != (HashTable String Any)" true
+    "(hash-table String int) != (hash-table String Any)" true
     (unify_fails
        (hash_table_of Prim.string Prim.int)
        (hash_table_of Prim.string Prim.any))
@@ -352,16 +353,16 @@ let test_tvar_in_tapp_with_any () =
   let tv = fresh () in
   (* (list 'a) = (list int) should still work - tvars are not restricted *)
   Alcotest.(check bool)
-    "(List 'a) = (List Int)" true
+    "(list 'a) = (list int)" true
     (unify_ok (list_of tv) (list_of Prim.int));
-  Alcotest.(check string) "tv = Int" "Int" (to_string tv)
+  Alcotest.(check string) "tv = int" "int" (to_string tv)
 
 (* =============================================================================
    Higher-Kinded Type Unification Tests (R7 from spec 17)
    ============================================================================= *)
 
 (** Test that HK type constructor variable unifies with concrete constructor.
-    When we have (f a) where f is a TVar and unify with (List Int), f should
+    When we have (f a) where f is a TVar and unify with (list int), f should
     unify to List and a should unify to Int. *)
 let test_hk_constructor_instantiation () =
   setup ();
@@ -369,13 +370,13 @@ let test_hk_constructor_instantiation () =
   let a = fresh () in
   (* (f a) where f and a are type variables *)
   let hk_app = TApp (f, [ a ]) in
-  (* (List Int) *)
+  (* (list int) *)
   let list_int = list_of Prim.int in
-  Alcotest.(check bool) "(f a) = (List Int)" true (unify_ok hk_app list_int);
+  Alcotest.(check bool) "(f a) = (list int)" true (unify_ok hk_app list_int);
   (* f should resolve to List (as a TCon) *)
-  Alcotest.(check string) "f = List" "List" (to_string f);
+  Alcotest.(check string) "f = List" "list" (to_string f);
   (* a should resolve to Int *)
-  Alcotest.(check string) "a = Int" "Int" (to_string a)
+  Alcotest.(check string) "a = int" "int" (to_string a)
 
 (** Test that HK constructor variable can unify with Vector. *)
 let test_hk_vector_instantiation () =
@@ -385,10 +386,10 @@ let test_hk_vector_instantiation () =
   let hk_app = TApp (f, [ a ]) in
   let vector_string = vector_of Prim.string in
   Alcotest.(check bool)
-    "(f a) = (Vector String)" true
+    "(f a) = (vector string)" true
     (unify_ok hk_app vector_string);
-  Alcotest.(check string) "f = Vector" "Vector" (to_string f);
-  Alcotest.(check string) "a = String" "String" (to_string a)
+  Alcotest.(check string) "f = Vector" "vector" (to_string f);
+  Alcotest.(check string) "a = string" "string" (to_string a)
 
 (** Test that two HK type applications with same constructor variable unify. *)
 let test_hk_same_constructor () =
@@ -402,12 +403,12 @@ let test_hk_same_constructor () =
   (* After unifying with List Int and List String *)
   let _ = unify_ok app1 (list_of Prim.int) in
   Alcotest.(check bool)
-    "(f b) = (List String)" true
+    "(f b) = (list string)" true
     (unify_ok app2 (list_of Prim.string));
   (* Both should have f = List *)
-  Alcotest.(check string) "f = List" "List" (to_string f);
-  Alcotest.(check string) "a = Int" "Int" (to_string a);
-  Alcotest.(check string) "b = String" "String" (to_string b)
+  Alcotest.(check string) "f = List" "list" (to_string f);
+  Alcotest.(check string) "a = int" "int" (to_string a);
+  Alcotest.(check string) "b = string" "string" (to_string b)
 
 (** Test that HK constructor variable fails when unified with different
     constructors. *)
@@ -422,7 +423,7 @@ let test_hk_different_constructors () =
   let _ = unify_ok app1 (list_of Prim.int) in
   (* Now unifying with Option should fail because f is already List *)
   Alcotest.(check bool)
-    "(f b) != (Option String)" true
+    "(f b) != (Option string)" true
     (unify_fails app2 (option_of Prim.string))
 
 (** Test nested HK application (f (g a)). *)
@@ -434,13 +435,13 @@ let test_hk_nested_application () =
   (* (f (g a)) *)
   let inner = TApp (g, [ a ]) in
   let outer = TApp (f, [ inner ]) in
-  (* (List (Vector Int)) *)
+  (* (list (vector int)) *)
   let target = list_of (vector_of Prim.int) in
   Alcotest.(check bool)
-    "(f (g a)) = (List (Vector Int))" true (unify_ok outer target);
-  Alcotest.(check string) "f = List" "List" (to_string f);
-  Alcotest.(check string) "g = Vector" "Vector" (to_string g);
-  Alcotest.(check string) "a = Int" "Int" (to_string a)
+    "(f (g a)) = (list (vector int))" true (unify_ok outer target);
+  Alcotest.(check string) "f = List" "list" (to_string f);
+  Alcotest.(check string) "g = Vector" "vector" (to_string g);
+  Alcotest.(check string) "a = int" "int" (to_string a)
 
 (** Test HK with arity mismatch fails. *)
 let test_hk_arity_mismatch () =
@@ -450,9 +451,9 @@ let test_hk_arity_mismatch () =
   let b = fresh () in
   (* (f a b) - two args *)
   let app = TApp (f, [ a; b ]) in
-  (* (List Int) - one arg *)
+  (* (list int) - one arg *)
   let target = list_of Prim.int in
-  Alcotest.(check bool) "(f a b) != (List Int)" true (unify_fails app target)
+  Alcotest.(check bool) "(f a b) != (list int)" true (unify_fails app target)
 
 (* =============================================================================
    Complex Tests
@@ -467,8 +468,8 @@ let test_identity_function () =
   let fn2 = arrow [ Prim.int ] b in
   Alcotest.(check bool) "('a -> 'a) = (Int -> 'b)" true (unify_ok fn1 fn2);
   (* Both a and b should be Int *)
-  Alcotest.(check string) "a = Int" "Int" (to_string a);
-  Alcotest.(check string) "b = Int" "Int" (to_string b)
+  Alcotest.(check string) "a = int" "int" (to_string a);
+  Alcotest.(check string) "b = int" "int" (to_string b)
 
 let test_map_function () =
   setup ();
@@ -484,12 +485,12 @@ let test_map_function () =
 let test_nested_application () =
   setup ();
   let a = fresh () in
-  (* List (Option a) = List (Option Int) *)
+  (* List (Option a) = List (Option int) *)
   let t1 = list_of (option_of a) in
   let t2 = list_of (option_of Prim.int) in
   Alcotest.(check bool)
-    "List (Option 'a) = List (Option Int)" true (unify_ok t1 t2);
-  Alcotest.(check string) "a = Int" "Int" (to_string a)
+    "List (Option 'a) = List (Option int)" true (unify_ok t1 t2);
+  Alcotest.(check string) "a = int" "int" (to_string a)
 
 (* =============================================================================
    solve_all Tests
@@ -520,8 +521,8 @@ let () =
         [
           Alcotest.test_case "same TCon" `Quick test_same_tcon;
           Alcotest.test_case "different TCon" `Quick test_different_tcon;
-          Alcotest.test_case "Nil = Nil" `Quick test_nil_nil;
-          Alcotest.test_case "Bool = Bool" `Quick test_bool_bool;
+          Alcotest.test_case "Nil = nil" `Quick test_nil_nil;
+          Alcotest.test_case "Bool = bool" `Quick test_bool_bool;
         ] );
       ( "type variables",
         [
@@ -540,11 +541,11 @@ let () =
         ] );
       ( "type applications",
         [
-          Alcotest.test_case "List Int = List Int" `Quick test_list_int_list_int;
-          Alcotest.test_case "List Int != List String" `Quick
+          Alcotest.test_case "List Int = List int" `Quick test_list_int_list_int;
+          Alcotest.test_case "List Int != List string" `Quick
             test_list_int_list_string;
-          Alcotest.test_case "List 'a = List Int" `Quick test_list_tvar_list_int;
-          Alcotest.test_case "Option String" `Quick test_option_string;
+          Alcotest.test_case "List 'a = List int" `Quick test_list_tvar_list_int;
+          Alcotest.test_case "Option string" `Quick test_option_string;
           Alcotest.test_case "different constructors" `Quick
             test_different_constructors;
           Alcotest.test_case "pair unification" `Quick test_pair_unification;

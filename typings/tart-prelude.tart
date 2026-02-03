@@ -3,25 +3,71 @@
 ;; Implicit utility types built on compiler intrinsics.
 ;; This file is loaded automatically before any other .tart file.
 ;;
-;; Intrinsics (built into compiler):
-;;   Truthy, Nil, Never, Int, Float, Num, String, Symbol, Keyword
-;;   List, Pair, Vector, HashTable (parameterized)
-;;   Union (|), literals ('foo, :kw, 1, etc.)
+;; ## Intrinsics (built into the type checker)
 ;;
-;; The prelude bridges lowercase type names in signatures to the
-;; uppercase built-in type constructors used internally.
+;; Intrinsic types use the %tart-intrinsic% prefix internally:
+;;   %tart-intrinsic%Int, %tart-intrinsic%Float, %tart-intrinsic%Num
+;;   %tart-intrinsic%String, %tart-intrinsic%Symbol, %tart-intrinsic%Keyword
+;;   %tart-intrinsic%Nil, %tart-intrinsic%T, %tart-intrinsic%Truthy, %tart-intrinsic%Never
+;;   %tart-intrinsic%List, %tart-intrinsic%Pair, %tart-intrinsic%Vector, %tart-intrinsic%HashTable
+;;
+;; The prelude bridges these to user-friendly lowercase names.
+;;
+;; ## User-facing Types
+;;
+;; This prelude provides:
+;;   int, float, num, string, symbol, keyword, nil, truthy, never
+;;   list, vector, pair, cons, hash-table
+;;   t, any, bool, option, is, nonempty
 
-;; The symbol 't—Elisp's canonical truthy value
-(type t 't)
+;; -----------------------------------------------------------------------------
+;; Primitive type bridges
+;; -----------------------------------------------------------------------------
+
+;; Numeric types
+(type int %tart-intrinsic%Int)
+(type float %tart-intrinsic%Float)
+(type num %tart-intrinsic%Num)
+
+;; Atom types
+(type string %tart-intrinsic%String)
+(type symbol %tart-intrinsic%Symbol)
+(type keyword %tart-intrinsic%Keyword)
+
+;; Special types
+(type nil %tart-intrinsic%Nil)
+(type truthy %tart-intrinsic%Truthy)
+(type never %tart-intrinsic%Never)
+
+;; The symbol 't - Elisp's canonical truthy value
+(type t %tart-intrinsic%T)
+
+;; -----------------------------------------------------------------------------
+;; Container type bridges
+;; -----------------------------------------------------------------------------
+
+;; Homogeneous list - alias for intrinsic List
+(type list [a] (%tart-intrinsic%List a))
+
+;; Vector - alias for intrinsic Vector
+(type vector [a] (%tart-intrinsic%Vector a))
+
+;; Cons cell / pair - alias for intrinsic Pair
+(type pair [a b] (%tart-intrinsic%Pair a b))
+(type cons [a b] (%tart-intrinsic%Pair a b))
+
+;; Hash table - alias for intrinsic HashTable
+(type hash-table [k v] (%tart-intrinsic%HashTable k v))
+
+;; -----------------------------------------------------------------------------
+;; Derived types (built on intrinsics)
+;; -----------------------------------------------------------------------------
 
 ;; Universal type - truthy or nil
 (type any (truthy | nil))
 
 ;; Boolean - t or nil (Elisp's boolean convention)
 (type bool (t | nil))
-
-;; Homogeneous list - alias for built-in List
-(type list [a] (List a))
 
 ;; Optional - value or nil
 ;; Note: The bound (a : truthy) prevents (option (option x)) since (option x)
@@ -36,3 +82,12 @@
 ;; Non-empty list: a list that is guaranteed not to be nil.
 ;; (nonempty int) is equivalent to (cons int (list int))
 (type nonempty [a] (is (list a)))
+
+;; -----------------------------------------------------------------------------
+;; Opaque types (no intrinsic backing needed)
+;; -----------------------------------------------------------------------------
+;; These are abstract types with no special type-checker behavior.
+;; They only unify with themselves.
+
+(type bool-vector)
+(type char-table)

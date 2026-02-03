@@ -19,14 +19,14 @@ let parse_many str = Tart.Read.parse_string_exn ~filename:"<test>" str
 let test_check_expr_literal () =
   let sexp = parse "42" in
   let ty, errors = Check.check_expr sexp in
-  Alcotest.(check string) "int type" "Int" (to_string ty);
+  Alcotest.(check string) "int type" "int" (to_string ty);
   Alcotest.(check int) "no errors" 0 (List.length errors)
 
 let test_check_expr_application () =
   let sexp = parse "(f 1)" in
   let env = Env.extend_mono "f" (arrow [ Prim.int ] Prim.string) Env.empty in
   let ty, errors = Check.check_expr ~env sexp in
-  Alcotest.(check string) "return type" "String" (to_string ty);
+  Alcotest.(check string) "return type" "string" (to_string ty);
   Alcotest.(check int) "no errors" 0 (List.length errors)
 
 let test_check_expr_type_error () =
@@ -62,7 +62,7 @@ let test_check_form_expr () =
   (* Result should be ExprForm *)
   match result with
   | Check.ExprForm { ty } ->
-      Alcotest.(check string) "expr type" "Int" (to_string ty)
+      Alcotest.(check string) "expr type" "int" (to_string ty)
   | _ -> Alcotest.fail "expected ExprForm"
 
 (* =============================================================================
@@ -117,18 +117,18 @@ let test_check_program_defun_calls_previous () =
    (test/fixtures/typing/core/).
 
 (** Test that car on a quoted list returns Option Any. (car '(1 2 3)) should
-    infer (Option Any) because '(1 2 3) has type (List Any). *)
+    infer (Option Any) because '(1 2 3) has type (list Any). *)
 let test_builtin_car_returns_option () =
   let sexp = parse "(car '(1 2 3))" in
   let ty, errors = Check.check_expr sexp in
   (* Uses default environment which includes built-in types *)
   Alcotest.(check int) "no errors" 0 (List.length errors);
-  (* car returns (a | nil) where a is inferred from the list; quoted list gives (Or Truthy Nil) *)
+  (* car returns (a | nil) where a is inferred from the list; quoted list gives (Or truthy nil) *)
   Alcotest.(check string)
-    "car returns Option Any" "(Or (Or Truthy Nil) Nil)" (to_string ty)
+    "car returns Option Any" "(Or (Or truthy nil) nil)" (to_string ty)
 
 (** Test that (+ 1 "x") produces a type error. The built-in + expects Int
-    arguments, not String. *)
+    arguments, not string. *)
 let test_builtin_plus_type_error () =
   let sexp = parse "(+ 1 \"x\")" in
   let _, errors = Check.check_expr sexp in
@@ -139,28 +139,28 @@ let test_builtin_plus_ok () =
   let sexp = parse "(+ 1 2)" in
   let ty, errors = Check.check_expr sexp in
   Alcotest.(check int) "no errors" 0 (List.length errors);
-  Alcotest.(check string) "plus returns Int" "Int" (to_string ty)
+  Alcotest.(check string) "plus returns int" "int" (to_string ty)
 
-(** Test that (concat "a" "b") returns String *)
+(** Test that (concat "a" "b") returns string *)
 let test_builtin_concat () =
   let sexp = parse "(concat \"a\" \"b\")" in
   let ty, errors = Check.check_expr sexp in
   Alcotest.(check int) "no errors" 0 (List.length errors);
-  Alcotest.(check string) "concat returns String" "String" (to_string ty)
+  Alcotest.(check string) "concat returns string" "string" (to_string ty)
 
 (** Test that (length '(1 2 3)) returns Int *)
 let test_builtin_length () =
   let sexp = parse "(length '(1 2 3))" in
   let ty, errors = Check.check_expr sexp in
   Alcotest.(check int) "no errors" 0 (List.length errors);
-  Alcotest.(check string) "length returns Int" "Int" (to_string ty)
+  Alcotest.(check string) "length returns int" "int" (to_string ty)
 
 (** Test that (null nil) returns Bool *)
 let test_builtin_null () =
   let sexp = parse "(null ())" in
   let ty, errors = Check.check_expr sexp in
   Alcotest.(check int) "no errors" 0 (List.length errors);
-  Alcotest.(check string) "null returns Bool" "(Or T Nil)" (to_string ty)
+  Alcotest.(check string) "null returns bool" "(Or t nil)" (to_string ty)
    ============================================================================= *)
 
 (* =============================================================================
@@ -188,7 +188,7 @@ let test_declare_tart_return_mismatch () =
           x)|}
   in
   let result = Check.check_program sexps in
-  (* Should have type error: Int (x) doesn't match String (return) *)
+  (* Should have type error: Int (x) doesn't match string (return) *)
   Alcotest.(check bool) "has error" true (List.length result.errors > 0)
 
 (** Test that polymorphic declare tart works correctly. Requires explicit [a]
@@ -239,7 +239,7 @@ let test_declare_tart_return_error_message () =
         (contains ~substring:"bad" related.message);
       Alcotest.(check bool)
         "related mentions declared type" true
-        (contains ~substring:"String" related.message)
+        (contains ~substring:"string" related.message)
   | [] -> Alcotest.fail "expected error"
 
 (* =============================================================================
@@ -251,7 +251,7 @@ let test_tart_annotation_valid () =
   let sexp = parse {|(tart string "hello")|} in
   let ty, errors = Check.check_expr sexp in
   Alcotest.(check int) "no errors" 0 (List.length errors);
-  Alcotest.(check string) "type is String" "String" (to_string ty)
+  Alcotest.(check string) "type is string" "string" (to_string ty)
 
 (** Test that mismatched tart annotation produces type error *)
 let test_tart_annotation_mismatch () =
@@ -264,7 +264,7 @@ let test_tart_annotation_list_valid () =
   let sexp = parse {|(tart (list int) (list 1 2 3))|} in
   let ty, errors = Check.check_expr sexp in
   Alcotest.(check int) "no errors" 0 (List.length errors);
-  Alcotest.(check string) "type is List Int" "(List Int)" (to_string ty)
+  Alcotest.(check string) "type is List int" "(list int)" (to_string ty)
 
 (** Test tart annotation in defvar initialization *)
 let test_tart_annotation_in_program () =
@@ -304,14 +304,14 @@ let test_defvar_tart_annotation_binds_type () =
   | [ Check.DefvarForm { name; var_type } ] ->
       Alcotest.(check string) "name" "my-cache" name;
       Alcotest.(check string)
-        "type" "(HashTable String Int)" (to_string var_type)
+        "type" "(hash-table string int)" (to_string var_type)
   | _ -> Alcotest.fail "expected DefvarForm"
 
 (** Test that defvar with tart annotation checks value against declared type *)
 let test_defvar_tart_annotation_checks_value () =
   let sexps = parse_many {|(defvar my-var (tart int "not an int"))|} in
   let result = Check.check_program sexps in
-  (* Should have a type error because "not an int" is String, not Int *)
+  (* Should have a type error because "not an int" is string, not Int *)
   Alcotest.(check bool) "has error" true (List.length result.errors > 0)
 
 (** Test that defconst works the same as defvar *)
@@ -322,7 +322,7 @@ let test_defconst_tart_annotation () =
   match result.forms with
   | [ Check.DefvarForm { name; var_type } ] ->
       Alcotest.(check string) "name" "my-version" name;
-      Alcotest.(check string) "type" "String" (to_string var_type)
+      Alcotest.(check string) "type" "string" (to_string var_type)
   | _ -> Alcotest.fail "expected DefvarForm"
 
 (** Test defvar without tart annotation infers type *)
@@ -333,7 +333,7 @@ let test_defvar_no_annotation_infers () =
   match result.forms with
   | [ Check.DefvarForm { name; var_type } ] ->
       Alcotest.(check string) "name" "my-num" name;
-      Alcotest.(check string) "type" "Int" (to_string var_type)
+      Alcotest.(check string) "type" "int" (to_string var_type)
   | _ -> Alcotest.fail "expected DefvarForm"
 
 (** Test defvar without init uses Any *)
@@ -344,7 +344,7 @@ let test_defvar_no_init () =
   match result.forms with
   | [ Check.DefvarForm { name; var_type } ] ->
       Alcotest.(check string) "name" "my-buffer" name;
-      Alcotest.(check string) "type" "(Or Truthy Nil)" (to_string var_type)
+      Alcotest.(check string) "type" "(Or truthy nil)" (to_string var_type)
   | _ -> Alcotest.fail "expected DefvarForm"
 
 (* =============================================================================
@@ -359,7 +359,7 @@ let test_tart_declare_binds_type () =
   match result.forms with
   | [ Check.TartDeclareForm { name; var_type } ] ->
       Alcotest.(check string) "name" "my-count" name;
-      Alcotest.(check string) "type" "Int" (to_string var_type)
+      Alcotest.(check string) "type" "int" (to_string var_type)
   | _ -> Alcotest.fail "expected TartDeclareForm"
 
 (** Test tart-declare followed by defvar *)
@@ -384,7 +384,7 @@ let test_tart_declare_arrow_type () =
   match result.forms with
   | [ Check.TartDeclareForm { var_type; _ } ] ->
       Alcotest.(check string)
-        "arrow type" "(-> (String) Nil)" (to_string var_type)
+        "arrow type" "(-> (string) nil)" (to_string var_type)
   | _ -> Alcotest.fail "expected TartDeclareForm"
 
 (* =============================================================================
@@ -399,7 +399,7 @@ let test_setq_checks_declared_type () =
         (setq my-cache "not a hash table")|}
   in
   let result = Check.check_program sexps in
-  (* Should have a type error: String is not (Hash-table String Int) *)
+  (* Should have a type error: string is not (Hash-table string int) *)
   Alcotest.(check bool) "has error" true (List.length result.errors > 0)
 
 (** Test that setq to declared variable with correct type succeeds *)
@@ -420,7 +420,7 @@ let test_setq_tart_declare_checks () =
         (setq my-count "not an int")|}
   in
   let result = Check.check_program sexps in
-  (* Should error: String is not Int *)
+  (* Should error: string is not Int *)
   Alcotest.(check bool) "has error" true (List.length result.errors > 0)
 
 (** Test reading declared variable has correct type *)
@@ -431,7 +431,7 @@ let test_read_declared_variable () =
         (upcase my-name)|}
   in
   let result = Check.check_program sexps in
-  (* my-name has type String, upcase expects String - should work *)
+  (* my-name has type string, upcase expects string - should work *)
   Alcotest.(check int) "no errors" 0 (List.length result.errors)
 
 (* =============================================================================
@@ -448,7 +448,7 @@ let test_form_result_defun_string () =
 let test_form_result_expr_string () =
   let result = Check.ExprForm { ty = Prim.int } in
   let str = Check.form_result_to_string result in
-  Alcotest.(check string) "Int" "Int" str
+  Alcotest.(check string) "int" "int" str
 
 (* =============================================================================
    tart-type (file-local type alias) Tests (R5, R6)
@@ -478,7 +478,7 @@ let test_tart_type_usable_in_annotation () =
   match result.forms with
   | [ _; Check.DefvarForm { name; var_type } ] ->
       Alcotest.(check string) "name" "my-num" name;
-      Alcotest.(check string) "type" "Int" (to_string var_type)
+      Alcotest.(check string) "type" "int" (to_string var_type)
   | _ -> Alcotest.fail "expected TartTypeForm then DefvarForm"
 
 (** Test that tart-type type error when value doesn't match *)
@@ -489,7 +489,7 @@ let test_tart_type_annotation_mismatch () =
         (defvar x (tart my-string 42))|}
   in
   let result = Check.check_program sexps in
-  (* Should have error: Int is not String *)
+  (* Should have error: Int is not string *)
   Alcotest.(check bool) "has error" true (List.length result.errors > 0)
 
 (** Test parameterized tart-type *)
@@ -515,7 +515,7 @@ let test_tart_type_parameterized_usage () =
   match result.forms with
   | [ _; Check.DefvarForm { var_type; _ } ] ->
       Alcotest.(check string)
-        "type" "(-> (Int) (Or T Nil))" (to_string var_type)
+        "type" "(-> (int) (Or t nil))" (to_string var_type)
   | _ -> Alcotest.fail "expected TartTypeForm then DefvarForm"
 
 (** Test multi-param tart-type *)
@@ -532,7 +532,7 @@ let test_tart_type_multi_param () =
     ->
       Alcotest.(check (list string)) "params" [ "k"; "v" ] params;
       Alcotest.(check string)
-        "type" "(HashTable String Int)" (to_string var_type)
+        "type" "(hash-table string int)" (to_string var_type)
   | _ -> Alcotest.fail "expected forms"
 
 (** Test tart-type to_string for simple alias *)
@@ -586,7 +586,7 @@ let test_invariance_list_int_not_list_any () =
   Alcotest.(check bool) "has type error" true (List.length result.errors > 0)
 
 (** Test that (list any) passed to (list any) parameter is ok. Note: '(1
-    "hello") infers to (List Any), so no annotation needed. *)
+    "hello") infers to (list Any), so no annotation needed. *)
 let test_invariance_list_any_to_list_any () =
   let sexps =
     parse_many
@@ -637,8 +637,8 @@ let test_invariance_hash_table_key () =
   Alcotest.(check bool) "has type error" true (List.length result.errors > 0)
 
 (** Test that polymorphic functions still work with lists. Note: We use (list 1
-    2 3) not '(1 2 3) because quoted lists infer to (List Any) and can't be
-    narrowed to (List Int) due to invariance. *)
+    2 3) not '(1 2 3) because quoted lists infer to (list Any) and can't be
+    narrowed to (list int) due to invariance. *)
 let test_invariance_poly_function_ok () =
   let sexps =
     parse_many
@@ -664,7 +664,7 @@ let test_at_type_basic () =
   let sexp = parse "(tart [int] identity 42)" in
   let ty, errors = Check.check_expr ~env sexp in
   Alcotest.(check int) "no errors" 0 (List.length errors);
-  Alcotest.(check string) "returns Int" "Int" (to_string ty)
+  Alcotest.(check string) "returns int" "int" (to_string ty)
 
 (** Test that (tart [string] identity 42) produces type error *)
 let test_at_type_type_mismatch () =
@@ -673,7 +673,7 @@ let test_at_type_type_mismatch () =
   in
   let sexp = parse {|(tart [string] identity 42)|} in
   let _, errors = Check.check_expr ~env sexp in
-  (* Should error: 42 is Int, but String was specified *)
+  (* Should error: 42 is Int, but string was specified *)
   Alcotest.(check bool) "has type error" true (List.length errors > 0)
 
 (** Test that (tart [_] identity 42) with placeholder infers correctly *)
@@ -684,7 +684,7 @@ let test_at_type_placeholder () =
   let sexp = parse "(tart [_] identity 42)" in
   let ty, errors = Check.check_expr ~env sexp in
   Alcotest.(check int) "no errors" 0 (List.length errors);
-  Alcotest.(check string) "returns Int" "Int" (to_string ty)
+  Alcotest.(check string) "returns int" "int" (to_string ty)
 
 (** Test multi-parameter function with explicit types *)
 let test_at_type_multi_param () =
@@ -695,7 +695,7 @@ let test_at_type_multi_param () =
   let sexp = parse {|(tart [int string] pair 1 "hi")|} in
   let ty, errors = Check.check_expr ~env sexp in
   Alcotest.(check int) "no errors" 0 (List.length errors);
-  Alcotest.(check string) "returns cons" "(cons Int String)" (to_string ty)
+  Alcotest.(check string) "returns cons" "(cons int string)" (to_string ty)
 
 (** Test partial instantiation with mixed explicit and inferred *)
 let test_at_type_partial () =
@@ -706,8 +706,8 @@ let test_at_type_partial () =
   let sexp = parse {|(tart [_ string] pair 1 "hi")|} in
   let ty, errors = Check.check_expr ~env sexp in
   Alcotest.(check int) "no errors" 0 (List.length errors);
-  (* First param inferred from 1 (Int), second explicit (String) *)
-  Alcotest.(check string) "returns cons" "(cons Int String)" (to_string ty)
+  (* First param inferred from 1 (int), second explicit (string) *)
+  Alcotest.(check string) "returns cons" "(cons int string)" (to_string ty)
 
 (** Test tart instantiation in a program context *)
 let test_at_type_in_program () =
@@ -743,11 +743,12 @@ let test_at_type_hk_instantiation () =
       (TArrow ([ PPositional Prim.int ], Prim.string))
       env
   in
-  let env = Env.extend_mono "my-list" (TApp (TCon "List", [ Prim.int ])) env in
+  (* Use list_of to get proper intrinsic type name *)
+  let env = Env.extend_mono "my-list" (list_of Prim.int) env in
   let sexp = parse {|(tart [list int string] fmap number-to-string my-list)|} in
   let ty, errors = Check.check_expr ~env sexp in
   Alcotest.(check int) "no errors" 0 (List.length errors);
-  Alcotest.(check string) "returns (List String)" "(List String)" (to_string ty)
+  Alcotest.(check string) "returns (list string)" "(list string)" (to_string ty)
 
 (** Test HK instantiation with partial placeholder *)
 let test_at_type_hk_partial () =
@@ -766,14 +767,13 @@ let test_at_type_hk_partial () =
       (TArrow ([ PPositional Prim.string ], Prim.string))
       env
   in
-  let env =
-    Env.extend_mono "my-list" (TApp (TCon "List", [ Prim.string ])) env
-  in
+  (* Use list_of to get proper intrinsic type name *)
+  let env = Env.extend_mono "my-list" (list_of Prim.string) env in
   (* Use placeholder for a, let it be inferred from my-list and upcase *)
   let sexp = parse {|(tart [list _ _] fmap upcase my-list)|} in
   let ty, errors = Check.check_expr ~env sexp in
   Alcotest.(check int) "no errors" 0 (List.length errors);
-  Alcotest.(check string) "returns (List String)" "(List String)" (to_string ty)
+  Alcotest.(check string) "returns (list string)" "(list string)" (to_string ty)
 
 (** Test HK instantiation with type mismatch *)
 let test_at_type_hk_mismatch () =
@@ -792,7 +792,7 @@ let test_at_type_hk_mismatch () =
       (TArrow ([ PPositional Prim.string ], Prim.string))
       env
   in
-  (* my-list is Option String, but we say list *)
+  (* my-list is Option string, but we say list *)
   let env = Env.extend_mono "my-list" (option_of Prim.string) env in
   let sexp = parse {|(tart [list string string] fmap upcase my-list)|} in
   let _, errors = Check.check_expr ~env sexp in
@@ -860,14 +860,14 @@ let test_pcase_returns_branch_type () =
   let sexp = parse {|(pcase x (_ 42))|} in
   let ty, errors = Check.check_expr sexp in
   Alcotest.(check int) "no errors" 0 (List.length errors);
-  Alcotest.(check string) "pcase returns Int" "Int" (to_string ty)
+  Alcotest.(check string) "pcase returns int" "int" (to_string ty)
 
 let test_pcase_unifies_branches () =
   (* All branches must have compatible types *)
   let sexp = parse {|(pcase x (1 "one") (2 "two") (_ "default"))|} in
   let ty, errors = Check.check_expr sexp in
   Alcotest.(check int) "no errors" 0 (List.length errors);
-  Alcotest.(check string) "pcase returns String" "String" (to_string ty)
+  Alcotest.(check string) "pcase returns string" "string" (to_string ty)
 
 let test_pcase_branch_type_mismatch () =
   (* Incompatible branch types cause error *)
@@ -883,7 +883,7 @@ let test_pcase_binds_pattern_var () =
   let sexp = parse {|(pcase 42 ((, x) (+ x 1)))|} in
   let ty, errors = Check.check_expr ~env sexp in
   Alcotest.(check int) "no errors" 0 (List.length errors);
-  Alcotest.(check string) "pcase with binding returns Int" "Int" (to_string ty)
+  Alcotest.(check string) "pcase with binding returns int" "int" (to_string ty)
 
 let test_pcase_exhaustive_same_as_pcase () =
   (* pcase-exhaustive works identically to pcase for type checking *)
@@ -891,7 +891,7 @@ let test_pcase_exhaustive_same_as_pcase () =
   let ty, errors = Check.check_expr sexp in
   Alcotest.(check int) "no errors" 0 (List.length errors);
   Alcotest.(check string)
-    "pcase-exhaustive returns String" "String" (to_string ty)
+    "pcase-exhaustive returns string" "string" (to_string ty)
 
 (* =============================================================================
    Test Suite

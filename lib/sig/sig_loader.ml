@@ -50,13 +50,13 @@ let is_defined_type ctx name = List.mem name ctx.defined_types
 
 (** {1 Primitive and Built-in Types} *)
 
-(** Check if a name is a primitive type *)
+(** Check if a name is a primitive type.
+
+    This now only checks for intrinsic names (with %tart-intrinsic% prefix).
+    User-facing names like "int", "string" etc. are handled by the prelude. *)
 let is_primitive name =
-  match name with
-  | "int" | "float" | "num" | "string" | "symbol" | "keyword" | "nil" | "t"
-  | "bool" | "truthy" | "any" | "never" ->
-      true
-  | _ -> false
+  (* Intrinsic names are always recognized as primitives *)
+  Types.is_intrinsic_name name
 
 (** {1 Type Validation} *)
 
@@ -367,36 +367,52 @@ let build_opaque_context (module_name : string) (sig_file : signature) :
     They assume the signature has been validated (type variables are in scope).
 *)
 
-(** Canonicalize a type constructor name to match core types convention.
-    Signature files use lowercase; core types use capitalized names. *)
-let canonicalize_type_name (name : string) : string =
-  match name with
-  | "list" -> "List"
-  | "vector" -> "Vector"
-  | "option" -> "Option"
-  | "pair" -> "Pair"
-  | "hash-table" -> "HashTable"
-  | "tuple" -> "Tuple"
-  | "ok" -> "ok" (* Variant tags stay as-is *)
-  | "err" -> "err" (* Variant tags stay as-is *)
-  | _ -> name
+(** Canonicalize a type constructor name.
 
-(** Convert a signature type name to a primitive type or TCon *)
+    This handles: 1. Intrinsic names are passed through unchanged 2. Container
+    type names map to their intrinsic equivalents 3. Other names pass through
+    unchanged
+
+    Note: The prelude handles user-facing names like "list" via aliases. This
+    function is for backwards compatibility with any remaining hardcoded
+    references. *)
+let canonicalize_type_name (name : string) : string =
+  if Types.is_intrinsic_name name then name
+  else
+    match name with
+    (* Container types map to intrinsics *)
+    | "List" -> Types.intrinsic "List"
+    | "Vector" -> Types.intrinsic "Vector"
+    | "Pair" -> Types.intrinsic "Pair"
+    | "HashTable" -> Types.intrinsic "HashTable"
+    (* Lowercase container names also map to intrinsics *)
+    | "list" -> Types.intrinsic "List"
+    | "vector" -> Types.intrinsic "Vector"
+    | "pair" -> Types.intrinsic "Pair"
+    | "hash-table" -> Types.intrinsic "HashTable"
+    | "tuple" ->
+        "Tuple" (* Tuple doesn't need intrinsic prefix - it's structural *)
+    (* Variant tags stay as-is *)
+    | "ok" -> "ok"
+    | "err" -> "err"
+    | _ -> name
+
+(** Convert a signature type name to a type.
+
+    Intrinsic names (with %tart-intrinsic% prefix) are passed through directly.
+    Other names are canonicalized (e.g., "list" -> "List" for backwards
+    compatibility with any hardcoded type names).
+
+    Note: User-facing primitive names like "int", "string" are now handled by
+    the prelude, not hardcoded here. This function is only called when a name is
+    not found in the alias context. *)
 let sig_name_to_prim (name : string) : Types.typ =
-  match name with
-  | "int" -> Types.Prim.int
-  | "float" -> Types.Prim.float
-  | "num" -> Types.Prim.num
-  | "string" -> Types.Prim.string
-  | "symbol" -> Types.Prim.symbol
-  | "keyword" -> Types.Prim.keyword
-  | "nil" -> Types.Prim.nil
-  | "t" -> Types.Prim.t
-  | "bool" -> Types.Prim.bool
-  | "truthy" -> Types.Prim.truthy
-  | "any" -> Types.Prim.any
-  | "never" -> Types.Prim.never
-  | _ -> Types.TCon (canonicalize_type_name name)
+  if Types.is_intrinsic_name name then
+    (* Intrinsic types pass through directly *)
+    Types.TCon name
+  else
+    (* Non-intrinsic names get canonicalized *)
+    Types.TCon (canonicalize_type_name name)
 
 (** Substitute type variables in a sig_type with other sig_types. Used for
     expanding parameterized type aliases. *)
@@ -466,7 +482,7 @@ let empty_type_context =
 let satisfies_bound (arg_typ : Types.typ) (bound_typ : Types.typ) : bool =
   let bound_typ = Types.repr bound_typ in
   match bound_typ with
-  | Types.TCon "Truthy" ->
+  | Types.TCon name when name = Types.intrinsic "Truthy" ->
       (* Truthy bound: arg must not contain nil *)
       Types.is_truthy arg_typ
   | _ ->
@@ -869,12 +885,16 @@ let load_defvar_with_ctx (ctx : type_context) (d : defvar_decl) :
       Type_env.Mono ty
 
 (** Convert a defun declaration to a type scheme (without alias/opaque
-    expansion). *)
+    expansion). This is kept for backwards compatibility but users should prefer
+    load_defun_with_ctx with the prelude context for proper intrinsic type name
+    resolution. *)
 let load_defun (d : defun_decl) : Type_env.scheme =
   load_defun_with_ctx empty_type_context d
 
 (** Convert a defvar declaration to a type scheme (without alias/opaque
-    expansion). *)
+    expansion). This is kept for backwards compatibility but users should prefer
+    load_defvar_with_ctx with the prelude context for proper intrinsic type name
+    resolution. *)
 let load_defvar (d : defvar_decl) : Type_env.scheme =
   load_defvar_with_ctx empty_type_context d
 

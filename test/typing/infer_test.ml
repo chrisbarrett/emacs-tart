@@ -29,30 +29,30 @@ let constraint_count ?(env = Env.empty) str =
    ============================================================================= *)
 
 let test_int_literal () =
-  Alcotest.(check string) "int literal" "Int" (infer_type "42")
+  Alcotest.(check string) "int literal" "int" (infer_type "42")
 
 let test_negative_int () =
-  Alcotest.(check string) "negative int" "Int" (infer_type "-17")
+  Alcotest.(check string) "negative int" "int" (infer_type "-17")
 
 let test_float_literal () =
-  Alcotest.(check string) "float literal" "Float" (infer_type "3.14")
+  Alcotest.(check string) "float literal" "float" (infer_type "3.14")
 
 let test_string_literal () =
-  Alcotest.(check string) "string literal" "String" (infer_type "\"hello\"")
+  Alcotest.(check string) "string literal" "string" (infer_type "\"hello\"")
 
 let test_empty_string () =
-  Alcotest.(check string) "empty string" "String" (infer_type "\"\"")
+  Alcotest.(check string) "empty string" "string" (infer_type "\"\"")
 
 let test_keyword_literal () =
-  Alcotest.(check string) "keyword literal" "Keyword" (infer_type ":foo")
+  Alcotest.(check string) "keyword literal" "keyword" (infer_type ":foo")
 
 let test_char_literal () =
   (* Characters are integers in Elisp *)
-  Alcotest.(check string) "char literal" "Int" (infer_type "?a")
+  Alcotest.(check string) "char literal" "int" (infer_type "?a")
 
 let test_nil_literal () =
   (* nil is the empty list *)
-  Alcotest.(check string) "nil" "Nil" (infer_type "()")
+  Alcotest.(check string) "nil" "nil" (infer_type "()")
 
 (* =============================================================================
    Variable Tests
@@ -60,7 +60,7 @@ let test_nil_literal () =
 
 let test_bound_var () =
   let env = Env.extend_mono "x" Prim.int Env.empty in
-  Alcotest.(check string) "bound variable" "Int" (infer_type ~env "x")
+  Alcotest.(check string) "bound variable" "int" (infer_type ~env "x")
 
 let test_unbound_var () =
   (* Unbound variables get fresh type variables *)
@@ -83,17 +83,17 @@ let test_poly_var_instantiation () =
    ============================================================================= *)
 
 let test_quoted_symbol () =
-  Alcotest.(check string) "quoted symbol" "Symbol" (infer_type "'foo")
+  Alcotest.(check string) "quoted symbol" "symbol" (infer_type "'foo")
 
 let test_quoted_list () =
   Alcotest.(check string)
-    "quoted list" "(List (Or Truthy Nil))" (infer_type "'(1 2 3)")
+    "quoted list" "(list (Or truthy nil))" (infer_type "'(1 2 3)")
 
 let test_quoted_int () =
-  Alcotest.(check string) "quoted int" "Int" (infer_type "'42")
+  Alcotest.(check string) "quoted int" "int" (infer_type "'42")
 
 let test_quoted_string () =
-  Alcotest.(check string) "quoted string" "String" (infer_type "'\"hello\"")
+  Alcotest.(check string) "quoted string" "string" (infer_type "'\"hello\"")
 
 (* =============================================================================
    Lambda Tests
@@ -101,7 +101,7 @@ let test_quoted_string () =
 
 let test_lambda_no_params () =
   let ty = infer_type "(lambda () 42)" in
-  Alcotest.(check string) "nullary lambda" "(-> () Int)" ty
+  Alcotest.(check string) "nullary lambda" "(-> () int)" ty
 
 let test_lambda_one_param () =
   let ty = infer_type "(lambda (x) x)" in
@@ -185,26 +185,26 @@ let test_if_without_else () =
 
 let test_let_simple () =
   let ty = infer_type "(let ((x 42)) x)" in
-  Alcotest.(check string) "simple let" "Int" ty
+  Alcotest.(check string) "simple let" "int" ty
 
 let test_let_multiple_bindings () =
   let ty = infer_type "(let ((x 1) (y 2)) y)" in
-  Alcotest.(check string) "let with two bindings" "Int" ty
+  Alcotest.(check string) "let with two bindings" "int" ty
 
 let test_let_binding_shadowing () =
   let env = Env.extend_mono "x" Prim.string Env.empty in
   let ty = infer_type ~env "(let ((x 42)) x)" in
   (* Inner x shadows outer x *)
-  Alcotest.(check string) "let shadows outer" "Int" ty
+  Alcotest.(check string) "let shadows outer" "int" ty
 
 let test_let_nil_binding () =
   let ty = infer_type "(let ((x)) x)" in
-  Alcotest.(check string) "nil binding" "Nil" ty
+  Alcotest.(check string) "nil binding" "nil" ty
 
 let test_let_star_sequential () =
   let ty = infer_type "(let* ((x 1) (y x)) y)" in
   (* y sees x, should be Int *)
-  Alcotest.(check string) "let* sequential" "Int" ty
+  Alcotest.(check string) "let* sequential" "int" ty
 
 (* =============================================================================
    Progn Tests
@@ -212,15 +212,15 @@ let test_let_star_sequential () =
 
 let test_progn_empty () =
   let ty = infer_type "(progn)" in
-  Alcotest.(check string) "empty progn" "Nil" ty
+  Alcotest.(check string) "empty progn" "nil" ty
 
 let test_progn_single () =
   let ty = infer_type "(progn 42)" in
-  Alcotest.(check string) "single progn" "Int" ty
+  Alcotest.(check string) "single progn" "int" ty
 
 let test_progn_multiple () =
   let ty = infer_type "(progn 1 2 \"end\")" in
-  Alcotest.(check string) "multiple progn" "String" ty
+  Alcotest.(check string) "multiple progn" "string" ty
 
 (* =============================================================================
    Boolean Expression Tests
@@ -228,23 +228,23 @@ let test_progn_multiple () =
 
 let test_and_empty () =
   let ty = infer_type "(and)" in
-  Alcotest.(check string) "empty and" "T" ty
+  Alcotest.(check string) "empty and" "t" ty
 
 let test_or_empty () =
   let ty = infer_type "(or)" in
-  Alcotest.(check string) "empty or" "Nil" ty
+  Alcotest.(check string) "empty or" "nil" ty
 
 let test_not_returns_bool () =
   let ty = infer_type "(not 42)" in
-  Alcotest.(check string) "not returns bool" "(Or T Nil)" ty
+  Alcotest.(check string) "not returns bool" "(Or t nil)" ty
 
 let test_and_last_type () =
   let ty = infer_type "(and 1 \"str\")" in
-  Alcotest.(check string) "and returns last" "String" ty
+  Alcotest.(check string) "and returns last" "string" ty
 
 let test_or_last_type () =
   let ty = infer_type "(or 1 \"str\")" in
-  Alcotest.(check string) "or returns last" "String" ty
+  Alcotest.(check string) "or returns last" "string" ty
 
 (* =============================================================================
    Vector Tests
@@ -253,15 +253,15 @@ let test_or_last_type () =
 let test_empty_vector () =
   let ty = infer_type "#()" in
   (* Empty vector has fresh element type *)
-  Alcotest.(check bool) "empty vector" true (String.sub ty 0 8 = "(Vector ")
+  Alcotest.(check bool) "empty vector" true (String.sub ty 0 8 = "(vector ")
 
 let test_int_vector () =
   let ty = infer_type "#(1 2 3)" in
-  Alcotest.(check string) "int vector" "(Vector Int)" ty
+  Alcotest.(check string) "int vector" "(vector int)" ty
 
 let test_string_vector () =
   let ty = infer_type "#(\"a\" \"b\")" in
-  Alcotest.(check string) "string vector" "(Vector String)" ty
+  Alcotest.(check string) "string vector" "(vector string)" ty
 
 let test_mixed_vector_constraints () =
   (* Mixed elements generate unification constraints *)
@@ -332,7 +332,7 @@ let test_pcase_with_env () =
 let test_defun_returns_symbol () =
   (* As an expression, defun returns a symbol *)
   let ty = infer_type "(defun foo () 42)" in
-  Alcotest.(check string) "defun returns symbol" "Symbol" ty
+  Alcotest.(check string) "defun returns symbol" "symbol" ty
 
 let test_defun_infer_simple () =
   (* infer_defun extracts the function type *)
@@ -391,7 +391,7 @@ let test_defun_declare_tart_monomorphic () =
   | Some result ->
       Alcotest.(check string) "defun name" "my-add" result.name;
       let ty_str = to_string result.fn_type in
-      Alcotest.(check string) "declared type" "(-> (Int Int) Int)" ty_str
+      Alcotest.(check string) "declared type" "(-> (int int) int)" ty_str
   | None -> Alcotest.fail "expected defun result"
 
 let test_defun_declare_tart_polymorphic () =
@@ -447,7 +447,7 @@ let test_defun_declare_tart_body_mismatch () =
   | Some result ->
       (* Function should still have the declared type *)
       let ty_str = to_string result.fn_type in
-      Alcotest.(check string) "declared type" "(-> (Int) String)" ty_str;
+      Alcotest.(check string) "declared type" "(-> (int) string)" ty_str;
       (* But there should be a constraint that x = String,
          which will produce an error when solved *)
       Alcotest.(check bool)
@@ -468,7 +468,7 @@ let test_defun_no_declare_still_infers () =
       Alcotest.(check string) "defun name" "foo" result.name;
       let ty_str = to_string result.fn_type in
       (* Should infer Int -> Int due to + constraint *)
-      Alcotest.(check string) "inferred type" "(-> (Int) Int)" ty_str
+      Alcotest.(check string) "inferred type" "(-> (int) int)" ty_str
   | None -> Alcotest.fail "expected defun result"
 
 let test_defun_declare_tart_with_body () =
@@ -488,7 +488,7 @@ let test_defun_declare_tart_with_body () =
   match Infer.infer_defun env sexp with
   | Some result ->
       let ty_str = to_string result.fn_type in
-      Alcotest.(check string) "declared type" "(-> (String) String)" ty_str
+      Alcotest.(check string) "declared type" "(-> (string) string)" ty_str
   | None -> Alcotest.fail "expected defun result"
 
 (* =============================================================================
@@ -498,7 +498,7 @@ let test_defun_declare_tart_with_body () =
 let test_tart_annotation_result_type () =
   (* (tart string "hello") should have type String *)
   let ty = infer_type {|(tart string "hello")|} in
-  Alcotest.(check string) "tart annotation result" "String" ty
+  Alcotest.(check string) "tart annotation result" "string" ty
 
 let test_tart_annotation_generates_constraint () =
   (* (tart int "wrong") generates a constraint: declared = inferred *)
@@ -509,7 +509,7 @@ let test_tart_annotation_uses_declared_type () =
   (* The result type should be the declared type, not the inferred type *)
   let ty = infer_type "(tart string 42)" in
   (* Result is String (declared), even though 42 is Int *)
-  Alcotest.(check string) "uses declared type" "String" ty
+  Alcotest.(check string) "uses declared type" "string" ty
 
 let test_tart_annotation_nested () =
   (* Annotations can be nested in expressions.
@@ -517,12 +517,12 @@ let test_tart_annotation_nested () =
      We check that the tart form itself has type Int and generates
      constraints that can be solved. *)
   let ty = infer_type "(let ((x (tart int 42))) x)" in
-  Alcotest.(check string) "nested annotation" "Int" ty
+  Alcotest.(check string) "nested annotation" "int" ty
 
 let test_tart_annotation_list_type () =
-  (* (tart (list int) '(1 2 3)) should have type (List Int) *)
+  (* (tart (list int) '(1 2 3)) should have type (list int) *)
   let ty = infer_type {|(tart (list int) '(1 2 3))|} in
-  Alcotest.(check string) "list annotation" "(List Int)" ty
+  Alcotest.(check string) "list annotation" "(list int)" ty
 
 let test_tart_annotation_polymorphic () =
   (* Polymorphic annotations like (tart (a -> a) (lambda (x) x)) *)

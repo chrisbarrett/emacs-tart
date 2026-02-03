@@ -320,10 +320,13 @@ let test_mixed_internal_public () =
 
 (** Missing signature diagnostics are created correctly *)
 let test_missing_signature_diagnostic () =
+  (* Test: foo.el defines foo-missing but foo.tart doesn't have a signature for it.
+     Should produce exactly one warning diagnostic about the missing signature. *)
   let files =
     [
       ("foo.el", "(defun foo-missing (x) x)");
-      ("foo.tart", "(defun foo-other (int) -> int)");
+      (* Empty .tart file - foo-missing is in .el but not in signature *)
+      ("foo.tart", "");
     ]
   in
   with_temp_dir files (fun dir ->
@@ -527,11 +530,12 @@ let test_autoload_search_path () =
 
 (** R10: Inline annotation that matches .tart declaration is OK *)
 let test_inline_matches_tart_ok () =
+  (* Test that inline tart declaration matches signature file: both say (int int) -> int.
+     Use a simple body that just returns the first arg to avoid needing + signature. *)
   let files =
     [
       ( "foo.el",
-        "(defun foo-add (a b)\n  (declare (tart (int int) -> int))\n  (+ a b))"
-      );
+        "(defun foo-add (a b)\n  (declare (tart (int int) -> int))\n  a)" );
       ("foo.tart", "(defun foo-add (int int) -> int)");
     ]
   in
@@ -539,10 +543,7 @@ let test_inline_matches_tart_ok () =
       let config = Module_check.default_config () in
       let el_path = Filename.concat dir "foo.el" in
       let sexps =
-        parse
-          "(defun foo-add (a b)\n\
-          \  (declare (tart (int int) -> int))\n\
-          \  (+ a b))"
+        parse "(defun foo-add (a b)\n  (declare (tart (int int) -> int))\n  a)"
       in
       let result = Module_check.check_module ~config ~filename:el_path sexps in
       Alcotest.(check int)

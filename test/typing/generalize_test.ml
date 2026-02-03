@@ -127,24 +127,24 @@ let test_let_identity_polymorphic () =
 let test_let_identity_used_at_int () =
   (* (let ((id (lambda (x) x))) (id 1)) should infer result as Int *)
   let ty = infer_and_solve "(let ((id (lambda (x) x))) (id 1))" in
-  Alcotest.(check string) "result is Int" "Int" ty
+  Alcotest.(check string) "result is int" "int" ty
 
 let test_let_identity_used_at_string () =
   (* (let ((id (lambda (x) x))) (id "s")) should infer result as String *)
   let ty = infer_and_solve "(let ((id (lambda (x) x))) (id \"s\"))" in
-  Alcotest.(check string) "result is String" "String" ty
+  Alcotest.(check string) "result is string" "string" ty
 
 let test_let_const_polymorphic () =
   (* const function: (let ((const (lambda (x y) x))) ...) *)
   let ty =
     infer_and_solve "(let ((const (lambda (x y) x))) (const 1 \"ignore\"))"
   in
-  Alcotest.(check string) "const returns Int" "Int" ty
+  Alcotest.(check string) "const returns int" "int" ty
 
 let test_let_star_generalization () =
   (* let* should also generalize *)
   let ty = infer_and_solve "(let* ((id (lambda (x) x)) (n (id 1))) n)" in
-  Alcotest.(check string) "let* generalizes" "Int" ty
+  Alcotest.(check string) "let* generalizes" "int" ty
 
 (* =============================================================================
    Value Restriction Tests
@@ -165,13 +165,13 @@ let test_value_restriction_application () =
   let _ = Unify.solve result.constraints in
   (* x should be Int (monomorphic), not polymorphic *)
   let ty_str = to_string result.ty in
-  Alcotest.(check string) "value restriction" "Int" ty_str
+  Alcotest.(check string) "value restriction" "int" ty_str
 
 let test_value_restriction_reverse () =
   (* Spec R6 test: (let ((xs (reverse '()))) xs) has monomorphic type.
-     reverse : forall a. (List a) -> (List a)
+     reverse : forall a. (list a) -> (list a)
      Since (reverse '()) is a function application (not a syntactic value),
-     xs should NOT be generalized - it stays at (List Any). *)
+     xs should NOT be generalized - it stays at (list Any). *)
   setup ();
   let env =
     Env.of_list
@@ -186,10 +186,10 @@ let test_value_restriction_reverse () =
   let sexp = parse "(let ((xs (reverse '()))) xs)" in
   let result = Infer.infer env sexp in
   let _ = Unify.solve result.constraints in
-  (* xs should be monomorphic (List Any), not polymorphic *)
+  (* xs should be monomorphic (list Any), not polymorphic *)
   let ty_str = to_string result.ty in
   Alcotest.(check string)
-    "reverse result monomorphic" "(List (Or Truthy Nil))" ty_str
+    "reverse result monomorphic" "(list (Or truthy nil))" ty_str
 
 (* =============================================================================
    Test Suite

@@ -91,9 +91,26 @@ val repr : typ -> typ
 val is_tvar : typ -> bool
 (** Check if a type is a type variable (after following links). *)
 
+(** {1 Intrinsic Types} *)
+
+val intrinsic_prefix : string
+(** The prefix used for built-in intrinsic type names ("%tart-intrinsic%"). *)
+
+val intrinsic : string -> string
+(** [intrinsic name] creates an intrinsic type name with the prefix. *)
+
+val is_intrinsic_name : string -> bool
+(** [is_intrinsic_name name] returns true if [name] is an intrinsic type name.
+*)
+
+val intrinsic_base_name : string -> string
+(** [intrinsic_base_name name] extracts the base name from an intrinsic (e.g.,
+    "%tart-intrinsic%Int" -> "Int"). Returns [name] unchanged if not an
+    intrinsic. *)
+
 (** {1 Primitive types} *)
 
-(** Primitive type constants. *)
+(** Primitive type constants using intrinsic names. *)
 module Prim : sig
   val int : typ
   val float : typ

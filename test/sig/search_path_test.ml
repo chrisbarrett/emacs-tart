@@ -270,7 +270,7 @@ let test_loaded_signature_type_checks () =
           let ty1, errors1 = check_expr_str ~env "(math-add 1 2)" in
           Alcotest.(check int)
             "no errors for correct call" 0 (List.length errors1);
-          Alcotest.(check string) "result is Int" "Int" (Types.to_string ty1);
+          Alcotest.(check string) "result is int" "int" (Types.to_string ty1);
           (* Call with wrong types should produce error *)
           let _, errors2 = check_expr_str ~env "(math-add \"a\" \"b\")" in
           Alcotest.(check bool)
@@ -311,12 +311,12 @@ let test_resolver_with_open () =
           | None -> Alcotest.fail "process not found"
           | Some scheme ->
               let scheme_str = Type_env.scheme_to_string scheme in
-              (* int-list should expand to (List Int) *)
+              (* int-list should expand to (list int) *)
               Alcotest.(check bool)
                 "type alias expanded" true
                 (try
                    let _ =
-                     Str.search_forward (Str.regexp_string "List") scheme_str 0
+                     Str.search_forward (Str.regexp_string "list") scheme_str 0
                    in
                    true
                  with Not_found -> false))
@@ -547,9 +547,9 @@ let test_load_data_tart () =
       (* Verify type checking works with a predicate (uses Any, avoids num/int subtyping) *)
       let ty, errors = check_expr_str ~env "(null nil)" in
       Alcotest.(check int) "null no errors" 0 (List.length errors);
-      (* null returns Prim.bool which is (Or T Nil) *)
+      (* null returns Prim.bool which is (Or t nil) *)
       Alcotest.(check string)
-        "null returns bool" "(Or T Nil)" (Types.to_string ty)
+        "null returns bool" "(Or t nil)" (Types.to_string ty)
 
 (** Test that fns.tart parses successfully (Spec 24 R5) *)
 let test_parse_fns_tart () =

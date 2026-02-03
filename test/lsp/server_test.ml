@@ -786,13 +786,13 @@ let test_hover_on_literal () =
       Alcotest.(check bool) "result is not null" true (result <> `Null);
       let contents = result |> member "contents" in
       let value = contents |> member "value" |> to_string in
-      (* Should contain "Int" type *)
+      (* Should contain "int" type *)
       Alcotest.(check bool)
         "contains Int type" true
         (String.length value > 0
         &&
         try
-          let _ = Str.search_forward (Str.regexp_string "Int") value 0 in
+          let _ = Str.search_forward (Str.regexp_string "int") value 0 in
           true
         with Not_found -> false)
 
@@ -992,9 +992,9 @@ let test_hover_instantiated_type () =
       ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
       ()
   in
-  (* list is polymorphic: (forall (a) (-> (&rest a) (List a)))
+  (* list is polymorphic: (forall (a) (-> (&rest a) (list a)))
      When applied to 1 and 2, 'a should be instantiated to Int
-     Result: (-> (&rest Int) (List Int)) *)
+     Result: (-> (&rest int) (list int)) *)
   let did_open_msg =
     make_message ~method_:"textDocument/didOpen"
       ~params:
@@ -1051,7 +1051,7 @@ let test_hover_instantiated_type () =
       Alcotest.(check bool)
         "contains Int (instantiated)" true
         (try
-           let _ = Str.search_forward (Str.regexp_string "Int") value 0 in
+           let _ = Str.search_forward (Str.regexp_string "int") value 0 in
            true
          with Not_found -> false)
 (* NOTE: Ideally we'd also check that there are no unresolved type
@@ -1123,11 +1123,11 @@ let test_hover_with_errors_elsewhere () =
       Alcotest.(check bool) "result is not null" true (result <> `Null);
       let contents = result |> member "contents" in
       let value = contents |> member "value" |> to_string in
-      (* Should contain "Int" type for the literal 42 *)
+      (* Should contain "int" type for the literal 42 *)
       Alcotest.(check bool)
         "contains Int type" true
         (try
-           let _ = Str.search_forward (Str.regexp_string "Int") value 0 in
+           let _ = Str.search_forward (Str.regexp_string "int") value 0 in
            true
          with Not_found -> false)
 

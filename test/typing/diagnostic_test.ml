@@ -34,10 +34,10 @@ let test_type_mismatch_diagnostic () =
   Alcotest.(check bool) "has expected" true (Option.is_some d.expected);
   Alcotest.(check bool) "has actual" true (Option.is_some d.actual);
   Alcotest.(check string)
-    "expected is Int" "Int"
+    "expected is int" "int"
     (Types.to_string (Option.get d.expected));
   Alcotest.(check string)
-    "actual is String" "String"
+    "actual is string" "string"
     (Types.to_string (Option.get d.actual))
 
 let test_arity_mismatch_diagnostic () =
@@ -121,11 +121,11 @@ let test_to_string_includes_expected_actual () =
     "contains 'found'" true
     (contains_pattern (Str.regexp_case_fold "found") str);
   Alcotest.(check bool)
-    "contains Int" true
-    (contains_pattern (Str.regexp "Int") str);
+    "contains int" true
+    (contains_pattern (Str.regexp "int") str);
   Alcotest.(check bool)
-    "contains String" true
-    (contains_pattern (Str.regexp "String") str)
+    "contains string" true
+    (contains_pattern (Str.regexp "string") str)
 
 let test_to_string_includes_related_locations () =
   let pos1 = Loc.make_pos ~file:"test.el" ~line:5 ~col:0 ~offset:50 in
@@ -180,10 +180,10 @@ let test_of_unify_type_mismatch () =
   let d = Diag.of_unify_error err in
   Alcotest.(check bool) "is error" true (Diag.is_error d);
   Alcotest.(check string)
-    "expected is Int" "Int"
+    "expected is int" "int"
     (Types.to_string (Option.get d.expected));
   Alcotest.(check string)
-    "actual is String" "String"
+    "actual is string" "string"
     (Types.to_string (Option.get d.actual))
 
 let test_of_unify_occurs_check () =
@@ -236,7 +236,7 @@ let test_type_mismatch_with_function_context () =
     (contains_pattern (Str.regexp "upcase") related_msg);
   Alcotest.(check bool)
     "related mentions expected type" true
-    (contains_pattern (Str.regexp "String") related_msg)
+    (contains_pattern (Str.regexp "string") related_msg)
 
 let test_end_to_end_function_arg_error () =
   (* Type-check (upcase count) where count is Int - should get context *)
@@ -356,11 +356,11 @@ let test_if_branch_mismatch_shows_both_types () =
   let str = Diag.to_string d in
   (* Should show both Int and String types *)
   Alcotest.(check bool)
-    "shows Int" true
-    (contains_pattern (Str.regexp "Int") str);
+    "shows int" true
+    (contains_pattern (Str.regexp "int") str);
   Alcotest.(check bool)
-    "shows String" true
-    (contains_pattern (Str.regexp "String") str)
+    "shows string" true
+    (contains_pattern (Str.regexp "string") str)
 
 let test_branch_mismatch_help_for_int_string () =
   let span = Loc.dummy_span in
@@ -707,10 +707,10 @@ let test_arity_mismatch_shows_signature () =
   (* Should show signature with types *)
   Alcotest.(check bool)
     "shows String type" true
-    (contains_pattern (Str.regexp "String") str);
+    (contains_pattern (Str.regexp "string") str);
   Alcotest.(check bool)
     "shows Int type" true
-    (contains_pattern (Str.regexp "Int") str)
+    (contains_pattern (Str.regexp "int") str)
 
 let test_arity_mismatch_optional_range () =
   let span = Loc.dummy_span in
@@ -902,8 +902,8 @@ let test_signature_mismatch_shows_types () =
   in
   let str = Diag.to_string d in
   Alcotest.(check bool)
-    "shows expected String" true
-    (contains_pattern (Str.regexp "String") str);
+    "shows expected string" true
+    (contains_pattern (Str.regexp "string") str);
   Alcotest.(check bool)
     "shows expected and found" true
     (contains_pattern (Str.regexp "expected") str
@@ -1082,9 +1082,10 @@ let test_explicit_instantiation_shows_expected_from_annotation () =
   let d = Diag.of_unify_error err in
   let str = Diag.to_string d in
   (* Should show that expected type is from tart instantiation *)
+  (* Type names are lowercase for intrinsics *)
   Alcotest.(check bool)
     "shows expected type" true
-    (contains_pattern (Str.regexp "expected.*String") str);
+    (contains_pattern (Str.regexp "expected.*string") str);
   Alcotest.(check bool)
     "shows from instantiation" true
     (contains_pattern (Str.regexp "tart.*instantiation") str)
@@ -1100,9 +1101,10 @@ let test_explicit_instantiation_shows_found_type () =
   in
   let d = Diag.of_unify_error err in
   let str = Diag.to_string d in
+  (* Type names are lowercase for intrinsics *)
   Alcotest.(check bool)
-    "shows found Int" true
-    (contains_pattern (Str.regexp "found.*Int") str)
+    "shows found int" true
+    (contains_pattern (Str.regexp "found.*int") str)
 
 let test_explicit_instantiation_has_error_code () =
   let span = Loc.dummy_span in
@@ -1133,10 +1135,10 @@ let test_explicit_instantiation_multiple_type_args () =
   in
   let d = Diag.of_unify_error err in
   let str = Diag.to_string d in
-  (* Should show both type args in context *)
+  (* Should show both type args in context - lowercase for intrinsics *)
   Alcotest.(check bool)
     "shows type args" true
-    (contains_pattern (Str.regexp "Int.*String\\|String.*Int") str)
+    (contains_pattern (Str.regexp "int.*string\\|string.*int") str)
 
 (* =============================================================================
    Test Suite

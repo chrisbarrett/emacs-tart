@@ -50,38 +50,95 @@ let param name : Sig_loader.alias_param =
 
 (** Create an alias parameter with truthy bound *)
 let param_truthy name : Sig_loader.alias_param =
-  { Sig_loader.ap_name = name; ap_bound = Some (tcon "Truthy") }
+  {
+    Sig_loader.ap_name = name;
+    ap_bound = Some (tcon (Core.Types.intrinsic "Truthy"));
+  }
+
+(** Helper to create intrinsic type name *)
+let intrinsic name = Core.Types.intrinsic name
 
 (** The prelude type alias definitions.
 
-    These aliases bridge user-facing lowercase names to built-in uppercase type
-    constructors. The type system uses uppercase names internally (List, Option,
-    etc.) but signature files use lowercase names (list, option).
+    These aliases bridge user-facing lowercase names to intrinsic type
+    constructors. The type system uses intrinsic names internally
+    (%tart-intrinsic%Int, etc.) but signature files use lowercase names (int,
+    string, etc.).
 
     Note: We define these as Sig_loader.type_alias values rather than sig_ast to
     integrate directly with the loader's alias context. *)
 let prelude_aliases : (string * Sig_loader.type_alias) list =
   [
-    (* (type t 't) - maps to symbol literal 't *)
-    ("t", { Sig_loader.alias_params = []; alias_body = tcon "'t" });
+    (* Primitive type bridges from user names to intrinsics *)
+    ( "int",
+      { Sig_loader.alias_params = []; alias_body = tcon (intrinsic "Int") } );
+    ( "float",
+      { Sig_loader.alias_params = []; alias_body = tcon (intrinsic "Float") } );
+    ( "num",
+      { Sig_loader.alias_params = []; alias_body = tcon (intrinsic "Num") } );
+    ( "string",
+      { Sig_loader.alias_params = []; alias_body = tcon (intrinsic "String") }
+    );
+    ( "symbol",
+      { Sig_loader.alias_params = []; alias_body = tcon (intrinsic "Symbol") }
+    );
+    ( "keyword",
+      { Sig_loader.alias_params = []; alias_body = tcon (intrinsic "Keyword") }
+    );
+    ( "nil",
+      { Sig_loader.alias_params = []; alias_body = tcon (intrinsic "Nil") } );
+    ( "truthy",
+      { Sig_loader.alias_params = []; alias_body = tcon (intrinsic "Truthy") }
+    );
+    ( "never",
+      { Sig_loader.alias_params = []; alias_body = tcon (intrinsic "Never") } );
+    (* (type t 't) - maps to symbol literal 't (which becomes intrinsic T) *)
+    ("t", { Sig_loader.alias_params = []; alias_body = tcon (intrinsic "T") });
     (* (type any (truthy | nil)) - top type as a union *)
     ( "any",
       {
         Sig_loader.alias_params = [];
         alias_body =
-          Sig_ast.STUnion ([ tcon "Truthy"; tcon "Nil" ], prelude_span);
+          Sig_ast.STUnion
+            ([ tcon (intrinsic "Truthy"); tcon (intrinsic "Nil") ], prelude_span);
       } );
-    (* (type bool (t | nil)) - boolean as a union, not a built-in *)
+    (* (type bool (t | nil)) - boolean as a union *)
     ( "bool",
       {
         Sig_loader.alias_params = [];
-        alias_body = Sig_ast.STUnion ([ tcon "T"; tcon "Nil" ], prelude_span);
+        alias_body =
+          Sig_ast.STUnion
+            ([ tcon (intrinsic "T"); tcon (intrinsic "Nil") ], prelude_span);
       } );
-    (* (type list [a] (List a)) - maps lowercase list to built-in List *)
+    (* (type list [a] (List a)) - maps lowercase list to intrinsic List *)
     ( "list",
       {
         Sig_loader.alias_params = [ param "a" ];
-        alias_body = tapp "List" [ tvar "a" ];
+        alias_body = tapp (intrinsic "List") [ tvar "a" ];
+      } );
+    (* (type vector [a] (Vector a)) - maps vector to intrinsic Vector *)
+    ( "vector",
+      {
+        Sig_loader.alias_params = [ param "a" ];
+        alias_body = tapp (intrinsic "Vector") [ tvar "a" ];
+      } );
+    (* (type pair [a b] (Pair a b)) - maps pair/cons to intrinsic Pair *)
+    ( "pair",
+      {
+        Sig_loader.alias_params = [ param "a"; param "b" ];
+        alias_body = tapp (intrinsic "Pair") [ tvar "a"; tvar "b" ];
+      } );
+    (* Also add "cons" as alias for pair - elisp uses cons cells *)
+    ( "cons",
+      {
+        Sig_loader.alias_params = [ param "a"; param "b" ];
+        alias_body = tapp (intrinsic "Pair") [ tvar "a"; tvar "b" ];
+      } );
+    (* (type hash-table [k v] (HashTable k v)) - maps to intrinsic HashTable *)
+    ( "hash-table",
+      {
+        Sig_loader.alias_params = [ param "k"; param "v" ];
+        alias_body = tapp (intrinsic "HashTable") [ tvar "k"; tvar "v" ];
       } );
     (* (type option [(a : truthy)] (a | nil)) - optional as union, truthy bound
        prevents nested option: (option (option x)) is an error since
@@ -89,20 +146,24 @@ let prelude_aliases : (string * Sig_loader.type_alias) list =
     ( "option",
       {
         Sig_loader.alias_params = [ param_truthy "a" ];
-        alias_body = Sig_ast.STUnion ([ tvar "a"; tcon "Nil" ], prelude_span);
+        alias_body =
+          Sig_ast.STUnion ([ tvar "a"; tcon (intrinsic "Nil") ], prelude_span);
       } );
     (* (type is [a] (a - nil)) - removes nil from a type via subtraction *)
     ( "is",
       {
         Sig_loader.alias_params = [ param "a" ];
-        alias_body = tsubtract (tvar "a") (tcon "Nil");
+        alias_body = tsubtract (tvar "a") (tcon (intrinsic "Nil"));
       } );
     (* (type nonempty [a] (is (list a))) - non-empty list, equivalent to
        ((list a) - nil) which yields (cons a (list a)) *)
     ( "nonempty",
       {
         Sig_loader.alias_params = [ param "a" ];
-        alias_body = tsubtract (tapp "List" [ tvar "a" ]) (tcon "Nil");
+        alias_body =
+          tsubtract
+            (tapp (intrinsic "List") [ tvar "a" ])
+            (tcon (intrinsic "Nil"));
       } );
   ]
 

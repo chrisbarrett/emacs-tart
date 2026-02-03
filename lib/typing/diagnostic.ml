@@ -66,40 +66,52 @@ let is_option_type ty = Option.is_some (Types.is_option ty)
 let suggest_type_fix ~expected ~actual : string list =
   let expected = Types.repr expected in
   let actual = Types.repr actual in
-  match (expected, actual) with
-  (* Int -> String: suggest number-to-string *)
-  | Types.TCon "String", Types.TCon "Int" ->
-      [ "convert the integer to a string: (number-to-string ...)" ]
-  (* String -> Int: suggest string-to-number *)
-  | Types.TCon "Int", Types.TCon "String" ->
-      [ "convert the string to a number: (string-to-number ...)" ]
-  (* Option inner -> inner: suggest nil handling *)
-  | _, _ when Option.is_some (Types.is_option actual) -> (
-      match Types.is_option actual with
-      | Some inner
-        when Types.equal expected inner
-             || Types.equal expected (Types.repr inner) ->
-          [
-            "check for nil first: (when-let ((x ...)) ...)";
-            "or provide a default: (or ... default-value)";
-          ]
-      | _ -> [])
-  (* inner -> Option inner: not usually an error, but could suggest wrapping *)
-  | _, _ when Option.is_some (Types.is_option expected) -> (
-      match Types.is_option expected with
-      | Some inner when Types.equal (Types.repr inner) actual ->
-          [ "the value is already non-nil and can be used directly" ]
-      | _ -> [])
-  (* Symbol -> String: suggest symbol-name *)
-  | Types.TCon "String", Types.TCon "Symbol" ->
-      [ "convert the symbol to a string: (symbol-name ...)" ]
-  (* String -> Symbol: suggest intern *)
-  | Types.TCon "Symbol", Types.TCon "String" ->
-      [ "convert the string to a symbol: (intern ...)" ]
-  (* List -> single element: suggest car or first *)
-  | _, Types.TApp (Types.TCon "List", _) ->
-      [ "to get a single element from a list, use (car ...) or (nth N ...)" ]
-  | _ -> []
+  (* Check primitive type mismatches using Prim constants (for intrinsic names) *)
+  if Types.equal expected Types.Prim.string && Types.equal actual Types.Prim.int
+  then
+    (* Int -> String: suggest number-to-string *)
+    [ "convert the integer to a string: (number-to-string ...)" ]
+  else if
+    Types.equal expected Types.Prim.int && Types.equal actual Types.Prim.string
+  then
+    (* String -> Int: suggest string-to-number *)
+    [ "convert the string to a number: (string-to-number ...)" ]
+  else if
+    Types.equal expected Types.Prim.string
+    && Types.equal actual Types.Prim.symbol
+  then
+    (* Symbol -> String: suggest symbol-name *)
+    [ "convert the symbol to a string: (symbol-name ...)" ]
+  else if
+    Types.equal expected Types.Prim.symbol
+    && Types.equal actual Types.Prim.string
+  then
+    (* String -> Symbol: suggest intern *)
+    [ "convert the string to a symbol: (intern ...)" ]
+  else
+    match (expected, actual) with
+    (* Option inner -> inner: suggest nil handling *)
+    | _, _ when Option.is_some (Types.is_option actual) -> (
+        match Types.is_option actual with
+        | Some inner
+          when Types.equal expected inner
+               || Types.equal expected (Types.repr inner) ->
+            [
+              "check for nil first: (when-let ((x ...)) ...)";
+              "or provide a default: (or ... default-value)";
+            ]
+        | _ -> [])
+    (* inner -> Option inner: not usually an error, but could suggest wrapping *)
+    | _, _ when Option.is_some (Types.is_option expected) -> (
+        match Types.is_option expected with
+        | Some inner when Types.equal (Types.repr inner) actual ->
+            [ "the value is already non-nil and can be used directly" ]
+        | _ -> [])
+    (* List -> single element: suggest car or first *)
+    | _, Types.TApp (con, _)
+      when Types.equal con (Types.TCon (Types.intrinsic "List")) ->
+        [ "to get a single element from a list, use (car ...) or (nth N ...)" ]
+    | _ -> []
 
 (** Create a type mismatch diagnostic with help suggestions. *)
 let type_mismatch ~span ~expected ~actual ?(related = []) () =
@@ -386,28 +398,35 @@ let if_branch_note ~is_then ~other_branch_span ~other_branch_type :
 let suggest_branch_fix ~this_type ~other_type : string list =
   let this_type = Types.repr this_type in
   let other_type = Types.repr other_type in
-  match (this_type, other_type) with
-  (* Int vs String: suggest conversion *)
-  | Types.TCon "Int", Types.TCon "String" ->
-      [ "convert the integer to a string: (number-to-string ...)" ]
-  | Types.TCon "String", Types.TCon "Int" ->
-      [ "convert the string to an integer: (string-to-number ...)" ]
-  (* Option vs non-Option: suggest handling nil *)
-  | _, _ when Option.is_some (Types.is_option other_type) -> (
-      match Types.is_option other_type with
-      | Some inner
-        when Types.equal this_type inner
-             || Types.equal this_type (Types.repr inner) ->
-          [ "wrap the non-optional value: (some ...)" ]
-      | _ -> [])
-  | _, _ when Option.is_some (Types.is_option this_type) -> (
-      match Types.is_option this_type with
-      | Some inner
-        when Types.equal other_type inner
-             || Types.equal other_type (Types.repr inner) ->
-          [ "unwrap the optional value or provide a default" ]
-      | _ -> [])
-  | _ -> []
+  (* Check primitive type mismatches using Prim constants *)
+  if
+    Types.equal this_type Types.Prim.int
+    && Types.equal other_type Types.Prim.string
+  then
+    (* Int vs String: suggest conversion *)
+    [ "convert the integer to a string: (number-to-string ...)" ]
+  else if
+    Types.equal this_type Types.Prim.string
+    && Types.equal other_type Types.Prim.int
+  then [ "convert the string to an integer: (string-to-number ...)" ]
+  else
+    match (this_type, other_type) with
+    (* Option vs non-Option: suggest handling nil *)
+    | _, _ when Option.is_some (Types.is_option other_type) -> (
+        match Types.is_option other_type with
+        | Some inner
+          when Types.equal this_type inner
+               || Types.equal this_type (Types.repr inner) ->
+            [ "wrap the non-optional value: (some ...)" ]
+        | _ -> [])
+    | _, _ when Option.is_some (Types.is_option this_type) -> (
+        match Types.is_option this_type with
+        | Some inner
+          when Types.equal other_type inner
+               || Types.equal other_type (Types.repr inner) ->
+            [ "unwrap the optional value or provide a default" ]
+        | _ -> [])
+    | _ -> []
 
 (** Create a branch type mismatch diagnostic (E0317) *)
 let branch_mismatch ~span ~this_type ~other_branch_span ~other_type ~is_then ()
