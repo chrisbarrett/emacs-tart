@@ -25,20 +25,21 @@
 ;; Sequence operations
 ;; ===========================================================================
 
-;; (length SEQ) - return length
-(defun length (any) -> int)
+;; (length SEQ) - return length of list, string, vector, bool-vector, or char-table
+(defun length (((list any) | string | (vector any) | bool-vector | char-table)) -> int)
 
 ;; (safe-length LIST) - return length, handling cycles
-(defun safe-length (any) -> int)
+;; Like length but handles circular lists
+(defun safe-length (((list any) | string | (vector any) | bool-vector | char-table)) -> int)
 
 ;; (length< SEQ LEN) - test if length less than
-(defun length< (any int) -> bool)
+(defun length< (((list any) | string | (vector any) | bool-vector | char-table) int) -> bool)
 
 ;; (length> SEQ LEN) - test if length greater than
-(defun length> (any int) -> bool)
+(defun length> (((list any) | string | (vector any) | bool-vector | char-table) int) -> bool)
 
 ;; (length= SEQ LEN) - test if length equal
-(defun length= (any int) -> bool)
+(defun length= (((list any) | string | (vector any) | bool-vector | char-table) int) -> bool)
 
 ;; (proper-list-p OBJ) - test if proper list
 (defun proper-list-p (any) -> (int | nil))

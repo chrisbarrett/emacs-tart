@@ -28,7 +28,7 @@ actually loaded—the OCaml code duplicates its definitions for bootstrapping.
 
 ### 1.4 Prelude Architecture Refactor (HIGH PRIORITY)
 
-**Status:** NOT STARTED
+**Status:** COMPLETE (commit 4fc5e7d)
 
 **Problem:** The prelude is currently implemented as hardcoded OCaml (`lib/sig/prelude.ml`)
 that duplicates what should be in `typings/tart-prelude.tart`. The .tart file exists but
@@ -606,10 +606,10 @@ Phase 8.* (Remove builtins) — after Phase 1.4
 
 ## Acceptance Criteria
 
-**Milestone 1: Foundation** ⚠️
+**Milestone 1: Foundation** ✅
 - [x] Unbound type variables produce errors (no inference)
 - [x] Prelude types available without import (via OCaml bootstrap)
-- [ ] Prelude loaded from .tart file with intrinsic bridging (Phase 1.4)
+- [x] Prelude loaded from .tart file with intrinsic bridging (Phase 1.4)
 - [x] Emacs version auto-detected
 
 **Milestone 2: Core Types** ✅
