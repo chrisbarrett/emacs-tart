@@ -1,0 +1,77 @@
+;; Type signatures for Emacs indent.c
+;;
+;; Source: emacs/src/indent.c
+;; Emacs version: 31.0
+;;
+;; Contains indentation and column-related functions.
+
+;; ===========================================================================
+;; Column position queries
+;; ===========================================================================
+
+;; (current-column) - return horizontal position of point (column 0 at BOL)
+;; Accounts for display widths (control chars, tabs, invisible text).
+(defun current-column () -> int)
+
+;; (current-indentation) - return horizontal position of first non-whitespace
+;; character on current line
+(defun current-indentation () -> int)
+
+;; ===========================================================================
+;; Column movement
+;; ===========================================================================
+
+;; (move-to-column COLUMN &optional FORCE) - move point to COLUMN
+;; Returns actual column reached.
+;; If FORCE is non-nil and COLUMN is in middle of a tab:
+;; - nil indent-tabs-mode: replace tab with spaces
+;; - otherwise: insert spaces before tab
+;; If FORCE is t and line is too short, add spaces/tabs to reach COLUMN.
+(defun move-to-column (int &optional any) -> int)
+
+;; (indent-to COLUMN &optional MINIMUM) - insert tabs/spaces to reach COLUMN
+;; MINIMUM specifies minimum number of spaces to insert (default 0).
+;; Uses tabs or spaces based on `indent-tabs-mode'.
+;; Returns the column where insertion ends.
+(defun indent-to (int &optional int) -> int)
+
+;; ===========================================================================
+;; Vertical motion
+;; ===========================================================================
+
+;; (vertical-motion LINES &optional WINDOW CUR-COL) - move to start of screen line
+;; LINES lines down (negative = up). Returns number of lines actually moved.
+;; WINDOW specifies which window to use for display calculations.
+;; CUR-COL if specified, use as starting column for goal column.
+(defun vertical-motion ((int | (cons int int)) &optional window int) -> int)
+
+;; ===========================================================================
+;; Motion computation
+;; ===========================================================================
+
+;; (compute-motion FROM FROMPOS TO TOPOS WIDTH OFFSETS WINDOW)
+;; Compute screen position when moving from FROM to TO.
+;; FROM: buffer position to start from
+;; FROMPOS: screen position (HPOS . VPOS) at FROM
+;; TO: buffer position to move to, or nil
+;; TOPOS: goal screen position (HPOS . VPOS), or nil for window dimensions
+;; WIDTH: available columns for display (nil = window text area width)
+;; OFFSETS: nil or (HSCROLL . TAB-OFFSET)
+;; WINDOW: window for display table and overlay decisions
+;;
+;; Returns: (POS HPOS VPOS PREVHPOS CONTIN)
+;; POS: ending buffer position
+;; HPOS/VPOS: ending screen position
+;; PREVHPOS: horizontal position one character back
+;; CONTIN: t if line is continued
+(defun compute-motion (int (cons int int) (int | nil) ((cons int int) | nil) (int | nil) ((cons int int) | nil) window) -> (list any))
+
+;; ===========================================================================
+;; Line number display
+;; ===========================================================================
+
+;; (line-number-display-width &optional PIXELWISE) - return width for line numbers
+;; PIXELWISE nil: integer columns of `line-number' face (excludes 2-col padding)
+;; PIXELWISE 'columns: float in frame canonical char width units
+;; PIXELWISE t or other non-nil: integer pixels
+(defun line-number-display-width (&optional any) -> (int | float))
