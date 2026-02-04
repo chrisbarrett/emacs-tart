@@ -1,7 +1,6 @@
 ;; Type mismatch: incompatible instantiations of type variable
-;; Error: cons expects the element type to match the list's element type
+;; Error: mapcar requires the function arg type to match list element type
 
-(defun broken-cons ()
-  "Try to cons a string onto a list of integers."
-  (let ((numbers (list 1 2 3)))
-    (cons "not a number" numbers)))
+(defun broken-mapcar ()
+  "Try to map a number function over a list of strings."
+  (mapcar #'1+ (list "a" "b" "c")))

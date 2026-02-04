@@ -1,2 +1,3 @@
 FAIL
-variable `local-var` is not defined
+UNDEFINED VARIABLE
+local-var

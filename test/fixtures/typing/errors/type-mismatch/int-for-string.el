@@ -1,6 +1,6 @@
 ;; Type mismatch: passing int where string expected
-;; Error: concat expects strings but receives integer
+;; Error: make-symbol expects a string but receives integer
 
-(defun broken-concat ()
-  "Concatenate should only accept strings."
-  (concat "hello" 42))
+(defun broken-make-symbol ()
+  "make-symbol should only accept strings."
+  (make-symbol 42))

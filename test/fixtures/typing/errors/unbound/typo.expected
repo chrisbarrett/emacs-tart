@@ -1,2 +1,3 @@
 FAIL
-variable `cocnat` is not defined
+UNDEFINED VARIABLE
+cocnat

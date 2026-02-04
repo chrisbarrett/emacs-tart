@@ -1,2 +1,3 @@
 FAIL
-variable `undefined-var` is not defined
+UNDEFINED VARIABLE
+undefined-var

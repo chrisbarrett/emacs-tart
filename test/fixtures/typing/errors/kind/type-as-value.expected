@@ -1,2 +1,3 @@
 FAIL
-variable `Int` is not defined
+UNDEFINED VARIABLE
+Int

@@ -1,4 +1,4 @@
 FAIL
-type mismatch
-Int
-String
+TYPE MISMATCH
+But found:
+    string

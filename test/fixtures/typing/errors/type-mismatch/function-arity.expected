@@ -1,4 +1,4 @@
 FAIL
-type mismatch
-expected: (-> (Int) String)
-found: Int
+TYPE MISMATCH
+But found:
+    int

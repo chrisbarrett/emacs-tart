@@ -1,4 +1,3 @@
 FAIL
-type mismatch
-expected: Symbol
-found: (List (Or Truthy Nil))
+TYPE MISMATCH
+symbol-name

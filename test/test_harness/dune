@@ -12,4 +12,7 @@
  (action
   (chdir
    %{project_root}
-   (run %{test}))))
+   (setenv
+    TART_BIN
+    %{bin:tart}
+    (run %{test})))))

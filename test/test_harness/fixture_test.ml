@@ -87,6 +87,7 @@ let () =
       let version_dir = Filename.concat fixtures_dir "version" in
       let regression_dir = Filename.concat fixtures_dir "regression" in
       let errors_dir = Filename.concat fixtures_dir "errors" in
+      let funcall_dir = Filename.concat fixtures_dir "funcall" in
       (* Collect error category subdirectories *)
       let error_tests =
         if Sys.file_exists errors_dir && Sys.is_directory errors_dir then
@@ -115,6 +116,9 @@ let () =
                ( "regression",
                  fixture_tests_for_dir ~tart_bin ~dir:regression_dir );
              ]
+           else [])
+        @ (if Sys.file_exists funcall_dir && Sys.is_directory funcall_dir then
+             [ ("funcall", fixture_tests_for_dir ~tart_bin ~dir:funcall_dir) ]
            else [])
         @ error_tests
       in

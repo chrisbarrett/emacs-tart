@@ -1,2 +1,3 @@
 FAIL
-variable `seq-filter` is not defined
+UNDEFINED VARIABLE
+seq-filter
