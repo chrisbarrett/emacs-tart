@@ -1,0 +1,96 @@
+;; Type signatures for Emacs gnutls.c
+;;
+;; Source: emacs/src/gnutls.c
+;; Emacs version: 31.0
+;;
+;; Contains GnuTLS functions for TLS/SSL encryption and cryptographic operations.
+
+;; ===========================================================================
+;; Availability check
+;; ===========================================================================
+
+;; (gnutls-available-p) - check if GnuTLS is available
+;; Returns list of capabilities if available, nil otherwise
+(defun gnutls-available-p () -> ((list symbol) | nil))
+
+;; ===========================================================================
+;; Connection establishment and management
+;; ===========================================================================
+
+;; (gnutls-boot PROC TYPE PROPLIST) - initialize GnuTLS client for PROC
+;; TYPE is credential type, PROPLIST contains options like :hostname, :verify-error, etc.
+(defun gnutls-boot (process symbol (list any)) -> (int | (list int)))
+
+;; (gnutls-deinit PROC) - deallocate GnuTLS resources for process
+(defun gnutls-deinit (process) -> nil)
+
+;; (gnutls-bye PROC CONT) - terminate GnuTLS connection
+;; CONT non-nil means continue after shutdown
+(defun gnutls-bye (process any) -> int)
+
+;; (gnutls-asynchronous-parameters PROC PARAMS) - mark as pre-init process
+(defun gnutls-asynchronous-parameters (process any) -> nil)
+
+;; (gnutls-get-initstage PROC) - return init stage of process
+(defun gnutls-get-initstage (process) -> int)
+
+;; ===========================================================================
+;; Error handling
+;; ===========================================================================
+
+;; (gnutls-errorp ERROR) - test if ERROR indicates a GnuTLS problem
+(defun gnutls-errorp (any) -> bool)
+
+;; (gnutls-error-fatalp ERROR) - test if ERROR is fatal
+(defun gnutls-error-fatalp (int) -> bool)
+
+;; (gnutls-error-string ERROR) - return error description
+(defun gnutls-error-string (int) -> string)
+
+;; ===========================================================================
+;; Peer certificate status
+;; ===========================================================================
+
+;; (gnutls-peer-status PROC) - describe peer certificate and warnings
+;; Returns plist with certificate info and verification warnings
+(defun gnutls-peer-status (process) -> (list any))
+
+;; (gnutls-peer-status-warning-describe STATUS) - describe warning from peer status
+(defun gnutls-peer-status-warning-describe (symbol) -> string)
+
+;; (gnutls-format-certificate CERT) - format X.509 certificate as string
+(defun gnutls-format-certificate (string) -> string)
+
+;; ===========================================================================
+;; Cryptographic operations - Symmetric ciphers
+;; ===========================================================================
+
+;; (gnutls-ciphers) - return alist of symmetric cipher descriptions
+;; Each entry is a plist with cipher properties
+(defun gnutls-ciphers () -> (list (list any)))
+
+;; (gnutls-symmetric-encrypt CIPHER KEY IV INPUT &optional AEAD-AUTH) - encrypt with symmetric cipher
+(defun gnutls-symmetric-encrypt ((symbol | (list any)) (string | buffer) (string | buffer) (string | buffer) &optional (string | buffer)) -> (list string))
+
+;; (gnutls-symmetric-decrypt CIPHER KEY IV INPUT &optional AEAD-AUTH) - decrypt with symmetric cipher
+(defun gnutls-symmetric-decrypt ((symbol | (list any)) (string | buffer) (string | buffer) (string | buffer) &optional (string | buffer)) -> (list string))
+
+;; ===========================================================================
+;; Cryptographic operations - Message authentication codes (MACs)
+;; ===========================================================================
+
+;; (gnutls-macs) - return alist of MAC algorithm descriptions
+(defun gnutls-macs () -> (list (list any)))
+
+;; (gnutls-hash-mac HASH-METHOD KEY INPUT) - compute MAC of INPUT
+(defun gnutls-hash-mac ((symbol | (list any)) (string | buffer) (string | buffer)) -> string)
+
+;; ===========================================================================
+;; Cryptographic operations - Digests
+;; ===========================================================================
+
+;; (gnutls-digests) - return alist of digest algorithm descriptions
+(defun gnutls-digests () -> (list (list any)))
+
+;; (gnutls-hash-digest DIGEST-METHOD INPUT) - compute digest of INPUT
+(defun gnutls-hash-digest ((symbol | (list any)) (string | buffer)) -> string)
