@@ -275,7 +275,7 @@ let run_check format emacs_version files =
   in
   let all_errors = file_errors @ type_errors in
   (match format with
-  | Human -> Tart.Error.report all_errors
+  | Human -> Tart.Error.report_human all_errors
   | Json -> Tart.Error.report_json all_errors);
   if all_errors <> [] then exit 1
 

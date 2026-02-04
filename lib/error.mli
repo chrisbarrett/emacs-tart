@@ -61,7 +61,7 @@ val of_file_error : Errors.File_error.t -> t
 (** {1 Formatting} *)
 
 val to_string : t -> string
-(** Format an error as a human-readable string.
+(** Format an error as a human-readable string (compact format).
 
     Output format follows compiler conventions:
     {v
@@ -83,6 +83,32 @@ val to_string : t -> string
     For I/O errors:
     {v
       error: init.el: No such file or directory
+    v} *)
+
+val to_string_human : t -> string
+(** Format an error in Elm-style human-readable format with source excerpts.
+
+    Per Spec 45: Shows Elm-style headers, source excerpts with underlines,
+    conversational prose, and colored output when TTY is detected.
+
+    Output format:
+    {v
+      -- TYPE MISMATCH ---------------------------------------- file.el:42:10
+
+      I found a type mismatch in this expression:
+
+      42 |   (upcase count)
+         |           ^^^^^
+
+      The function `upcase` expects argument 1 to be:
+
+          String
+
+      But this expression has type:
+
+          Int
+
+      Hint: convert the integer to a string: (number-to-string ...)
     v} *)
 
 val to_json : t -> Yojson.Safe.t
@@ -134,7 +160,7 @@ end
 (** {1 Reporting} *)
 
 val report : t list -> unit
-(** Report errors to stderr with summary count.
+(** Report errors to stderr in compact format with summary count.
 
     Prints each error followed by a summary line showing the count. Example:
     {v
@@ -147,6 +173,34 @@ val report : t list -> unit
         ...
 
       Found 2 errors
+    v} *)
+
+val report_human : t list -> unit
+(** Report errors to stderr in Elm-style human format with source excerpts.
+
+    Per Spec 45: Shows Elm-style headers, source excerpts with underlines,
+    conversational prose, and colored output when TTY is detected.
+
+    Prints each error followed by a summary line showing the count. Example:
+    {v
+      -- TYPE MISMATCH ---------------------------------------- file.el:42:10
+
+      I found a type mismatch in this expression:
+
+      42 |   (upcase count)
+         |           ^^^^^
+
+      The function `upcase` expects argument 1 to be:
+
+          String
+
+      But this expression has type:
+
+          Int
+
+      Hint: convert the integer to a string: (number-to-string ...)
+
+      Found 1 error
     v} *)
 
 val report_json : t list -> unit
