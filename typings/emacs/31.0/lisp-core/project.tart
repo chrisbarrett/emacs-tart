@@ -1,0 +1,123 @@
+;; Type signatures for Emacs project.el
+;;
+;; Source: emacs/lisp/progmodes/project.el
+;; Emacs version: 31.0
+;;
+;; Project management infrastructure.
+
+;; ===========================================================================
+;; Project type (opaque)
+;; ===========================================================================
+
+;; Project represents a project instance (directory with certain properties)
+(type project)
+
+;; ===========================================================================
+;; Project detection
+;; ===========================================================================
+
+;; (project-current &optional MAYBE-PROMPT DIRECTORY) - find current project
+(defun project-current (&optional bool string) -> (project | nil))
+
+;; (project-root PROJECT) - return project root directory
+(defun project-root (project) -> string)
+
+;; (project-files PROJECT &optional DIRS) - return list of project files
+(defun project-files (project &optional (list string)) -> (list string))
+
+;; (project-ignores PROJECT DIR) - return list of ignore patterns
+(defun project-ignores (project string) -> (list string))
+
+;; (project-external-roots PROJECT) - return external root directories
+(defun project-external-roots (project) -> (list string))
+
+;; ===========================================================================
+;; Project backends
+;; ===========================================================================
+
+;; (project-try-vc DIR) - try to detect VC project at DIR
+(defun project-try-vc (string) -> (project | nil))
+
+;; (project-try-local DIR) - try local project definition
+(defun project-try-local (string) -> (project | nil))
+
+;; ===========================================================================
+;; Project commands
+;; ===========================================================================
+
+;; (project-find-file) - find file in project
+(defun project-find-file () -> nil)
+
+;; (project-find-regexp REGEXP) - find regexp in project
+(defun project-find-regexp (string) -> nil)
+
+;; (project-search REGEXP) - interactive search in project
+(defun project-search (string) -> nil)
+
+;; (project-query-replace-regexp FROM TO) - query-replace in project
+(defun project-query-replace-regexp (string string) -> nil)
+
+;; (project-or-external-find-file) - find file including external roots
+(defun project-or-external-find-file () -> nil)
+
+;; (project-find-dir) - find directory in project
+(defun project-find-dir () -> nil)
+
+;; (project-dired) - open project root in dired
+(defun project-dired () -> nil)
+
+;; (project-vc-dir) - open project in vc-dir
+(defun project-vc-dir () -> nil)
+
+;; (project-shell) - open shell in project root
+(defun project-shell () -> nil)
+
+;; (project-eshell) - open eshell in project root
+(defun project-eshell () -> nil)
+
+;; (project-compile) - compile project
+(defun project-compile () -> nil)
+
+;; (project-switch-to-buffer BUFFER-OR-NAME) - switch to project buffer
+(defun project-switch-to-buffer ((buffer | string)) -> nil)
+
+;; (project-display-buffer BUFFER-OR-NAME) - display project buffer
+(defun project-display-buffer ((buffer | string)) -> nil)
+
+;; (project-kill-buffers &optional NO-CONFIRM) - kill project buffers
+(defun project-kill-buffers (&optional bool) -> nil)
+
+;; ===========================================================================
+;; Project switching
+;; ===========================================================================
+
+;; (project-switch-project DIR) - switch to project at DIR
+(defun project-switch-project (string) -> nil)
+
+;; (project-remember-project PR &optional NO-WRITE) - remember project
+(defun project-remember-project (project &optional bool) -> nil)
+
+;; (project-forget-project PROJECT-ROOT) - forget project at root
+(defun project-forget-project (string) -> nil)
+
+;; (project-known-project-roots) - return list of known project roots
+(defun project-known-project-roots () -> (list string))
+
+;; (project-prompt-project-dir) - prompt for project directory
+(defun project-prompt-project-dir () -> string)
+
+;; ===========================================================================
+;; Variables
+;; ===========================================================================
+
+;; List of project detection backend functions
+(defvar project-find-functions (list any))
+
+;; Known project root directories
+(defvar project-list-file string)
+
+;; Project switching commands
+(defvar project-switch-commands (list any))
+
+;; Prefix argument for project commands
+(defvar project-current-directory-override (string | nil))
