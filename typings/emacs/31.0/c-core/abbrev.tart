@@ -1,0 +1,89 @@
+;; Type signatures for Emacs abbrev.c
+;;
+;; Source: emacs/src/abbrev.c
+;; Emacs version: 31.0
+;;
+;; Contains abbreviation (abbrev) functionality.
+
+;; ===========================================================================
+;; Abbrev table predicates and creation
+;; ===========================================================================
+
+;; (abbrev-table-p OBJECT) - test if OBJECT is an abbrev table
+(defun abbrev-table-p (any) -> bool)
+
+;; (abbrev-table-empty-p OBJECT &optional IGNORE-SYSTEM) - test if empty
+(defun abbrev-table-empty-p (any &optional any) -> bool)
+
+;; (make-abbrev-table &optional PROPS) - create new empty abbrev table
+(defun make-abbrev-table (&optional (list any)) -> any)
+
+;; (clear-abbrev-table TABLE) - undefine all abbrevs in table
+(defun clear-abbrev-table (any) -> nil)
+
+;; ===========================================================================
+;; Abbrev table properties
+;; ===========================================================================
+
+;; (abbrev-table-get TABLE PROP) - get property of abbrev table
+(defun abbrev-table-get (any symbol) -> any)
+
+;; (abbrev-table-put TABLE PROP VAL) - set property of abbrev table
+(defun abbrev-table-put (any symbol any) -> nil)
+
+;; (abbrev-table-name TABLE) - return name of abbrev table
+(defun abbrev-table-name (any) -> (symbol | nil))
+
+;; ===========================================================================
+;; Abbrev definition and lookup
+;; ===========================================================================
+
+;; (define-abbrev TABLE ABBREV EXPANSION &optional HOOK &rest PROPS)
+;; Define ABBREV in TABLE to expand into EXPANSION
+(defun define-abbrev (any string (string | nil) &optional any &rest any) -> symbol)
+
+;; (define-abbrev-table TABLENAME DEFINITIONS &optional DOCSTRING &rest PROPS)
+;; Define TABLENAME as an abbrev table name
+(defun define-abbrev-table (symbol (list any) &optional (string | nil) &rest any) -> nil)
+
+;; (abbrev-symbol ABBREV &optional TABLE) - return symbol for abbrev
+(defun abbrev-symbol (string &optional any) -> (symbol | nil))
+
+;; (abbrev-expansion ABBREV &optional TABLE) - return expansion string
+(defun abbrev-expansion (string &optional any) -> (string | nil))
+
+;; ===========================================================================
+;; Abbrev expansion and insertion
+;; ===========================================================================
+
+;; (expand-abbrev) - expand abbrev before point
+(defun expand-abbrev () -> (symbol | nil))
+
+;; (unexpand-abbrev) - undo expansion of last abbrev
+(defun unexpand-abbrev () -> nil)
+
+;; (abbrev-insert ABBREV &optional NAME WORDSTART WORDEND) - insert abbrev
+(defun abbrev-insert (symbol &optional (string | nil) (int | nil) (int | nil)) -> (symbol | nil))
+
+;; (abbrev-prefix-mark &optional ARG) - mark point as abbreviation start
+(defun abbrev-prefix-mark (&optional any) -> nil)
+
+;; ===========================================================================
+;; Abbrev serialization
+;; ===========================================================================
+
+;; (insert-abbrev-table-description NAME &optional READABLE) - insert table desc
+(defun insert-abbrev-table-description (symbol &optional any) -> nil)
+
+;; (insert-abbrevs) - insert all abbrev definitions
+(defun insert-abbrevs () -> nil)
+
+;; (define-abbrevs &optional ARG) - define abbrevs from definitions in buffer
+(defun define-abbrevs (&optional any) -> nil)
+
+;; ===========================================================================
+;; File name abbreviation
+;; ===========================================================================
+
+;; (abbreviate-file-name FILENAME) - shorten filename using directory-abbrev-alist
+(defun abbreviate-file-name (string) -> string)
