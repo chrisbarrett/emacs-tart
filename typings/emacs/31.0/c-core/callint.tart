@@ -1,0 +1,40 @@
+;; Type signatures for Emacs callint.c
+;;
+;; Source: emacs/src/callint.c
+;; Emacs version: 31.0
+;;
+;; Interactive command calling infrastructure.
+;; Handles prefix arguments and calling commands interactively.
+
+;; ===========================================================================
+;; Prefix argument functions
+;; ===========================================================================
+
+;; (prefix-numeric-value RAW) - return numeric meaning of raw prefix arg
+;; A raw prefix argument is what you get from (interactive "P").
+;; Its numeric meaning is what you get from (interactive "p").
+;; Returns 1 for nil, the numeric value for integers,
+;; the car for a cons (list), etc.
+(defun prefix-numeric-value ((int | (cons int any) | nil)) -> int)
+
+;; ===========================================================================
+;; Interactive command calling
+;; ===========================================================================
+
+;; (call-interactively FUNCTION &optional RECORD-FLAG KEYS) - call as command
+;; FUNCTION is called with arguments prompted for interactively.
+;; If RECORD-FLAG is non-nil, unconditionally put this command in the
+;; variable `command-history'. Otherwise, only if not already being recorded.
+;; KEYS, if given, specifies the keys that were pressed to run the command.
+(defun call-interactively (symbol &optional any any) -> any)
+
+;; (funcall-interactively FUNCTION &rest ARGUMENTS) - call function interactively
+;; Passes ARGUMENTS to FUNCTION, for use in `call-interactively'.
+;; Used by macros like `command-execute' that call functions interactively.
+(defun funcall-interactively [a] (a &rest any) -> any)
+
+;; (interactive &optional ARG-DESCRIPTOR) - specify interactive calling convention
+;; NOTE: This is a special form, not a function. It's a declaration that tells
+;; `call-interactively' how to read arguments. When evaluated, returns nil.
+;; It cannot meaningfully be called at runtime.
+(defun interactive (&optional any) -> nil)
