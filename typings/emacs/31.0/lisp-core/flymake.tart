@@ -1,0 +1,157 @@
+;; Type signatures for Emacs flymake.el
+;;
+;; Source: emacs/lisp/progmodes/flymake.el
+;; Emacs version: 31.0
+;;
+;; On-the-fly syntax checking.
+
+;; ============================================================================
+;; Core Mode and Control
+;; ============================================================================
+
+;; (flymake-mode &optional ARG) - toggle flymake minor mode
+(defun flymake-mode (&optional any) -> nil)
+
+;; (flymake-start &optional DEFERRED FORCE) - start syntax check
+(defun flymake-start (&optional (list symbol) any) -> nil)
+
+;; (turn-on-flymake-mode) - unconditionally enable flymake
+(defun turn-on-flymake-mode () -> nil)
+
+;; (flymake-mode-on) - turn on flymake mode
+(defun flymake-mode-on () -> nil)
+
+;; (flymake-mode-off) - turn off flymake mode
+(defun flymake-mode-off () -> nil)
+
+;; ============================================================================
+;; Error Navigation
+;; ============================================================================
+
+;; (flymake-goto-next-error &optional N FILTER INTERACTIVE) - go to next error
+(defun flymake-goto-next-error (&optional int (((any) -> any) | symbol) any) -> nil)
+
+;; (flymake-goto-prev-error &optional N FILTER INTERACTIVE) - go to previous error
+(defun flymake-goto-prev-error (&optional int (((any) -> any) | symbol) any) -> nil)
+
+;; ============================================================================
+;; Diagnostics Display
+;; ============================================================================
+
+;; (flymake-show-buffer-diagnostics &optional DIAGNOSTIC) - show diagnostics buffer
+(defun flymake-show-buffer-diagnostics (&optional any) -> nil)
+
+;; (flymake-show-project-diagnostics) - show project-wide diagnostics
+(defun flymake-show-project-diagnostics () -> nil)
+
+;; (flymake-show-diagnostic POS &optional PREFER-OVERLAYS) - show diagnostic at position
+(defun flymake-show-diagnostic ((int | marker) &optional any) -> nil)
+
+;; (flymake-diagnostics &optional BEG END) - return diagnostics in region
+(defun flymake-diagnostics (&optional (int | marker | nil) (int | marker | nil)) -> (list any))
+
+;; (flymake-diagnostic-buffer DIAGNOSTIC) - get buffer of diagnostic
+(defun flymake-diagnostic-buffer (any) -> buffer)
+
+;; (flymake-diagnostic-text DIAGNOSTIC) - get text of diagnostic
+(defun flymake-diagnostic-text (any) -> string)
+
+;; (flymake-diagnostic-beg DIAGNOSTIC) - get start position
+(defun flymake-diagnostic-beg (any) -> int)
+
+;; (flymake-diagnostic-end DIAGNOSTIC) - get end position
+(defun flymake-diagnostic-end (any) -> int)
+
+;; (flymake-diagnostic-type DIAGNOSTIC) - get diagnostic type
+(defun flymake-diagnostic-type (any) -> symbol)
+
+;; (flymake-diagnostic-backend DIAGNOSTIC) - get backend that produced it
+(defun flymake-diagnostic-backend (any) -> symbol)
+
+;; (flymake-diagnostic-data DIAGNOSTIC) - get additional data
+(defun flymake-diagnostic-data (any) -> any)
+
+;; ============================================================================
+;; Diagnostic Creation
+;; ============================================================================
+
+;; (flymake-make-diagnostic BUFFER BEG END TYPE TEXT &optional DATA OVERLAY-PROPERTIES)
+(defun flymake-make-diagnostic (buffer int int symbol string &optional any (list (pair symbol any))) -> any)
+
+;; ============================================================================
+;; Backend Management
+;; ============================================================================
+
+;; (flymake-running-backends) - list running backends
+(defun flymake-running-backends () -> (list symbol))
+
+;; (flymake-disabled-backends) - list disabled backends
+(defun flymake-disabled-backends () -> (list symbol))
+
+;; (flymake-reporting-backends) - list currently reporting backends
+(defun flymake-reporting-backends () -> (list symbol))
+
+;; (flymake-is-running) - check if flymake is running
+(defun flymake-is-running () -> any)
+
+;; ============================================================================
+;; Log and Diagnostics Buffer
+;; ============================================================================
+
+;; (flymake-log LEVEL MSG &rest ARGS) - log a message
+(defun flymake-log (int string &rest any) -> nil)
+
+;; (flymake-error FORMAT &rest ARGS) - signal flymake error
+(defun flymake-error (string &rest any) -> nil)
+
+;; ============================================================================
+;; Mode Line
+;; ============================================================================
+
+;; (flymake--mode-line-format) - format mode line indicator
+(defun flymake--mode-line-format () -> (list any))
+
+;; ============================================================================
+;; Variables
+;; ============================================================================
+
+;; Hook for diagnostic backends
+(defvar flymake-diagnostic-functions (list ((any &rest any) -> any)))
+
+;; Delay before starting check after changes
+(defvar flymake-no-changes-timeout (float | nil))
+
+;; Whether to wrap around buffer
+(defvar flymake-wrap-around any)
+
+;; Start on enabling flymake-mode
+(defvar flymake-start-on-flymake-mode any)
+
+;; Fringe indicator position
+(defvar flymake-fringe-indicator-position (symbol | nil))
+
+;; Suppress zero counters
+(defvar flymake-suppress-zero-counters symbol)
+
+;; Mode hook
+(defvar flymake-mode-hook (list ((nil) -> any)))
+
+;; Error face
+(defvar flymake-error symbol)
+
+;; Warning face
+(defvar flymake-warning symbol)
+
+;; Note face
+(defvar flymake-note symbol)
+
+;; Diagnostic type bitmap alist
+(defvar flymake-error-bitmap (pair symbol symbol))
+(defvar flymake-warning-bitmap (pair symbol symbol))
+(defvar flymake-note-bitmap (pair symbol symbol))
+
+;; Number of errors/warnings/notes
+(defvar flymake--state any)
+
+;; Whether to show diagnostics at eol
+(defvar flymake-show-diagnostics-at-end-of-line any)
