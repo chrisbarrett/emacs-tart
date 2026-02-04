@@ -183,32 +183,48 @@ Key mappings:
 - E0400: Pattern Errors (non-exhaustive)
 - E0700+: Module Errors (reserved)
 
-### 5.2 Source Excerpts in Errors (Spec 45)
+### 5.2 Source Excerpts in Errors (Spec 45) ✅ COMPLETE
 
-**Files:**
-- `lib/util/ansi.ml` — CREATE (TTY detection, colors)
-- `lib/typing/source_excerpt.ml` — CREATE (read source, render underlines)
-- `lib/typing/diagnostic.ml` — Use excerpts in `human` format
+**Status:** COMPLETE
 
-**Changes:**
-1. Read source file around error location
-2. Render with line numbers, underlines, Elm-style prose
-3. Show `.tart` signature provenance when relevant
-4. Colors for TTY, plain text otherwise
+Implemented Elm-style error messages with source excerpts per Spec 45.
 
-**Verify:** Type errors show code context with underlines
+**Files created/modified:**
+- `lib/typing/ansi.ml` — TTY detection, semantic colors, syntax highlighting
+- `lib/typing/source_excerpt.ml` — Source reading, underline rendering, prose
+- `lib/typing/diagnostic.ml` — `to_string_human` for Elm-style formatting
+- `lib/error.ml` — `to_string_human` and `report_human` functions
+- `bin/main.ml` — Wired human format into CLI check command
 
-### 5.3 File I/O Errors (Spec 37)
+The `./tart check` command now displays Elm-style error messages by default:
+```
+-- TYPE MISMATCH -------------------------- file.el:42:10
 
-**Files:**
-- `lib/errors/file_error.ml` — EXISTS, enhance
-- `bin/main.ml` — Use structured file errors
+I found a type mismatch in this expression:
 
-**Changes:**
-1. Levenshtein suggestions for file not found
-2. "did you mean: foo.el" for missing `.el` extension
-3. Directory vs file detection
-4. Signature not found with search path listing
+42 |   (upcase count)
+   |           ^^^^^
+
+The function `upcase` expects argument 1 to be:
+
+    String
+
+But this expression has type:
+
+    Int
+
+Hint: convert the integer to a string: (number-to-string ...)
+```
+
+### 5.3 File I/O Errors (Spec 37) ✅ COMPLETE
+
+**Status:** COMPLETE (already implemented)
+
+All file I/O error handling is in place in `lib/errors/file_error.ml`:
+1. ✅ Levenshtein suggestions for file not found
+2. ✅ "did you mean: foo.el" for missing `.el` extension
+3. ✅ Directory vs file detection (`Is_directory` error type)
+4. ✅ Signature not found with search path listing
 
 ---
 
@@ -246,16 +262,14 @@ test/fixtures/typing/
 
 ## Phase 7: CLI & Tooling Polish
 
-### 7.1 Cmdliner Migration (Spec 36)
+### 7.1 Cmdliner Migration (Spec 36) ✅ COMPLETE
 
-**Files:**
-- `bin/main.ml` — Rewrite with Cmdliner
-- `bin/dune` — Add cmdliner dependency
+**Status:** COMPLETE (already implemented)
 
-**Benefits:**
-- Auto-generated `--help`
-- Typo suggestions (`--prot` → `--port`)
-- Structured validation errors
+The CLI already uses Cmdliner for argument parsing:
+- Auto-generated `--help` with subcommand documentation
+- Structured argument validation
+- Subcommand dispatch (check, eval, expand, repl, lsp, coverage)
 
 ---
 
