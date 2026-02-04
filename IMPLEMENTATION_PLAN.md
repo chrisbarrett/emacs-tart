@@ -168,14 +168,20 @@ Focus on 31.0 only for now. Backfilling 30.1/29.1 is future work after the 31.0 
 
 ## Phase 5: Error Quality & Developer Experience
 
-### 5.1 Error Code Registry (Spec 47)
+### 5.1 Error Code Registry (Spec 47) ✅ COMPLETE
 
-**Files:**
-- `lib/typing/diagnostic.ml` — Update to use canonical error codes
+**Status:** COMPLETE
 
-**Changes:**
-1. Map all error conditions to codes from Spec 47
-2. Ensure all diagnostics include `error[EXXXX]:` format
+Updated error codes to follow Spec 47. All codes are now sequential starting
+from E0001 instead of using Rust-style codes.
+
+Key mappings:
+- E0001-E0007: Type Errors (mismatch, branch, infinite, signature, annotation, return)
+- E0100-E0104: Name Errors (undefined variable, missing signature)
+- E0200-E0201: Arity Errors (wrong args, wrong type args)
+- E0300-E0302: Kind Errors (mismatch, infinite, arity)
+- E0400: Pattern Errors (non-exhaustive)
+- E0700+: Module Errors (reserved)
 
 ### 5.2 Source Excerpts in Errors (Spec 45)
 

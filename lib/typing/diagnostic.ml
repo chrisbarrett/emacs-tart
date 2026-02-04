@@ -10,34 +10,77 @@
     - Actual type
     - Related locations (e.g., where expected type originated)
 
-    Error codes follow Rust conventions:
-    - E0308: Type mismatch
-    - E0317: Incompatible branch types
-    - E0061: Wrong number of arguments
-    - E0106: Infinite type (occurs check) *)
+    Error codes follow Spec 47 (Error Code Registry):
+    - Type Errors (E0001–E0099)
+    - Name Errors (E0100–E0199)
+    - Arity Errors (E0200–E0299)
+    - Kind Errors (E0300–E0399)
+    - Pattern Errors (E0400–E0499)
+    - Row/Record Errors (E0500–E0599)
+    - Union Errors (E0600–E0699)
+    - Module Errors (E0700–E0799)
+    - File Errors (E0800–E0899) *)
 
 module Types = Core.Types
 module Loc = Syntax.Location
 
-(** Error codes for categorizing diagnostics. *)
+(** Error codes for categorizing diagnostics.
+
+    Codes are assigned per Spec 47 (Error Code Registry). Once assigned, codes
+    are never reassigned. *)
 type error_code =
-  | E0308  (** Type mismatch *)
-  | E0317  (** Incompatible branch types *)
-  | E0061  (** Wrong number of arguments (arity) *)
-  | E0106  (** Infinite type (occurs check) *)
-  | E0425  (** Undefined variable *)
-  | E0509  (** Kind mismatch *)
-  | E0601  (** Missing type class instance *)
+  (* Type Errors (E0001–E0099) *)
+  | E0001  (** TypeMismatch: Expected one type, found another *)
+  | E0002  (** BranchMismatch: If/cond branches have incompatible types *)
+  | E0003  (** InfiniteType: Occurs check failed (recursive type) *)
+  | E0004
+      (** SignatureMismatch: Implementation doesn't match declared signature *)
+  | E0005  (** AnnotationMismatch: Expression doesn't match tart annotation *)
+  | E0006  (** ReturnMismatch: Function body doesn't match declared return *)
+  | E0007  (** UnificationFailed: Types cannot be unified *)
+  (* Name Errors (E0100–E0199) *)
+  | E0100  (** UndefinedVariable: Variable not in scope *)
+  | E0101  (** UndefinedFunction: Function not in scope *)
+  | E0102  (** UndefinedType: Type not in scope *)
+  | E0104  (** MissingSignature: Function defined but not in .tart file *)
+  (* Arity Errors (E0200–E0299) *)
+  | E0200  (** WrongArity: Wrong number of arguments to function *)
+  | E0201  (** WrongTypeArity: Wrong number of type arguments *)
+  (* Kind Errors (E0300–E0399) *)
+  | E0300  (** KindMismatch: Expected one kind, found another *)
+  | E0301  (** InfiniteKind: Occurs check failed at kind level *)
+  | E0302  (** TypeArityMismatch: Type constructor applied to wrong # of args *)
+  (* Pattern Errors (E0400–E0499) *)
+  | E0400  (** NonExhaustive: Pattern match doesn't cover all cases *)
+  (* Module Errors (E0700–E0799) *)
+  | E0702  (** SignatureNotFound: No .tart signature file found *)
 
 (** Format an error code for display. *)
 let error_code_to_string = function
-  | E0308 -> "E0308"
-  | E0317 -> "E0317"
-  | E0061 -> "E0061"
-  | E0106 -> "E0106"
-  | E0425 -> "E0425"
-  | E0509 -> "E0509"
-  | E0601 -> "E0601"
+  (* Type Errors *)
+  | E0001 -> "E0001"
+  | E0002 -> "E0002"
+  | E0003 -> "E0003"
+  | E0004 -> "E0004"
+  | E0005 -> "E0005"
+  | E0006 -> "E0006"
+  | E0007 -> "E0007"
+  (* Name Errors *)
+  | E0100 -> "E0100"
+  | E0101 -> "E0101"
+  | E0102 -> "E0102"
+  | E0104 -> "E0104"
+  (* Arity Errors *)
+  | E0200 -> "E0200"
+  | E0201 -> "E0201"
+  (* Kind Errors *)
+  | E0300 -> "E0300"
+  | E0301 -> "E0301"
+  | E0302 -> "E0302"
+  (* Pattern Errors *)
+  | E0400 -> "E0400"
+  (* Module Errors *)
+  | E0702 -> "E0702"
 
 (** Severity level for diagnostics *)
 type severity = Error | Warning | Hint
@@ -126,7 +169,7 @@ let type_mismatch ~span ~expected ~actual ?(related = []) () =
   in
   {
     severity = Error;
-    code = Some E0308;
+    code = Some E0001;
     span;
     message;
     expected = Some expected;
@@ -143,7 +186,7 @@ let arity_mismatch ~span ~expected ~actual ?(related = []) () =
   in
   {
     severity = Error;
-    code = Some E0061;
+    code = Some E0200;
     span;
     message;
     expected = None;
@@ -160,7 +203,7 @@ let occurs_check ~span ~tvar_id ~typ ?(related = []) () =
   in
   {
     severity = Error;
-    code = Some E0106;
+    code = Some E0003;
     span;
     message;
     expected = None;
@@ -177,7 +220,7 @@ let missing_signature ~span ~name () =
   in
   {
     severity = Warning;
-    code = None;
+    code = Some E0104;
     span;
     message;
     expected = None;
@@ -186,7 +229,7 @@ let missing_signature ~span ~name () =
     help = [];
   }
 
-(** Create a signature mismatch diagnostic (E0308) showing both locations.
+(** Create a signature mismatch diagnostic (E0004) showing both locations.
 
     Used when a function's implementation type doesn't match its declared
     signature. Shows the implementation location as primary, and the signature
@@ -204,7 +247,7 @@ let signature_mismatch ~name ~impl_span ~impl_type ~sig_span ~sig_type () =
   in
   {
     severity = Error;
-    code = Some E0308;
+    code = Some E0004;
     span = impl_span;
     message =
       Printf.sprintf "implementation of `%s` does not match signature" name;
@@ -214,7 +257,7 @@ let signature_mismatch ~name ~impl_span ~impl_type ~sig_span ~sig_type () =
     help = [];
   }
 
-(** Create an undefined variable diagnostic (E0425) with typo suggestions.
+(** Create an undefined variable diagnostic (E0100) with typo suggestions.
 
     Takes the undefined name and a list of candidate names from the environment
     to generate "did you mean?" suggestions using Levenshtein distance. *)
@@ -229,7 +272,7 @@ let undefined_variable ~span ~name ~candidates () =
   in
   {
     severity = Error;
-    code = Some E0425;
+    code = Some E0100;
     span;
     message;
     expected = None;
@@ -335,7 +378,7 @@ let arity_mismatch_with_context ~span ~expected ~actual ~context () =
       in
       {
         severity = Error;
-        code = Some E0061;
+        code = Some E0200;
         span;
         message;
         expected = None;
@@ -360,7 +403,7 @@ let arity_mismatch_with_context ~span ~expected ~actual ~context () =
       in
       {
         severity = Error;
-        code = Some E0061;
+        code = Some E0201;
         span;
         message;
         expected = None;
@@ -428,7 +471,7 @@ let suggest_branch_fix ~this_type ~other_type : string list =
         | _ -> [])
     | _ -> []
 
-(** Create a branch type mismatch diagnostic (E0317) *)
+(** Create a branch type mismatch diagnostic (E0002) *)
 let branch_mismatch ~span ~this_type ~other_branch_span ~other_type ~is_then ()
     =
   let related =
@@ -437,7 +480,7 @@ let branch_mismatch ~span ~this_type ~other_branch_span ~other_type ~is_then ()
   let help = suggest_branch_fix ~this_type ~other_type in
   {
     severity = Error;
-    code = Some E0317;
+    code = Some E0002;
     span;
     message = "if branches have incompatible types";
     expected = Some other_type;
@@ -479,7 +522,7 @@ let type_mismatch_with_context ~span ~expected ~actual ~context () =
       let related = fn_related @ nil_note in
       {
         severity = Error;
-        code = Some E0308;
+        code = Some E0001;
         span;
         message;
         expected = Some expected;
@@ -505,7 +548,7 @@ let type_mismatch_with_context ~span ~expected ~actual ~context () =
       in
       {
         severity = Error;
-        code = Some E0308;
+        code = Some E0005;
         span;
         message;
         expected = Some expected;
@@ -530,7 +573,7 @@ let type_mismatch_with_context ~span ~expected ~actual ~context () =
       in
       {
         severity = Error;
-        code = Some E0308;
+        code = Some E0006;
         span;
         message;
         expected = Some expected;
@@ -556,7 +599,7 @@ let type_mismatch_with_context ~span ~expected ~actual ~context () =
       in
       {
         severity = Error;
-        code = Some E0308;
+        code = Some E0001;
         span;
         message =
           "type mismatch: tart instantiation specifies incompatible type";
@@ -584,7 +627,7 @@ let type_mismatch_with_context ~span ~expected ~actual ~context () =
       in
       {
         severity = Error;
-        code = Some E0061;
+        code = Some E0201;
         span;
         message;
         expected = None;
@@ -602,7 +645,7 @@ let type_mismatch_with_context ~span ~expected ~actual ~context () =
       in
       {
         severity = Error;
-        code = Some E0308;
+        code = Some E0001;
         span;
         message;
         expected = Some expected;
@@ -756,13 +799,13 @@ let is_error (d : t) : bool =
 (** Count errors in a list of diagnostics *)
 let count_errors (ds : t list) : int = List.length (List.filter is_error ds)
 
-(** Create a non-exhaustive pattern match warning.
+(** Create a non-exhaustive pattern match warning (E0400).
 
     Used when a pcase expression doesn't cover all constructors of an ADT. *)
 let non_exhaustive_match ~span ~message () =
   {
     severity = Warning;
-    code = None;
+    code = Some E0400;
     span;
     message;
     expected = None;
@@ -771,7 +814,7 @@ let non_exhaustive_match ~span ~message () =
     help = [ "add a wildcard pattern (_) to handle remaining cases" ];
   }
 
-(** Create a kind mismatch diagnostic (E0509).
+(** Create a kind mismatch diagnostic (E0300).
 
     Used when a type application has mismatched kinds.
 
@@ -796,7 +839,7 @@ let kind_mismatch ~span ~expected ~found ~location () =
   in
   {
     severity = Error;
-    code = Some E0509;
+    code = Some E0300;
     span;
     message = "kind mismatch";
     expected = None;
@@ -824,7 +867,7 @@ let of_kind_error span (err : Kind_infer.kind_error) : t =
   | Kind_infer.OccursCheckFailed { kvar_id; kind } ->
       {
         severity = Error;
-        code = Some E0509;
+        code = Some E0301;
         span;
         message = "infinite kind";
         expected = None;
@@ -844,7 +887,7 @@ let of_kind_error span (err : Kind_infer.kind_error) : t =
       let arg_word n = if n = 1 then "argument" else "arguments" in
       {
         severity = Error;
-        code = Some E0509;
+        code = Some E0302;
         span;
         message =
           Printf.sprintf
@@ -864,10 +907,13 @@ let of_kind_error span (err : Kind_infer.kind_error) : t =
         help = [];
       }
 
-(** Create a missing type class instance diagnostic (E0601).
+(** Create a missing type class instance diagnostic.
 
     Used when a function with type class constraints is called but no instance
     exists for the required constraint.
+
+    Note: Type classes are not yet fully implemented. Error code will be
+    assigned when type class support is added to the type system.
 
     Output format follows R8 from spec 21:
     {v
@@ -878,7 +924,7 @@ let of_kind_error span (err : Kind_infer.kind_error) : t =
 let missing_instance ~span ~class_name ~typ () =
   {
     severity = Error;
-    code = Some E0601;
+    code = None;
     span;
     message =
       Printf.sprintf "no instance of `%s %s` found" class_name

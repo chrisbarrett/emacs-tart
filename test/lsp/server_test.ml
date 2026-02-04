@@ -1251,7 +1251,7 @@ let test_diagnostic_has_error_code () =
       (* Check error code is present *)
       let code = first |> member "code" in
       Alcotest.(check bool) "has code" true (code <> `Null);
-      Alcotest.(check string) "code is E0308" "E0308" (code |> to_string)
+      Alcotest.(check string) "code is E0001" "E0001" (code |> to_string)
 
 (** Test that diagnostics include help suggestions in message *)
 let test_diagnostic_has_help_suggestions () =
@@ -2252,7 +2252,7 @@ let test_code_action_parses_context () =
                                        ] );
                                  ] );
                              ("severity", `Int 1);
-                             ("code", `String "E0308");
+                             ("code", `String "E0001");
                              ("message", `String "type mismatch");
                              ("source", `String "tart");
                            ];

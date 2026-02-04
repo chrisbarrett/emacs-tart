@@ -4,23 +4,49 @@
     including source locations, expected vs actual types, and related locations
     (provenance) for understanding where types originated.
 
-    Error codes follow Rust conventions:
-    - E0308: Type mismatch
-    - E0317: Incompatible branch types
-    - E0061: Wrong number of arguments
-    - E0106: Infinite type (occurs check) *)
+    Error codes follow Spec 47 (Error Code Registry):
+    - Type Errors (E0001–E0099)
+    - Name Errors (E0100–E0199)
+    - Arity Errors (E0200–E0299)
+    - Kind Errors (E0300–E0399)
+    - Pattern Errors (E0400–E0499)
+    - Row/Record Errors (E0500–E0599)
+    - Union Errors (E0600–E0699)
+    - Module Errors (E0700–E0799)
+    - File Errors (E0800–E0899) *)
 
 (** {1 Types} *)
 
-(** Error codes for categorizing diagnostics. *)
+(** Error codes for categorizing diagnostics.
+
+    Codes are assigned per Spec 47 (Error Code Registry). Once assigned, codes
+    are never reassigned. *)
 type error_code =
-  | E0308  (** Type mismatch *)
-  | E0317  (** Incompatible branch types *)
-  | E0061  (** Wrong number of arguments (arity) *)
-  | E0106  (** Infinite type (occurs check) *)
-  | E0425  (** Undefined variable *)
-  | E0509  (** Kind mismatch *)
-  | E0601  (** Missing type class instance *)
+  (* Type Errors (E0001–E0099) *)
+  | E0001  (** TypeMismatch: Expected one type, found another *)
+  | E0002  (** BranchMismatch: If/cond branches have incompatible types *)
+  | E0003  (** InfiniteType: Occurs check failed (recursive type) *)
+  | E0004
+      (** SignatureMismatch: Implementation doesn't match declared signature *)
+  | E0005  (** AnnotationMismatch: Expression doesn't match tart annotation *)
+  | E0006  (** ReturnMismatch: Function body doesn't match declared return *)
+  | E0007  (** UnificationFailed: Types cannot be unified *)
+  (* Name Errors (E0100–E0199) *)
+  | E0100  (** UndefinedVariable: Variable not in scope *)
+  | E0101  (** UndefinedFunction: Function not in scope *)
+  | E0102  (** UndefinedType: Type not in scope *)
+  | E0104  (** MissingSignature: Function defined but not in .tart file *)
+  (* Arity Errors (E0200–E0299) *)
+  | E0200  (** WrongArity: Wrong number of arguments to function *)
+  | E0201  (** WrongTypeArity: Wrong number of type arguments *)
+  (* Kind Errors (E0300–E0399) *)
+  | E0300  (** KindMismatch: Expected one kind, found another *)
+  | E0301  (** InfiniteKind: Occurs check failed at kind level *)
+  | E0302  (** TypeArityMismatch: Type constructor applied to wrong # of args *)
+  (* Pattern Errors (E0400–E0499) *)
+  | E0400  (** NonExhaustive: Pattern match doesn't cover all cases *)
+  (* Module Errors (E0700–E0799) *)
+  | E0702  (** SignatureNotFound: No .tart signature file found *)
 
 val error_code_to_string : error_code -> string
 (** Format an error code for display. *)
@@ -99,7 +125,7 @@ val signature_mismatch :
   sig_type:Core.Types.typ ->
   unit ->
   t
-(** Create a signature mismatch diagnostic (E0308) showing both locations.
+(** Create a signature mismatch diagnostic (E0004) showing both locations.
 
     Used when a function's implementation type doesn't match its declared
     signature. [impl_span] is the location in the [.el] file, [sig_span] is the
@@ -111,7 +137,7 @@ val undefined_variable :
   candidates:string list ->
   unit ->
   t
-(** Create an undefined variable diagnostic (E0425) with typo suggestions.
+(** Create an undefined variable diagnostic (E0100) with typo suggestions.
 
     Takes the undefined name and a list of candidate names from the environment
     to generate "did you mean?" suggestions using Levenshtein distance. *)
@@ -124,7 +150,7 @@ val branch_mismatch :
   is_then:bool ->
   unit ->
   t
-(** Create a branch type mismatch diagnostic (E0317).
+(** Create a branch type mismatch diagnostic (E0002).
 
     Used when if/cond branches have incompatible types. [span] is the location
     of the branch with the error, [other_branch_span] is the location of the
@@ -154,7 +180,7 @@ val to_string : t -> string
 
     Output format (similar to rustc/clang):
     {v
-      error[E0308]: type mismatch: expected Int but found String
+      error[E0001]: type mismatch: expected Int but found String
         --> file.el:10:5
         |
         = expected: Int
@@ -209,7 +235,7 @@ val kind_mismatch :
   location:string ->
   unit ->
   t
-(** Create a kind mismatch diagnostic (E0509).
+(** Create a kind mismatch diagnostic (E0300).
 
     Used when a type application has mismatched kinds, e.g., applying a type
     variable of kind [*] as if it were kind [* -> *]. *)
@@ -225,10 +251,13 @@ val missing_instance :
   typ:Core.Types.typ ->
   unit ->
   t
-(** Create a missing type class instance diagnostic (E0601).
+(** Create a missing type class instance diagnostic.
 
     Used when a function with type class constraints is called but no instance
-    exists for the required constraint. *)
+    exists for the required constraint.
+
+    Note: Type classes are not yet fully implemented. Error code will be
+    assigned when type class support is added to the type system. *)
 
 (** {1 JSON Serialization} *)
 
@@ -239,7 +268,7 @@ val to_json : t -> Yojson.Safe.t
     {v
       {
         "kind": "type",
-        "code": "E0308",
+        "code": "E0001",
         "severity": "error",
         "message": "type mismatch",
         "location": { "file": "init.el", "line": 42, "column": 10 },

@@ -133,11 +133,11 @@ end
 
     Prints each error followed by a summary line showing the count. Example:
     {v
-      error[E0308]: type mismatch
+      error[E0001]: type mismatch
         --> init.el:42:10
         ...
 
-      error[E0425]: variable `strng` is not defined
+      error[E0100]: variable `strng` is not defined
         --> init.el:50:5
         ...
 
