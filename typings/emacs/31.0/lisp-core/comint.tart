@@ -1,0 +1,217 @@
+;; Type signatures for Emacs comint.el
+;;
+;; Source: emacs/lisp/comint.el
+;; Emacs version: 31.0
+;;
+;; General command interpreter mode for inferior processes.
+
+;; ============================================================================
+;; Mode
+;; ============================================================================
+
+;; (comint-mode) - major mode for inferior process
+(defun comint-mode () -> nil)
+
+;; ============================================================================
+;; Process Creation
+;; ============================================================================
+
+;; (make-comint NAME PROGRAM &optional STARTFILE &rest SWITCHES)
+;; Create buffer with subprocess running PROGRAM
+(defun make-comint (string string &optional string &rest string) -> buffer)
+
+;; (make-comint-in-buffer NAME BUFFER PROGRAM &optional STARTFILE &rest SWITCHES)
+(defun make-comint-in-buffer (string buffer string &optional string &rest string) -> buffer)
+
+;; (comint-run PROGRAM &optional SWITCHES) - run program in comint buffer
+(defun comint-run (string &optional (list string)) -> nil)
+
+;; (comint-exec BUFFER NAME PROGRAM STARTFILE SWITCHES)
+(defun comint-exec (buffer string string (string | nil) (list string)) -> buffer)
+
+;; ============================================================================
+;; Input/Output
+;; ============================================================================
+
+;; (comint-send-input &optional NO-NEWLINE ARTIFICIAL) - send input to process
+(defun comint-send-input (&optional any any) -> nil)
+
+;; (comint-send-string PROCESS STRING) - send string to process
+(defun comint-send-string (process string) -> nil)
+
+;; (comint-send-region PROCESS START END) - send region to process
+(defun comint-send-region (process (int | marker) (int | marker)) -> nil)
+
+;; (comint-send-eof) - send EOF to process
+(defun comint-send-eof () -> nil)
+
+;; (comint-send-invisible PROMPT &optional PROMPT-STRING) - read and send invisibly
+(defun comint-send-invisible (string &optional string) -> nil)
+
+;; ============================================================================
+;; Process Signals
+;; ============================================================================
+
+;; (comint-interrupt-subjob) - interrupt subprocess
+(defun comint-interrupt-subjob () -> nil)
+
+;; (comint-kill-subjob) - kill subprocess
+(defun comint-kill-subjob () -> nil)
+
+;; (comint-quit-subjob) - quit subprocess
+(defun comint-quit-subjob () -> nil)
+
+;; (comint-stop-subjob) - stop subprocess
+(defun comint-stop-subjob () -> nil)
+
+;; (comint-continue-subjob) - continue subprocess
+(defun comint-continue-subjob () -> nil)
+
+;; ============================================================================
+;; History Navigation
+;; ============================================================================
+
+;; (comint-previous-input ARG) - go to previous input
+(defun comint-previous-input (int) -> nil)
+
+;; (comint-next-input ARG) - go to next input
+(defun comint-next-input (int) -> nil)
+
+;; (comint-previous-matching-input REGEXP N &optional RESTORE)
+(defun comint-previous-matching-input (string int &optional any) -> nil)
+
+;; (comint-next-matching-input REGEXP N)
+(defun comint-next-matching-input (string int) -> nil)
+
+;; (comint-previous-matching-input-from-input ARG)
+(defun comint-previous-matching-input-from-input (int) -> nil)
+
+;; (comint-next-matching-input-from-input ARG)
+(defun comint-next-matching-input-from-input (int) -> nil)
+
+;; (comint-dynamic-list-input-ring) - display input history
+(defun comint-dynamic-list-input-ring () -> nil)
+
+;; (comint-history-isearch-backward) - search history backward
+(defun comint-history-isearch-backward () -> nil)
+
+;; (comint-history-isearch-backward-regexp) - search history with regexp
+(defun comint-history-isearch-backward-regexp () -> nil)
+
+;; (comint-write-input-ring) - save history to file
+(defun comint-write-input-ring () -> nil)
+
+;; (comint-read-input-ring &optional SILENT) - read history from file
+(defun comint-read-input-ring (&optional any) -> nil)
+
+;; ============================================================================
+;; Output Control
+;; ============================================================================
+
+;; (comint-show-output) - show beginning of process output
+(defun comint-show-output () -> nil)
+
+;; (comint-clear-buffer) - clear the comint buffer
+(defun comint-clear-buffer () -> nil)
+
+;; (comint-truncate-buffer &optional STRING) - truncate buffer to max size
+(defun comint-truncate-buffer (&optional string) -> nil)
+
+;; (comint-strip-ctrl-m &optional STRING) - remove ^M characters
+(defun comint-strip-ctrl-m (&optional string) -> nil)
+
+;; (comint-show-maximum-output) - scroll to show max output
+(defun comint-show-maximum-output () -> nil)
+
+;; ============================================================================
+;; Prompts and Markers
+;; ============================================================================
+
+;; (comint-bol &optional ARG) - go to beginning of line after prompt
+(defun comint-bol (&optional any) -> nil)
+
+;; (comint-goto-process-mark) - move to process mark
+(defun comint-goto-process-mark () -> nil)
+
+;; (comint-set-process-mark) - set process mark to point
+(defun comint-set-process-mark () -> nil)
+
+;; (comint-snapshot-last-prompt) - snapshot prompt for filtering
+(defun comint-snapshot-last-prompt () -> nil)
+
+;; ============================================================================
+;; Completion
+;; ============================================================================
+
+;; (comint-dynamic-complete) - do dynamic completion
+(defun comint-dynamic-complete () -> nil)
+
+;; (comint-replace-by-expanded-history &optional SILENT START)
+(defun comint-replace-by-expanded-history (&optional any int) -> nil)
+
+;; ============================================================================
+;; Variables
+;; ============================================================================
+
+;; Input ring for history
+(defvar comint-input-ring ring)
+
+;; Size of input ring
+(defvar comint-input-ring-size int)
+
+;; Regexp matching prompt
+(defvar comint-prompt-regexp string)
+
+;; Whether prompt is read-only
+(defvar comint-prompt-read-only any)
+
+;; Whether to highlight input
+(defvar comint-highlight-input any)
+
+;; Face for prompt
+(defvar comint-highlight-prompt symbol)
+
+;; File for saving history
+(defvar comint-input-ring-file-name (string | nil))
+
+;; Ignoredups in history
+(defvar comint-input-ignoredups any)
+
+;; Whether to scroll for output
+(defvar comint-scroll-to-bottom-on-input (symbol | nil))
+
+;; Whether to scroll for output
+(defvar comint-scroll-to-bottom-on-output (symbol | nil))
+
+;; Whether to scroll for output
+(defvar comint-move-point-for-output (symbol | nil))
+
+;; Show maximum output
+(defvar comint-scroll-show-maximum-output any)
+
+;; Max size before truncation
+(defvar comint-buffer-maximum-size int)
+
+;; Whether to use prompt regexp
+(defvar comint-use-prompt-regexp any)
+
+;; Input filter functions
+(defvar comint-input-filter-functions (list ((string) -> any)))
+
+;; Output filter functions
+(defvar comint-output-filter-functions (list ((string) -> any)))
+
+;; Preoutput filter functions
+(defvar comint-preoutput-filter-functions (list ((string) -> string)))
+
+;; Mode hook
+(defvar comint-mode-hook (list ((nil) -> any)))
+
+;; Process echoes
+(defvar comint-process-echoes any)
+
+;; Input sender
+(defvar comint-input-sender (((process string) -> nil) | nil))
+
+;; Get old input function
+(defvar comint-get-old-input (((nil) -> string) | nil))
