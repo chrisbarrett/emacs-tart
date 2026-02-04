@@ -1328,7 +1328,10 @@ let test_load_minibuf_tart () =
   (match Search_path.parse_signature_file path with
   | None -> Alcotest.fail "minibuf.tart failed to parse in load test"
   | Some sig_file -> (
-      match Sig_loader.validate_signature sig_file with
+      match
+        Sig_loader.validate_signature
+          ~prelude_type_names:Prelude.prelude_type_names sig_file
+      with
       | Ok () -> ()
       | Error err ->
           Alcotest.fail

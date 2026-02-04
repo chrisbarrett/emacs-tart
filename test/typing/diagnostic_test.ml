@@ -167,6 +167,49 @@ let test_to_string_compact () =
     "contains expected" true
     (contains_pattern (Str.regexp_case_fold "expected") str)
 
+let test_to_string_human_has_header () =
+  (* Test that to_string_human includes Elm-style header *)
+  let pos = Loc.make_pos ~file:"test.el" ~line:5 ~col:3 ~offset:50 in
+  let span = Loc.make_span ~start_pos:pos ~end_pos:pos in
+  let d =
+    Diag.type_mismatch ~span ~expected:Types.Prim.int ~actual:Types.Prim.string
+      ()
+  in
+  let str = Diag.to_string_human d in
+  (* Should have Elm-style header with error type *)
+  Alcotest.(check bool)
+    "has TYPE MISMATCH header" true
+    (contains_pattern (Str.regexp "TYPE MISMATCH") str);
+  (* Should have dashes *)
+  Alcotest.(check bool)
+    "has dashes" true
+    (contains_pattern (Str.regexp "--.*--") str);
+  (* Should have file location *)
+  Alcotest.(check bool)
+    "has file location" true
+    (contains_pattern (Str.regexp "test\\.el") str)
+
+let test_to_string_human_has_prose () =
+  (* Test that to_string_human includes conversational prose *)
+  let pos = Loc.make_pos ~file:"test.el" ~line:5 ~col:3 ~offset:50 in
+  let span = Loc.make_span ~start_pos:pos ~end_pos:pos in
+  let d =
+    Diag.type_mismatch ~span ~expected:Types.Prim.int ~actual:Types.Prim.string
+      ()
+  in
+  let str = Diag.to_string_human d in
+  (* Should have introductory prose *)
+  Alcotest.(check bool)
+    "has intro prose" true
+    (contains_pattern (Str.regexp_case_fold "I found\\|mismatch") str);
+  (* Should have types *)
+  Alcotest.(check bool)
+    "has int type" true
+    (contains_pattern (Str.regexp "int") str);
+  Alcotest.(check bool)
+    "has string type" true
+    (contains_pattern (Str.regexp "string") str)
+
 (* =============================================================================
    Conversion from Unify.error Tests
    ============================================================================= *)
@@ -1168,6 +1211,10 @@ let () =
           Alcotest.test_case "includes related" `Quick
             test_to_string_includes_related_locations;
           Alcotest.test_case "compact format" `Quick test_to_string_compact;
+          Alcotest.test_case "human format header" `Quick
+            test_to_string_human_has_header;
+          Alcotest.test_case "human format prose" `Quick
+            test_to_string_human_has_prose;
         ] );
       ( "conversion",
         [

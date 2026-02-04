@@ -192,6 +192,32 @@ val to_string : t -> string
       help: convert the integer to a string: (number-to-string ...)
     v} *)
 
+val to_string_human : t -> string
+(** Format a diagnostic in Elm-style human-readable format with source excerpts.
+
+    Per Spec 45: Shows Elm-style headers, source excerpts with underlines,
+    conversational prose, and colored output when TTY is detected.
+
+    Output format:
+    {v
+      -- TYPE MISMATCH ---------------------------------------- file.el:42:10
+
+      I found a type mismatch in this expression:
+
+      42 |   (upcase count)
+         |           ^^^^^
+
+      The function `upcase` expects argument 1 to be:
+
+          String
+
+      But this expression has type:
+
+          Int
+
+      Hint: convert the integer to a string: (number-to-string ...)
+    v} *)
+
 val to_string_compact : t -> string
 (** Format a diagnostic in a compact single-line format.
 

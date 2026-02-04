@@ -754,6 +754,131 @@ let to_string (d : t) : string =
 
   Buffer.contents buf
 
+(** Convert error code to error type string for header. *)
+let error_type_of_code = function
+  | Some E0001 -> "TYPE MISMATCH"
+  | Some E0002 -> "BRANCH MISMATCH"
+  | Some E0003 -> "INFINITE TYPE"
+  | Some E0004 -> "SIGNATURE MISMATCH"
+  | Some E0005 -> "ANNOTATION MISMATCH"
+  | Some E0006 -> "RETURN MISMATCH"
+  | Some E0007 -> "UNIFICATION FAILED"
+  | Some E0100 -> "UNDEFINED VARIABLE"
+  | Some E0101 -> "UNDEFINED FUNCTION"
+  | Some E0102 -> "UNDEFINED TYPE"
+  | Some E0104 -> "MISSING SIGNATURE"
+  | Some E0200 -> "WRONG ARITY"
+  | Some E0201 -> "WRONG TYPE ARITY"
+  | Some E0300 -> "KIND MISMATCH"
+  | Some E0301 -> "INFINITE KIND"
+  | Some E0302 -> "TYPE ARITY MISMATCH"
+  | Some E0400 -> "NON-EXHAUSTIVE MATCH"
+  | Some E0702 -> "SIGNATURE NOT FOUND"
+  | None -> "ERROR"
+
+(** Format a diagnostic in Elm-style human-readable format with source excerpts.
+
+    Per Spec 45 R4-R9: Shows Elm-style headers, source excerpts with underlines,
+    conversational prose, and colored output when TTY is detected.
+
+    Output format:
+    {[
+      -- TYPE MISMATCH ---------------------------------------- file.el:42:10
+
+      I found a type mismatch in this expression:
+
+      42 |   (upcase count)
+         |           ^^^^^
+
+      The function `upcase` expects argument 1 to be:
+
+          String
+
+      But this expression has type:
+
+          Int
+
+      Hint: convert the integer to a string: (number-to-string ...)
+    ]} *)
+let to_string_human (d : t) : string =
+  let buf = Buffer.create 512 in
+
+  (* R4: Elm-style header with dashes *)
+  let error_type = error_type_of_code d.code in
+  Buffer.add_string buf (Source_excerpt.format_header ~error_type d.span);
+  Buffer.add_string buf "\n\n";
+
+  (* R5: Conversational intro *)
+  let prose_ctx =
+    (* Map from our diagnostic type to Source_excerpt prose context *)
+    match d.code with
+    | Some E0002 ->
+        (* Branch mismatch - check if we have related info *)
+        Source_excerpt.IfBranch { is_then = true }
+        (* Default *)
+    | Some E0006 ->
+        (* Return mismatch - try to extract fn_name from message *)
+        Source_excerpt.DeclaredReturn { fn_name = "function" }
+    | Some E0005 -> Source_excerpt.TartAnnotation
+    | _ -> Source_excerpt.NoContext
+  in
+  Buffer.add_string buf (Source_excerpt.intro_prose prose_ctx);
+  Buffer.add_string buf "\n\n";
+
+  (* R1-R3: Source excerpt for primary location *)
+  (match Source_excerpt.render_span d.span with
+  | Some excerpt ->
+      Buffer.add_string buf excerpt;
+      Buffer.add_string buf "\n\n"
+  | None ->
+      (* R8: Fallback when source unavailable *)
+      Buffer.add_string buf "(source not available)\n\n");
+
+  (* R5: Expected type prose *)
+  (match d.expected with
+  | Some ty ->
+      let expected_str = Ansi.type_name (Types.to_string ty) in
+      Buffer.add_string buf
+        (Source_excerpt.expected_prose ~expected:expected_str prose_ctx);
+      Buffer.add_string buf "\n\n"
+  | None -> ());
+
+  (* R5: Actual type prose *)
+  (match d.actual with
+  | Some ty ->
+      let actual_str = Ansi.type_name (Types.to_string ty) in
+      Buffer.add_string buf
+        (Source_excerpt.actual_prose ~actual:actual_str prose_ctx);
+      Buffer.add_string buf "\n"
+  | None -> ());
+
+  (* R7: Related location excerpts *)
+  List.iter
+    (fun (rel : related_location) ->
+      if rel.span.start_pos.file <> "<generated>" then (
+        Buffer.add_string buf "\n";
+        (match Source_excerpt.render_span rel.span with
+        | Some excerpt ->
+            Buffer.add_string buf excerpt;
+            Buffer.add_string buf "\n"
+        | None -> ());
+        Buffer.add_string buf (Ansi.hint rel.message);
+        Buffer.add_string buf "\n")
+      else (
+        Buffer.add_string buf "\n";
+        Buffer.add_string buf (Ansi.hint rel.message);
+        Buffer.add_string buf "\n"))
+    d.related;
+
+  (* R9: Help suggestions *)
+  List.iter
+    (fun help_text ->
+      Buffer.add_string buf "\n";
+      Buffer.add_string buf (Ansi.help ("Hint: " ^ help_text)))
+    d.help;
+
+  Buffer.contents buf
+
 (** Format a diagnostic in a compact single-line format.
 
     Useful for IDE integration and machine parsing. Format: file:line:col:

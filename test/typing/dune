@@ -49,3 +49,7 @@
 (test
  (name kind_infer_test)
  (libraries tart alcotest))
+
+(test
+ (name source_excerpt_test)
+ (libraries tart alcotest str unix))
