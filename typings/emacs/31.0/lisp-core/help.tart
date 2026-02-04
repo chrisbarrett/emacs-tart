@@ -1,0 +1,110 @@
+;; Type signatures for Emacs help.el
+;;
+;; Source: emacs/lisp/help.el
+;; Emacs version: 31.0
+;;
+;; Help system functions.
+
+;; ===========================================================================
+;; Help buffer
+;; ===========================================================================
+
+;; (help-buffer) - return help buffer, creating if needed
+(defun help-buffer () -> buffer)
+
+;; (help-setup-xref ITEM INTERACTIVE-P) - set up cross-reference for help
+;; ITEM is (FUNCTION . ARGS) to call for "back" button
+(defun help-setup-xref ((list any) bool) -> nil)
+
+;; (help-make-xrefs &optional BUFFER) - make cross-reference buttons in buffer
+(defun help-make-xrefs (&optional buffer) -> nil)
+
+;; (help-xref-button N TYPE &rest ARGS) - make button on match N
+(defun help-xref-button (int symbol &rest any) -> nil)
+
+;; ===========================================================================
+;; Describe functions
+;; ===========================================================================
+
+;; (describe-function FUNCTION) - display documentation for FUNCTION
+(defun describe-function (symbol) -> nil)
+
+;; (describe-variable VARIABLE &optional BUFFER FRAME) - describe variable
+(defun describe-variable (symbol &optional buffer frame) -> nil)
+
+;; (describe-symbol SYMBOL &optional BUFFER FRAME) - describe any symbol
+(defun describe-symbol (symbol &optional buffer frame) -> nil)
+
+;; (describe-face FACE &optional FRAME) - describe face
+(defun describe-face ((symbol | (list symbol)) &optional frame) -> nil)
+
+;; (describe-mode &optional BUFFER) - display documentation of current mode
+(defun describe-mode (&optional buffer) -> nil)
+
+;; (describe-key KEY &optional UNTRANSLATED UP-EVENT) - describe key binding
+(defun describe-key (any &optional any any) -> nil)
+
+;; (describe-key-briefly KEY &optional INSERT UNTRANSLATED) - brief key description
+(defun describe-key-briefly (any &optional bool any) -> (string | nil))
+
+;; (describe-bindings &optional PREFIX BUFFER) - describe all key bindings
+(defun describe-bindings (&optional any buffer) -> nil)
+
+;; (describe-prefix-bindings) - describe bindings of current prefix
+(defun describe-prefix-bindings () -> nil)
+
+;; ===========================================================================
+;; Where-is functions
+;; ===========================================================================
+
+;; (where-is DEFINITION &optional INSERT) - find keys for DEFINITION
+(defun where-is (symbol &optional bool) -> nil)
+
+;; (where-is-internal DEFINITION &optional KEYMAP FIRSTONLY NOINDIRECT NO-REMAP)
+;; Return key sequences that invoke DEFINITION
+(defun where-is-internal (any &optional any bool bool bool) -> (list any))
+
+;; ===========================================================================
+;; Apropos
+;; ===========================================================================
+
+;; (apropos PATTERN &optional DO-ALL) - show matching symbols
+(defun apropos (string &optional bool) -> (list any))
+
+;; (apropos-command PATTERN &optional DO-ALL VAR-PREDICATE) - matching commands
+(defun apropos-command (string &optional bool any) -> (list any))
+
+;; (apropos-variable PATTERN &optional DO-ALL) - matching variables
+(defun apropos-variable (string &optional bool) -> (list any))
+
+;; (apropos-documentation PATTERN &optional DO-ALL) - search documentation
+(defun apropos-documentation (string &optional bool) -> (list any))
+
+;; (apropos-value PATTERN &optional DO-ALL) - matching values
+(defun apropos-value (string &optional bool) -> (list any))
+
+;; ===========================================================================
+;; Help navigation
+;; ===========================================================================
+
+;; (help-go-back) - go back in help history
+(defun help-go-back () -> nil)
+
+;; (help-go-forward) - go forward in help history
+(defun help-go-forward () -> nil)
+
+;; (help-follow-symbol &optional POS) - follow symbol at point
+(defun help-follow-symbol (&optional int) -> nil)
+
+;; ===========================================================================
+;; Utility
+;; ===========================================================================
+
+;; (help-split-fundoc DOCSTRING DEF) - split docstring into usage and doc
+(defun help-split-fundoc ((string | nil) any) -> ((pair string string) | nil))
+
+;; (help-add-fundoc-usage DOCSTRING ARGLIST) - add usage line to docstring
+(defun help-add-fundoc-usage ((string | nil) any) -> (string | nil))
+
+;; (help-function-arglist FN &optional PRESERVE-NAMES) - get argument list
+(defun help-function-arglist (any &optional bool) -> (list any))
