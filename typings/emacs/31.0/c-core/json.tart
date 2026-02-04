@@ -1,0 +1,45 @@
+;; Type signatures for Emacs json.c
+;;
+;; Source: emacs/src/json.c
+;; Emacs version: 31.0
+;;
+;; Contains JSON parsing and serialization functions.
+;;
+;; Note: JSON values map to Elisp types as follows:
+;; - object -> hash-table or alist or plist (configurable)
+;; - array -> vector or list (configurable)
+;; - string -> string
+;; - number -> integer or float
+;; - true -> t or :json-true (configurable)
+;; - false -> :json-false or nil (configurable)
+;; - null -> :null or nil (configurable)
+
+;; ===========================================================================
+;; Parsing
+;; ===========================================================================
+
+;; (json-parse-string STRING &rest ARGS) - parse JSON string
+;; Keyword arguments:
+;;   :object-type - 'hash-table, 'alist, or 'plist (default 'hash-table)
+;;   :array-type - 'array or 'list (default 'array)
+;;   :null-object - value for JSON null (default :null)
+;;   :false-object - value for JSON false (default :json-false)
+(defun json-parse-string (string &rest any) -> any)
+
+;; (json-parse-buffer &rest ARGS) - parse JSON from current buffer at point
+;; Same keyword arguments as json-parse-string.
+(defun json-parse-buffer (&rest any) -> any)
+
+;; ===========================================================================
+;; Serialization
+;; ===========================================================================
+
+;; (json-serialize OBJECT &rest ARGS) - serialize OBJECT to JSON string
+;; Keyword arguments:
+;;   :null-object - Lisp value to serialize as null (default :null)
+;;   :false-object - Lisp value to serialize as false (default :json-false)
+(defun json-serialize (any &rest any) -> string)
+
+;; (json-insert OBJECT &rest ARGS) - insert JSON representation into buffer
+;; Same keyword arguments as json-serialize.
+(defun json-insert (any &rest any) -> nil)

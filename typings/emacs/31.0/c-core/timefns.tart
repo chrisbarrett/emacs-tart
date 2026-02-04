@@ -1,0 +1,85 @@
+;; Type signatures for Emacs timefns.c
+;;
+;; Source: emacs/src/timefns.c
+;; Emacs version: 31.0
+;;
+;; Contains time and date primitive functions.
+;;
+;; Note: Time values in Emacs can be represented as:
+;; - (ticks . hz) - arbitrary precision
+;; - (high low micro pico) - traditional format
+;; - Float - seconds since epoch
+;; - Integer - seconds since epoch
+;; - nil - current time
+
+;; ===========================================================================
+;; Current time
+;; ===========================================================================
+
+;; (current-time) - return current time as list (HIGH LOW USEC PSEC)
+(defun current-time () -> (list int))
+
+;; (current-time-string &optional TIME ZONE) - current time as readable string
+(defun current-time-string (&optional any any) -> string)
+
+;; (current-time-zone &optional TIME ZONE) - return timezone info as (OFFSET NAME)
+(defun current-time-zone (&optional any any) -> (pair int string))
+
+;; ===========================================================================
+;; Time conversion
+;; ===========================================================================
+
+;; (time-convert TIME &optional FORM) - convert time representation
+;; FORM: t or nil -> (ticks . hz), integer/list -> traditional format
+(defun time-convert (any &optional any) -> any)
+
+;; (float-time &optional TIME) - time as floating point seconds since epoch
+(defun float-time (&optional any) -> float)
+
+;; ===========================================================================
+;; Time arithmetic
+;; ===========================================================================
+
+;; (time-add A B) - add two time values
+(defun time-add (any any) -> any)
+
+;; (time-subtract A B) - subtract time values (A - B)
+(defun time-subtract (any any) -> any)
+
+;; ===========================================================================
+;; Time comparison
+;; ===========================================================================
+
+;; (time-less-p T1 T2) - return non-nil if T1 is before T2
+(defun time-less-p (any any) -> bool)
+
+;; (time-equal-p T1 T2) - return non-nil if times are equal
+(defun time-equal-p (any any) -> bool)
+
+;; ===========================================================================
+;; Encode/decode
+;; ===========================================================================
+
+;; (decode-time &optional TIME ZONE FORM) - decode time into components
+;; Returns decoded time with seconds, minutes, hours, day, month, year, etc.
+(defun decode-time (&optional any any any) -> any)
+
+;; (encode-time TIME &rest OBSOLESCENT-ARGUMENTS) - encode time from components
+;; Can accept decoded-time structure or individual components.
+(defun encode-time (any &rest any) -> any)
+
+;; ===========================================================================
+;; Formatting
+;; ===========================================================================
+
+;; (format-time-string FORMAT-STRING &optional TIME ZONE) - format time as string
+;; Uses strftime-style format specifiers.
+(defun format-time-string (string &optional any any) -> string)
+
+;; ===========================================================================
+;; Timezone
+;; ===========================================================================
+
+;; (set-time-zone-rule TZ) - set default timezone rule
+;; TZ is nil (use system default) or a string like "UTC" or "PST8PDT".
+(defun set-time-zone-rule ((string | nil)) -> any)
