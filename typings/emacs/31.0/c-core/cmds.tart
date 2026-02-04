@@ -1,0 +1,51 @@
+;; Type signatures for Emacs cmds.c
+;;
+;; Source: emacs/src/cmds.c
+;; Emacs version: 31.0
+;;
+;; Simple built-in editing commands for character and line movement.
+
+;; ===========================================================================
+;; Character movement
+;; ===========================================================================
+
+;; (forward-char &optional N) - Move point N characters forward
+;; On reaching end or beginning of buffer, stop and signal error.
+;; If N is omitted or nil, move point 1 character forward.
+(defun forward-char (&optional int) -> nil)
+
+;; (backward-char &optional N) - Move point N characters backward
+;; On attempt to pass beginning or end of buffer, stop and signal error.
+;; If N is omitted or nil, move point 1 character backward.
+(defun backward-char (&optional int) -> nil)
+
+;; ===========================================================================
+;; Line movement
+;; ===========================================================================
+
+;; (forward-line &optional N) - Move N lines forward
+;; If there isn't room, go as far as possible (no error).
+;; Returns the count of lines left to move.
+(defun forward-line (&optional int) -> int)
+
+;; (beginning-of-line &optional N) - Move point to beginning of current line
+;; With argument N not nil or 1, move forward N - 1 lines first.
+(defun beginning-of-line (&optional int) -> nil)
+
+;; (end-of-line &optional N) - Move point to end of current line
+;; With argument N not nil or 1, move forward N - 1 lines first.
+(defun end-of-line (&optional int) -> nil)
+
+;; ===========================================================================
+;; Character editing
+;; ===========================================================================
+
+;; (delete-char N &optional KILLFLAG) - Delete the following N characters
+;; Optional KILLFLAG non-nil means save in kill ring instead of deleting.
+;; Interactively, N is the prefix arg, and KILLFLAG is set if N was explicitly
+;; specified.
+(defun delete-char (int &optional any) -> nil)
+
+;; (self-insert-command N &optional CHAR) - Insert the character you type
+;; CHAR defaults to `last-command-event'.
+(defun self-insert-command (int &optional int) -> nil)
