@@ -1,0 +1,116 @@
+;; Type signatures for Emacs floatfns.c
+;;
+;; Source: emacs/src/floatfns.c
+;; Emacs version: 31.0
+;;
+;; Contains mathematical and floating-point functions.
+
+;; ===========================================================================
+;; Trigonometric functions
+;; ===========================================================================
+
+;; (sin ARG) - return sine of ARG (radians)
+(defun sin (num) -> float)
+
+;; (cos ARG) - return cosine of ARG (radians)
+(defun cos (num) -> float)
+
+;; (tan ARG) - return tangent of ARG (radians)
+(defun tan (num) -> float)
+
+;; (asin ARG) - return arcsine of ARG
+(defun asin (num) -> float)
+
+;; (acos ARG) - return arccosine of ARG
+(defun acos (num) -> float)
+
+;; (atan Y &optional X) - return arctangent of Y or Y/X
+;; With one arg: arctan(Y)
+;; With two args: arctan(Y/X) in correct quadrant
+(defun atan (num &optional num) -> float)
+
+;; ===========================================================================
+;; Exponential and logarithmic functions
+;; ===========================================================================
+
+;; (exp ARG) - return e^ARG
+(defun exp (num) -> float)
+
+;; (log ARG &optional BASE) - return natural logarithm of ARG
+;; If BASE is given, return log base BASE of ARG.
+(defun log (num &optional num) -> float)
+
+;; (log10 ARG) - return base-10 logarithm of ARG
+(defun log10 (num) -> float)
+
+;; (expt X Y) - return X^Y (X raised to power Y)
+(defun expt (num num) -> num)
+
+;; (sqrt ARG) - return square root of ARG
+(defun sqrt (num) -> float)
+
+;; ===========================================================================
+;; Conversion to float
+;; ===========================================================================
+
+;; (float ARG) - convert ARG to floating point
+(defun float (num) -> float)
+
+;; ===========================================================================
+;; Rounding functions
+;; ===========================================================================
+
+;; (floor ARG &optional DIVISOR) - round ARG toward negative infinity
+;; If DIVISOR is given, return floor(ARG/DIVISOR).
+(defun floor (num &optional num) -> int)
+
+;; (ceiling ARG &optional DIVISOR) - round ARG toward positive infinity
+;; If DIVISOR is given, return ceiling(ARG/DIVISOR).
+(defun ceiling (num &optional num) -> int)
+
+;; (truncate ARG &optional DIVISOR) - round ARG toward zero
+;; If DIVISOR is given, return truncate(ARG/DIVISOR).
+(defun truncate (num &optional num) -> int)
+
+;; (round ARG &optional DIVISOR) - round ARG to nearest integer
+;; If DIVISOR is given, return round(ARG/DIVISOR).
+;; Ties are rounded to even numbers.
+(defun round (num &optional num) -> int)
+
+;; (ffloor ARG) - return largest float not greater than ARG
+(defun ffloor (num) -> float)
+
+;; (fceiling ARG) - return smallest float not less than ARG
+(defun fceiling (num) -> float)
+
+;; (ftruncate ARG) - round ARG toward zero as a float
+(defun ftruncate (num) -> float)
+
+;; (fround ARG) - round ARG to nearest float
+(defun fround (num) -> float)
+
+;; ===========================================================================
+;; Floating-point specific operations
+;; ===========================================================================
+
+;; (logb ARG) - return integer binary logarithm of ARG
+;; This is the exponent of the floating-point representation.
+(defun logb (num) -> int)
+
+;; (frexp X) - return mantissa and exponent of X
+;; Returns (SGNFCAND . EXP) where X = SGNFCAND * 2^EXP.
+(defun frexp (num) -> (pair float int))
+
+;; (ldexp SGNFCAND EXP) - construct float from mantissa and exponent
+;; Returns SGNFCAND * 2^EXP.
+(defun ldexp (num int) -> float)
+
+;; (copysign X Y) - return X with sign of Y
+(defun copysign (num num) -> float)
+
+;; ===========================================================================
+;; Floating-point predicates
+;; ===========================================================================
+
+;; (isnan X) - return non-nil if X is NaN (not-a-number)
+(defun isnan (num) -> bool)
