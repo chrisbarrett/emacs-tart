@@ -1,0 +1,118 @@
+;; Type signatures for Emacs windmove.el
+;;
+;; Source: emacs/lisp/windmove.el
+;; Emacs version: 31.0
+;;
+;; Directional window selection and manipulation.
+
+;; ============================================================================
+;; Window Selection Commands
+;; ============================================================================
+
+;; (windmove-left &optional ARG IS-INTERACTIVE) - select window to the left
+(defun windmove-left (&optional int any) -> nil)
+
+;; (windmove-right &optional ARG IS-INTERACTIVE) - select window to the right
+(defun windmove-right (&optional int any) -> nil)
+
+;; (windmove-up &optional ARG IS-INTERACTIVE) - select window above
+(defun windmove-up (&optional int any) -> nil)
+
+;; (windmove-down &optional ARG IS-INTERACTIVE) - select window below
+(defun windmove-down (&optional int any) -> nil)
+
+;; ============================================================================
+;; Keybinding Setup
+;; ============================================================================
+
+;; (windmove-default-keybindings &optional MODIFIERS) - set up shift+arrow keys
+(defun windmove-default-keybindings (&optional (symbol | (list symbol))) -> nil)
+
+;; (windmove-display-default-keybindings &optional MODIFIERS) - display keybindings
+(defun windmove-display-default-keybindings (&optional (symbol | (list symbol))) -> nil)
+
+;; (windmove-delete-default-keybindings &optional PREFIX MODIFIERS) - delete keybindings
+(defun windmove-delete-default-keybindings (&optional any (symbol | (list symbol))) -> nil)
+
+;; (windmove-swap-states-default-keybindings &optional MODIFIERS) - swap keybindings
+(defun windmove-swap-states-default-keybindings (&optional (symbol | (list symbol))) -> nil)
+
+;; ============================================================================
+;; Display Commands
+;; ============================================================================
+
+;; (windmove-display-left &optional ARG) - display buffer in left window
+(defun windmove-display-left (&optional int) -> nil)
+
+;; (windmove-display-right &optional ARG) - display buffer in right window
+(defun windmove-display-right (&optional int) -> nil)
+
+;; (windmove-display-up &optional ARG) - display buffer in upper window
+(defun windmove-display-up (&optional int) -> nil)
+
+;; (windmove-display-down &optional ARG) - display buffer in lower window
+(defun windmove-display-down (&optional int) -> nil)
+
+;; (windmove-display-same-window &optional ARG) - display in current window
+(defun windmove-display-same-window (&optional int) -> nil)
+
+;; (windmove-display-new-frame &optional ARG) - display in new frame
+(defun windmove-display-new-frame (&optional int) -> nil)
+
+;; (windmove-display-new-tab &optional ARG) - display in new tab
+(defun windmove-display-new-tab (&optional int) -> nil)
+
+;; ============================================================================
+;; Deletion Commands
+;; ============================================================================
+
+;; (windmove-delete-left &optional ARG) - delete window to the left
+(defun windmove-delete-left (&optional any) -> nil)
+
+;; (windmove-delete-right &optional ARG) - delete window to the right
+(defun windmove-delete-right (&optional any) -> nil)
+
+;; (windmove-delete-up &optional ARG) - delete window above
+(defun windmove-delete-up (&optional any) -> nil)
+
+;; (windmove-delete-down &optional ARG) - delete window below
+(defun windmove-delete-down (&optional any) -> nil)
+
+;; ============================================================================
+;; Swap Commands
+;; ============================================================================
+
+;; (windmove-swap-states-left) - swap with left window
+(defun windmove-swap-states-left () -> nil)
+
+;; (windmove-swap-states-right) - swap with right window
+(defun windmove-swap-states-right () -> nil)
+
+;; (windmove-swap-states-up) - swap with upper window
+(defun windmove-swap-states-up () -> nil)
+
+;; (windmove-swap-states-down) - swap with lower window
+(defun windmove-swap-states-down () -> nil)
+
+;; ============================================================================
+;; Internal/Utility
+;; ============================================================================
+
+;; (windmove-find-other-window DIR &optional ARG WINDOW) - find window in direction
+(defun windmove-find-other-window (symbol &optional int window) -> (window | nil))
+
+;; (windmove-do-window-select DIR &optional ARG WINDOW) - select window in direction
+(defun windmove-do-window-select (symbol &optional int window) -> nil)
+
+;; ============================================================================
+;; Variables
+;; ============================================================================
+
+;; Whether wraparound is allowed
+(defvar windmove-wrap-around any)
+
+;; Create window if none found
+(defvar windmove-create-window any)
+
+;; Action for display commands
+(defvar windmove-display-no-select any)
