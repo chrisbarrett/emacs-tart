@@ -1,0 +1,113 @@
+;; Type signatures for Emacs button.el
+;;
+;; Source: emacs/lisp/button.el
+;; Emacs version: 31.0
+;;
+;; Clickable buttons in text.
+
+;; ===========================================================================
+;; Button predicates
+;; ===========================================================================
+
+;; (button-p OBJECT) - return non-nil if OBJECT is a button (overlay or text-property)
+(defun button-p (any) -> bool)
+
+;; (button-has-type-p BUTTON TYPE) - test if BUTTON has type TYPE
+(defun button-has-type-p (any symbol) -> bool)
+
+;; ===========================================================================
+;; Button type definition
+;; ===========================================================================
+
+;; (define-button-type NAME &rest PROPERTIES) - define a button type
+;; PROPERTIES alternates :PROPERTY VALUE pairs
+(defun define-button-type (symbol &rest any) -> symbol)
+
+;; (button-type-subtype-p TYPE SUPERTYPE) - test type inheritance
+(defun button-type-subtype-p (symbol symbol) -> bool)
+
+;; (button-type-get TYPE PROP) - get property from button type
+(defun button-type-get (symbol symbol) -> any)
+
+;; (button-type-put TYPE PROP VAL) - set property on button type
+(defun button-type-put (symbol symbol any) -> nil)
+
+;; ===========================================================================
+;; Button properties
+;; ===========================================================================
+
+;; (button-get BUTTON PROP) - get property from button
+(defun button-get (any symbol) -> any)
+
+;; (button-put BUTTON PROP VAL) - set property on button
+(defun button-put (any symbol any) -> nil)
+
+;; (button-activate BUTTON &optional USE-MOUSE-ACTION) - activate button
+(defun button-activate (any &optional bool) -> nil)
+
+;; (button-label BUTTON) - return button's text label
+(defun button-label (any) -> string)
+
+;; (button-type BUTTON) - return button's type symbol
+(defun button-type (any) -> symbol)
+
+;; (button-start BUTTON) - return position of button start
+(defun button-start (any) -> int)
+
+;; (button-end BUTTON) - return position of button end
+(defun button-end (any) -> int)
+
+;; ===========================================================================
+;; Button creation
+;; ===========================================================================
+
+;; (make-button BEG END &rest PROPERTIES) - create text-property button
+;; Creates a button from BEG to END with PROPERTIES
+(defun make-button (int int &rest any) -> any)
+
+;; (insert-button LABEL &rest PROPERTIES) - insert button at point
+;; Returns the button created
+(defun insert-button (string &rest any) -> any)
+
+;; (make-text-button BEG END &rest PROPERTIES) - create text-property button
+(defun make-text-button (int int &rest any) -> (int | marker))
+
+;; (insert-text-button LABEL &rest PROPERTIES) - insert text-property button
+(defun insert-text-button (string &rest any) -> (int | marker))
+
+;; (buttonize STRING CALLBACK &optional DATA HELP-ECHO) - buttonize a string
+;; Returns STRING with button properties
+(defun buttonize (string any &optional any string) -> string)
+
+;; (buttonize-region START END CALLBACK &optional DATA HELP-ECHO)
+;; Add button properties to region
+(defun buttonize-region (int int any &optional any string) -> nil)
+
+;; ===========================================================================
+;; Button navigation
+;; ===========================================================================
+
+;; (button-at POS) - return button at POS, or nil
+(defun button-at (int) -> (any | nil))
+
+;; (next-button POS &optional COUNT-CURRENT) - find next button after POS
+(defun next-button (int &optional bool) -> (any | nil))
+
+;; (previous-button POS &optional COUNT-CURRENT) - find previous button
+(defun previous-button (int &optional bool) -> (any | nil))
+
+;; (forward-button N &optional WRAP DISPLAY-MESSAGE NO-ERROR) - move to Nth button
+(defun forward-button (int &optional bool bool bool) -> any)
+
+;; (backward-button N &optional WRAP DISPLAY-MESSAGE NO-ERROR) - move backward
+(defun backward-button (int &optional bool bool bool) -> any)
+
+;; ===========================================================================
+;; Interactive
+;; ===========================================================================
+
+;; (push-button &optional POS USE-MOUSE-ACTION) - push button at point
+(defun push-button (&optional int bool) -> bool)
+
+;; (button-describe &optional BUTTON-OR-POS) - describe button
+(defun button-describe (&optional any) -> nil)
