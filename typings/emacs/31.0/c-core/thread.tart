@@ -33,7 +33,7 @@
 ;; Start new thread running FUNCTION
 ;; BUFFER-DISPOSITION: t means buffer can't be killed, nil means thread
 ;; gets error if buffer killed, 'silently means no error
-(defun make-thread ((-> () any) &optional (string | nil) any) -> any)
+(defun make-thread ((() -> any) &optional (string | nil) any) -> any)
 
 ;; (thread-join THREAD) - wait for thread to exit and return its result
 (defun thread-join (any) -> any)

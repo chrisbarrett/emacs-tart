@@ -1,0 +1,306 @@
+;; Type signatures for Emacs files.el
+;;
+;; Source: emacs/lisp/files.el
+;; Emacs version: 31.0
+;;
+;; File operations including visiting, saving, backups, and auto-save.
+
+;; ===========================================================================
+;; File visiting
+;; ===========================================================================
+
+;; (find-file FILENAME &optional WILDCARDS) - edit file in current window
+(defun find-file (string &optional bool) -> buffer)
+
+;; (find-file-noselect FILENAME &optional NOWARN RAWFILE WILDCARDS)
+;; Read file into buffer without selecting it
+(defun find-file-noselect (string &optional bool bool bool) -> (buffer | (list buffer)))
+
+;; (find-file-other-window FILENAME &optional WILDCARDS) - edit in other window
+(defun find-file-other-window (string &optional bool) -> buffer)
+
+;; (find-file-other-frame FILENAME &optional WILDCARDS) - edit in other frame
+(defun find-file-other-frame (string &optional bool) -> buffer)
+
+;; (find-file-read-only FILENAME &optional WILDCARDS) - edit file read-only
+(defun find-file-read-only (string &optional bool) -> (buffer | (list buffer)))
+
+;; (find-file-read-only-other-window FILENAME &optional WILDCARDS)
+(defun find-file-read-only-other-window (string &optional bool) -> (buffer | (list buffer)))
+
+;; (find-file-read-only-other-frame FILENAME &optional WILDCARDS)
+(defun find-file-read-only-other-frame (string &optional bool) -> (buffer | (list buffer)))
+
+;; (find-file-literally FILENAME) - visit file with no conversion
+(defun find-file-literally (string) -> buffer)
+
+;; (find-file-existing FILENAME) - edit only existing files
+(defun find-file-existing (string) -> buffer)
+
+;; (find-alternate-file FILENAME &optional WILDCARDS) - replace current buffer
+(defun find-alternate-file (string &optional bool) -> nil)
+
+;; (find-alternate-file-other-window FILENAME &optional WILDCARDS)
+(defun find-alternate-file-other-window (string &optional bool) -> nil)
+
+;; (view-file FILENAME) - view file in view-mode
+(defun view-file (string) -> buffer)
+
+;; (view-file-other-window FILENAME) - view file in other window
+(defun view-file-other-window (string) -> buffer)
+
+;; (view-file-other-frame FILENAME) - view file in other frame
+(defun view-file-other-frame (string) -> buffer)
+
+;; ===========================================================================
+;; File saving
+;; ===========================================================================
+
+;; (save-buffer &optional ARG) - save current buffer to visited file
+(defun save-buffer (&optional int) -> nil)
+
+;; (basic-save-buffer &optional CALLED-INTERACTIVELY) - core save implementation
+(defun basic-save-buffer (&optional bool) -> nil)
+
+;; (write-file FILENAME &optional CONFIRM) - write buffer to specified file
+(defun write-file (string &optional bool) -> nil)
+
+;; (save-some-buffers &optional ARG PRED) - save some modified buffers
+;; Returns number of files actually saved
+(defun save-some-buffers (&optional any any) -> int)
+
+;; (not-modified &optional ARG) - mark buffer as not modified
+(defun not-modified (&optional any) -> nil)
+
+;; (set-visited-file-name FILENAME &optional NO-QUERY ALONG-WITH-FILE)
+;; Change name of file visited by buffer
+(defun set-visited-file-name ((string | nil) &optional bool bool) -> nil)
+
+;; ===========================================================================
+;; Buffer reversion
+;; ===========================================================================
+
+;; (revert-buffer &optional IGNORE-AUTO NOCONFIRM PRESERVE-MODES)
+;; Replace buffer text with file on disk
+(defun revert-buffer (&optional bool bool bool) -> bool)
+
+;; (revert-buffer-quick &optional AUTO-SAVE-ONLY) - quick revert
+(defun revert-buffer-quick (&optional bool) -> nil)
+
+;; (recover-file FILE) - recover from auto-save file
+(defun recover-file (string) -> nil)
+
+;; (recover-this-file) - recover current buffer from auto-save
+(defun recover-this-file () -> nil)
+
+;; (recover-session) - recover from previous session
+(defun recover-session () -> nil)
+
+;; ===========================================================================
+;; Backup functions
+;; ===========================================================================
+
+;; (make-backup-file-name FILE) - create non-numeric backup file name
+(defun make-backup-file-name (string) -> string)
+
+;; (make-backup-file-name-1 FILE) - make backup name with directory handling
+(defun make-backup-file-name-1 (string) -> string)
+
+;; (backup-file-name-p FILE) - test if file name is a backup file name
+(defun backup-file-name-p (string) -> bool)
+
+;; (find-backup-file-name FN) - find backup file name and versions to delete
+(defun find-backup-file-name (string) -> (list string))
+
+;; (file-newest-backup FILENAME) - return newest backup file name, or nil
+(defun file-newest-backup (string) -> (string | nil))
+
+;; (file-backup-file-names FILENAME) - return all backup file names
+(defun file-backup-file-names (string) -> (list string))
+
+;; (diff-backup FILENAME &optional SWITCHES) - diff current file against backup
+(defun diff-backup (string &optional string) -> nil)
+
+;; ===========================================================================
+;; Auto-save functions
+;; ===========================================================================
+
+;; (make-auto-save-file-name) - return auto-save file name for current buffer
+(defun make-auto-save-file-name () -> string)
+
+;; (auto-save-file-name-p FILENAME) - test if file name is auto-save format
+(defun auto-save-file-name-p (string) -> bool)
+
+;; (rename-auto-save-file) - adjust auto-save file name for current conditions
+(defun rename-auto-save-file () -> nil)
+
+;; (do-auto-save &optional NO-MESSAGE CURRENT-ONLY) - auto-save all buffers
+(defun do-auto-save (&optional bool bool) -> nil)
+
+;; ===========================================================================
+;; Directory functions
+;; ===========================================================================
+
+;; (make-directory DIR &optional PARENTS) - create directory
+(defun make-directory (string &optional bool) -> bool)
+
+;; (make-empty-file FILENAME &optional PARENTS) - create empty file
+(defun make-empty-file (string &optional bool) -> nil)
+
+;; (delete-directory DIRECTORY &optional RECURSIVE TRASH) - delete directory
+(defun delete-directory (string &optional bool bool) -> nil)
+
+;; (copy-directory DIRECTORY NEWNAME &optional KEEP-TIME PARENTS COPY-CONTENTS)
+;; Copy directory to new location
+(defun copy-directory (string string &optional bool bool bool) -> nil)
+
+;; (directory-files-recursively DIR REGEXP &optional INCLUDE-DIRECTORIES)
+;; Return list of files in directory matching regexp
+(defun directory-files-recursively (string string &optional bool) -> (list string))
+
+;; (directory-empty-p DIR) - test if directory is empty
+(defun directory-empty-p (string) -> bool)
+
+;; (delete-directory-internal DIRECTORY) - primitive directory deletion
+(defun delete-directory-internal (string) -> nil)
+
+;; ===========================================================================
+;; File attribute and comparison
+;; ===========================================================================
+
+;; (file-equal-p FILENAME1 FILENAME2) - test if two files are the same file
+(defun file-equal-p (string string) -> bool)
+
+;; (file-in-directory-p FILE DIR) - test if file is in directory tree
+(defun file-in-directory-p (string string) -> bool)
+
+;; (file-has-changed-p FILE &optional TAG) - test if file has changed on disk
+(defun file-has-changed-p (string &optional any) -> bool)
+
+;; (file-size-human-readable SIZE &optional FLAVOR SPACE UNIT)
+;; Format file size for human reading
+(defun file-size-human-readable (int &optional symbol string string) -> string)
+
+;; (read-file-modes &optional PROMPT INITIAL-FILE) - read file mode string
+(defun read-file-modes (&optional string string) -> int)
+
+;; ===========================================================================
+;; File name utilities
+;; ===========================================================================
+
+;; (wildcard-to-regexp WILDCARD) - convert shell wildcard to regexp
+(defun wildcard-to-regexp (string) -> string)
+
+;; (file-expand-wildcards PATTERN &optional FULL PATH) - expand wildcards
+(defun file-expand-wildcards (string &optional bool bool) -> (list string))
+
+;; (find-sibling-file FILE) - find sibling file with different extension
+(defun find-sibling-file (string) -> (string | nil))
+
+;; (rename-visited-file NEW-NAME) - rename current file and visited-file
+(defun rename-visited-file (string) -> nil)
+
+;; (locate-dominating-file FILE NAME) - find dominating file in directory tree
+(defun locate-dominating-file (string (string | ((string) -> any))) -> (string | nil))
+
+;; (locate-user-emacs-file NAME &optional OLD-NAME) - locate file in emacs dir
+(defun locate-user-emacs-file (string &optional string) -> string)
+
+;; ===========================================================================
+;; Lock file functions
+;; ===========================================================================
+
+;; (make-lock-file-name FILENAME) - make lock file name for file
+(defun make-lock-file-name (string) -> string)
+
+;; (lock-file FILENAME) - lock file
+(defun lock-file (string) -> nil)
+
+;; (unlock-file FILENAME) - unlock file
+(defun unlock-file (string) -> nil)
+
+;; ===========================================================================
+;; Buffer/file state
+;; ===========================================================================
+
+;; (buffer-modified-p &optional BUFFER) - test if buffer is modified
+(defun buffer-modified-p (&optional buffer) -> bool)
+
+;; (set-buffer-modified-p FLAG) - set buffer modified flag
+(defun set-buffer-modified-p (bool) -> nil)
+
+;; (buffer-file-name &optional BUFFER) - return visited file name
+(defun buffer-file-name (&optional buffer) -> (string | nil))
+
+;; (set-auto-mode &optional KEEP-MODE-IF-SAME) - select major mode
+(defun set-auto-mode (&optional bool) -> nil)
+
+;; (normal-mode &optional FIND-FILE) - choose major mode appropriately
+(defun normal-mode (&optional bool) -> nil)
+
+;; ===========================================================================
+;; Important variables
+;; ===========================================================================
+
+;; If non-nil, do not make backup files
+(defvar backup-inhibited bool)
+
+;; Non-nil if file was read-only when visited
+(defvar buffer-file-read-only bool)
+
+;; Non-nil if buffer was visited literally
+(defvar find-file-literally bool)
+
+;; Non-nil means make a backup the first time a file is saved
+(defvar make-backup-files bool)
+
+;; Non-nil means copy files for backup instead of renaming
+(defvar backup-by-copying bool)
+
+;; Control numbered backups: nil, never, t, or any other value
+(defvar version-control (symbol | bool | nil))
+
+;; Non-nil means auto-save file-visiting buffers by default
+(defvar auto-save-default bool)
+
+;; Non-nil means make sure files end with newline
+(defvar require-final-newline (symbol | bool | nil))
+
+;; Non-nil means protect against I/O errors when saving
+(defvar file-precious-flag bool)
+
+;; List of modes for which to ignore extensions in completion
+(defvar completion-ignored-extensions (list string))
+
+;; Directory in which to put auto-save files
+(defvar auto-save-file-name-transforms (list any))
+
+;; List of auto-saved file names
+(defvar auto-save-list-file-name (string | nil))
+
+;; Prefix for auto-save file names
+(defvar auto-save-file-name-prefix string)
+
+;; Default directory for new buffers
+(defvar default-directory string)
+
+;; Alist of directory abbreviations
+(defvar directory-abbrev-alist (list (pair string string)))
+
+;; Hooks run before saving each buffer
+(defvar before-save-hook (list any))
+
+;; Hooks run after saving each buffer
+(defvar after-save-hook (list any))
+
+;; Hooks run when visiting a file
+(defvar find-file-hook (list any))
+
+;; List of functions to try for visiting special files
+(defvar file-name-handler-alist (list (pair string any)))
+
+;; Most recent directory used in file-related minibuffer prompts
+(defvar minibuffer-default-add-shell-commands bool)
+
+;; Kill buffer after writing when true
+(defvar kill-buffer-query-functions (list any))

@@ -39,58 +39,58 @@
 ;; ===========================================================================
 
 ;; (seq-map FUNCTION SEQUENCE) - apply function to each element
-(defun seq-map ((-> (any) any) ((list any) | (vector any) | string)) -> (list any))
+(defun seq-map (((any -> any)) ((list any) | (vector any) | string)) -> (list any))
 
 ;; (seq-do FUNCTION SEQUENCE) - apply function for side effects, return sequence
-(defun seq-do ((-> (any) any) ((list any) | (vector any) | string)) -> ((list any) | (vector any) | string))
+(defun seq-do (((any -> any)) ((list any) | (vector any) | string)) -> ((list any) | (vector any) | string))
 
 ;; (seq-filter PRED SEQUENCE) - return list of elements where pred is non-nil
-(defun seq-filter ((-> (any) any) ((list any) | (vector any) | string)) -> (list any))
+(defun seq-filter (((any -> any)) ((list any) | (vector any) | string)) -> (list any))
 
 ;; (seq-remove PRED SEQUENCE) - return list of elements where pred is nil
-(defun seq-remove ((-> (any) any) ((list any) | (vector any) | string)) -> (list any))
+(defun seq-remove (((any -> any)) ((list any) | (vector any) | string)) -> (list any))
 
 ;; (seq-reduce FUNCTION SEQUENCE INITIAL-VALUE) - reduce sequence
-(defun seq-reduce ((-> (any any) any) ((list any) | (vector any) | string) any) -> any)
+(defun seq-reduce ((((any any) -> any)) ((list any) | (vector any) | string) any) -> any)
 
 ;; ===========================================================================
 ;; Search operations
 ;; ===========================================================================
 
 ;; (seq-find PRED SEQUENCE &optional DEFAULT) - find first matching element
-(defun seq-find ((-> (any) any) ((list any) | (vector any) | string) &optional any) -> any)
+(defun seq-find (((any -> any)) ((list any) | (vector any) | string) &optional any) -> any)
 
 ;; (seq-contains-p SEQUENCE ELT &optional TESTFN) - test if element in sequence
-(defun seq-contains-p (((list any) | (vector any) | string) any &optional ((-> (any any) any) | nil)) -> bool)
+(defun seq-contains-p (((list any) | (vector any) | string) any &optional ((((any any) -> any)) | nil)) -> bool)
 
 ;; (seq-position SEQUENCE ELT &optional TESTFN) - return index of element
-(defun seq-position (((list any) | (vector any) | string) any &optional ((-> (any any) any) | nil)) -> (int | nil))
+(defun seq-position (((list any) | (vector any) | string) any &optional ((((any any) -> any)) | nil)) -> (int | nil))
 
 ;; ===========================================================================
 ;; Predicates
 ;; ===========================================================================
 
 ;; (seq-every-p PRED SEQUENCE) - return non-nil if pred true for all elements
-(defun seq-every-p ((-> (any) any) ((list any) | (vector any) | string)) -> bool)
+(defun seq-every-p (((any -> any)) ((list any) | (vector any) | string)) -> bool)
 
 ;; (seq-some PRED SEQUENCE) - return first non-nil pred result
-(defun seq-some ((-> (any) any) ((list any) | (vector any) | string)) -> any)
+(defun seq-some (((any -> any)) ((list any) | (vector any) | string)) -> any)
 
 ;; (seq-count PRED SEQUENCE) - count elements where pred is non-nil
-(defun seq-count ((-> (any) any) ((list any) | (vector any) | string)) -> int)
+(defun seq-count (((any -> any)) ((list any) | (vector any) | string)) -> int)
 
 ;; ===========================================================================
 ;; Transformation
 ;; ===========================================================================
 
 ;; (seq-sort PRED SEQUENCE) - return sorted copy
-(defun seq-sort ((-> (any any) any) ((list any) | (vector any) | string)) -> ((list any) | (vector any) | string))
+(defun seq-sort ((((any any) -> any)) ((list any) | (vector any) | string)) -> ((list any) | (vector any) | string))
 
 ;; (seq-uniq SEQUENCE &optional TESTFN) - return list with duplicates removed
-(defun seq-uniq (((list any) | (vector any) | string) &optional ((-> (any any) any) | nil)) -> (list any))
+(defun seq-uniq (((list any) | (vector any) | string) &optional ((((any any) -> any)) | nil)) -> (list any))
 
 ;; (seq-group-by FUNCTION SEQUENCE) - group elements by function result
-(defun seq-group-by ((-> (any) any) ((list any) | (vector any) | string)) -> (list (pair any (list any))))
+(defun seq-group-by (((any -> any)) ((list any) | (vector any) | string)) -> (list (pair any (list any))))
 
 ;; (seq-partition SEQUENCE N) - partition into sublists of length N
 (defun seq-partition (((list any) | (vector any) | string) int) -> (list (list any)))

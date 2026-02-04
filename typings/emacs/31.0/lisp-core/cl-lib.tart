@@ -10,17 +10,17 @@
 ;; ===========================================================================
 
 ;; (cl-loop CLAUSE...) - Common Lisp loop macro
-(defmacro cl-loop (&rest any) -> any)
+(defun cl-loop (&rest any) -> any)
 
 ;; ===========================================================================
 ;; Function definition
 ;; ===========================================================================
 
 ;; (cl-defun NAME ARGLIST BODY...) - define function with CL arglist
-(defmacro cl-defun (symbol (list any) &rest any) -> symbol)
+(defun cl-defun (symbol (list any) &rest any) -> symbol)
 
 ;; (cl-defmacro NAME ARGLIST BODY...) - define macro with CL arglist
-(defmacro cl-defmacro (symbol (list any) &rest any) -> symbol)
+(defun cl-defmacro (symbol (list any) &rest any) -> symbol)
 
 ;; ===========================================================================
 ;; Local function binding
@@ -28,64 +28,64 @@
 
 ;; (cl-flet ((FUNC ARGLIST BODY...) ...) FORM...)
 ;; Make local function definitions (non-recursive)
-(defmacro cl-flet ((list any) &rest any) -> any)
+(defun cl-flet ((list any) &rest any) -> any)
 
 ;; (cl-labels ((FUNC ARGLIST BODY...) ...) FORM...)
 ;; Make local recursive function definitions
-(defmacro cl-labels ((list any) &rest any) -> any)
+(defun cl-labels ((list any) &rest any) -> any)
 
 ;; (cl-letf ((PLACE VALUE) ...) BODY...) - temporarily bind places
-(defmacro cl-letf ((list any) &rest any) -> any)
+(defun cl-letf ((list any) &rest any) -> any)
 
 ;; ===========================================================================
 ;; Destructuring
 ;; ===========================================================================
 
 ;; (cl-destructuring-bind ARGS EXPR BODY...) - bind variables from expr
-(defmacro cl-destructuring-bind ((list any) any &rest any) -> any)
+(defun cl-destructuring-bind ((list any) any &rest any) -> any)
 
 ;; ===========================================================================
 ;; Case/type dispatch
 ;; ===========================================================================
 
 ;; (cl-case EXPR (KEYLIST BODY...)...) - dispatch on value
-(defmacro cl-case (any &rest any) -> any)
+(defun cl-case (any &rest any) -> any)
 
 ;; (cl-typecase EXPR (TYPE BODY...)...) - dispatch on type
-(defmacro cl-typecase (any &rest any) -> any)
+(defun cl-typecase (any &rest any) -> any)
 
 ;; (cl-ecase EXPR (KEYLIST BODY...)...) - cl-case with error on no match
-(defmacro cl-ecase (any &rest any) -> any)
+(defun cl-ecase (any &rest any) -> any)
 
 ;; (cl-etypecase EXPR (TYPE BODY...)...) - cl-typecase with error on no match
-(defmacro cl-etypecase (any &rest any) -> any)
+(defun cl-etypecase (any &rest any) -> any)
 
 ;; ===========================================================================
 ;; Block/return
 ;; ===========================================================================
 
 ;; (cl-block NAME BODY...) - define lexically-scoped block
-(defmacro cl-block (symbol &rest any) -> any)
+(defun cl-block (symbol &rest any) -> any)
 
 ;; (cl-return &optional RESULT) - return from nil block
-(defmacro cl-return (&optional any) -> any)
+(defun cl-return (&optional any) -> any)
 
 ;; (cl-return-from NAME &optional RESULT) - return from named block
-(defmacro cl-return-from (symbol &optional any) -> any)
+(defun cl-return-from (symbol &optional any) -> any)
 
 ;; ===========================================================================
 ;; Modification macros
 ;; ===========================================================================
 
 ;; (cl-incf PLACE &optional X) - increment place by X (default 1)
-(defmacro cl-incf (any &optional num) -> num)
+(defun cl-incf (any &optional num) -> num)
 
 ;; (cl-decf PLACE &optional X) - decrement place by X (default 1)
-(defmacro cl-decf (any &optional num) -> num)
+(defun cl-decf (any &optional num) -> num)
 
 ;; (cl-pushnew X PLACE &key :test :test-not :key)
 ;; Add X to list in PLACE if not already present
-(defmacro cl-pushnew (any any &rest any) -> (list any))
+(defun cl-pushnew (any any &rest any) -> (list any))
 
 ;; ===========================================================================
 ;; List accessors
@@ -117,31 +117,31 @@
 ;; ===========================================================================
 
 ;; (cl-mapcar FUNCTION SEQ...) - map over multiple sequences
-(defun cl-mapcar ((-> (&rest any) any) &rest ((list any) | (vector any) | string)) -> (list any))
+(defun cl-mapcar (((&rest any) -> any) &rest ((list any) | (vector any) | string)) -> (list any))
 
 ;; (cl-remove-if PRED LIST &key :key) - remove elements where pred is true
-(defun cl-remove-if ((-> (any) any) (list any) &rest any) -> (list any))
+(defun cl-remove-if (((any) -> any) (list any) &rest any) -> (list any))
 
 ;; (cl-remove-if-not PRED LIST &key :key) - keep elements where pred is true
-(defun cl-remove-if-not ((-> (any) any) (list any) &rest any) -> (list any))
+(defun cl-remove-if-not (((any) -> any) (list any) &rest any) -> (list any))
 
 ;; (cl-find-if PRED SEQ &key :key) - find first element where pred is true
-(defun cl-find-if ((-> (any) any) ((list any) | (vector any) | string) &rest any) -> any)
+(defun cl-find-if (((any) -> any) ((list any) | (vector any) | string) &rest any) -> any)
 
 ;; (cl-position-if PRED SEQ &key :key) - find position where pred is true
-(defun cl-position-if ((-> (any) any) ((list any) | (vector any) | string) &rest any) -> (int | nil))
+(defun cl-position-if (((any) -> any) ((list any) | (vector any) | string) &rest any) -> (int | nil))
 
 ;; (cl-count-if PRED SEQ &key :key) - count elements where pred is true
-(defun cl-count-if ((-> (any) any) ((list any) | (vector any) | string) &rest any) -> int)
+(defun cl-count-if (((any) -> any) ((list any) | (vector any) | string) &rest any) -> int)
 
 ;; (cl-every PRED SEQ &rest MORE-SEQS) - true if pred true for all
-(defun cl-every ((-> (&rest any) any) &rest ((list any) | (vector any) | string)) -> bool)
+(defun cl-every (((&rest any) -> any) &rest ((list any) | (vector any) | string)) -> bool)
 
 ;; (cl-some PRED SEQ &rest MORE-SEQS) - return first non-nil pred result
-(defun cl-some ((-> (&rest any) any) &rest ((list any) | (vector any) | string)) -> any)
+(defun cl-some (((&rest any) -> any) &rest ((list any) | (vector any) | string)) -> any)
 
 ;; (cl-notany PRED SEQ &rest MORE-SEQS) - true if pred false for all
-(defun cl-notany ((-> (&rest any) any) &rest ((list any) | (vector any) | string)) -> bool)
+(defun cl-notany (((&rest any) -> any) &rest ((list any) | (vector any) | string)) -> bool)
 
 ;; (cl-notevery PRED SEQ &rest MORE-SEQS) - true if pred false for some
-(defun cl-notevery ((-> (&rest any) any) &rest ((list any) | (vector any) | string)) -> bool)
+(defun cl-notevery (((&rest any) -> any) &rest ((list any) | (vector any) | string)) -> bool)

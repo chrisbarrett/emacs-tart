@@ -75,7 +75,7 @@
 ;; (map-charset-chars FUNCTION CHARSET &optional ARG FROM-CODE TO-CODE)
 ;; Call FUNCTION for all characters in CHARSET
 ;; FUNCTION is called with (FROM . TO) range and ARG
-(defun map-charset-chars ((-> ((pair int int) any) any) symbol &optional any (int | nil) (int | nil)) -> nil)
+(defun map-charset-chars ((((pair int int) any) -> any) symbol &optional any (int | nil) (int | nil)) -> nil)
 
 ;; (unify-charset CHARSET &optional UNIFY-MAP DEUNIFY)
 ;; Unify characters of CHARSET with Unicode
