@@ -1,0 +1,235 @@
+;; Type signatures for Emacs vc.el
+;;
+;; Source: emacs/lisp/vc/vc.el
+;; Emacs version: 31.0
+;;
+;; Version control interface.
+
+;; ============================================================================
+;; Primary Actions
+;; ============================================================================
+
+;; (vc-next-action VERBOSE) - do next logical VC operation
+(defun vc-next-action (any) -> nil)
+
+;; (vc-register &optional VC-FILESET COMMENT) - register files into VCS
+(defun vc-register (&optional (list string) string) -> nil)
+
+;; (vc-checkin FILES BACKEND &optional COMMENT INITIAL-CONTENTS) - commit files
+(defun vc-checkin ((list string) symbol &optional string any) -> nil)
+
+;; (vc-checkout FILE &optional REV) - check out a file
+(defun vc-checkout (string &optional string) -> nil)
+
+;; (vc-revert FILES &optional CONTENTS-DONE) - revert files to repository state
+(defun vc-revert ((list string) &optional any) -> nil)
+
+;; (vc-pull &optional ARG) - pull updates from repository
+(defun vc-pull (&optional any) -> nil)
+
+;; (vc-push &optional ARG) - push commits to repository
+(defun vc-push (&optional any) -> nil)
+
+;; (vc-merge &optional ARG) - merge branches
+(defun vc-merge (&optional any) -> nil)
+
+;; (vc-update &optional ARG) - update working directory
+(defun vc-update (&optional any) -> nil)
+
+;; ============================================================================
+;; Diff and Log
+;; ============================================================================
+
+;; (vc-diff FILES &optional REV1 REV2 BUFFER ASYNC) - show diff for files
+(defun vc-diff ((list string) &optional string string buffer any) -> int)
+
+;; (vc-version-diff FILES REV1 REV2) - show diff between specific revisions
+(defun vc-version-diff ((list string) string string) -> nil)
+
+;; (vc-root-diff ARG) - show diff for entire repository root
+(defun vc-root-diff (any) -> nil)
+
+;; (vc-diff-internal ASYNC FILES REV1 REV2 BUFFER &optional CHANGESET)
+(defun vc-diff-internal (any (list string) (string | nil) (string | nil) buffer &optional any) -> int)
+
+;; (vc-print-log FILES BUFFER &optional SHORTLOG START-REVISION LIMIT)
+(defun vc-print-log ((list string) buffer &optional any string int) -> nil)
+
+;; (vc-print-root-log &optional LIMIT REVISION) - show log for root
+(defun vc-print-root-log (&optional int string) -> nil)
+
+;; (vc-log-incoming &optional REMOTE-LOCATION) - show incoming changes
+(defun vc-log-incoming (&optional string) -> nil)
+
+;; (vc-log-outgoing &optional REMOTE-LOCATION) - show outgoing changes
+(defun vc-log-outgoing (&optional string) -> nil)
+
+;; (vc-log-search PATTERN) - search log for pattern
+(defun vc-log-search (string) -> nil)
+
+;; ============================================================================
+;; Annotate
+;; ============================================================================
+
+;; (vc-annotate FILE &optional REVISION DISPLAY-MODE BUF MOVE-POINT-TO VC-BK)
+(defun vc-annotate (string &optional string symbol buffer int symbol) -> nil)
+
+;; (vc-annotate-display-select &optional BUFFER RATIO) - select annotation display
+(defun vc-annotate-display-select (&optional buffer float) -> nil)
+
+;; (vc-annotate-show-diff-revision-at-line &optional REVISION)
+(defun vc-annotate-show-diff-revision-at-line (&optional string) -> nil)
+
+;; (vc-annotate-show-log-revision-at-line) - show log for line's revision
+(defun vc-annotate-show-log-revision-at-line () -> nil)
+
+;; ============================================================================
+;; Directory/Status Commands
+;; ============================================================================
+
+;; (vc-dir DIR) - show VC status of files in directory
+(defun vc-dir (string) -> nil)
+
+;; (vc-root-dir) - find root directory of repository
+(defun vc-root-dir () -> (string | nil))
+
+;; (vc-dir-mode) - major mode for vc-dir buffer
+(defun vc-dir-mode () -> nil)
+
+;; (vc-dir-mark-file) - mark file in vc-dir
+(defun vc-dir-mark-file () -> nil)
+
+;; (vc-dir-unmark-file) - unmark file in vc-dir
+(defun vc-dir-unmark-file () -> nil)
+
+;; (vc-dir-mark-all-files &optional ARG) - mark all files
+(defun vc-dir-mark-all-files (&optional any) -> nil)
+
+;; (vc-dir-unmark-all-files &optional ARG) - unmark all files
+(defun vc-dir-unmark-all-files (&optional any) -> nil)
+
+;; ============================================================================
+;; File Operations
+;; ============================================================================
+
+;; (vc-delete-file FILE) - delete file under version control
+(defun vc-delete-file (string) -> nil)
+
+;; (vc-rename-file OLD NEW) - rename file under version control
+(defun vc-rename-file (string string) -> nil)
+
+;; (vc-ignore FILE &optional DIRECTORY REMOVE) - add/remove file from ignore
+(defun vc-ignore (string &optional string any) -> nil)
+
+;; ============================================================================
+;; State Queries
+;; ============================================================================
+
+;; (vc-state FILE &optional BACKEND) - get version control state of file
+(defun vc-state (string &optional symbol) -> symbol)
+
+;; (vc-backend FILE) - return backend for file
+(defun vc-backend (string) -> (symbol | nil))
+
+;; (vc-registered FILE) - is file registered under VCS?
+(defun vc-registered (string) -> any)
+
+;; (vc-working-revision FILE &optional BACKEND) - get working revision
+(defun vc-working-revision (string &optional symbol) -> (string | nil))
+
+;; (vc-responsible-backend FILE &optional NO-ERROR) - find backend for file
+(defun vc-responsible-backend (string &optional any) -> (symbol | nil))
+
+;; (vc-file-clearprops FILE) - clear cached properties
+(defun vc-file-clearprops (string) -> nil)
+
+;; ============================================================================
+;; Branch Operations
+;; ============================================================================
+
+;; (vc-create-branch &optional REVISION) - create new branch
+(defun vc-create-branch (&optional string) -> nil)
+
+;; (vc-switch-branch &optional BRANCH) - switch to branch
+(defun vc-switch-branch (&optional string) -> nil)
+
+;; (vc-create-tag NAME BRANCHP) - create tag or branch
+(defun vc-create-tag (string any) -> nil)
+
+;; (vc-retrieve-tag NAME UPDATE) - retrieve named tag/branch
+(defun vc-retrieve-tag (string any) -> nil)
+
+;; ============================================================================
+;; Revision Operations
+;; ============================================================================
+
+;; (vc-revision-other-window REV) - visit revision in other window
+(defun vc-revision-other-window (string) -> nil)
+
+;; (vc-find-revision FILE REV) - visit specific revision
+(defun vc-find-revision (string string) -> buffer)
+
+;; (vc-ediff) - start ediff session
+(defun vc-ediff () -> nil)
+
+;; ============================================================================
+;; Utilities
+;; ============================================================================
+
+;; (vc-ensure-vc-buffer) - ensure current buffer is VC-registered
+(defun vc-ensure-vc-buffer () -> nil)
+
+;; (vc-deduce-fileset &optional OBSERVER ALLOW-UNREGISTERED STATE-MODEL-ONLY-FILES)
+(defun vc-deduce-fileset (&optional any any any) -> (list any))
+
+;; (vc-default-mode-line-string FILE) - format mode line string
+(defun vc-default-mode-line-string (string) -> string)
+
+;; ============================================================================
+;; Variables
+;; ============================================================================
+
+;; List of version control backends to use
+(defvar vc-handled-backends (list symbol))
+
+;; Whether to do async commits
+(defvar vc-async-checkin any)
+
+;; Whether to make backup files when registered
+(defvar vc-make-backup-files any)
+
+;; Follow symlinks to their targets
+(defvar vc-follow-symlinks (symbol | any))
+
+;; Display diff before revert
+(defvar vc-revert-show-diff any)
+
+;; Extra switches for diff
+(defvar vc-diff-switches (string | (list string) | nil))
+
+;; Extra switches for checkin
+(defvar vc-checkin-switches (string | (list string) | nil))
+
+;; Extra switches for checkout
+(defvar vc-checkout-switches (string | (list string) | nil))
+
+;; Suppress confirmation for some commands
+(defvar vc-suppress-confirm any)
+
+;; Command name for certain operations
+(defvar vc-command-messages any)
+
+;; Allow rewriting published history
+(defvar vc-allow-rewriting-published-history (symbol | nil))
+
+;; Log show limit
+(defvar vc-log-show-limit int)
+
+;; Use short log format
+(defvar vc-log-short-style (list symbol))
+
+;; Mode hook
+(defvar vc-mode-hook (list ((nil) -> any)))
+
+;; Annotate background mode
+(defvar vc-annotate-background-mode any)
