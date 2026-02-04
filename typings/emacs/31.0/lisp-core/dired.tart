@@ -1,0 +1,338 @@
+;; Type signatures for Emacs dired.el
+;;
+;; Source: emacs/lisp/dired.el
+;; Emacs version: 31.0
+;;
+;; Dired - the directory editor.
+
+;; ============================================================================
+;; Entry Points
+;; ============================================================================
+
+;; (dired DIRNAME &optional SWITCHES) - open directory in Dired mode
+(defun dired (string &optional string) -> buffer)
+
+;; (dired-other-window DIRNAME &optional SWITCHES) - open in other window
+(defun dired-other-window (string &optional string) -> buffer)
+
+;; (dired-other-frame DIRNAME &optional SWITCHES) - open in new frame
+(defun dired-other-frame (string &optional string) -> buffer)
+
+;; (dired-other-tab DIRNAME &optional SWITCHES) - open in new tab
+(defun dired-other-tab (string &optional string) -> buffer)
+
+;; (dired-noselect DIR-OR-LIST &optional SWITCHES) - return buffer without selecting
+(defun dired-noselect ((string | (list string)) &optional string) -> buffer)
+
+;; (dired-jump &optional OTHER-WINDOW FILE-NAME) - jump to current file in Dired
+(defun dired-jump (&optional any string) -> nil)
+
+;; (dired-jump-other-window &optional FILE-NAME) - jump in other window
+(defun dired-jump-other-window (&optional string) -> nil)
+
+;; ============================================================================
+;; Navigation
+;; ============================================================================
+
+;; (dired-next-line ARG) - move down ARG lines
+(defun dired-next-line (int) -> nil)
+
+;; (dired-previous-line ARG) - move up ARG lines
+(defun dired-previous-line (int) -> nil)
+
+;; (dired-find-file) - visit file at point
+(defun dired-find-file () -> nil)
+
+;; (dired-find-file-other-window) - visit file in other window
+(defun dired-find-file-other-window () -> nil)
+
+;; (dired-view-file) - view file in read-only mode
+(defun dired-view-file () -> nil)
+
+;; (dired-display-file) - display file in other window
+(defun dired-display-file () -> nil)
+
+;; (dired-goto-file FILE) - move point to FILE's line
+(defun dired-goto-file (string) -> (int | nil))
+
+;; (dired-goto-subdir DIR) - go to subdirectory DIR
+(defun dired-goto-subdir (string) -> (int | nil))
+
+;; (dired-next-subdir ARG &optional NO-ERROR-IF-NOT-FOUND) - go to next subdir
+(defun dired-next-subdir (int &optional any) -> nil)
+
+;; (dired-prev-subdir ARG &optional NO-ERROR-IF-NOT-FOUND) - go to previous subdir
+(defun dired-prev-subdir (int &optional any) -> nil)
+
+;; (dired-move-to-filename &optional RAISE-ERROR BOL) - move to filename column
+(defun dired-move-to-filename (&optional any any) -> (int | nil))
+
+;; (dired-move-to-end-of-filename &optional NO-ERROR) - move to end of filename
+(defun dired-move-to-end-of-filename (&optional any) -> (int | nil))
+
+;; (dired-up-directory &optional OTHER-WINDOW) - go to parent directory
+(defun dired-up-directory (&optional any) -> nil)
+
+;; ============================================================================
+;; Marking
+;; ============================================================================
+
+;; (dired-mark &optional ARG INTERACTIVE) - mark current or next ARG files
+(defun dired-mark (&optional int any) -> nil)
+
+;; (dired-unmark &optional ARG INTERACTIVE) - unmark current or next ARG files
+(defun dired-unmark (&optional int any) -> nil)
+
+;; (dired-flag-file-deletion &optional ARG INTERACTIVE) - flag file for deletion
+(defun dired-flag-file-deletion (&optional int any) -> nil)
+
+;; (dired-unmark-all-marks) - remove all marks
+(defun dired-unmark-all-marks () -> nil)
+
+;; (dired-unmark-all-files MARK &optional ARG INTERACTIVE) - unmark all files with MARK
+(defun dired-unmark-all-files (int &optional any any) -> nil)
+
+;; (dired-toggle-marks) - toggle marks
+(defun dired-toggle-marks () -> nil)
+
+;; (dired-get-marked-files &optional LOCALP ARG FILTER DISTINGUISH-ONE-MARKED ERROR)
+;; Return list of marked files
+(defun dired-get-marked-files (&optional any any ((string) -> any) any any) -> (list string))
+
+;; (dired-mark-files-regexp REGEXP &optional MARKER-CHAR) - mark by regexp
+(defun dired-mark-files-regexp (string &optional int) -> int)
+
+;; (dired-mark-files-containing-regexp REGEXP &optional MARKER-CHAR) - mark files containing
+(defun dired-mark-files-containing-regexp (string &optional int) -> int)
+
+;; (dired-mark-extension EXTENSION &optional MARKER-CHAR) - mark by extension
+(defun dired-mark-extension ((string | (list string)) &optional int) -> nil)
+
+;; (dired-mark-symlinks &optional UNFLAG-P) - mark symbolic links
+(defun dired-mark-symlinks (&optional any) -> nil)
+
+;; (dired-mark-directories &optional UNFLAG-P) - mark directories
+(defun dired-mark-directories (&optional any) -> nil)
+
+;; (dired-mark-executables &optional UNFLAG-P) - mark executable files
+(defun dired-mark-executables (&optional any) -> nil)
+
+;; (dired-change-marks OLD NEW) - change mark OLD to NEW
+(defun dired-change-marks (int int) -> nil)
+
+;; ============================================================================
+;; File Operations
+;; ============================================================================
+
+;; (dired-do-copy &optional ARG) - copy marked files
+(defun dired-do-copy (&optional int) -> nil)
+
+;; (dired-do-rename &optional ARG) - rename marked files
+(defun dired-do-rename (&optional int) -> nil)
+
+;; (dired-do-delete &optional ARG) - delete marked files
+(defun dired-do-delete (&optional int) -> nil)
+
+;; (dired-do-flagged-delete &optional NO-MSG) - delete flagged files
+(defun dired-do-flagged-delete (&optional any) -> nil)
+
+;; (dired-do-hardlink &optional ARG) - create hard links
+(defun dired-do-hardlink (&optional int) -> nil)
+
+;; (dired-do-symlink &optional ARG) - create symbolic links
+(defun dired-do-symlink (&optional int) -> nil)
+
+;; (dired-do-chmod &optional ARG) - change file permissions
+(defun dired-do-chmod (&optional int) -> nil)
+
+;; (dired-do-chown &optional ARG) - change file owner
+(defun dired-do-chown (&optional int) -> nil)
+
+;; (dired-do-chgrp &optional ARG) - change file group
+(defun dired-do-chgrp (&optional int) -> nil)
+
+;; (dired-do-touch &optional ARG) - touch files
+(defun dired-do-touch (&optional int) -> nil)
+
+;; (dired-do-print &optional ARG) - print files
+(defun dired-do-print (&optional int) -> nil)
+
+;; (dired-do-compress &optional ARG) - compress/uncompress files
+(defun dired-do-compress (&optional int) -> nil)
+
+;; (dired-do-compress-to) - compress to specified file
+(defun dired-do-compress-to () -> nil)
+
+;; (dired-do-shell-command COMMAND &optional ARG FILE-LIST) - run shell command
+(defun dired-do-shell-command (string &optional int (list string)) -> nil)
+
+;; (dired-do-async-shell-command COMMAND &optional ARG FILE-LIST) - run async command
+(defun dired-do-async-shell-command (string &optional int (list string)) -> nil)
+
+;; (dired-do-load &optional ARG) - load Emacs Lisp files
+(defun dired-do-load (&optional int) -> nil)
+
+;; (dired-do-byte-compile &optional ARG) - byte compile files
+(defun dired-do-byte-compile (&optional int) -> nil)
+
+;; (dired-do-redisplay &optional ARG) - redisplay marked files
+(defun dired-do-redisplay (&optional int) -> nil)
+
+;; (dired-do-kill-lines &optional ARG FMT) - kill lines from display
+(defun dired-do-kill-lines (&optional int string) -> int)
+
+;; (dired-create-directory DIR) - create directory
+(defun dired-create-directory (string) -> nil)
+
+;; (dired-create-empty-file FILE) - create empty file
+(defun dired-create-empty-file (string) -> nil)
+
+;; ============================================================================
+;; File Information
+;; ============================================================================
+
+;; (dired-get-filename &optional LOCALP NO-ERROR-IF-NOT-FILEP) - get filename at point
+(defun dired-get-filename (&optional any any) -> (string | nil))
+
+;; (dired-file-name-at-point) - get abbreviated filename
+(defun dired-file-name-at-point () -> (string | nil))
+
+;; (dired-current-directory &optional LOCALP) - get directory of current line
+(defun dired-current-directory (&optional any) -> string)
+
+;; (dired-copy-filename-as-kill &optional ARG) - copy filename to kill ring
+(defun dired-copy-filename-as-kill (&optional int) -> nil)
+
+;; ============================================================================
+;; Sorting
+;; ============================================================================
+
+;; (dired-sort-toggle-or-edit &optional ARG) - toggle sorting or edit switches
+(defun dired-sort-toggle-or-edit (&optional any) -> nil)
+
+;; (dired-sort-set-mode-line) - set mode line with sort switches
+(defun dired-sort-set-mode-line () -> nil)
+
+;; ============================================================================
+;; Subdirectory Operations
+;; ============================================================================
+
+;; (dired-maybe-insert-subdir DIR &optional SWITCHES NO-ERROR-IF-NOT-DIR-P) - insert subdir
+(defun dired-maybe-insert-subdir (string &optional string any) -> nil)
+
+;; (dired-insert-subdir DIR &optional SWITCHES NO-ERROR-IF-NOT-DIR-P) - insert subdir
+(defun dired-insert-subdir (string &optional string any) -> nil)
+
+;; (dired-kill-subdir &optional REMEMBER-MARKS) - remove subdirectory listing
+(defun dired-kill-subdir (&optional any) -> nil)
+
+;; (dired-tree-up ARG) - go up ARG levels in tree
+(defun dired-tree-up (int) -> nil)
+
+;; (dired-tree-down) - go down one level in tree
+(defun dired-tree-down () -> nil)
+
+;; ============================================================================
+;; Refresh/Update
+;; ============================================================================
+
+;; (dired-revert &optional ARG NOCONFIRM) - revert Dired buffer
+(defun dired-revert (&optional any any) -> nil)
+
+;; (dired-undo) - undo in Dired
+(defun dired-undo () -> nil)
+
+;; (revert-buffer &optional IGNORE-AUTO NOCONFIRM PRESERVE-MODES) - general revert
+;; Note: already defined elsewhere, but commonly used in dired
+
+;; ============================================================================
+;; Misc Utilities
+;; ============================================================================
+
+;; (dired-isearch-filenames) - search file names
+(defun dired-isearch-filenames () -> nil)
+
+;; (dired-isearch-filenames-regexp) - regexp search file names
+(defun dired-isearch-filenames-regexp () -> nil)
+
+;; (dired-summary) - show summary of Dired commands
+(defun dired-summary () -> nil)
+
+;; (dired-why) - explain why current file was rejected
+(defun dired-why () -> nil)
+
+;; (dired-diff FILE &optional SWITCHES) - diff file at point with another
+(defun dired-diff (string &optional string) -> nil)
+
+;; (dired-backup-diff &optional SWITCHES) - diff with backup file
+(defun dired-backup-diff (&optional string) -> nil)
+
+;; (dired-compare-directories DIR PREDICATE) - compare two directories
+(defun dired-compare-directories (string (any -> any)) -> nil)
+
+;; (dired-hide-details-mode &optional ARG) - toggle detail hiding
+(defun dired-hide-details-mode (&optional any) -> nil)
+
+;; (dired-hide-subdir &optional ARG) - hide subdirectory
+(defun dired-hide-subdir (&optional int) -> nil)
+
+;; (dired-hide-all &optional ARG) - hide all subdirs
+(defun dired-hide-all (&optional any) -> nil)
+
+;; (dired-show-file-type FILE &optional DEREF-SYMLINKS) - show file type
+(defun dired-show-file-type (string &optional any) -> nil)
+
+;; ============================================================================
+;; Variables
+;; ============================================================================
+
+;; Directory name or wildcard spec for current buffer
+(defvar dired-directory (string | (list string)))
+
+;; Switches passed to ls
+(defvar dired-listing-switches string)
+
+;; Current mark character
+(defvar dired-marker-char int)
+
+;; Character flagging files for deletion
+(defvar dired-del-marker int)
+
+;; Actual switches used for current listing
+(defvar dired-actual-switches (string | nil))
+
+;; Alist of listed directories and positions
+(defvar dired-subdir-alist (list (pair string int)))
+
+;; Mode hook
+(defvar dired-mode-hook (list ((nil) -> any)))
+
+;; Whether to confirm file operations
+(defvar dired-no-confirm (list symbol))
+
+;; Whether to auto-revert
+(defvar dired-auto-revert-buffer any)
+
+;; Hide details
+(defvar dired-hide-details-mode any)
+
+;; How to handle recursive delete
+(defvar dired-recursive-deletes (symbol | nil))
+
+;; How to handle recursive copy
+(defvar dired-recursive-copies (symbol | nil))
+
+;; Deletion confirmation
+(defvar dired-deletion-confirmer ((string) -> any))
+
+;; Omit files mode
+(defvar dired-omit-mode any)
+
+;; Free disk space display
+(defvar dired-free-space (symbol | nil))
+
+;; Keep file modification times on copy
+(defvar dired-copy-preserve-time any)
+
+;; Create destination dir if missing
+(defvar dired-create-destination-dirs (symbol | nil))
