@@ -1,0 +1,157 @@
+;; Type signatures for Emacs replace.el
+;;
+;; Source: emacs/lisp/replace.el
+;; Emacs version: 31.0
+;;
+;; Search and replace functions.
+
+;; ============================================================================
+;; Query Replace
+;; ============================================================================
+
+;; (query-replace FROM-STRING TO-STRING &optional DELIMITED START END BACKWARD REGION-NONCONTIGUOUS-P)
+(defun query-replace (string string &optional any (int | marker) (int | marker) any any) -> nil)
+
+;; (query-replace-regexp REGEXP TO-STRING &optional DELIMITED START END BACKWARD REGION-NONCONTIGUOUS-P)
+(defun query-replace-regexp (string string &optional any (int | marker) (int | marker) any any) -> nil)
+
+;; (query-replace-regexp-eval REGEXP TO-EXPR &optional DELIMITED START END REGION-NONCONTIGUOUS-P)
+(defun query-replace-regexp-eval (string any &optional any (int | marker) (int | marker) any) -> nil)
+
+;; (map-query-replace-regexp REGEXP TO-STRINGS &optional N START END REGION-NONCONTIGUOUS-P)
+(defun map-query-replace-regexp (string string &optional int (int | marker) (int | marker) any) -> nil)
+
+;; ============================================================================
+;; Non-interactive Replace
+;; ============================================================================
+
+;; (replace-string FROM-STRING TO-STRING &optional DELIMITED START END BACKWARD REGION-NONCONTIGUOUS-P)
+(defun replace-string (string string &optional any (int | marker) (int | marker) any any) -> nil)
+
+;; (replace-regexp REGEXP TO-STRING &optional DELIMITED START END BACKWARD REGION-NONCONTIGUOUS-P)
+(defun replace-regexp (string string &optional any (int | marker) (int | marker) any any) -> nil)
+
+;; ============================================================================
+;; Occur and Line Matching
+;; ============================================================================
+
+;; (occur REGEXP &optional NLINES REGION) - show all matches in buffer
+(defun occur (string &optional int any) -> nil)
+
+;; (multi-occur BUFS REGEXP &optional NLINES) - occur across multiple buffers
+(defun multi-occur ((list buffer) string &optional int) -> nil)
+
+;; (multi-occur-in-matching-buffers BUFREGEXP REGEXP &optional ALLBUFS NLINES)
+(defun multi-occur-in-matching-buffers (string string &optional any int) -> nil)
+
+;; (occur-rename-buffer &optional UNIQUE-P) - rename occur buffer
+(defun occur-rename-buffer (&optional any) -> nil)
+
+;; (occur-next &optional N) - go to Nth next match
+(defun occur-next (&optional int) -> nil)
+
+;; (occur-prev &optional N) - go to Nth previous match
+(defun occur-prev (&optional int) -> nil)
+
+;; (occur-mode-goto-occurrence &optional EVENT) - go to source location
+(defun occur-mode-goto-occurrence (&optional any) -> nil)
+
+;; (occur-mode-goto-occurrence-other-window) - go to source in other window
+(defun occur-mode-goto-occurrence-other-window () -> nil)
+
+;; (occur-mode-display-occurrence) - display source without selecting
+(defun occur-mode-display-occurrence () -> nil)
+
+;; (occur-edit-mode) - edit occur buffer
+(defun occur-edit-mode () -> nil)
+
+;; ============================================================================
+;; Line Filtering
+;; ============================================================================
+
+;; (how-many REGEXP &optional RSTART REND INTERACTIVE) - count matches
+(defun how-many (string &optional (int | marker) (int | marker) any) -> int)
+
+;; (keep-lines REGEXP &optional RSTART REND INTERACTIVE) - keep matching lines
+(defun keep-lines (string &optional (int | marker) (int | marker) any) -> nil)
+
+;; (flush-lines REGEXP &optional RSTART REND INTERACTIVE) - delete matching lines
+(defun flush-lines (string &optional (int | marker) (int | marker) any) -> int)
+
+;; (delete-matching-lines REGEXP &optional RSTART REND INTERACTIVE) - alias for flush-lines
+(defun delete-matching-lines (string &optional (int | marker) (int | marker) any) -> int)
+
+;; (delete-non-matching-lines REGEXP &optional RSTART REND INTERACTIVE) - alias for keep-lines
+(defun delete-non-matching-lines (string &optional (int | marker) (int | marker) any) -> nil)
+
+;; (count-matches REGEXP &optional RSTART REND INTERACTIVE) - alias for how-many
+(defun count-matches (string &optional (int | marker) (int | marker) any) -> int)
+
+;; ============================================================================
+;; Replace Core Functions
+;; ============================================================================
+
+;; (perform-replace FROM-STRING REPLACEMENTS QUERY-FLAG REGEXP-FLAG DELIMITED-FLAG
+;;   &optional REPEAT-COUNT MAP START END BACKWARD REGION-NONCONTIGUOUS-P)
+(defun perform-replace (string (string | (list string)) any any any &optional int any (int | marker) (int | marker) any any) -> nil)
+
+;; (replace-match REPLACEMENT &optional FIXEDCASE LITERAL STRING SUBEXP) - replace current match
+(defun replace-match (string &optional any any string int) -> nil)
+
+;; (match-substitute-replacement REPLACEMENT &optional FIXEDCASE LITERAL STRING SUBEXP)
+(defun match-substitute-replacement (string &optional any any string int) -> string)
+
+;; ============================================================================
+;; Variables
+;; ============================================================================
+
+;; Whether to preserve case in replacements
+(defvar case-replace any)
+
+;; Treat whitespace flexibly in search patterns
+(defvar replace-lax-whitespace any)
+
+;; Treat whitespace flexibly in replacement strings
+(defvar replace-regexp-lax-whitespace any)
+
+;; Character used for help in query-replace
+(defvar query-replace-help string)
+
+;; History of replacement strings
+(defvar query-replace-history (list string))
+
+;; Highlight replacements
+(defvar query-replace-highlight any)
+
+;; Show replacement strings before asking
+(defvar query-replace-show-replacement any)
+
+;; Skip read-only areas
+(defvar query-replace-skip-read-only any)
+
+;; Lazy highlight during query-replace
+(defvar query-replace-lazy-highlight any)
+
+;; Context lines in occur output
+(defvar list-matching-lines-default-context-lines (int | nil))
+
+;; Default face for occur output
+(defvar list-matching-lines-face symbol)
+
+;; Prefix face for occur output
+(defvar list-matching-lines-prefix-face symbol)
+
+;; Buffer name prefix for occur
+(defvar list-matching-lines-buffer-name-face symbol)
+
+;; Hook for occur mode
+(defvar occur-mode-hook (list ((nil) -> any)))
+
+;; Hook run when occur buffer is populated
+(defvar occur-hook (list ((nil) -> any)))
+
+;; Search function used for replacements
+(defvar replace-search-function (((string (int | marker) any) -> any) | nil))
+
+;; Replacement search function
+(defvar replace-re-search-function (((string (int | marker) any) -> any) | nil))
