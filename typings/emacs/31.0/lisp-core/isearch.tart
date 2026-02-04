@@ -1,0 +1,385 @@
+;; Type signatures for Emacs incremental search from isearch.el
+;;
+;; Source: emacs/lisp/isearch.el
+;; Emacs version: 31.0
+;;
+;; Contains incremental search functions and variables.
+
+;; -----------------------------------------------------------------------------
+;; Core entry points
+;; -----------------------------------------------------------------------------
+
+;; (isearch-forward &optional REGEXP-P NO-RECURSIVE-EDIT)
+;; Start incremental search forward.
+;; With prefix arg, do a regular expression search instead.
+(defun isearch-forward (&optional any any) -> nil)
+
+;; (isearch-backward &optional REGEXP-P NO-RECURSIVE-EDIT)
+;; Start incremental search backward.
+(defun isearch-backward (&optional any any) -> nil)
+
+;; (isearch-forward-regexp &optional NOT-REGEXP NO-RECURSIVE-EDIT)
+;; Start incremental forward search for a regular expression.
+(defun isearch-forward-regexp (&optional any any) -> nil)
+
+;; (isearch-backward-regexp &optional NOT-REGEXP NO-RECURSIVE-EDIT)
+;; Start incremental backward search for a regular expression.
+(defun isearch-backward-regexp (&optional any any) -> nil)
+
+;; (isearch-forward-word &optional NOT-WORD NO-RECURSIVE-EDIT)
+;; Start incremental search forward for a word sequence.
+(defun isearch-forward-word (&optional any any) -> nil)
+
+;; (isearch-forward-symbol &optional _NOT-SYMBOL NO-RECURSIVE-EDIT)
+;; Start incremental search forward for a symbol.
+(defun isearch-forward-symbol (&optional any any) -> nil)
+
+;; (isearch-forward-symbol-at-point &optional ARG)
+;; Start incremental search for symbol at point.
+(defun isearch-forward-symbol-at-point (&optional int) -> nil)
+
+;; (isearch-forward-thing-at-point)
+;; Start incremental search for thing at point.
+(defun isearch-forward-thing-at-point () -> nil)
+
+;; -----------------------------------------------------------------------------
+;; Control functions
+;; -----------------------------------------------------------------------------
+
+;; (isearch-mode FORWARD &optional REGEXP OP-FUN RECURSIVE-EDIT REGEXP-FUNCTION)
+;; Start Isearch minor mode.
+;; Called by isearch-forward, isearch-backward, etc.
+(defun isearch-mode (bool &optional any any any any) -> nil)
+
+;; (isearch-done &optional NOPUSH EDIT)
+;; Exit Isearch mode.
+;; NOPUSH means don't push the string onto the search ring.
+(defun isearch-done (&optional any any) -> nil)
+
+;; (isearch-exit)
+;; Exit search normally.
+;; If first time, just exit; if empty string, switch to nonincremental search.
+(defun isearch-exit () -> nil)
+
+;; (isearch-abort)
+;; Abort incremental search.
+;; If search is successful, go back to starting point.
+(defun isearch-abort () -> nil)
+
+;; (isearch-cancel)
+;; Terminate search and go back to starting point.
+(defun isearch-cancel () -> nil)
+
+;; -----------------------------------------------------------------------------
+;; Search iteration
+;; -----------------------------------------------------------------------------
+
+;; (isearch-repeat DIRECTION &optional COUNT)
+;; Repeat the search in DIRECTION.
+(defun isearch-repeat (symbol &optional int) -> nil)
+
+;; (isearch-repeat-forward &optional COUNT)
+;; Repeat search forward.
+(defun isearch-repeat-forward (&optional int) -> nil)
+
+;; (isearch-repeat-backward &optional COUNT)
+;; Repeat search backward.
+(defun isearch-repeat-backward (&optional int) -> nil)
+
+;; -----------------------------------------------------------------------------
+;; Search state management
+;; -----------------------------------------------------------------------------
+
+;; (isearch-update)
+;; Called after each command to update display.
+(defun isearch-update () -> nil)
+
+;; (isearch-edit-string)
+;; Edit the search string in the minibuffer.
+(defun isearch-edit-string () -> nil)
+
+;; (isearch-push-state)
+;; Push the current search state onto the stack.
+(defun isearch-push-state () -> nil)
+
+;; (isearch-pop-state)
+;; Pop the top state from the stack.
+(defun isearch-pop-state () -> nil)
+
+;; (isearch-clean-overlays)
+;; Clean up lazy highlight overlays.
+(defun isearch-clean-overlays () -> nil)
+
+;; -----------------------------------------------------------------------------
+;; Yank operations
+;; -----------------------------------------------------------------------------
+
+;; (isearch-yank-word-or-char)
+;; Yank next word or character from buffer into search string.
+(defun isearch-yank-word-or-char () -> nil)
+
+;; (isearch-yank-symbol-or-char)
+;; Yank next symbol or character from buffer into search string.
+(defun isearch-yank-symbol-or-char () -> nil)
+
+;; (isearch-yank-char)
+;; Yank char from buffer onto end of search string.
+(defun isearch-yank-char () -> nil)
+
+;; (isearch-yank-line)
+;; Yank rest of line from buffer onto end of search string.
+(defun isearch-yank-line () -> nil)
+
+;; (isearch-yank-kill)
+;; Yank last kill onto end of search string.
+(defun isearch-yank-kill () -> nil)
+
+;; (isearch-yank-until-char CHAR)
+;; Yank from point to before CHAR into search string.
+(defun isearch-yank-until-char (int) -> nil)
+
+;; (isearch-yank-pop)
+;; Replace current search string with next kill ring item.
+(defun isearch-yank-pop () -> nil)
+
+;; (isearch-yank-x-selection)
+;; Yank X selection onto end of search string.
+(defun isearch-yank-x-selection () -> nil)
+
+;; -----------------------------------------------------------------------------
+;; Delete/edit operations
+;; -----------------------------------------------------------------------------
+
+;; (isearch-delete-char)
+;; Undo last input item during search.
+(defun isearch-delete-char () -> nil)
+
+;; (isearch-del-char)
+;; Delete char from end of search string.
+(defun isearch-del-char () -> nil)
+
+;; (isearch-printing-char &optional CHAR COUNT)
+;; Append a printing character to the search string.
+(defun isearch-printing-char (&optional int int) -> nil)
+
+;; -----------------------------------------------------------------------------
+;; History ring
+;; -----------------------------------------------------------------------------
+
+;; (isearch-update-ring STRING &optional REGEXP)
+;; Add STRING to the appropriate search ring.
+(defun isearch-update-ring (string &optional any) -> nil)
+
+;; (isearch-ring-advance)
+;; Advance to the next search string from the history ring.
+(defun isearch-ring-advance () -> nil)
+
+;; (isearch-ring-retreat)
+;; Go back to the previous search string from the history ring.
+(defun isearch-ring-retreat () -> nil)
+
+;; (isearch-ring-advance-edit)
+;; Advance in minibuffer edit mode.
+(defun isearch-ring-advance-edit () -> nil)
+
+;; (isearch-ring-retreat-edit)
+;; Retreat in minibuffer edit mode.
+(defun isearch-ring-retreat-edit () -> nil)
+
+;; (isearch-complete)
+;; Complete the search string from the search rings.
+(defun isearch-complete () -> nil)
+
+;; (isearch-complete-edit)
+;; Complete the search string in minibuffer edit mode.
+(defun isearch-complete-edit () -> nil)
+
+;; -----------------------------------------------------------------------------
+;; Toggle functions
+;; -----------------------------------------------------------------------------
+
+;; (isearch-toggle-case-fold)
+;; Toggle case folding in searching.
+(defun isearch-toggle-case-fold () -> nil)
+
+;; (isearch-toggle-regexp)
+;; Toggle regular expression mode.
+(defun isearch-toggle-regexp () -> nil)
+
+;; (isearch-toggle-word)
+;; Toggle word search mode.
+(defun isearch-toggle-word () -> nil)
+
+;; (isearch-toggle-symbol)
+;; Toggle symbol search mode.
+(defun isearch-toggle-symbol () -> nil)
+
+;; (isearch-toggle-invisible)
+;; Toggle searching in invisible text.
+(defun isearch-toggle-invisible () -> nil)
+
+;; (isearch-toggle-char-fold)
+;; Toggle character folding in searching.
+(defun isearch-toggle-char-fold () -> nil)
+
+;; (isearch-toggle-lax-whitespace)
+;; Toggle whitespace matching in searching.
+(defun isearch-toggle-lax-whitespace () -> nil)
+
+;; -----------------------------------------------------------------------------
+;; Query replace integration
+;; -----------------------------------------------------------------------------
+
+;; (isearch-query-replace &optional DELIMITED REGEXP-FLAG)
+;; Start query-replace with current search string.
+(defun isearch-query-replace (&optional any any) -> nil)
+
+;; (isearch-query-replace-regexp &optional DELIMITED)
+;; Start regexp query-replace with current search string.
+(defun isearch-query-replace-regexp (&optional any) -> nil)
+
+;; -----------------------------------------------------------------------------
+;; Highlighting
+;; -----------------------------------------------------------------------------
+
+;; (isearch-highlight BEG END)
+;; Highlight the current match between BEG and END.
+(defun isearch-highlight (int int) -> nil)
+
+;; (isearch-dehighlight)
+;; Remove isearch highlighting.
+(defun isearch-dehighlight () -> nil)
+
+;; (isearch-lazy-highlight-new-loop &optional BEG END)
+;; Start a new lazy highlighting loop.
+(defun isearch-lazy-highlight-new-loop (&optional int int) -> nil)
+
+;; (isearch-lazy-highlight-start)
+;; Start lazy highlighting.
+(defun isearch-lazy-highlight-start () -> nil)
+
+;; (isearch-lazy-highlight-update)
+;; Update lazy highlighting.
+(defun isearch-lazy-highlight-update () -> nil)
+
+;; (isearch-lazy-highlight-cleanup &optional FORCE)
+;; Clean up lazy highlighting.
+(defun isearch-lazy-highlight-cleanup (&optional any) -> nil)
+
+;; -----------------------------------------------------------------------------
+;; Occur integration
+;; -----------------------------------------------------------------------------
+
+;; (isearch-occur &optional REGEXP NLINES)
+;; Run occur with current search string.
+(defun isearch-occur (&optional any int) -> nil)
+
+;; (isearch-highlight-regexp)
+;; Highlight all matches of current search string.
+(defun isearch-highlight-regexp () -> nil)
+
+;; (isearch-highlight-lines-matching-regexp)
+;; Highlight lines matching current search string.
+(defun isearch-highlight-lines-matching-regexp () -> nil)
+
+;; -----------------------------------------------------------------------------
+;; Utility functions
+;; -----------------------------------------------------------------------------
+
+;; (isearch-message &optional C-Q-HACK ELLIPSIS)
+;; Generate and print the message string.
+(defun isearch-message (&optional any any) -> nil)
+
+;; (isearch-message-prefix &optional C-Q-HACK ELLIPSIS NONINCREMENTAL)
+;; Generate the prefix for the search message.
+(defun isearch-message-prefix (&optional any any any) -> string)
+
+;; (isearch-message-suffix)
+;; Generate the suffix for the search message.
+(defun isearch-message-suffix () -> string)
+
+;; (isearch-search-string STRING &optional BOUND NOERROR)
+;; Search for STRING using current isearch settings.
+(defun isearch-search-string (string &optional any any) -> (int | nil))
+
+;; (isearch-search)
+;; Do the search for the current value of isearch-string.
+(defun isearch-search () -> any)
+
+;; (isearch-search-and-update)
+;; Do the search and update the display.
+(defun isearch-search-and-update () -> nil)
+
+;; (isearch-describe-bindings)
+;; Show a list of all keys defined in Isearch mode.
+(defun isearch-describe-bindings () -> nil)
+
+;; (isearch-describe-key)
+;; Display documentation of the key pressed.
+(defun isearch-describe-key () -> nil)
+
+;; (isearch-describe-mode)
+;; Display documentation of Isearch mode.
+(defun isearch-describe-mode () -> nil)
+
+;; -----------------------------------------------------------------------------
+;; Variables
+;; -----------------------------------------------------------------------------
+
+;; Search string state
+(defvar isearch-string string)
+(defvar isearch-message string)
+(defvar isearch-regexp (bool | nil))
+(defvar isearch-word (bool | nil))
+(defvar isearch-forward bool)
+(defvar isearch-success bool)
+(defvar isearch-error (string | nil))
+(defvar isearch-other-end (int | nil))
+(defvar isearch-wrapped bool)
+(defvar isearch-barrier int)
+(defvar isearch-opoint int)
+
+;; Mode state
+(defvar isearch-mode (bool | nil))
+(defvar isearch-mode-map any)
+(defvar isearch-case-fold-search any)
+
+;; History rings
+(defvar search-ring (list string))
+(defvar regexp-search-ring (list string))
+(defvar search-ring-max int)
+(defvar regexp-search-ring-max int)
+(defvar search-ring-yank-pointer (list string))
+(defvar regexp-search-ring-yank-pointer (list string))
+
+;; Lazy highlighting
+(defvar isearch-lazy-highlight bool)
+(defvar isearch-lazy-count bool)
+(defvar isearch-lazy-count-current int)
+(defvar isearch-lazy-count-total int)
+
+;; Hooks
+(defvar isearch-mode-hook (list any))
+(defvar isearch-mode-end-hook (list any))
+(defvar isearch-update-post-hook (list any))
+
+;; Filter predicate
+(defvar isearch-filter-predicate (((int int) -> any) | nil))
+
+;; Customization
+(defvar search-invisible any)
+(defvar search-whitespace-regexp (string | nil))
+(defvar search-upper-case any)
+(defvar search-nonincremental-instead bool)
+(defvar search-exit-option any)
+(defvar search-slow-window-lines int)
+(defvar search-slow-speed int)
+(defvar search-highlight bool)
+(defvar isearch-hide-immediately bool)
+(defvar isearch-resume-in-command-history bool)
+(defvar isearch-allow-scroll bool)
+(defvar isearch-allow-motion bool)
+(defvar isearch-allow-prefix bool)
+(defvar isearch-motion-changes-direction bool)
+(defvar isearch-repeat-on-direction-change bool)
+(defvar isearch-yank-on-move (symbol | nil))
