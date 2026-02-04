@@ -112,7 +112,15 @@ val intrinsic_base_name : string -> string
 
 (** Primitive type constants using intrinsic names. *)
 module Prim : sig
+  val int_name : string
+  (** Intrinsic type names for comparison in unification *)
+
+  val float_name : string
+  val num_name : string
+
   val int : typ
+  (** Type constructors *)
+
   val float : typ
   val num : typ
   val string : typ

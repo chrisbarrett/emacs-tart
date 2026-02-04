@@ -122,9 +122,17 @@ let intrinsic_display_name base_name =
     These use the %tart-intrinsic% prefix to distinguish them from user types.
     The prelude bridges these to user-friendly names. *)
 module Prim = struct
-  let int = TCon (intrinsic "Int")
-  let float = TCon (intrinsic "Float")
-  let num = TCon (intrinsic "Num")
+  (** Intrinsic type names for comparison *)
+  let int_name = intrinsic "Int"
+
+  let float_name = intrinsic "Float"
+  let num_name = intrinsic "Num"
+
+  (** Type constructors *)
+  let int = TCon int_name
+
+  let float = TCon float_name
+  let num = TCon num_name
   let string = TCon (intrinsic "String")
   let symbol = TCon (intrinsic "Symbol")
   let keyword = TCon (intrinsic "Keyword")

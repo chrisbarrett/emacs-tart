@@ -147,12 +147,19 @@ let rec unify ?(invariant = false) t1 t2 loc : unit internal_result =
         else Ok ()
     (* Type constants: handle numeric subtyping.
        Int <: Num and Float <: Num (Int/Float are subtypes of Num).
-       This allows integer literals to be passed where Num is expected. *)
+       This allows integer literals to be passed where Num is expected.
+
+       Uses intrinsic names (e.g., "%tart-intrinsic%Int") via Prim constants. *)
     | TCon n1, TCon n2 ->
         if n1 = n2 then Ok ()
-        else if n1 = "Num" && (n2 = "Int" || n2 = "Float") then Ok ()
-        else if n2 = "Num" && (n1 = "Int" || n1 = "Float") then Ok ()
-        else Error (ITypeMismatch (t1, t2, loc))
+        else
+          let is_int name = name = Prim.int_name in
+          let is_float name = name = Prim.float_name in
+          let is_num name = name = Prim.num_name in
+          (* Num accepts Int or Float *)
+          if is_num n1 && (is_int n2 || is_float n2) then Ok ()
+          else if is_num n2 && (is_int n1 || is_float n1) then Ok ()
+          else Error (ITypeMismatch (t1, t2, loc))
     (* Type applications: constructor and args must match.
        For HK types, the constructor may be a type variable that unifies
        with a concrete constructor. Arguments are unified with invariant=true
