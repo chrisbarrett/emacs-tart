@@ -1,0 +1,37 @@
+;; Type signatures for Emacs terminal.c
+;;
+;; Source: emacs/src/terminal.c
+;; Emacs version: 31.0
+;;
+;; Contains terminal device management functions.
+;; TERMINAL parameters accept a terminal object, a frame, or nil (selected frame).
+
+;; (delete-terminal &optional TERMINAL FORCE) - delete terminal and its frames
+;; Normally cannot delete if all other displays are suspended (use FORCE to override)
+(defun delete-terminal (&optional (terminal | frame | nil) any) -> nil)
+
+;; (frame-terminal &optional FRAME) - return terminal that FRAME is displayed on
+;; Returns the terminal object (integer identifier)
+(defun frame-terminal (&optional (frame | nil)) -> terminal)
+
+;; (terminal-live-p OBJECT) - return non-nil if OBJECT is a live terminal
+;; Returns the terminal type (same as framep) if live, nil otherwise
+(defun terminal-live-p (any) -> (symbol | nil))
+
+;; (terminal-list) - return list of all terminal devices
+(defun terminal-list () -> (list terminal))
+
+;; (terminal-name &optional TERMINAL) - return name of terminal device
+;; Not guaranteed to be unique among opened devices
+(defun terminal-name (&optional (terminal | frame | nil)) -> (string | nil))
+
+;; (terminal-parameters &optional TERMINAL) - return parameter-alist of terminal
+;; Value is a list of (PARM . VALUE) pairs where PARM is a symbol
+(defun terminal-parameters (&optional (terminal | frame | nil)) -> (list (pair symbol any)))
+
+;; (terminal-parameter TERMINAL PARAMETER) - return TERMINAL's value for PARAMETER
+(defun terminal-parameter ((terminal | frame | nil) symbol) -> any)
+
+;; (set-terminal-parameter TERMINAL PARAMETER VALUE) - set TERMINAL's PARAMETER to VALUE
+;; Returns the previous value of PARAMETER
+(defun set-terminal-parameter ((terminal | frame | nil) symbol any) -> any)

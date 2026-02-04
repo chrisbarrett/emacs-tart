@@ -191,6 +191,8 @@ let prelude_opaque_defs : (string * string list) list =
     (* Text overlay in a buffer *)
     ("process", []);
     (* Subprocess or network connection *)
+    ("terminal", []);
+    (* Terminal device (display or tty) *)
     (* Special sequences *)
     ("bool-vector", []);
     (* Bit vector *)

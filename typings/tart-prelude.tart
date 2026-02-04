@@ -96,6 +96,7 @@
 (type marker)      ; Position marker in a buffer
 (type overlay)     ; Text overlay in a buffer
 (type process)     ; Subprocess or network connection
+(type terminal)    ; Terminal device (display or tty)
 
 ;; Special sequences
 (type bool-vector) ; Bit vector
