@@ -1,0 +1,153 @@
+;; Type signatures for Emacs imenu.el
+;;
+;; Source: emacs/lisp/imenu.el
+;; Emacs version: 31.0
+;;
+;; Index navigation for programming modes.
+
+;; ============================================================================
+;; Entry Points
+;; ============================================================================
+
+;; (imenu INDEX-ITEM) - jump to location selected from buffer index
+(defun imenu (any) -> nil)
+
+;; (imenu-add-to-menubar NAME) - add imenu to menu bar
+(defun imenu-add-to-menubar (string) -> nil)
+
+;; (imenu-add-menubar-index) - add "Index" menu to menu bar
+(defun imenu-add-menubar-index () -> nil)
+
+;; ============================================================================
+;; Index Creation
+;; ============================================================================
+
+;; (imenu-default-create-index-function) - default index function
+(defun imenu-default-create-index-function () -> (list any))
+
+;; (imenu--make-index-alist &optional NOERROR) - create index alist
+(defun imenu--make-index-alist (&optional any) -> (list any))
+
+;; (imenu--generic-function PATTERNS) - make index from regexps
+(defun imenu--generic-function ((list any)) -> (list any))
+
+;; (imenu--completion-buffer INDEX-ALIST &optional PROMPT) - prompt for item
+(defun imenu--completion-buffer ((list any) &optional string) -> any)
+
+;; (imenu--in-alist STR ALIST) - check if STR is in ALIST
+(defun imenu--in-alist (string (list any)) -> any)
+
+;; (imenu--split-menu MENULIST TITLE) - split menu into submenus
+(defun imenu--split-menu ((list any) string) -> (list any))
+
+;; (imenu--split-submenus ALIST) - split submenus exceeding limit
+(defun imenu--split-submenus ((list any)) -> (list any))
+
+;; (imenu--sort-by-name A B) - sorting predicate for menu items
+(defun imenu--sort-by-name (any any) -> any)
+
+;; (imenu--sort-by-position A B) - sort by position predicate
+(defun imenu--sort-by-position (any any) -> any)
+
+;; (imenu--relative-position) - calculate relative buffer position
+(defun imenu--relative-position () -> int)
+
+;; (imenu--truncate-items MENULIST) - truncate long menu items
+(defun imenu--truncate-items ((list any)) -> nil)
+
+;; ============================================================================
+;; Navigation
+;; ============================================================================
+
+;; (imenu-default-goto-function NAME POSITION &rest REST) - go to index position
+(defun imenu-default-goto-function (string (int | marker) &rest any) -> nil)
+
+;; ============================================================================
+;; Mouse/Menu Interface
+;; ============================================================================
+
+;; (imenu--mouse-menu INDEX-ALIST EVENT &optional TITLE) - popup mouse menu
+(defun imenu--mouse-menu ((list any) any &optional string) -> any)
+
+;; (imenu--menubar-select INDEX-ITEM) - handle menubar selection
+(defun imenu--menubar-select (any) -> nil)
+
+;; (imenu-choose-buffer-index &optional PROMPT ALIST) - interactive choose
+(defun imenu-choose-buffer-index (&optional string (list any)) -> any)
+
+;; (imenu-update-menubar) - update menu bar entry
+(defun imenu-update-menubar () -> nil)
+
+;; ============================================================================
+;; Flat Index
+;; ============================================================================
+
+;; (imenu--flatten-index-alist INDEX-ALIST &optional CONCAT-NAMES PREFIX)
+(defun imenu--flatten-index-alist ((list any) &optional any string) -> (list any))
+
+;; ============================================================================
+;; Variables
+;; ============================================================================
+
+;; Function to generate index alist
+(defvar imenu-create-index-function ((nil) -> (list any)))
+
+;; Generic expressions for index creation
+(defvar imenu-generic-expression (list any))
+
+;; Syntax modifications during generic matching
+(defvar imenu-syntax-alist (list (pair int int)))
+
+;; Function to handle jumping to index position
+(defvar imenu-default-goto-function ((string (int | marker) &rest any) -> nil))
+
+;; Alist containing case-fold setting
+(defvar imenu-case-fold-search any)
+
+;; Sorting function for index entries
+(defvar imenu-sort-function (((any any) -> any) | nil))
+
+;; Maximum nesting depth
+(defvar imenu-max-item-length (int | nil))
+
+;; Maximum items before splitting
+(defvar imenu-max-items int)
+
+;; String used to represent separator
+(defvar imenu-level-separator string)
+
+;; Whether to display a submenu for types
+(defvar imenu-use-popup-menu any)
+
+;; Marker for special rescan entry
+(defvar imenu--rescan-item (pair string int))
+
+;; Cached index alist
+(defvar imenu--index-alist ((list any) | nil))
+
+;; Last position when index was made
+(defvar imenu--last-menubar-index-alist ((list any) | nil))
+
+;; Space for annotations
+(defvar imenu-space-replacement string)
+
+;; Whether to eagerly scan
+(defvar imenu-eager-completion-buffer any)
+
+;; After-jump hook
+(defvar imenu-after-jump-hook (list ((nil) -> any)))
+
+;; Use markers in index
+(defvar imenu-use-markers any)
+
+;; Automatically rescan buffers
+(defvar imenu-auto-rescan any)
+
+;; Timer for auto rescan
+(defvar imenu-auto-rescan-maxout int)
+
+;; Function to extract position from entry
+(defvar imenu-extract-index-name-function (((nil) -> string) | nil))
+
+;; Previous entry for movement
+(defvar imenu-prev-index-position-function (((nil) -> any) | nil))
