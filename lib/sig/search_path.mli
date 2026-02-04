@@ -198,3 +198,16 @@ val load_c_core : search_path:t -> Core.Type_env.t -> Core.Type_env.t
     @param search_path The search path configuration
     @param env Base type environment to extend
     @return Extended type environment with c-core signatures *)
+
+(** {1 Lisp-Core Loading} *)
+
+val load_lisp_core : search_path:t -> Core.Type_env.t -> Core.Type_env.t
+(** Load lisp-core signatures from versioned typings.
+
+    Uses the version fallback chain to find the lisp-core directory, then loads
+    all .tart files from it. Lisp-core contains signatures for functions and
+    macros defined in Emacs Lisp (as opposed to C primitives in c-core).
+
+    @param search_path The search path configuration
+    @param env Base type environment to extend
+    @return Extended type environment with lisp-core signatures *)

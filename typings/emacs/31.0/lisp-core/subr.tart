@@ -1,0 +1,230 @@
+;; Type signatures for Emacs subr.el
+;;
+;; Source: emacs/lisp/subr.el
+;; Emacs version: 31.0
+;;
+;; Core macros and utility functions. These are loaded at Emacs startup
+;; and are available in all Emacs Lisp code.
+
+;; ===========================================================================
+;; Control flow macros
+;; ===========================================================================
+
+;; (when COND &rest BODY) - if COND is true, evaluate BODY
+(defun when (any &rest any) -> any)
+
+;; (unless COND &rest BODY) - if COND is nil, evaluate BODY
+(defun unless (any &rest any) -> any)
+
+;; (dolist (VAR LIST [RESULT]) &rest BODY) - iterate over list
+(defun dolist (any &rest any) -> any)
+
+;; (dotimes (VAR COUNT [RESULT]) &rest BODY) - iterate COUNT times
+(defun dotimes (any &rest any) -> any)
+
+;; ===========================================================================
+;; Let-binding macros
+;; ===========================================================================
+
+;; (if-let SPEC THEN &rest ELSE) - conditional binding
+(defun if-let (any any &rest any) -> any)
+
+;; (if-let* VARLIST THEN &rest ELSE) - conditional multi-binding
+(defun if-let* ((list any) any &rest any) -> any)
+
+;; (when-let SPEC &rest BODY) - conditional binding that executes body
+(defun when-let (any &rest any) -> any)
+
+;; (when-let* VARLIST &rest BODY) - conditional multi-binding
+(defun when-let* ((list any) &rest any) -> any)
+
+;; (while-let SPEC &rest BODY) - while loop with binding
+(defun while-let (any &rest any) -> any)
+
+;; ===========================================================================
+;; Buffer context macros
+;; ===========================================================================
+
+;; (with-current-buffer BUFFER &rest BODY) - execute body in buffer context
+(defun with-current-buffer ((buffer | string) &rest any) -> any)
+
+;; (with-temp-buffer &rest BODY) - execute body in temporary buffer
+(defun with-temp-buffer (&rest any) -> any)
+
+;; (with-output-to-string &rest BODY) - capture output as string
+(defun with-output-to-string (&rest any) -> string)
+
+;; (with-output-to-temp-buffer BUFNAME &rest BODY) - output to temp buffer
+(defun with-output-to-temp-buffer (string &rest any) -> any)
+
+;; (with-temp-file FILE &rest BODY) - execute body, write result to file
+(defun with-temp-file (string &rest any) -> any)
+
+;; ===========================================================================
+;; Window/frame context macros
+;; ===========================================================================
+
+;; (with-selected-window WINDOW &rest BODY) - execute body with window selected
+(defun with-selected-window (window &rest any) -> any)
+
+;; (with-selected-frame FRAME &rest BODY) - execute body with frame selected
+(defun with-selected-frame (frame &rest any) -> any)
+
+;; ===========================================================================
+;; State-saving macros
+;; ===========================================================================
+
+;; (save-match-data &rest BODY) - save/restore match data around body
+(defun save-match-data (&rest any) -> any)
+
+;; (with-silent-modifications &rest BODY) - suppress modification hooks
+(defun with-silent-modifications (&rest any) -> any)
+
+;; (with-undo-amalgamate &rest BODY) - combine undo entries
+(defun with-undo-amalgamate (&rest any) -> any)
+
+;; (with-local-quit &rest BODY) - allow C-g during body
+(defun with-local-quit (&rest any) -> any)
+
+;; (while-no-input &rest BODY) - abort on input
+(defun while-no-input (&rest any) -> any)
+
+;; (with-restriction START END &rest BODY) - restrict buffer to region
+(defun with-restriction (int int &rest any) -> any)
+
+;; ===========================================================================
+;; Error handling macros
+;; ===========================================================================
+
+;; (with-demoted-errors FORMAT &rest BODY) - convert errors to messages
+(defun with-demoted-errors (string &rest any) -> any)
+
+;; ===========================================================================
+;; Configuration macros
+;; ===========================================================================
+
+;; (with-case-table TABLE &rest BODY) - use case table during body
+(defun with-case-table (any &rest any) -> any)
+
+;; (with-file-modes MODES &rest BODY) - set default file modes during body
+(defun with-file-modes (int &rest any) -> any)
+
+;; (with-syntax-table TABLE &rest BODY) - use syntax table during body
+(defun with-syntax-table (any &rest any) -> any)
+
+;; (with-eval-after-load FILE &rest BODY) - evaluate body after file loads
+(defun with-eval-after-load ((string | symbol) &rest any) -> nil)
+
+;; (with-existing-directory &rest BODY) - ensure default-directory exists
+(defun with-existing-directory (&rest any) -> any)
+
+;; (with-temp-message MESSAGE &rest BODY) - show message during body
+(defun with-temp-message ((string | nil) &rest any) -> any)
+
+;; ===========================================================================
+;; Error functions
+;; ===========================================================================
+
+;; (error STRING &rest ARGS) - signal error
+(defun error (string &rest any) -> never)
+
+;; (user-error FORMAT &rest ARGS) - signal user error
+(defun user-error (string &rest any) -> never)
+
+;; ===========================================================================
+;; Number predicates
+;; ===========================================================================
+
+;; (zerop NUMBER) - test if number is zero
+(defun zerop (num) -> bool)
+
+;; (plusp NUMBER) - test if number is positive
+(defun plusp (num) -> bool)
+
+;; (minusp NUMBER) - test if number is negative
+(defun minusp (num) -> bool)
+
+;; (oddp INTEGER) - test if integer is odd
+(defun oddp (int) -> bool)
+
+;; (evenp INTEGER) - test if integer is even
+(defun evenp (int) -> bool)
+
+;; (fixnump OBJECT) - test if object is a fixnum
+(defun fixnump (any) -> bool)
+
+;; (bignump OBJECT) - test if object is a bignum
+(defun bignump (any) -> bool)
+
+;; ===========================================================================
+;; List accessors (c*r functions)
+;; ===========================================================================
+
+;; (caar X) - (car (car x))
+(defun caar [a b] ((pair (pair a any) any)) -> a)
+
+;; (cadr X) - (car (cdr x))
+(defun cadr [a] ((pair any (pair a any))) -> a)
+
+;; (cdar X) - (cdr (car x))
+(defun cdar [a b] ((pair (pair any a) any)) -> a)
+
+;; (cddr X) - (cdr (cdr x))
+(defun cddr [a] ((pair any (pair any a))) -> a)
+
+;; Third and fourth level accessors - simplified to any
+(defun caaar (any) -> any)
+(defun caadr (any) -> any)
+(defun cadar (any) -> any)
+(defun caddr (any) -> any)
+(defun cdaar (any) -> any)
+(defun cdadr (any) -> any)
+(defun cddar (any) -> any)
+(defun cdddr (any) -> any)
+
+;; ===========================================================================
+;; Function utilities
+;; ===========================================================================
+
+;; (ignore &rest ARGUMENTS) - return nil ignoring arguments
+(defun ignore (&rest any) -> nil)
+
+;; (always &rest ARGUMENTS) - return t ignoring arguments
+(defun always (&rest any) -> t)
+
+;; (apply-partially FUN &rest ARGS) - partial application
+(defun apply-partially (any &rest any) -> any)
+
+;; (gensym &optional PREFIX) - generate unique symbol
+(defun gensym (&optional string) -> symbol)
+
+;; ===========================================================================
+;; Bit operations
+;; ===========================================================================
+
+;; (lsh VALUE COUNT) - logical shift
+(defun lsh (int int) -> int)
+
+;; ===========================================================================
+;; Buffer-local utilities
+;; ===========================================================================
+
+;; (buffer-local-boundp SYMBOL BUFFER) - test if var is buffer-local bound
+(defun buffer-local-boundp (symbol buffer) -> bool)
+
+;; (buffer-local-restore-state STATES) - restore buffer-local state
+(defun buffer-local-restore-state ((list any)) -> nil)
+
+;; ===========================================================================
+;; Predicates
+;; ===========================================================================
+
+;; (frame-configuration-p OBJECT) - test if object is frame configuration
+(defun frame-configuration-p (any) -> bool)
+
+;; ===========================================================================
+;; Error definition
+;; ===========================================================================
+
+;; (define-error NAME MESSAGE &optional PARENT) - define new error type
+(defun define-error (symbol string &optional (symbol | (list symbol))) -> nil)

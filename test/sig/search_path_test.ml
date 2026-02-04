@@ -787,7 +787,10 @@ let test_load_window_tart () =
   (match Search_path.parse_signature_file path with
   | None -> Alcotest.fail "window.tart failed to parse in load test"
   | Some sig_file -> (
-      match Sig_loader.validate_signature sig_file with
+      match
+        Sig_loader.validate_signature
+          ~prelude_type_names:Prelude.prelude_type_names sig_file
+      with
       | Ok () -> ()
       | Error err ->
           Alcotest.fail
@@ -852,7 +855,10 @@ let test_load_frame_tart () =
   (match Search_path.parse_signature_file path with
   | None -> Alcotest.fail "frame.tart failed to parse in load test"
   | Some sig_file -> (
-      match Sig_loader.validate_signature sig_file with
+      match
+        Sig_loader.validate_signature
+          ~prelude_type_names:Prelude.prelude_type_names sig_file
+      with
       | Ok () -> ()
       | Error err ->
           Alcotest.fail
@@ -982,7 +988,10 @@ let test_load_editfns_tart () =
   (match Search_path.parse_signature_file path with
   | None -> Alcotest.fail "editfns.tart failed to parse in load test"
   | Some sig_file -> (
-      match Sig_loader.validate_signature sig_file with
+      match
+        Sig_loader.validate_signature
+          ~prelude_type_names:Prelude.prelude_type_names sig_file
+      with
       | Ok () -> ()
       | Error err ->
           Alcotest.fail
@@ -1114,7 +1123,10 @@ let test_load_process_tart () =
   (match Search_path.parse_signature_file path with
   | None -> Alcotest.fail "process.tart failed to parse in load test"
   | Some sig_file -> (
-      match Sig_loader.validate_signature sig_file with
+      match
+        Sig_loader.validate_signature
+          ~prelude_type_names:Prelude.prelude_type_names sig_file
+      with
       | Ok () -> ()
       | Error err ->
           Alcotest.fail

@@ -1,0 +1,133 @@
+;; Type signatures for Emacs timer.el
+;;
+;; Source: emacs/lisp/emacs-lisp/timer.el
+;; Emacs version: 31.0
+;;
+;; Timer functions for scheduling code execution.
+
+;; ===========================================================================
+;; Timer predicates
+;; ===========================================================================
+
+;; (timerp OBJECT) - test if object is a timer
+(defun timerp (any) -> bool)
+
+;; ===========================================================================
+;; Timer creation
+;; ===========================================================================
+
+;; (timer-create) - create a timer object
+(defun timer-create () -> any)
+
+;; ===========================================================================
+;; Timer accessors and setters
+;; ===========================================================================
+
+;; (timer--time TIMER) - get timer's time
+(defun timer--time (any) -> any)
+
+;; (timer--time-setter TIMER TIME) - set timer's time
+(defun timer--time-setter (any any) -> any)
+
+;; (timer-set-time TIMER TIME &optional DELTA) - set timer's time
+(defun timer-set-time (any any &optional any) -> any)
+
+;; (timer-set-idle-time TIMER SECS &optional REPEAT) - set idle time
+(defun timer-set-idle-time (any num &optional any) -> any)
+
+;; (timer-set-function TIMER FUNCTION &optional ARGS) - set timer function
+(defun timer-set-function (any any &optional (list any)) -> any)
+
+;; ===========================================================================
+;; Timer time operations
+;; ===========================================================================
+
+;; (timer-inc-time TIMER SECS &optional USECS PSECS) - increment timer time
+(defun timer-inc-time (any num &optional int int) -> any)
+
+;; (timer-next-integral-multiple-of-time TIME SECS) - next multiple
+(defun timer-next-integral-multiple-of-time (any num) -> any)
+
+;; (timer-relative-time TIME SECS &optional USECS PSECS) - relative time
+(defun timer-relative-time (any num &optional int int) -> any)
+
+;; (timer--time-less-p T1 T2) - compare times
+(defun timer--time-less-p (any any) -> bool)
+
+;; (timer-until TIMER TIME) - seconds until timer fires
+(defun timer-until (any any) -> num)
+
+;; ===========================================================================
+;; Timer activation
+;; ===========================================================================
+
+;; (timer-activate TIMER &optional TRIGGERED-P REUSE-CELL) - activate timer
+(defun timer-activate (any &optional any any) -> any)
+
+;; (timer-activate-when-idle TIMER &optional DONT-WAIT REUSE-CELL) - idle timer
+(defun timer-activate-when-idle (any &optional any any) -> any)
+
+;; (timer--activate TIMER &optional TRIGGERED-P REUSE-CELL IDLE) - internal
+(defun timer--activate (any &optional any any any) -> any)
+
+;; ===========================================================================
+;; Timer cancellation
+;; ===========================================================================
+
+;; (cancel-timer TIMER) - cancel a timer
+(defun cancel-timer (any) -> nil)
+
+;; (cancel-timer-internal TIMER) - internal cancel
+(defun cancel-timer-internal (any) -> nil)
+
+;; (cancel-function-timers FUNCTION) - cancel timers for function
+(defun cancel-function-timers (any) -> nil)
+
+;; ===========================================================================
+;; High-level timer creation
+;; ===========================================================================
+
+;; (run-at-time TIME REPEAT FUNCTION &rest ARGS) - run at specific time
+(defun run-at-time (any any any &rest any) -> any)
+
+;; (run-with-timer SECS REPEAT FUNCTION &rest ARGS) - run after delay
+(defun run-with-timer (num any any &rest any) -> any)
+
+;; (run-with-idle-timer SECS REPEAT FUNCTION &rest ARGS) - run when idle
+(defun run-with-idle-timer (num any any &rest any) -> any)
+
+;; (add-timeout SECS FUNCTION OBJECT &optional REPEAT) - add timeout
+(defun add-timeout (num any any &optional any) -> any)
+
+;; ===========================================================================
+;; Timer event handling
+;; ===========================================================================
+
+;; (timer-event-handler TIMER) - handle timer event
+(defun timer-event-handler (any) -> nil)
+
+;; (timeout-event-p EVENT) - test if event is timeout
+(defun timeout-event-p (any) -> bool)
+
+;; ===========================================================================
+;; Timeout macros
+;; ===========================================================================
+
+;; (with-timeout-suspend) - suspend timeout
+(defun with-timeout-suspend () -> any)
+
+;; (with-timeout-unsuspend TIMER-SPEC-LIST) - unsuspend timeout
+(defun with-timeout-unsuspend ((list any)) -> nil)
+
+;; ===========================================================================
+;; Utilities
+;; ===========================================================================
+
+;; (y-or-n-p-with-timeout PROMPT SECONDS DEFAULT-VALUE) - timed y-or-n-p
+(defun y-or-n-p-with-timeout (string num any) -> bool)
+
+;; (timer-duration STRING) - parse duration string
+(defun timer-duration (string) -> (num | nil))
+
+;; (internal-timer-start-idle) - internal idle start
+(defun internal-timer-start-idle () -> nil)

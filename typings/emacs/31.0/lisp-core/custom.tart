@@ -1,0 +1,51 @@
+;; Type signatures for Emacs custom.el and related
+;;
+;; Source: emacs/lisp/custom.el
+;; Emacs version: 31.0
+;;
+;; Emacs customization system forms.
+
+;; ===========================================================================
+;; Customization special forms
+;; ===========================================================================
+
+;; (defcustom SYMBOL STANDARD DOC &rest ARGS) - define customizable variable
+(defun defcustom (symbol any string &rest any) -> symbol)
+
+;; (defgroup SYMBOL MEMBERS DOC &rest ARGS) - define customization group
+(defun defgroup (symbol (list any) string &rest any) -> symbol)
+
+;; (defface FACE SPEC DOC &rest ARGS) - define face
+(defun defface (symbol any string &rest any) -> symbol)
+
+;; (deftheme THEME &optional DOC) - define theme
+(defun deftheme (symbol &optional string) -> symbol)
+
+;; ===========================================================================
+;; Custom variable access
+;; ===========================================================================
+
+;; (custom-variable-p VARIABLE) - test if var is customizable
+(defun custom-variable-p (any) -> bool)
+
+;; (custom-set-variables &rest ARGS) - set custom variables
+(defun custom-set-variables (&rest any) -> nil)
+
+;; (custom-set-faces &rest ARGS) - set custom faces
+(defun custom-set-faces (&rest any) -> nil)
+
+;; (customize-set-variable SYM VAL &optional COMMENT) - set custom var
+(defun customize-set-variable (symbol any &optional string) -> nil)
+
+;; ===========================================================================
+;; Theme functions
+;; ===========================================================================
+
+;; (load-theme THEME &optional NO-CONFIRM NO-ENABLE) - load theme
+(defun load-theme (symbol &optional any any) -> bool)
+
+;; (disable-theme THEME) - disable theme
+(defun disable-theme (symbol) -> nil)
+
+;; (enable-theme THEME) - enable theme
+(defun enable-theme (symbol) -> nil)

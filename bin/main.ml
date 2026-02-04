@@ -265,6 +265,7 @@ let run_check format emacs_version files =
   in
   let base_env = Tart.Check.default_env () in
   let initial_env = Tart.Search_path.load_c_core ~search_path base_env in
+  let initial_env = Tart.Search_path.load_lisp_core ~search_path initial_env in
   let _, type_errors =
     List.fold_left
       (fun (env, acc_errors) file ->

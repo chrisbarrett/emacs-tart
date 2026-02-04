@@ -1,0 +1,64 @@
+;; Type signatures for Emacs byte-compilation forms
+;;
+;; Source: emacs/lisp/emacs-lisp/bytecomp.el
+;; Emacs version: 31.0
+;;
+;; Byte compilation forms and utilities.
+
+;; ===========================================================================
+;; Compilation forms
+;; ===========================================================================
+
+;; (eval-when-compile &rest BODY) - evaluate at compile time only
+(defun eval-when-compile (&rest any) -> any)
+
+;; (eval-and-compile &rest BODY) - evaluate at compile and load time
+(defun eval-and-compile (&rest any) -> any)
+
+;; (declare-function FN FILE &optional ARGLIST FILEONLY) - declare external fn
+(defun declare-function (symbol string &optional any any) -> nil)
+
+;; (defsubst NAME ARGLIST &optional DOCSTRING DECL &rest BODY) - inline defun
+(defun defsubst (symbol (list any) &rest any) -> symbol)
+
+;; (define-inline NAME ARGS &rest BODY) - define inline function
+(defun define-inline (symbol (list any) &rest any) -> symbol)
+
+;; ===========================================================================
+;; Variable definition forms
+;; ===========================================================================
+
+;; (defvar-local SYMBOL &optional INITVALUE DOCSTRING) - buffer-local var
+(defun defvar-local (symbol &optional any string) -> symbol)
+
+;; (defvar-keymap SYMBOL &optional DOCSTRING &rest OPTIONS) - keymap var
+(defun defvar-keymap (symbol &optional string &rest any) -> symbol)
+
+;; ===========================================================================
+;; Obsolescence
+;; ===========================================================================
+
+;; (make-obsolete OBSOLETE-NAME CURRENT-NAME WHEN) - mark function obsolete
+(defun make-obsolete (symbol (symbol | string) string) -> nil)
+
+;; (make-obsolete-variable OBSOLETE-NAME CURRENT-NAME WHEN &optional ACCESS)
+(defun make-obsolete-variable (symbol (symbol | string | nil) string &optional symbol) -> nil)
+
+;; (define-obsolete-function-alias OBSOLETE-NAME CURRENT-NAME WHEN &optional DOC)
+(defun define-obsolete-function-alias (symbol symbol string &optional string) -> nil)
+
+;; (define-obsolete-variable-alias OBSOLETE-NAME CURRENT-NAME WHEN &optional DOC)
+(defun define-obsolete-variable-alias (symbol symbol string &optional string) -> nil)
+
+;; ===========================================================================
+;; Byte compilation functions
+;; ===========================================================================
+
+;; (byte-compile FORM) - byte compile form
+(defun byte-compile (any) -> any)
+
+;; (byte-compile-file FILENAME &optional LOAD) - compile file
+(defun byte-compile-file (string &optional any) -> (t | nil))
+
+;; (byte-recompile-directory DIRECTORY &optional ARG FORCE) - recompile dir
+(defun byte-recompile-directory (string &optional any any) -> nil)

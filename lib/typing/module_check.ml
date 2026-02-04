@@ -408,6 +408,11 @@ let check_module ~(config : config) ~(filename : string)
   (* Step 2b: Load c-core signatures (Emacs primitives like +, car, etc.) *)
   let base_env = Search.load_c_core ~search_path:config.search_path base_env in
 
+  (* Step 2c: Load lisp-core signatures (macros and functions from subr.el etc.) *)
+  let base_env =
+    Search.load_lisp_core ~search_path:config.search_path base_env
+  in
+
   (* Step 3: Load signatures for required modules *)
   let required_modules = extract_requires sexps in
   let env_with_requires =

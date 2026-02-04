@@ -468,3 +468,25 @@ let load_c_core ~(search_path : t) (env : Core.Type_env.t) : Core.Type_env.t =
           load_c_core_files ~c_core_dir env
       | None -> env)
   | _ -> env
+
+(** Load lisp-core signatures from versioned typings.
+
+    Uses the version fallback chain to find the lisp-core directory, then loads
+    all .tart files from it. Lisp-core contains signatures for functions and
+    macros defined in Emacs Lisp (as opposed to C primitives in c-core).
+
+    @param search_path The search path configuration
+    @param env Base type environment to extend
+    @return Extended type environment with lisp-core signatures *)
+let load_lisp_core ~(search_path : t) (env : Core.Type_env.t) : Core.Type_env.t
+    =
+  match (search_path.typings_root, search_path.emacs_version) with
+  | Some typings_root, Some version -> (
+      match find_typings_dir ~typings_root ~version with
+      | Some typings_dir ->
+          let lisp_core_dir = Filename.concat typings_dir "lisp-core" in
+          if Sys.file_exists lisp_core_dir && Sys.is_directory lisp_core_dir
+          then load_c_core_files ~c_core_dir:lisp_core_dir env
+          else env
+      | None -> env)
+  | _ -> env
