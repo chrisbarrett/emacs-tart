@@ -188,3 +188,39 @@
 
 ;; (momentary-string-display STRING POS &optional EXIT-CHAR MESSAGE) - show string momentarily
 (defun momentary-string-display (string int &optional int string) -> nil)
+
+;; ===========================================================================
+;; Line movement
+;; ===========================================================================
+
+;; (line-move ARG &optional NOERROR TO-END TRY-VSCROLL) - move vertically
+(defun line-move (int &optional bool bool bool) -> nil)
+
+;; (line-move-partial ARG NOERROR TO-END) - partial line movement
+(defun line-move-partial (int bool bool) -> nil)
+
+;; ===========================================================================
+;; Narrowing
+;; ===========================================================================
+
+;; (buffer-narrowed-p) - return non-nil if buffer is narrowed
+(defun buffer-narrowed-p () -> bool)
+
+;; ===========================================================================
+;; Transposition
+;; ===========================================================================
+
+;; (transpose-subr MOVER &optional ARG) - generic transpose function
+(defun transpose-subr (any &optional int) -> nil)
+
+;; (transpose-chars ARG) - transpose characters before point
+(defun transpose-chars (int) -> nil)
+
+;; (transpose-words ARG) - transpose words before point
+(defun transpose-words (int) -> nil)
+
+;; (transpose-sexps ARG &optional INTERACTIVE) - transpose S-expressions
+(defun transpose-sexps (int &optional bool) -> nil)
+
+;; (transpose-lines ARG) - transpose lines at point
+(defun transpose-lines (int) -> nil)

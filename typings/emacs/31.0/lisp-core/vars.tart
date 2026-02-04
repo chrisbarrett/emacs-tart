@@ -266,3 +266,34 @@
 
 ;; Function documentation property
 (defvar function-documentation any)
+
+;; ===========================================================================
+;; Event state
+;; ===========================================================================
+
+;; Last input event that was part of a key sequence
+(defvar last-command-event any)
+
+;; Last input character
+(defvar last-input-event any)
+
+;; ===========================================================================
+;; Kill/yank state
+;; ===========================================================================
+
+;; Whether to save interprogram paste before kill
+(defvar save-interprogram-paste-before-kill any)
+
+;; ===========================================================================
+;; Undo state
+;; ===========================================================================
+
+;; Whether undo should not redo
+(defvar undo-no-redo bool)
+
+;; ===========================================================================
+;; Compilation
+;; ===========================================================================
+
+;; Whether function is side-effect-free
+(defvar side-effect-free symbol)

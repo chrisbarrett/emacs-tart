@@ -1,0 +1,85 @@
+;; Type signatures for Emacs syntax.el
+;;
+;; Source: emacs/lisp/emacs-lisp/syntax.el
+;; Emacs version: 31.0
+;;
+;; Syntax parsing and analysis functions.
+
+;; ===========================================================================
+;; Syntax parsing state (ppss)
+;; ===========================================================================
+
+;; (syntax-ppss &optional POS) - get parse state at POS
+;; Returns a list: (depth innermost-start last-complete-sexp
+;;                  in-string in-comment after-quote
+;;                  min-depth comment-style comment-or-string-start
+;;                  open-parens two-char-syntax syntax-table-pos)
+(defun syntax-ppss (&optional int) -> (list any))
+
+;; (syntax-ppss-depth STATE) - extract nesting depth from ppss state
+(defun syntax-ppss-depth ((list any)) -> int)
+
+;; (syntax-ppss-flush-cache BPOS &optional BUFFER) - flush ppss cache
+(defun syntax-ppss-flush-cache (int &optional buffer) -> nil)
+
+;; ===========================================================================
+;; Syntax propertization
+;; ===========================================================================
+
+;; (syntax-propertize POS) - apply syntax properties up to POS
+(defun syntax-propertize (int) -> nil)
+
+;; ===========================================================================
+;; Parse partial sexp
+;; ===========================================================================
+
+;; (parse-partial-sexp FROM TO &optional TARGETDEPTH STOPBEFORE OLDSTATE COMMENTSTOP)
+;; Parse Lisp code from FROM to TO and return parser state
+(defun parse-partial-sexp (int int &optional int bool (list any) any) -> (list any))
+
+;; (scan-lists FROM COUNT DEPTH &optional SYNTAX-TABLE) - scan for balanced expressions
+(defun scan-lists (int int int &optional any) -> (int | nil))
+
+;; (scan-sexps FROM COUNT &optional SYNTAX-TABLE) - scan for S-expressions
+(defun scan-sexps (int int &optional any) -> (int | nil))
+
+;; ===========================================================================
+;; Syntax tables
+;; ===========================================================================
+
+;; (syntax-table) - return current syntax table
+(defun syntax-table () -> any)
+
+;; (set-syntax-table TABLE) - set current syntax table
+(defun set-syntax-table (any) -> any)
+
+;; (standard-syntax-table) - return standard syntax table
+(defun standard-syntax-table () -> any)
+
+;; (copy-syntax-table &optional TABLE) - copy syntax table
+(defun copy-syntax-table (&optional any) -> any)
+
+;; (make-syntax-table &optional PARENT) - create new syntax table
+(defun make-syntax-table (&optional any) -> any)
+
+;; (modify-syntax-entry CHAR NEWENTRY &optional TABLE) - modify syntax for char
+(defun modify-syntax-entry (int string &optional any) -> nil)
+
+;; (char-syntax CHAR) - return syntax code for character
+(defun char-syntax (int) -> int)
+
+;; (syntax-after POS) - return syntax code at position
+(defun syntax-after (int) -> (int | nil))
+
+;; ===========================================================================
+;; Forward/backward by syntax
+;; ===========================================================================
+
+;; (forward-comment COUNT) - move forward across COUNT comments
+(defun forward-comment (int) -> bool)
+
+;; (skip-syntax-forward SYNTAX &optional LIM) - skip characters with syntax
+(defun skip-syntax-forward (string &optional int) -> int)
+
+;; (skip-syntax-backward SYNTAX &optional LIM) - skip backward
+(defun skip-syntax-backward (string &optional int) -> int)
