@@ -32,10 +32,12 @@
 ;; Records
 ;; ===========================================================================
 
-;; (record TYPE &rest SLOTS) - create record
+;; (record TYPE &rest SLOTS) - create record with type and initial slots
+;; Note: Cannot use 'record' as return type due to name conflict with function.
+;; Records are a special kind of vector with a type tag.
 (defun record (symbol &rest any) -> any)
 
-;; (make-record TYPE LENGTH INIT) - create record with length
+;; (make-record TYPE LENGTH INIT) - create record with length, all slots set to INIT
 (defun make-record (symbol int any) -> any)
 
 ;; ===========================================================================
@@ -56,18 +58,18 @@
 ;; Bool vectors
 ;; ===========================================================================
 
-;; (bool-vector &rest OBJECTS) - create bool vector
-(defun bool-vector (&rest any) -> any)
+;; (bool-vector &rest OBJECTS) - create bool vector from booleans
+(defun bool-vector (&rest any) -> bool-vector)
 
-;; (make-bool-vector LENGTH INIT) - create bool vector
-(defun make-bool-vector (int any) -> any)
+;; (make-bool-vector LENGTH INIT) - create bool vector of given length
+(defun make-bool-vector (int any) -> bool-vector)
 
 ;; ===========================================================================
 ;; Markers
 ;; ===========================================================================
 
-;; (make-marker) - create marker
-(defun make-marker () -> any)
+;; (make-marker) - create unset marker (position nil, buffer nil)
+(defun make-marker () -> marker)
 
 ;; ===========================================================================
 ;; Byte code
@@ -83,7 +85,8 @@
 ;; Finalizers
 ;; ===========================================================================
 
-;; (make-finalizer FN) - create weak reference with cleanup
+;; (make-finalizer FN) - create weak reference with cleanup function
+;; FN is called with no arguments when the finalizer is garbage collected.
 (defun make-finalizer (any) -> any)
 
 ;; ===========================================================================
