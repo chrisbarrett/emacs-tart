@@ -1,0 +1,127 @@
+;; Type signatures for Emacs shell.el
+;;
+;; Source: emacs/lisp/shell.el
+;; Emacs version: 31.0
+;;
+;; Inferior shell mode.
+
+;; ============================================================================
+;; Main Entry Points
+;; ============================================================================
+
+;; (shell &optional BUFFER FILE-NAME) - run inferior shell
+(defun shell (&optional buffer string) -> buffer)
+
+;; (shell-mode) - major mode for inferior shell
+(defun shell-mode () -> nil)
+
+;; ============================================================================
+;; Directory Tracking
+;; ============================================================================
+
+;; (shell-dirtrack-mode &optional ARG) - toggle directory tracking
+(defun shell-dirtrack-mode (&optional any) -> nil)
+
+;; (shell-resync-dirs) - resync directory stack from shell
+(defun shell-resync-dirs () -> nil)
+
+;; (dirs &optional ARG) - alias for shell-resync-dirs
+(defun dirs (&optional any) -> nil)
+
+;; (shell-cd DIR) - change directory in shell buffer
+(defun shell-cd (string) -> nil)
+
+;; (shell-process-cd ARG) - process cd command
+(defun shell-process-cd (string) -> nil)
+
+;; (shell-process-pushd ARG) - process pushd command
+(defun shell-process-pushd (string) -> nil)
+
+;; (shell-process-popd ARG) - process popd command
+(defun shell-process-popd (string) -> nil)
+
+;; ============================================================================
+;; Navigation
+;; ============================================================================
+
+;; (shell-forward-command &optional ARG) - move forward over shell command
+(defun shell-forward-command (&optional int) -> nil)
+
+;; (shell-backward-command &optional ARG) - move backward over shell command
+(defun shell-backward-command (&optional int) -> nil)
+
+;; ============================================================================
+;; Completion
+;; ============================================================================
+
+;; (shell-dynamic-complete-command) - complete shell command at point
+(defun shell-dynamic-complete-command () -> nil)
+
+;; (shell-dynamic-complete-filename) - complete filename at point
+(defun shell-dynamic-complete-filename () -> nil)
+
+;; (shell-dynamic-complete-environment-variable) - complete env var
+(defun shell-dynamic-complete-environment-variable () -> nil)
+
+;; (shell-completion-vars) - set completion variables for shell
+(defun shell-completion-vars () -> nil)
+
+;; ============================================================================
+;; Undefined Command Highlighting
+;; ============================================================================
+
+;; (shell-highlight-undef-mode &optional ARG) - highlight undefined commands
+(defun shell-highlight-undef-mode (&optional any) -> nil)
+
+;; ============================================================================
+;; Variables
+;; ============================================================================
+
+;; Shell executable for interactive shell
+(defvar explicit-shell-file-name (string | nil))
+
+;; Shell file name
+(defvar shell-file-name string)
+
+;; Pattern for shell prompt
+(defvar shell-prompt-pattern string)
+
+;; Command to get directory stack
+(defvar shell-dirstack-query string)
+
+;; Stack of directories
+(defvar shell-dirstack (list string))
+
+;; History file name
+(defvar shell-history-file-name (string | nil))
+
+;; Whether to push directories
+(defvar shell-pushd-regexp string)
+
+;; Popd regexp
+(defvar shell-popd-regexp string)
+
+;; Cd regexp
+(defvar shell-cd-regexp string)
+
+;; Mode hook
+(defvar shell-mode-hook (list ((nil) -> any)))
+
+;; Completion functions
+(defvar shell-dynamic-complete-functions (list ((nil) -> any)))
+
+;; Command regexp
+(defvar shell-command-regexp string)
+
+;; Whether to dumb terminal
+(defvar explicit-shell-args (list string))
+
+;; Pushd behavior
+(defvar shell-pushd-tohome any)
+(defvar shell-pushd-dextract any)
+(defvar shell-pushd-dunique any)
+
+;; Undefined command face
+(defvar shell-highlight-undef-defined-face symbol)
+(defvar shell-highlight-undef-undefined-face symbol)
+(defvar shell-highlight-undef-alias-face symbol)
