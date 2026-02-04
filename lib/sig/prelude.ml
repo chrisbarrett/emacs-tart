@@ -167,8 +167,40 @@ let prelude_aliases : (string * Sig_loader.type_alias) list =
       } );
   ]
 
+(** {1 Opaque Types}
+
+    Opaque types are abstract types with no internal structure exposed. They
+    only unify with themselves. These represent core Emacs data structures. *)
+
+(** Prelude opaque type definitions.
+
+    Each entry is (name, params) where params is the list of type parameter
+    names. Empty params means non-parameterized opaque type. *)
+let prelude_opaque_defs : (string * string list) list =
+  [
+    (* Core Emacs data structures *)
+    ("buffer", []);
+    (* Emacs buffer *)
+    ("window", []);
+    (* Emacs window *)
+    ("frame", []);
+    (* Emacs frame *)
+    ("marker", []);
+    (* Position marker in a buffer *)
+    ("overlay", []);
+    (* Text overlay in a buffer *)
+    ("process", []);
+    (* Subprocess or network connection *)
+    (* Special sequences *)
+    ("bool-vector", []);
+    (* Bit vector *)
+    ("char-table", []);
+    (* Character property table *)
+  ]
+
 (** Names of prelude types (for shadowing checks) *)
-let prelude_type_names : string list = List.map fst prelude_aliases
+let prelude_type_names : string list =
+  List.map fst prelude_aliases @ List.map fst prelude_opaque_defs
 
 (** {1 Prelude Context}
 
@@ -181,11 +213,24 @@ let prelude_alias_context () : Sig_loader.alias_context =
     (fun ctx (name, alias) -> Sig_loader.add_alias name alias ctx)
     Sig_loader.empty_aliases prelude_aliases
 
+(** Build an opaque context containing prelude opaque types.
+
+    Opaque types use the special module name "prelude" for their constructor
+    names, e.g., "prelude.buffer" for the buffer type. *)
+let prelude_opaque_context () : Sig_loader.opaque_context =
+  List.fold_left
+    (fun ctx (name, params) ->
+      let opaque : Sig_loader.opaque_type =
+        { Sig_loader.opaque_params = params; opaque_con = "prelude." ^ name }
+      in
+      Sig_loader.add_opaque name opaque ctx)
+    Sig_loader.empty_opaques prelude_opaque_defs
+
 (** Build a type context containing prelude types *)
 let prelude_type_context () : Sig_loader.type_context =
   {
     Sig_loader.tc_aliases = prelude_alias_context ();
-    tc_opaques = Sig_loader.empty_opaques;
+    tc_opaques = prelude_opaque_context ();
   }
 
 (** {1 Shadowing Checks} *)

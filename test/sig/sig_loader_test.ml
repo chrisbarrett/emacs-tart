@@ -125,11 +125,12 @@ let test_primitive_not_var () =
   | Error e -> Alcotest.fail (Printf.sprintf "Unexpected error: %s" e.message)
 
 let test_type_decl_defines_type () =
-  (* Type declarations make names available *)
+  (* Type declarations make names available.
+     Note: buffer is a prelude type now, so use a different name. *)
   let src =
     {|
-    (type buffer)
-    (defun get-buffer (string) -> buffer)
+    (type my-buffer)
+    (defun get-my-buffer (string) -> my-buffer)
   |}
   in
   match validate_str src with
@@ -409,53 +410,54 @@ let test_type_alias_in_param_position () =
 
     These tests verify that opaque types work as distinct abstract types. *)
 
-(** Test that opaque types are distinct from each other. R9: buffer and handle
-    are separate distinct opaque types *)
+(** Test that opaque types are distinct from each other. R9: resource and handle
+    are separate distinct opaque types. Note: buffer, marker, etc. are prelude
+    types now, so we use different names for testing. *)
 let test_opaque_types_distinct () =
   let sig_src =
     {|
-    (type buffer)
-    (type handle)
-    (defun get-buffer () -> buffer)
-    (defun get-handle () -> handle)
-    (defun use-buffer (buffer) -> nil)
+    (type my-resource)
+    (type my-handle)
+    (defun get-resource () -> my-resource)
+    (defun get-handle () -> my-handle)
+    (defun use-resource (my-resource) -> nil)
   |}
   in
   let env = load_sig_str sig_src in
-  (* Trying to use a handle where buffer is expected should fail *)
-  let _, errors = check_expr_str ~env "(use-buffer (get-handle))" in
+  (* Trying to use a handle where resource is expected should fail *)
+  let _, errors = check_expr_str ~env "(use-resource (get-handle))" in
   Alcotest.(check bool)
     "type error for wrong opaque type" true
     (List.length errors > 0)
 
 (** Test that opaque types can only be created/consumed via declared functions.
     R9: Values can only be created/consumed via functions declared in the same
-    module *)
+    module. Note: buffer is a prelude type now, so use different names. *)
 let test_opaque_type_creation () =
   let sig_src =
     {|
-    (type buffer)
-    (defun get-buffer () -> buffer)
-    (defun use-buffer (buffer) -> nil)
+    (type my-resource)
+    (defun get-resource () -> my-resource)
+    (defun use-resource (my-resource) -> nil)
   |}
   in
   let env = load_sig_str sig_src in
-  (* Valid: use buffer returned from get-buffer *)
-  let _, errors = check_expr_str ~env "(use-buffer (get-buffer))" in
+  (* Valid: use resource returned from get-resource *)
+  let _, errors = check_expr_str ~env "(use-resource (get-resource))" in
   Alcotest.(check int) "no errors for valid opaque use" 0 (List.length errors)
 
 (** Test that opaque types don't unify with other types. R9: Opaque types are
-    not unifiable with other types *)
+    not unifiable with other types. Note: buffer is a prelude type now. *)
 let test_opaque_vs_other_types () =
   let sig_src =
     {|
-    (type buffer)
-    (defun use-buffer (buffer) -> nil)
+    (type my-resource)
+    (defun use-resource (my-resource) -> nil)
   |}
   in
   let env = load_sig_str sig_src in
-  (* Trying to pass an int where buffer is expected should fail *)
-  let _, errors = check_expr_str ~env "(use-buffer 42)" in
+  (* Trying to pass an int where resource is expected should fail *)
+  let _, errors = check_expr_str ~env "(use-resource 42)" in
   Alcotest.(check bool)
     "type error for int vs opaque" true
     (List.length errors > 0)
@@ -484,20 +486,20 @@ let test_opaque_phantom_params () =
     (List.length errors2 > 0)
 
 (** Test opaque type in return position. R9: Opaque types work correctly in
-    function return types *)
+    function return types. Note: buffer is prelude now, use different name. *)
 let test_opaque_return_type () =
   let sig_src =
     {|
-    (type buffer)
-    (defun create-buffer (string) -> buffer)
+    (type my-resource)
+    (defun create-resource (string) -> my-resource)
   |}
   in
   let env = load_sig_str sig_src in
-  let ty, errors = check_expr_str ~env "(create-buffer \"test\")" in
+  let ty, errors = check_expr_str ~env "(create-resource \"test\")" in
   Alcotest.(check int) "no type errors" 0 (List.length errors);
   (* The type should contain the module-qualified opaque name *)
   Alcotest.(check bool)
-    "returns opaque buffer type" true
+    "returns opaque resource type" true
     (String.sub (Types.to_string ty) 0 4 = "test")
 
 (** Test opaque type used in polymorphic function. R9, R10: Opaque types work
@@ -564,28 +566,28 @@ let test_open_imports_type_aliases () =
             with Not_found -> false))
 
 (** Test that open imports opaque types for use in signatures. R12: Opaque types
-    from opened modules are available *)
+    from opened modules are available. Note: buffer is prelude now. *)
 let test_open_imports_opaque_types () =
-  (* Create a module "buf" with an opaque type *)
-  let buf_sig =
-    parse_sig_str ~module_name:"buf"
+  (* Create a module "res" with an opaque type *)
+  let res_sig =
+    parse_sig_str ~module_name:"res"
       {|
-    (type buffer)
-    (defun make-buffer () -> buffer)
+    (type my-resource)
+    (defun make-resource () -> my-resource)
   |}
   in
-  let resolver name = if name = "buf" then Some buf_sig else None in
-  (* Module that opens buf and uses its opaque type *)
+  let resolver name = if name = "res" then Some res_sig else None in
+  (* Module that opens res and uses its opaque type *)
   let env =
     load_sig_str_with_resolver ~resolver
       {|
-    (open 'buf)
-    (defun wrap-buffer (buffer) -> (list buffer))
+    (open 'res)
+    (defun wrap-resource (my-resource) -> (list my-resource))
   |}
   in
-  (* The buffer type should be available *)
-  match Type_env.lookup "wrap-buffer" env with
-  | None -> Alcotest.fail "wrap-buffer not found"
+  (* The my-resource type should be available *)
+  match Type_env.lookup "wrap-resource" env with
+  | None -> Alcotest.fail "wrap-resource not found"
   | Some _ -> () (* Type was successfully loaded *)
 
 (** Test that opened values are NOT re-exported. R12: "seq is NOT re-exported
@@ -994,17 +996,18 @@ let test_import_struct_accessor_type_error () =
     "type error for accessor with wrong type" true
     (List.length errors > 0)
 
-(** Test import-struct with empty slots. R11: Struct with no slots is valid *)
+(** Test import-struct with empty slots. R11: Struct with no slots is valid.
+    Note: marker is prelude now, use different name. *)
 let test_import_struct_no_slots () =
   let sig_src = {|
-    (import-struct marker :slots ())
+    (import-struct my-marker :slots ())
   |} in
   let env = load_sig_str sig_src in
   (* Constructor takes no arguments *)
-  let ty, errors = check_expr_str ~env "(make-marker)" in
+  let ty, errors = check_expr_str ~env "(make-my-marker)" in
   Alcotest.(check int) "no type errors" 0 (List.length errors);
   Alcotest.(check string)
-    "result is struct type" "test/marker" (Types.to_string ty)
+    "result is struct type" "test/my-marker" (Types.to_string ty)
 
 (** Test that two different structs have different types. R11: Struct types are
     distinct *)

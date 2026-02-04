@@ -254,6 +254,8 @@ let parse_signature_file_with_errors (path : string) :
     - Parser errors (invalid syntax)
     - Validation errors (unbound type variables, invalid types)
 
+    Prelude types (buffer, window, etc.) are automatically available.
+
     @param path Path to the `.tart` file
     @return Ok signature or Error list of all errors *)
 let parse_and_validate_signature (path : string) :
@@ -261,8 +263,11 @@ let parse_and_validate_signature (path : string) :
   match parse_signature_file_with_errors path with
   | Error errors -> Error errors
   | Ok sig_file ->
-      (* Now validate the parsed signature *)
-      let validation_errors = Sig_loader.validate_signature_all sig_file in
+      (* Now validate the parsed signature, allowing prelude types *)
+      let validation_errors =
+        Sig_loader.validate_signature_all
+          ~prelude_type_names:Prelude.prelude_type_names sig_file
+      in
       if validation_errors = [] then Ok sig_file
       else
         Error
@@ -334,11 +339,16 @@ let load_module ~(search_path : t) ?(el_path : string option)
   | Some sig_file ->
       (* Validate the signature if it has no external dependencies.
          Signatures with open/include can't be validated standalone
-         because they reference types from other modules. *)
+         because they reference types from other modules.
+         When with_prelude is true, include prelude type names in validation
+         so signatures can reference buffer, window, etc. *)
+      let prelude_type_names =
+        if with_prelude then Prelude.prelude_type_names else []
+      in
       let valid =
         if has_external_deps sig_file then true
         else
-          match Sig_loader.validate_signature sig_file with
+          match Sig_loader.validate_signature ~prelude_type_names sig_file with
           | Ok () -> true
           | Error _ -> false
       in
@@ -367,10 +377,13 @@ let load_module_with_sig ~(search_path : t) ?(el_path : string option)
   match resolver module_name with
   | None -> None
   | Some sig_file ->
+      let prelude_type_names =
+        if with_prelude then Prelude.prelude_type_names else []
+      in
       let valid =
         if has_external_deps sig_file then true
         else
-          match Sig_loader.validate_signature sig_file with
+          match Sig_loader.validate_signature ~prelude_type_names sig_file with
           | Ok () -> true
           | Error _ -> false
       in
@@ -412,6 +425,9 @@ let load_c_core_files ~(c_core_dir : string) ?(with_prelude = true)
   let prelude_ctx =
     if with_prelude then Some (Prelude.prelude_type_context ()) else None
   in
+  let prelude_type_names =
+    if with_prelude then Prelude.prelude_type_names else []
+  in
   List.fold_left
     (fun acc_env path ->
       match parse_signature_file path with
@@ -421,7 +437,9 @@ let load_c_core_files ~(c_core_dir : string) ?(with_prelude = true)
           let valid =
             if has_external_deps sig_file then true
             else
-              match Sig_loader.validate_signature sig_file with
+              match
+                Sig_loader.validate_signature ~prelude_type_names sig_file
+              with
               | Ok () -> true
               | Error _ -> false
           in

@@ -86,18 +86,24 @@ let test_prelude_type_names () =
   Alcotest.(check bool) "contains nonempty" true (List.mem "nonempty" names)
 
 (** Test that is_prelude_type returns false for non-prelude types. Note: int,
-    string, etc. ARE now prelude types (they bridge to intrinsics). Only truly
-    user-defined types like "buffer" are not prelude types. *)
+    string, etc. ARE now prelude types (they bridge to intrinsics). Buffer,
+    window, etc. are also prelude types (opaque types for Emacs data
+    structures). Only truly user-defined types like "my-custom-type" are not
+    prelude types. *)
 let test_not_prelude_types () =
   (* int, string, etc. ARE prelude types now - they bridge intrinsics *)
   Alcotest.(check bool) "int IS prelude" true (Prelude.is_prelude_type "int");
   Alcotest.(check bool)
     "string IS prelude" true
     (Prelude.is_prelude_type "string");
+  (* buffer, window, etc. ARE prelude types now - opaque types *)
+  Alcotest.(check bool)
+    "buffer IS prelude" true
+    (Prelude.is_prelude_type "buffer");
   (* User-defined types are NOT prelude types *)
   Alcotest.(check bool)
-    "buffer not prelude" false
-    (Prelude.is_prelude_type "buffer")
+    "my-custom-type not prelude" false
+    (Prelude.is_prelude_type "my-custom-type")
 
 (** {1 Prelude Context Tests} *)
 

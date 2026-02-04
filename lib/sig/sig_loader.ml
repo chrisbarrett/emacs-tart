@@ -220,18 +220,35 @@ let build_context (sig_file : signature) : tvar_context =
   List.fold_left add_decl_types empty_context sig_file.sig_decls
 
 (** Validate an entire signature file. Returns Ok () if all declarations are
-    valid, or the first error. *)
-let validate_signature (sig_file : signature) : unit result =
-  let ctx = build_context sig_file in
+    valid, or the first error.
+
+    @param prelude_type_names
+      Optional list of type names from the prelude that should be considered
+      valid. This allows signatures to reference prelude types like buffer,
+      window, etc. without declaring them locally. *)
+let validate_signature ?(prelude_type_names = []) (sig_file : signature) :
+    unit result =
+  let base_ctx = build_context sig_file in
+  let ctx =
+    List.fold_left (fun c name -> with_type c name) base_ctx prelude_type_names
+  in
   List.fold_left
     (fun acc decl ->
       let* () = acc in
       validate_decl ctx decl)
     (Ok ()) sig_file.sig_decls
 
-(** Validate a signature and collect all errors (not just the first). *)
-let validate_signature_all (sig_file : signature) : load_error list =
-  let ctx = build_context sig_file in
+(** Validate a signature and collect all errors (not just the first).
+
+    @param prelude_type_names
+      Optional list of type names from the prelude that should be considered
+      valid. *)
+let validate_signature_all ?(prelude_type_names = []) (sig_file : signature) :
+    load_error list =
+  let base_ctx = build_context sig_file in
+  let ctx =
+    List.fold_left (fun c name -> with_type c name) base_ctx prelude_type_names
+  in
   List.filter_map
     (fun decl ->
       match validate_decl ctx decl with Ok () -> None | Error e -> Some e)

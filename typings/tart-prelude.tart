@@ -89,5 +89,14 @@
 ;; These are abstract types with no special type-checker behavior.
 ;; They only unify with themselves.
 
-(type bool-vector)
-(type char-table)
+;; Core Emacs data structures
+(type buffer)      ; Emacs buffer
+(type window)      ; Emacs window
+(type frame)       ; Emacs frame
+(type marker)      ; Position marker in a buffer
+(type overlay)     ; Text overlay in a buffer
+(type process)     ; Subprocess or network connection
+
+;; Special sequences
+(type bool-vector) ; Bit vector
+(type char-table)  ; Character property table

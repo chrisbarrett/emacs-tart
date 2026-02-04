@@ -52,12 +52,25 @@ val build_context : Sig_ast.signature -> tvar_context
 (** Build context from declarations. Adds all type declarations to the context
     so they can be referenced. *)
 
-val validate_signature : Sig_ast.signature -> (unit, load_error) result
+val validate_signature :
+  ?prelude_type_names:string list ->
+  Sig_ast.signature ->
+  (unit, load_error) result
 (** Validate an entire signature file. Returns Ok () if all declarations are
-    valid, or the first error. *)
+    valid, or the first error.
 
-val validate_signature_all : Sig_ast.signature -> load_error list
-(** Validate a signature and collect all errors (not just the first). *)
+    @param prelude_type_names
+      Optional list of type names from the prelude that should be considered
+      valid. This allows signatures to reference prelude types like buffer,
+      window, etc. without declaring them locally. *)
+
+val validate_signature_all :
+  ?prelude_type_names:string list -> Sig_ast.signature -> load_error list
+(** Validate a signature and collect all errors (not just the first).
+
+    @param prelude_type_names
+      Optional list of type names from the prelude that should be considered
+      valid. *)
 
 (** {1 Type Alias Context} *)
 
