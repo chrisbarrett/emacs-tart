@@ -1,0 +1,59 @@
+;; Type signatures for Emacs dired.c
+;;
+;; Source: emacs/src/dired.c
+;; Emacs version: 31.0
+;;
+;; Contains directory listing and file attribute functions.
+
+;; ===========================================================================
+;; Directory listing
+;; ===========================================================================
+
+;; (directory-files DIRECTORY &optional FULL MATCH NOSORT COUNT) - list files
+;; Return list of file names in DIRECTORY.
+;; If FULL is non-nil, return absolute file names.
+;; If MATCH is non-nil, only return files matching this regexp.
+;; If NOSORT is non-nil, don't sort the files.
+;; If COUNT is given, return at most COUNT files.
+(defun directory-files (string &optional any any any int) -> (list string))
+
+;; (directory-files-and-attributes DIR &optional FULL MATCH NOSORT ID-FORMAT COUNT)
+;; Like directory-files but also return file attributes.
+;; Returns list of (NAME . ATTRIBUTES) pairs.
+(defun directory-files-and-attributes (string &optional any any any any int) -> (list any))
+
+;; ===========================================================================
+;; File name completion
+;; ===========================================================================
+
+;; (file-name-all-completions FILE DIRECTORY) - all completions of FILE in DIR
+;; Return list of all file names in DIRECTORY that start with FILE.
+(defun file-name-all-completions (string string) -> (list string))
+
+;; (file-name-completion FILE DIRECTORY &optional PREDICATE) - complete FILE in DIR
+;; Complete FILE in DIRECTORY.
+;; Returns completed string, t if FILE is unique completion, or nil if no match.
+(defun file-name-completion (string string &optional any) -> (string | t | nil))
+
+;; ===========================================================================
+;; File attributes
+;; ===========================================================================
+
+;; (file-attributes FILENAME &optional ID-FORMAT) - return attributes of file
+;; Returns list: (TYPE LINKS UID GID ACCESS MODIFY STATUS SIZE MODE FLAGS INODE DEVICE)
+;; If ID-FORMAT is 'string, return UID/GID as strings; 'integer for numbers.
+(defun file-attributes (string &optional any) -> ((list any) | nil))
+
+;; (file-attributes-lessp F1 F2) - compare file attributes by modification time
+;; Return non-nil if F1 was modified more recently than F2.
+(defun file-attributes-lessp (any any) -> bool)
+
+;; ===========================================================================
+;; System info
+;; ===========================================================================
+
+;; (system-users) - return list of user names on this system
+(defun system-users () -> (list string))
+
+;; (system-groups) - return list of group names on this system
+(defun system-groups () -> (list string))

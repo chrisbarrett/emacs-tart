@@ -1,0 +1,36 @@
+;; Type signatures for Emacs doc.c
+;;
+;; Source: emacs/src/doc.c
+;; Emacs version: 31.0
+;;
+;; Contains documentation access and string substitution functions.
+
+;; ===========================================================================
+;; Documentation access
+;; ===========================================================================
+
+;; (documentation FUNCTION &optional VERBATIM) - return function's docstring
+;; If VERBATIM is non-nil, don't process escape sequences.
+(defun documentation (any &optional any) -> (string | nil))
+
+;; (documentation-property SYMBOL PROP &optional VERBATIM) - get doc from plist
+;; Return documentation string from SYMBOL's PROP property.
+(defun documentation-property (symbol symbol &optional any) -> (string | nil))
+
+;; ===========================================================================
+;; Key substitution
+;; ===========================================================================
+
+;; (substitute-command-keys STRING &optional NO-FACE KEYMAP) - substitute key bindings
+;; Replace \\[COMMAND], \\{KEYMAP}, \\<KEYMAP> in STRING with key bindings.
+;; If NO-FACE is non-nil, don't add `help-key-binding` face.
+;; If KEYMAP is given, use it for \\[COMMAND] lookups.
+(defun substitute-command-keys (string &optional any any) -> string)
+
+;; ===========================================================================
+;; Internal
+;; ===========================================================================
+
+;; (Snarf-documentation FILENAME) - used during Emacs build to load docstrings
+;; This is internal to the build process and not normally called.
+(defun Snarf-documentation (string) -> any)

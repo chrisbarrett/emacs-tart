@@ -1,0 +1,45 @@
+;; Type signatures for Emacs macros.c
+;;
+;; Source: emacs/src/macros.c
+;; Emacs version: 31.0
+;;
+;; Contains keyboard macro recording and execution functions.
+
+;; ===========================================================================
+;; Macro recording
+;; ===========================================================================
+
+;; (start-kbd-macro APPEND &optional NO-EXEC) - start recording keyboard macro
+;; If APPEND is non-nil, append to last macro instead of starting new.
+;; If NO-EXEC is non-nil, don't re-execute the macro while defining.
+(defun start-kbd-macro (any &optional any) -> nil)
+
+;; (end-kbd-macro &optional REPEAT LOOPFUNC) - finish recording keyboard macro
+;; If REPEAT is given, execute the macro that many times.
+;; LOOPFUNC, if given, is called after each repetition.
+(defun end-kbd-macro (&optional any any) -> nil)
+
+;; ===========================================================================
+;; Macro execution
+;; ===========================================================================
+
+;; (call-last-kbd-macro &optional PREFIX LOOPFUNC) - call most recent keyboard macro
+;; PREFIX is the prefix argument to pass to the macro.
+;; LOOPFUNC is called after each repetition.
+(defun call-last-kbd-macro (&optional any any) -> nil)
+
+;; (execute-kbd-macro MACRO &optional COUNT LOOPFUNC) - execute keyboard macro
+;; MACRO is a string or vector of events.
+;; COUNT is number of times to execute (default 1).
+;; LOOPFUNC is called after each repetition.
+(defun execute-kbd-macro (any &optional any any) -> nil)
+
+;; ===========================================================================
+;; Internal
+;; ===========================================================================
+
+;; (cancel-kbd-macro-events) - cancel events added during macro definition
+(defun cancel-kbd-macro-events () -> nil)
+
+;; (store-kbd-macro-event OBJ) - store event as part of macro being defined
+(defun store-kbd-macro-event (any) -> nil)
