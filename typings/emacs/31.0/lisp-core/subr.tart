@@ -228,3 +228,123 @@
 
 ;; (define-error NAME MESSAGE &optional PARENT) - define new error type
 (defun define-error (symbol string &optional (symbol | (list symbol))) -> nil)
+
+;; ===========================================================================
+;; Hook management
+;; ===========================================================================
+
+;; (add-hook HOOK FN &optional DEPTH LOCAL) - add function to hook
+(defun add-hook (symbol any &optional int bool) -> nil)
+
+;; (remove-hook HOOK FN &optional LOCAL) - remove function from hook
+(defun remove-hook (symbol any &optional bool) -> nil)
+
+;; (run-hooks &rest HOOKS) - run multiple hooks
+(defun run-hooks (&rest symbol) -> nil)
+
+;; ===========================================================================
+;; Stack-like list operations (macros)
+;; ===========================================================================
+
+;; (push NEWELT PLACE) - push element onto list variable
+(defun push [a] (a any) -> (list a))
+
+;; (pop PLACE) - pop and return first element of list variable
+(defun pop [a] (any) -> a)
+
+;; ===========================================================================
+;; Buffer-local variable macros
+;; ===========================================================================
+
+;; (setq-local VAR VALUE) - set buffer-local variable
+(defun setq-local (&rest any) -> any)
+
+;; (defvar-local VAR &optional VALUE DOCSTRING) - define buffer-local variable
+(defun defvar-local (symbol &optional any string) -> symbol)
+
+;; ===========================================================================
+;; String comparison (aliases)
+;; ===========================================================================
+
+;; (string= S1 S2) - alias for string-equal
+(defun string= ((string | symbol) (string | symbol)) -> bool)
+
+;; (string< S1 S2) - alias for string-lessp
+(defun string< ((string | symbol) (string | symbol)) -> bool)
+
+;; (string> S1 S2) - test if string greater than (in subr.el)
+(defun string> ((string | symbol) (string | symbol)) -> bool)
+
+;; ===========================================================================
+;; Suppression macros
+;; ===========================================================================
+
+;; (with-no-warnings &rest BODY) - suppress compiler warnings
+(defun with-no-warnings (&rest any) -> any)
+
+;; ===========================================================================
+;; Numeric utilities
+;; ===========================================================================
+
+;; (number-sequence FROM &optional TO INC) - generate list of numbers
+(defun number-sequence (num &optional num num) -> (list num))
+
+;; (clamp VALUE MIN MAX) - constrain value to range
+(defun clamp (num num num) -> num)
+
+;; ===========================================================================
+;; String utilities
+;; ===========================================================================
+
+;; (string-empty-p STRING) - test if string is empty
+(defun string-empty-p ((string | nil)) -> bool)
+
+;; (string-blank-p STRING) - test if string is blank (only whitespace)
+(defun string-blank-p ((string | nil)) -> bool)
+
+;; (string-trim STRING &optional TRIM-LEFT TRIM-RIGHT) - trim whitespace
+(defun string-trim (string &optional string string) -> string)
+
+;; (string-trim-left STRING &optional REGEXP) - trim left whitespace
+(defun string-trim-left (string &optional string) -> string)
+
+;; (string-trim-right STRING &optional REGEXP) - trim right whitespace
+(defun string-trim-right (string &optional string) -> string)
+
+;; (string-prefix-p PREFIX STRING &optional IGNORE-CASE) - test prefix
+(defun string-prefix-p (string string &optional bool) -> bool)
+
+;; (string-suffix-p SUFFIX STRING &optional IGNORE-CASE) - test suffix
+(defun string-suffix-p (string string &optional bool) -> bool)
+
+;; (string-join STRINGS &optional SEPARATOR) - join strings with separator
+(defun string-join ((list string) &optional string) -> string)
+
+;; (string-replace FROM-STRING TO-STRING IN-STRING) - replace all occurrences
+(defun string-replace (string string string) -> string)
+
+;; (string-search NEEDLE HAYSTACK &optional START-POS) - find substring
+(defun string-search (string string &optional int) -> (int | nil))
+
+;; (split-string STRING &optional SEPARATORS OMIT-NULLS TRIM) - split string
+(defun split-string (string &optional string bool string) -> (list string))
+
+;; ===========================================================================
+;; File/path utilities
+;; ===========================================================================
+
+;; (locate-library LIBRARY &optional NOSUFFIX PATH INTERACTIVE-CALL)
+(defun locate-library (string &optional bool (list string) bool) -> (string | nil))
+
+;; ===========================================================================
+;; Miscellaneous predicates
+;; ===========================================================================
+
+;; (provide FEATURE &optional SUBFEATURES) - declare feature
+(defun provide (symbol &optional (list symbol)) -> symbol)
+
+;; (require FEATURE &optional FILENAME NOERROR) - load feature
+(defun require (symbol &optional string bool) -> symbol)
+
+;; (featurep FEATURE &optional SUBFEATURE) - test if feature is present
+(defun featurep (symbol &optional symbol) -> bool)

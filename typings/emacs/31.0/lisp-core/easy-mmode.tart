@@ -1,0 +1,38 @@
+;; Type signatures for Emacs easy-mmode.el
+;;
+;; Source: emacs/lisp/emacs-lisp/easy-mmode.el
+;; Emacs version: 31.0
+;;
+;; Macros for defining minor and major modes.
+
+;; ===========================================================================
+;; Minor mode definition
+;; ===========================================================================
+
+;; (define-minor-mode MODE DOC &rest OPTIONS-AND-BODY) - define a minor mode
+;; Creates: MODE function, MODE variable, MODE-hook, MODE-map
+(defun define-minor-mode (symbol &rest any) -> symbol)
+
+;; (define-globalized-minor-mode GLOBAL-MODE MODE TURN-ON &rest KEYS) - global minor mode
+(defun define-globalized-minor-mode (symbol symbol any &rest any) -> symbol)
+
+;; ===========================================================================
+;; Derived mode definition
+;; ===========================================================================
+
+;; (define-derived-mode MODE PARENT NAME &optional DOCSTRING &rest BODY) - derive major mode
+(defun define-derived-mode (symbol symbol string &optional string &rest any) -> symbol)
+
+;; ===========================================================================
+;; Generic mode definition
+;; ===========================================================================
+
+;; (define-generic-mode MODE COMMENT-LIST KEYWORD-LIST FONT-LOCK-LIST AUTO-MODE-LIST FUNCTION-LIST &optional DOCSTRING)
+(defun define-generic-mode (symbol any any any any any &optional string) -> symbol)
+
+;; ===========================================================================
+;; Key definition
+;; ===========================================================================
+
+;; (easy-mmode-define-keymap BINDINGS &optional INHERIT) - create keymap from alist
+(defun easy-mmode-define-keymap ((list any) &optional any) -> any)

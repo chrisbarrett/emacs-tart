@@ -1,0 +1,164 @@
+;; Type declarations for common Emacs global variables
+;;
+;; Source: Various Emacs Lisp and C source files
+;; Emacs version: 31.0
+;;
+;; These are commonly used global variables that code references.
+
+;; ===========================================================================
+;; Command loop state (defined in keyboard.c)
+;; ===========================================================================
+
+;; Current raw prefix argument
+(defvar current-prefix-arg any)
+
+;; The last prefix argument value
+(defvar prefix-arg any)
+
+;; Last command executed
+(defvar last-command symbol)
+
+;; Command being executed currently
+(defvar this-command symbol)
+
+;; Command that set this-command
+(defvar real-this-command symbol)
+
+;; ===========================================================================
+;; Buffer state (defined in buffer.c)
+;; ===========================================================================
+
+;; List of undo entries for current buffer
+(defvar buffer-undo-list any)
+
+;; The major mode of the current buffer
+(defvar major-mode symbol)
+
+;; Default directory for current buffer
+(defvar default-directory string)
+
+;; Fill prefix for current buffer
+(defvar fill-prefix (string | nil))
+
+;; Fill column for current buffer
+(defvar fill-column int)
+
+;; If non-nil, truncate long lines
+(defvar truncate-lines bool)
+
+;; ===========================================================================
+;; Mark state (defined in simple.el and marker.c)
+;; ===========================================================================
+
+;; Whether transient mark mode is active
+(defvar transient-mark-mode any)
+
+;; Whether mark is currently active
+(defvar mark-active bool)
+
+;; Ring of previous marks in current buffer
+(defvar mark-ring (list marker))
+
+;; Global mark ring
+(defvar global-mark-ring (list marker))
+
+;; ===========================================================================
+;; Minibuffer (defined in minibuf.c and minibuffer.el)
+;; ===========================================================================
+
+;; History list
+(defvar minibuffer-history (list string))
+
+;; Position in minibuffer history
+(defvar minibuffer-history-position int)
+
+;; ===========================================================================
+;; Completion (defined in minibuffer.el)
+;; ===========================================================================
+
+;; Completion format - how to display completions
+(defvar completions-format symbol)
+
+;; Whether completion auto-wraps
+(defvar completion-auto-wrap bool)
+
+;; ===========================================================================
+;; Error handling
+;; ===========================================================================
+
+;; Last error condition
+(defvar debug-on-error bool)
+
+;; ===========================================================================
+;; Misc state
+;; ===========================================================================
+
+;; Whether to suggest key bindings for commands
+(defvar suggest-key-bindings any)
+
+;; Selective display threshold
+(defvar selective-display any)
+
+;; List of enabled minor modes
+(defvar minor-mode-list (list symbol))
+
+;; Inhibit read-only errors
+(defvar inhibit-read-only bool)
+
+;; Standard output stream
+(defvar standard-output any)
+
+;; Standard input stream
+(defvar standard-input any)
+
+;; Load path for elisp files
+(defvar load-path (list string))
+
+;; Features that have been provided
+(defvar features (list symbol))
+
+;; Current buffer (dynamically bound)
+(defvar current-buffer buffer)
+
+;; Case fold search
+(defvar case-fold-search bool)
+
+;; Kill ring
+(defvar kill-ring (list string))
+
+;; Kill ring yank pointer
+(defvar kill-ring-yank-pointer (list string))
+
+;; ===========================================================================
+;; Command history
+;; ===========================================================================
+
+;; History of interactive commands
+(defvar command-history (list any))
+
+;; ===========================================================================
+;; Region extraction
+;; ===========================================================================
+
+;; Function to extract region content
+(defvar region-extract-function any)
+
+;; Extended command predicate
+(defvar read-extended-command-predicate any)
+
+;; ===========================================================================
+;; Local keymaps
+;; ===========================================================================
+
+;; Buffer-local function key translations
+(defvar local-function-key-map any)
+
+;; ===========================================================================
+;; Error handling state
+;; ===========================================================================
+
+;; Function to call for next error
+(defvar next-error-function any)
+
+;; Whether buffer is a next-error source
+(defvar next-error-buffer-p any)

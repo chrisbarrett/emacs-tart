@@ -1,0 +1,181 @@
+;; Type signatures for Emacs simple.el
+;;
+;; Source: emacs/lisp/simple.el
+;; Emacs version: 31.0
+;;
+;; Basic editing commands and utilities. These are frequently used
+;; functions defined in simple.el but compiled to native code.
+
+;; ===========================================================================
+;; Mark and region
+;; ===========================================================================
+
+;; (push-mark &optional LOCATION NOMSG ACTIVATE) - set mark and push on ring
+(defun push-mark (&optional (int | marker | nil) bool bool) -> nil)
+
+;; (pop-mark) - pop mark off the mark ring and jump to it
+(defun pop-mark () -> nil)
+
+;; (mark &optional FORCE) - return position of mark, or nil if no mark
+;; Returns nil if mark is not set, or with transient-mark-mode if not active
+(defun mark (&optional bool) -> (int | nil))
+
+;; (set-mark POS) - set mark at POS (integer or marker)
+(defun set-mark ((int | marker | nil)) -> nil)
+
+;; (use-region-p) - test if region is active and usable
+(defun use-region-p () -> bool)
+
+;; (region-active-p) - test if region is active
+(defun region-active-p () -> bool)
+
+;; (deactivate-mark &optional FORCE) - deactivate the mark
+(defun deactivate-mark (&optional bool) -> nil)
+
+;; (activate-mark &optional NO-TMMMSG) - activate the mark
+(defun activate-mark (&optional bool) -> nil)
+
+;; (mark-word &optional ARG ALLOW-EXTEND) - mark word at point
+(defun mark-word (&optional int bool) -> nil)
+
+;; (mark-sexp &optional ARG ALLOW-EXTEND) - mark sexp at point
+(defun mark-sexp (&optional int bool) -> nil)
+
+;; (mark-paragraph &optional ARG ALLOW-EXTEND) - mark paragraph at point
+(defun mark-paragraph (&optional int bool) -> nil)
+
+;; ===========================================================================
+;; Buffer display
+;; ===========================================================================
+
+;; (display-buffer BUFFER-OR-NAME &optional ACTION FRAME) - display buffer
+(defun display-buffer ((buffer | string) &optional any frame) -> (window | nil))
+
+;; (pop-to-buffer BUFFER-OR-NAME &optional ACTION NORECORD) - select buffer in other window
+(defun pop-to-buffer ((buffer | string) &optional any bool) -> (window | nil))
+
+;; (switch-to-buffer BUFFER-OR-NAME &optional NORECORD FORCE-SAME-WINDOW) - switch to buffer
+(defun switch-to-buffer ((buffer | string | nil) &optional bool bool) -> buffer)
+
+;; (switch-to-buffer-other-window BUFFER-OR-NAME &optional NORECORD) - switch in other window
+(defun switch-to-buffer-other-window ((buffer | string) &optional bool) -> buffer)
+
+;; (switch-to-buffer-other-frame BUFFER-OR-NAME &optional NORECORD) - switch in other frame
+(defun switch-to-buffer-other-frame ((buffer | string) &optional bool) -> buffer)
+
+;; ===========================================================================
+;; Movement commands
+;; ===========================================================================
+
+;; (beginning-of-buffer &optional ARG) - move to beginning of buffer
+(defun beginning-of-buffer (&optional any) -> nil)
+
+;; (end-of-buffer &optional ARG) - move to end of buffer
+(defun end-of-buffer (&optional any) -> nil)
+
+;; (goto-line LINE &optional BUFFER RELATIVE-LINE) - go to line number
+(defun goto-line (int &optional buffer bool) -> nil)
+
+;; (next-line &optional ARG TRY-VSCROLL) - move down
+(defun next-line (&optional int bool) -> nil)
+
+;; (previous-line &optional ARG TRY-VSCROLL) - move up
+(defun previous-line (&optional int bool) -> nil)
+
+;; ===========================================================================
+;; Kill/yank
+;; ===========================================================================
+
+;; (kill-region START END &optional REGION) - kill text between START and END
+(defun kill-region (int int &optional any) -> nil)
+
+;; (copy-region-as-kill START END &optional REGION) - copy text to kill ring
+(defun copy-region-as-kill (int int &optional any) -> nil)
+
+;; (kill-ring-save START END &optional REGION) - save region to kill ring
+(defun kill-ring-save (int int &optional any) -> nil)
+
+;; (yank &optional ARG) - insert most recent kill
+(defun yank (&optional any) -> nil)
+
+;; (yank-pop &optional ARG) - replace yanked text with previous kill
+(defun yank-pop (&optional any) -> nil)
+
+;; (kill-line &optional ARG) - kill rest of line
+(defun kill-line (&optional int) -> nil)
+
+;; (kill-whole-line &optional ARG) - kill entire line(s)
+(defun kill-whole-line (&optional int) -> nil)
+
+;; ===========================================================================
+;; Indentation
+;; ===========================================================================
+
+;; (newline &optional ARG INTERACTIVE) - insert newline
+(defun newline (&optional int bool) -> nil)
+
+;; (newline-and-indent) - insert newline and indent
+(defun newline-and-indent () -> nil)
+
+;; (indent-according-to-mode) - indent line according to major mode
+(defun indent-according-to-mode () -> nil)
+
+;; (indent-for-tab-command &optional ARG) - indent line or region
+(defun indent-for-tab-command (&optional any) -> nil)
+
+;; (indent-rigidly START END ARG &optional INTERACTIVE) - indent region
+(defun indent-rigidly (int int int &optional bool) -> nil)
+
+;; ===========================================================================
+;; Undo
+;; ===========================================================================
+
+;; (undo &optional ARG) - undo changes
+(defun undo (&optional int) -> nil)
+
+;; (undo-only &optional ARG) - undo without redoing
+(defun undo-only (&optional int) -> nil)
+
+;; ===========================================================================
+;; Fill
+;; ===========================================================================
+
+;; (fill-paragraph &optional JUSTIFY REGION) - fill paragraph
+(defun fill-paragraph (&optional any bool) -> nil)
+
+;; (set-fill-column ARG) - set fill column
+(defun set-fill-column (int) -> nil)
+
+;; ===========================================================================
+;; Minibuffer interaction
+;; ===========================================================================
+
+;; (read-number PROMPT &optional DEFAULT HIST) - read number from minibuffer
+(defun read-number (string &optional num symbol) -> num)
+
+;; (read-char-from-minibuffer PROMPT &optional CHARS HISTORY) - read char
+(defun read-char-from-minibuffer (string &optional (list int) symbol) -> int)
+
+;; ===========================================================================
+;; Shell command
+;; ===========================================================================
+
+;; (shell-command COMMAND &optional OUTPUT-BUFFER ERROR-BUFFER) - run shell command
+(defun shell-command (string &optional (buffer | string | bool) (buffer | string)) -> (int | nil))
+
+;; (shell-command-on-region START END COMMAND &optional OUTPUT-BUFFER REPLACE ERROR-BUFFER DISPLAY-ERROR-BUFFER REGION-NONCONTIGUOUS-P)
+(defun shell-command-on-region (int int string &optional any bool any bool bool) -> (int | nil))
+
+;; ===========================================================================
+;; Completion
+;; ===========================================================================
+
+;; (completion-at-point) - complete at point using completion-at-point-functions
+(defun completion-at-point () -> any)
+
+;; ===========================================================================
+;; Messages
+;; ===========================================================================
+
+;; (momentary-string-display STRING POS &optional EXIT-CHAR MESSAGE) - show string momentarily
+(defun momentary-string-display (string int &optional int string) -> nil)

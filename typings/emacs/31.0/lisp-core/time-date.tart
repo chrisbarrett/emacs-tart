@@ -1,0 +1,104 @@
+;; Type signatures for Emacs time-date.el
+;;
+;; Source: emacs/lisp/calendar/time-date.el
+;; Emacs version: 31.0
+;;
+;; Time and date manipulation functions.
+
+;; ===========================================================================
+;; Time conversion
+;; ===========================================================================
+
+;; (time-convert TIME &optional FORM) - convert time representation
+;; TIME is a time value, FORM specifies output format:
+;;   t or nil: (ticks . hz)
+;;   integer: (high low micro pico)
+;;   list: (high low micro pico)
+(defun time-convert (any &optional any) -> any)
+
+;; (time-add A B) - add two time values
+(defun time-add (any any) -> any)
+
+;; (time-subtract A B) - subtract time values (A - B)
+(defun time-subtract (any any) -> any)
+
+;; (time-less-p T1 T2) - test if T1 is before T2
+(defun time-less-p (any any) -> bool)
+
+;; (time-equal-p T1 T2) - test if times are equal
+(defun time-equal-p (any any) -> bool)
+
+;; ===========================================================================
+;; Time component extraction
+;; ===========================================================================
+
+;; (decode-time &optional TIME ZONE FORM) - decode time into components
+(defun decode-time (&optional any any any) -> any)
+
+;; (encode-time TIME &rest OBSOLESCENT-ARGUMENTS) - encode time from components
+(defun encode-time (any &rest any) -> any)
+
+;; ===========================================================================
+;; Formatting and parsing
+;; ===========================================================================
+
+;; (format-time-string FORMAT-STRING &optional TIME ZONE) - format time as string
+(defun format-time-string (string &optional any any) -> string)
+
+;; (parse-time-string STRING) - parse time string
+(defun parse-time-string (string) -> any)
+
+;; (date-to-time STRING) - parse date string to time
+(defun date-to-time (string) -> any)
+
+;; ===========================================================================
+;; Seconds manipulation
+;; ===========================================================================
+
+;; (seconds-to-time SECONDS) - convert seconds to time value
+(defun seconds-to-time (num) -> any)
+
+;; (time-to-seconds &optional TIME) - convert time to floating seconds
+(defun time-to-seconds (&optional any) -> float)
+
+;; (float-time &optional TIME) - time as floating point seconds
+(defun float-time (&optional any) -> float)
+
+;; (time-to-days TIME) - days since epoch
+(defun time-to-days (any) -> int)
+
+;; ===========================================================================
+;; Day and date calculations
+;; ===========================================================================
+
+;; (days-to-time DAYS) - convert days to time value
+(defun days-to-time (int) -> any)
+
+;; (time-since TIME) - seconds since TIME
+(defun time-since (any) -> num)
+
+;; (days-between D1 D2) - days between two dates
+(defun days-between (string string) -> int)
+
+;; ===========================================================================
+;; Human readable formatting
+;; ===========================================================================
+
+;; (format-seconds FORMAT-STRING SECONDS) - format seconds nicely
+(defun format-seconds (string num) -> string)
+
+;; (seconds-to-string SECONDS) - format seconds as human readable
+(defun seconds-to-string (num) -> string)
+
+;; ===========================================================================
+;; Current time
+;; ===========================================================================
+
+;; (current-time) - return current time as list
+(defun current-time () -> any)
+
+;; (current-time-string &optional TIME ZONE) - current time as readable string
+(defun current-time-string (&optional any any) -> string)
+
+;; (current-time-zone &optional TIME ZONE) - return timezone info
+(defun current-time-zone (&optional any any) -> (pair int string))

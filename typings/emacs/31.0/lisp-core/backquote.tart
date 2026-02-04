@@ -1,0 +1,23 @@
+;; Type signatures for Emacs backquote.el
+;;
+;; Source: emacs/lisp/emacs-lisp/backquote.el
+;; Emacs version: 31.0
+;;
+;; Backquote macro implementation. The backquote and unquote forms
+;; are special reader syntax, but they expand to these macros.
+
+;; ===========================================================================
+;; Backquote forms
+;; ===========================================================================
+
+;; (backquote FORM) - quasi-quote expansion macro
+;; The reader expands `form to (backquote form)
+(defun backquote (any) -> any)
+
+;; ,form inside ` expands to (unquote form)
+;; This is a marker processed by backquote expansion
+(defun unquote (any) -> any)
+
+;; ,@form inside ` expands to (unquote-splicing form)
+;; This is a marker processed by backquote expansion
+(defun unquote-splicing (any) -> any)

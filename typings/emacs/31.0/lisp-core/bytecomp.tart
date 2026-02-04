@@ -54,6 +54,31 @@
 ;; Byte compilation functions
 ;; ===========================================================================
 
+;; ===========================================================================
+;; Declaration form
+;; ===========================================================================
+
+;; (declare &rest SPECS) - declare function properties
+;; Used inside defun to specify properties like:
+;;   (interactive-only t)
+;;   (obsolete other-fn "31.0")
+;;   (compiler-macro expander-fn)
+;;   (gv-setter setter-fn)
+;;   (pure t)
+;;   (side-effect-free t)
+(defun declare (&rest any) -> nil)
+
+;; Declaration property keywords - these are symbols used in declare forms
+;; Interactive-only marks functions not meant for Elisp code
+(defvar interactive-only symbol)
+
+;; Obsolete marks deprecated functions
+(defvar obsolete symbol)
+
+;; ===========================================================================
+;; Byte compilation functions
+;; ===========================================================================
+
 ;; (byte-compile FORM) - byte compile form
 (defun byte-compile (any) -> any)
 
