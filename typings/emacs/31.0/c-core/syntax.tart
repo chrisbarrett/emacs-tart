@@ -1,0 +1,131 @@
+;; Type signatures for Emacs syntax.c
+;;
+;; Source: emacs/src/syntax.c
+;; Emacs version: 31.0
+;;
+;; Contains syntax table manipulation and syntax-based motion functions.
+
+;; ===========================================================================
+;; Syntax table predicates and accessors
+;; ===========================================================================
+
+;; (syntax-table-p OBJECT) - return t if OBJECT is a syntax table
+(defun syntax-table-p (any) -> bool)
+
+;; (syntax-table) - return current buffer's syntax table
+(defun syntax-table () -> char-table)
+
+;; (standard-syntax-table) - return the standard syntax table
+(defun standard-syntax-table () -> char-table)
+
+;; (copy-syntax-table &optional TABLE) - copy a syntax table
+;; TABLE defaults to the standard syntax table.
+(defun copy-syntax-table (&optional char-table) -> char-table)
+
+;; (set-syntax-table TABLE) - set current buffer's syntax table
+(defun set-syntax-table (char-table) -> char-table)
+
+;; ===========================================================================
+;; Character syntax queries
+;; ===========================================================================
+
+;; (char-syntax CHARACTER) - return syntax code of CHARACTER as a character
+;; e.g., word constituent returns ?w (119)
+;; Note: Use syntax-after for buffer context with text properties.
+(defun char-syntax (int) -> int)
+
+;; (syntax-class-to-char SYNTAX) - return syntax char for integer class
+;; e.g., word constituent (2) returns ?w (119)
+(defun syntax-class-to-char (int) -> int)
+
+;; (matching-paren CHARACTER) - return matching paren or nil
+(defun matching-paren (int) -> (int | nil))
+
+;; (string-to-syntax STRING) - convert syntax descriptor to raw form
+;; Returns cons (CODE . MATCHING-CHAR) for use as syntax-table text property.
+(defun string-to-syntax (string) -> ((cons int (int | nil)) | nil))
+
+;; (modify-syntax-entry CHAR NEWENTRY &optional SYNTAX-TABLE)
+;; Set syntax for CHAR according to NEWENTRY string.
+;; CHAR may be a cons (MIN . MAX) for a range.
+(defun modify-syntax-entry ((int | (cons int int)) string &optional char-table) -> nil)
+
+;; (internal-describe-syntax-value SYNTAX) - describe syntax value at point
+;; Internal function for describe-syntax.
+(defun internal-describe-syntax-value (any) -> any)
+
+;; ===========================================================================
+;; Word and character motion
+;; ===========================================================================
+
+;; (forward-word &optional ARG) - move forward ARG words
+;; Returns t normally, nil if stopped by buffer/field boundary.
+(defun forward-word (&optional int) -> bool)
+
+;; (skip-chars-forward STRING &optional LIM) - skip chars in STRING
+;; STRING is like [...] in regexp (^ for negation, ranges allowed).
+;; Returns distance traveled (zero or positive).
+(defun skip-chars-forward (string &optional (int | marker)) -> int)
+
+;; (skip-chars-backward STRING &optional LIM) - skip chars in STRING backward
+;; Returns distance traveled (zero or negative).
+(defun skip-chars-backward (string &optional (int | marker)) -> int)
+
+;; (skip-syntax-forward SYNTAX &optional LIM) - skip chars with given syntax
+;; SYNTAX is string of syntax code characters. ^ prefix negates.
+;; Returns distance traveled (zero or positive).
+(defun skip-syntax-forward (string &optional (int | marker)) -> int)
+
+;; (skip-syntax-backward SYNTAX &optional LIM) - skip chars with given syntax
+;; Returns distance traveled (zero or negative).
+(defun skip-syntax-backward (string &optional (int | marker)) -> int)
+
+;; ===========================================================================
+;; Comment motion
+;; ===========================================================================
+
+;; (forward-comment COUNT) - move forward across COUNT comments
+;; Negative COUNT moves backward. Skips whitespace between comments.
+;; Returns t if COUNT comments found, nil otherwise.
+(defun forward-comment (int) -> bool)
+
+;; ===========================================================================
+;; S-expression scanning
+;; ===========================================================================
+
+;; (scan-lists FROM COUNT DEPTH) - scan for balanced parens
+;; FROM: starting position
+;; COUNT: number of lists to scan (negative = backward)
+;; DEPTH: initial nesting depth (positive = move out, negative = move in)
+;; Returns position, or nil at buffer boundary with zero depth, or signals error.
+(defun scan-lists (int int int) -> (int | nil))
+
+;; (scan-sexps FROM COUNT) - scan for balanced expressions
+;; Returns position or nil if boundary reached between expressions.
+;; Signals error if boundary reached inside expression.
+(defun scan-sexps (int int) -> (int | nil))
+
+;; (backward-prefix-chars) - move backward over prefix syntax chars
+;; Moves over expression prefix (') and prefix flag (p) characters.
+(defun backward-prefix-chars () -> nil)
+
+;; (parse-partial-sexp FROM TO &optional TARGETDEPTH STOPBEFORE OLDSTATE COMMENTSTOP)
+;; Parse Lisp syntax from FROM to TO, returns parse state.
+;; TARGETDEPTH: stop at this paren depth
+;; STOPBEFORE: stop before any sexp-starting character
+;; OLDSTATE: previous parse state to continue from
+;; COMMENTSTOP: stop at comment start (or 'syntax-table for comment/string)
+;;
+;; Returns list:
+;;  0: depth in parens
+;;  1: position of innermost containing list start (or nil)
+;;  2: position of last complete sexp end
+;;  3: non-nil if in string (char to terminate, or t for generic)
+;;  4: nil outside comment, t in non-nestable, else nesting level
+;;  5: t if following quote character
+;;  6: minimum paren depth encountered
+;;  7: comment style (if any)
+;;  8: position of comment/string start (or nil)
+;;  9: list of open paren positions (outermost first)
+;; 10: syntax of position if potential two-char construct (or nil)
+(defun parse-partial-sexp (int int &optional (int | nil) any (list any) any) -> (list any))

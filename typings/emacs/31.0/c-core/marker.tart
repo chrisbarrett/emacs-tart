@@ -1,0 +1,62 @@
+;; Type signatures for Emacs marker.c
+;;
+;; Source: emacs/src/marker.c
+;; Emacs version: 31.0
+;;
+;; Contains marker creation and manipulation functions.
+
+;; ===========================================================================
+;; Marker predicates
+;; ===========================================================================
+
+;; (markerp OBJECT) - return t if OBJECT is a marker
+(defun markerp (any) -> bool)
+
+;; ===========================================================================
+;; Marker properties
+;; ===========================================================================
+
+;; (marker-buffer MARKER) - return buffer MARKER points into, or nil if none
+(defun marker-buffer (marker) -> (buffer | nil))
+
+;; (marker-position MARKER) - return position of MARKER, or nil if nowhere
+(defun marker-position (marker) -> (int | nil))
+
+;; (marker-last-position MARKER) - return final position even in dead buffer
+;; This is the position the marker held when its buffer was killed.
+(defun marker-last-position (marker) -> int)
+
+;; (marker-insertion-type MARKER) - return insertion type of MARKER
+;; t means the marker stays after inserted text at its position.
+;; nil means the marker stays before inserted text.
+(defun marker-insertion-type (marker) -> bool)
+
+;; ===========================================================================
+;; Marker creation
+;; ===========================================================================
+
+;; (make-marker) - return newly allocated marker with position nil
+(defun make-marker () -> marker)
+
+;; (copy-marker &optional MARKER TYPE) - return new marker with same position
+;; MARKER can be a marker or integer (position in current buffer).
+;; TYPE sets the insertion-type (nil or non-nil).
+(defun copy-marker (&optional (int | marker) any) -> marker)
+
+;; ===========================================================================
+;; Marker modification
+;; ===========================================================================
+
+;; (set-marker MARKER POSITION &optional BUFFER) - set MARKER's position
+;; POSITION can be a marker, integer, or nil (unset the marker).
+;; BUFFER defaults to current buffer.
+;; Returns MARKER.
+(defun set-marker (marker (int | marker | nil) &optional buffer) -> marker)
+
+;; (set-marker-insertion-type MARKER TYPE) - set insertion-type of MARKER
+;; TYPE non-nil means stay after inserted text at that position.
+(defun set-marker-insertion-type (marker any) -> any)
+
+;; (move-marker MARKER POSITION &optional BUFFER) - alias for set-marker
+;; Functionally identical to set-marker.
+(defun move-marker (marker (int | marker | nil) &optional buffer) -> marker)
