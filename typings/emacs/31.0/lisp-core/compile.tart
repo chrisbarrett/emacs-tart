@@ -1,0 +1,217 @@
+;; Type signatures for Emacs compile.el
+;;
+;; Source: emacs/lisp/progmodes/compile.el
+;; Emacs version: 31.0
+;;
+;; Compilation mode for running commands and navigating errors.
+
+;; ============================================================================
+;; Primary Compilation Commands
+;; ============================================================================
+
+;; (compile COMMAND &optional COMINT) - run compilation command
+(defun compile (string &optional any) -> buffer)
+
+;; (recompile &optional EDIT-COMMAND) - re-run last compilation
+(defun recompile (&optional any) -> buffer)
+
+;; (compilation-start COMMAND &optional MODE NAME-FUNCTION HIGHLIGHT-REGEXP CONTINUE)
+(defun compilation-start (string &optional (symbol | ((nil) -> symbol)) ((string) -> string) string any) -> buffer)
+
+;; (kill-compilation) - kill running compilation
+(defun kill-compilation () -> nil)
+
+;; ============================================================================
+;; Error Navigation
+;; ============================================================================
+
+;; (next-error &optional N RESET) - visit next error
+(defun next-error (&optional int any) -> nil)
+
+;; (previous-error &optional N) - visit previous error
+(defun previous-error (&optional int) -> nil)
+
+;; (first-error &optional N) - visit first error
+(defun first-error (&optional int) -> nil)
+
+;; (next-error-no-select &optional N) - move to next error without selecting
+(defun next-error-no-select (&optional int) -> nil)
+
+;; (previous-error-no-select &optional N) - move to previous error without selecting
+(defun previous-error-no-select (&optional int) -> nil)
+
+;; (compilation-next-error N &optional DIFFERENT-FILE PT) - next error in compilation buffer
+(defun compilation-next-error (int &optional any int) -> nil)
+
+;; (compilation-previous-error N) - previous error in compilation buffer
+(defun compilation-previous-error (int) -> nil)
+
+;; (compilation-next-file N) - go to next file in compilation output
+(defun compilation-next-file (int) -> nil)
+
+;; (compilation-previous-file N) - go to previous file
+(defun compilation-previous-file (int) -> nil)
+
+;; (next-error-follow-minor-mode &optional ARG) - auto-follow errors
+(defun next-error-follow-minor-mode (&optional any) -> nil)
+
+;; (next-error-select-buffer BUFFER) - select buffer for next-error
+(defun next-error-select-buffer (buffer) -> nil)
+
+;; ============================================================================
+;; Compilation Modes
+;; ============================================================================
+
+;; (compilation-mode &optional NAME-OF-MODE) - major mode for compilation
+(defun compilation-mode (&optional string) -> nil)
+
+;; (compilation-minor-mode &optional ARG) - minor mode for error navigation
+(defun compilation-minor-mode (&optional any) -> nil)
+
+;; (compilation-shell-minor-mode &optional ARG) - minor mode for shell buffers
+(defun compilation-shell-minor-mode (&optional any) -> nil)
+
+;; ============================================================================
+;; Source Navigation
+;; ============================================================================
+
+;; (compilation-goto-locus NEXT-ERROR) - go to error location
+(defun compilation-goto-locus (any) -> nil)
+
+;; (compilation-display-error) - display error without selecting
+(defun compilation-display-error () -> nil)
+
+;; (compilation-find-file MARKER FILENAME DIRECTORY &rest FORMATS)
+(defun compilation-find-file (marker string string &rest string) -> buffer)
+
+;; ============================================================================
+;; Buffer Operations
+;; ============================================================================
+
+;; (compilation-filter PROC STRING) - filter compilation output
+(defun compilation-filter (process string) -> nil)
+
+;; (compilation-forget-errors) - clear error list
+(defun compilation-forget-errors () -> nil)
+
+;; (compilation-handle-exit PROCESS-STATUS EXIT-STATUS MSG)
+(defun compilation-handle-exit (symbol int string) -> nil)
+
+;; ============================================================================
+;; Grep (often compiled together with compile)
+;; ============================================================================
+
+;; (grep COMMAND-ARGS) - run grep
+(defun grep (string) -> nil)
+
+;; (grep-find COMMAND-ARGS) - run grep with find
+(defun grep-find (string) -> nil)
+
+;; (lgrep REGEXP &optional FILES DIR CONFIRM) - local grep
+(defun lgrep (string &optional string string any) -> nil)
+
+;; (rgrep REGEXP &optional FILES DIR CONFIRM) - recursive grep
+(defun rgrep (string &optional string string any) -> nil)
+
+;; (zrgrep REGEXP &optional FILES DIR CONFIRM) - recursive grep in compressed files
+(defun zrgrep (string &optional string string any) -> nil)
+
+;; (grep-mode) - major mode for grep output
+(defun grep-mode () -> nil)
+
+;; ============================================================================
+;; Variables
+;; ============================================================================
+
+;; Default compile command
+(defvar compile-command string)
+
+;; Whether to prompt for command
+(defvar compilation-read-command any)
+
+;; Scroll compilation output
+(defvar compilation-scroll-output (symbol | nil))
+
+;; Skip threshold for errors
+(defvar compilation-skip-threshold int)
+
+;; Error regexp alist
+(defvar compilation-error-regexp-alist (list (symbol | (list any))))
+
+;; Error regexp alist-alist
+(defvar compilation-error-regexp-alist-alist (list (pair symbol (list any))))
+
+;; Current compilation directory
+(defvar compilation-directory (string | nil))
+
+;; Compilation buffer name function
+(defvar compilation-buffer-name-function (((symbol) -> string) | nil))
+
+;; Environment for compilation
+(defvar compilation-environment (list string))
+
+;; Process setup function
+(defvar compilation-process-setup-function (((nil) -> nil) | nil))
+
+;; Finished message function
+(defvar compilation-finish-functions (list ((buffer string) -> nil)))
+
+;; Window height
+(defvar compilation-window-height (int | nil))
+
+;; Context lines
+(defvar compilation-context-lines (int | nil))
+
+;; Highlight line
+(defvar compilation-highlight-line any)
+
+;; Highlight overlay
+(defvar compilation-highlight-overlay (any | nil))
+
+;; Message face
+(defvar compilation-message-face symbol)
+
+;; Error face
+(defvar compilation-error-face symbol)
+
+;; Warning face
+(defvar compilation-warning-face symbol)
+
+;; Info face
+(defvar compilation-info-face symbol)
+
+;; Mode hook
+(defvar compilation-mode-hook (list ((nil) -> any)))
+
+;; Start hook
+(defvar compilation-start-hook (list ((process) -> any)))
+
+;; Ask about save
+(defvar compilation-ask-about-save any)
+
+;; Save buffers predicate
+(defvar compilation-save-buffers-predicate (((buffer) -> any) | nil))
+
+;; Next error function (for use in other modes)
+(defvar next-error-function (((int any) -> nil) | nil))
+
+;; Next error last buffer
+(defvar next-error-last-buffer (buffer | nil))
+
+;; Grep command
+(defvar grep-command string)
+
+;; Grep find command
+(defvar grep-find-command (string | (pair string int)))
+
+;; Grep template
+(defvar grep-template string)
+
+;; Grep find template
+(defvar grep-find-template string)
+
+;; Grep files aliases
+(defvar grep-files-aliases (list (pair string string)))
+
+;; Grep mode hook
+(defvar grep-mode-hook (list ((nil) -> any)))
