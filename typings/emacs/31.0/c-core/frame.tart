@@ -17,247 +17,247 @@
 
 ;; (frame-visible-p FRAME) - test if frame is visible
 ;; Returns t, nil, or symbol 'icon
-(defun frame-visible-p (any) -> (symbol | nil))
+(defun frame-visible-p (frame) -> (symbol | nil))
 
 ;; ===========================================================================
 ;; Frame selection and listing
 ;; ===========================================================================
 
 ;; (selected-frame) - return the selected frame
-(defun selected-frame () -> any)
+(defun selected-frame () -> frame)
 
 ;; (frame-list) - return list of all live frames
-(defun frame-list () -> (list any))
+(defun frame-list () -> (list frame))
 
 ;; (visible-frame-list) - return list of visible frames
-(defun visible-frame-list () -> (list any))
+(defun visible-frame-list () -> (list frame))
 
 ;; ===========================================================================
 ;; Frame selection
 ;; ===========================================================================
 
 ;; (select-frame FRAME &optional NORECORD) - select frame as current
-(defun select-frame (any &optional any) -> any)
+(defun select-frame (frame &optional any) -> frame)
 
 ;; (select-frame-set-input-focus FRAME &optional NORECORD) - select and focus
-(defun select-frame-set-input-focus (any &optional any) -> nil)
+(defun select-frame-set-input-focus (frame &optional any) -> nil)
 
 ;; ===========================================================================
 ;; Frame creation and deletion
 ;; ===========================================================================
 
 ;; (make-frame &optional PARMS) - create new frame
-(defun make-frame (&optional (list any)) -> any)
+(defun make-frame (&optional (list any)) -> frame)
 
 ;; (make-terminal-frame PARMS) - create terminal frame
-(defun make-terminal-frame ((list any)) -> any)
+(defun make-terminal-frame ((list any)) -> frame)
 
 ;; (make-frame-visible &optional FRAME) - make frame visible
-(defun make-frame-visible (&optional any) -> any)
+(defun make-frame-visible (&optional frame) -> frame)
 
 ;; (make-frame-invisible &optional FRAME FORCE) - make frame invisible
-(defun make-frame-invisible (&optional any any) -> nil)
+(defun make-frame-invisible (&optional frame any) -> nil)
 
 ;; (delete-frame &optional FRAME FORCE) - delete a frame
-(defun delete-frame (&optional any any) -> nil)
+(defun delete-frame (&optional frame any) -> nil)
 
 ;; (iconify-frame &optional FRAME) - iconify a frame
-(defun iconify-frame (&optional any) -> nil)
+(defun iconify-frame (&optional frame) -> nil)
 
 ;; (raise-frame &optional FRAME) - bring frame to front
-(defun raise-frame (&optional any) -> nil)
+(defun raise-frame (&optional frame) -> nil)
 
 ;; (lower-frame &optional FRAME) - send frame to back
-(defun lower-frame (&optional any) -> nil)
+(defun lower-frame (&optional frame) -> nil)
 
 ;; ===========================================================================
 ;; Frame parameters
 ;; ===========================================================================
 
 ;; (frame-parameters &optional FRAME) - return all parameters
-(defun frame-parameters (&optional any) -> (list any))
+(defun frame-parameters (&optional frame) -> (list any))
 
 ;; (frame-parameter FRAME PARAMETER) - get a single parameter
-(defun frame-parameter (any symbol) -> any)
+(defun frame-parameter (frame symbol) -> any)
 
 ;; (modify-frame-parameters FRAME ALIST) - modify parameters
-(defun modify-frame-parameters (any (list any)) -> nil)
+(defun modify-frame-parameters (frame (list any)) -> nil)
 
 ;; ===========================================================================
 ;; Frame window relationship
 ;; ===========================================================================
 
 ;; (frame-first-window &optional FRAME-OR-WINDOW) - first window on frame
-(defun frame-first-window (&optional any) -> any)
+(defun frame-first-window (&optional (frame | window)) -> window)
 
 ;; (frame-root-window &optional FRAME-OR-WINDOW) - root window of frame
-(defun frame-root-window (&optional any) -> any)
+(defun frame-root-window (&optional (frame | window)) -> window)
 
 ;; (frame-selected-window &optional FRAME-OR-WINDOW) - selected window of frame
-(defun frame-selected-window (&optional any) -> any)
+(defun frame-selected-window (&optional (frame | window)) -> window)
 
 ;; (frame-old-selected-window &optional FRAME) - old selected window
-(defun frame-old-selected-window (&optional any) -> (any | nil))
+(defun frame-old-selected-window (&optional frame) -> (window | nil))
 
 ;; ===========================================================================
 ;; Frame hierarchy (parent/child frames)
 ;; ===========================================================================
 
 ;; (frame-parent &optional FRAME) - return parent frame
-(defun frame-parent (&optional any) -> (any | nil))
+(defun frame-parent (&optional frame) -> (frame | nil))
 
 ;; (frame-root-frame &optional FRAME) - return root frame
-(defun frame-root-frame (&optional any) -> any)
+(defun frame-root-frame (&optional frame) -> frame)
 
 ;; (frame-ancestor-p ANCESTOR DESCENDANT) - test ancestry
-(defun frame-ancestor-p (any any) -> bool)
+(defun frame-ancestor-p (frame frame) -> bool)
 
 ;; ===========================================================================
 ;; Frame focus
 ;; ===========================================================================
 
 ;; (frame-focus &optional FRAME) - return focus frame
-(defun frame-focus (&optional any) -> (any | nil))
+(defun frame-focus (&optional frame) -> (frame | nil))
 
 ;; (redirect-frame-focus FRAME &optional FOCUS-FRAME) - redirect focus
-(defun redirect-frame-focus (any &optional any) -> nil)
+(defun redirect-frame-focus (frame &optional frame) -> nil)
 
 ;; ===========================================================================
 ;; Frame dimensions (text area)
 ;; ===========================================================================
 
 ;; (frame-text-height &optional FRAME) - text area height in pixels
-(defun frame-text-height (&optional any) -> int)
+(defun frame-text-height (&optional frame) -> int)
 
 ;; (frame-text-width &optional FRAME) - text area width in pixels
-(defun frame-text-width (&optional any) -> int)
+(defun frame-text-width (&optional frame) -> int)
 
 ;; (frame-text-cols &optional FRAME) - text area width in columns
-(defun frame-text-cols (&optional any) -> int)
+(defun frame-text-cols (&optional frame) -> int)
 
 ;; (frame-text-lines &optional FRAME) - text area height in lines
-(defun frame-text-lines (&optional any) -> int)
+(defun frame-text-lines (&optional frame) -> int)
 
 ;; ===========================================================================
 ;; Frame dimensions (total)
 ;; ===========================================================================
 
 ;; (frame-total-cols &optional FRAME) - total width in columns
-(defun frame-total-cols (&optional any) -> int)
+(defun frame-total-cols (&optional frame) -> int)
 
 ;; (frame-total-lines &optional FRAME) - total height in lines
-(defun frame-total-lines (&optional any) -> int)
+(defun frame-total-lines (&optional frame) -> int)
 
 ;; (frame-native-height &optional FRAME) - native height in pixels
-(defun frame-native-height (&optional any) -> int)
+(defun frame-native-height (&optional frame) -> int)
 
 ;; (frame-native-width &optional FRAME) - native width in pixels
-(defun frame-native-width (&optional any) -> int)
+(defun frame-native-width (&optional frame) -> int)
 
 ;; ===========================================================================
 ;; Frame character dimensions
 ;; ===========================================================================
 
 ;; (frame-char-height &optional FRAME) - character height in pixels
-(defun frame-char-height (&optional any) -> int)
+(defun frame-char-height (&optional frame) -> int)
 
 ;; (frame-char-width &optional FRAME) - character width in pixels
-(defun frame-char-width (&optional any) -> int)
+(defun frame-char-width (&optional frame) -> int)
 
 ;; ===========================================================================
 ;; Frame position
 ;; ===========================================================================
 
 ;; (frame-position &optional FRAME) - return (x . y) position
-(defun frame-position (&optional any) -> (pair int int))
+(defun frame-position (&optional frame) -> (pair int int))
 
 ;; ===========================================================================
 ;; Frame decorations
 ;; ===========================================================================
 
 ;; (frame-fringe-width &optional FRAME) - fringe width in pixels
-(defun frame-fringe-width (&optional any) -> int)
+(defun frame-fringe-width (&optional frame) -> int)
 
 ;; (frame-internal-border-width &optional FRAME) - internal border width
-(defun frame-internal-border-width (&optional any) -> int)
+(defun frame-internal-border-width (&optional frame) -> int)
 
 ;; (frame-child-frame-border-width &optional FRAME) - child frame border width
-(defun frame-child-frame-border-width (&optional any) -> int)
+(defun frame-child-frame-border-width (&optional frame) -> int)
 
 ;; (frame-scroll-bar-height &optional FRAME) - scroll bar height
-(defun frame-scroll-bar-height (&optional any) -> int)
+(defun frame-scroll-bar-height (&optional frame) -> int)
 
 ;; (frame-scroll-bar-width &optional FRAME) - scroll bar width
-(defun frame-scroll-bar-width (&optional any) -> int)
+(defun frame-scroll-bar-width (&optional frame) -> int)
 
 ;; (frame-bottom-divider-width &optional FRAME) - bottom divider width
-(defun frame-bottom-divider-width (&optional any) -> int)
+(defun frame-bottom-divider-width (&optional frame) -> int)
 
 ;; (frame-right-divider-width &optional FRAME) - right divider width
-(defun frame-right-divider-width (&optional any) -> int)
+(defun frame-right-divider-width (&optional frame) -> int)
 
 ;; ===========================================================================
 ;; Tool bar and tab bar
 ;; ===========================================================================
 
 ;; (tool-bar-height &optional FRAME PIXELWISE) - tool bar height
-(defun tool-bar-height (&optional any any) -> int)
+(defun tool-bar-height (&optional frame any) -> int)
 
 ;; (tab-bar-height &optional FRAME PIXELWISE) - tab bar height
-(defun tab-bar-height (&optional any any) -> int)
+(defun tab-bar-height (&optional frame any) -> int)
 
 ;; ===========================================================================
 ;; Mouse position
 ;; ===========================================================================
 
 ;; (mouse-position) - return (FRAME X . Y) in characters
-(defun mouse-position () -> (pair any (pair (int | nil) (int | nil))))
+(defun mouse-position () -> (pair frame (pair (int | nil) (int | nil))))
 
 ;; (mouse-pixel-position) - return (FRAME X . Y) in pixels
-(defun mouse-pixel-position () -> (pair any (pair (int | nil) (int | nil))))
+(defun mouse-pixel-position () -> (pair frame (pair (int | nil) (int | nil))))
 
 ;; (set-mouse-position FRAME X Y) - set mouse position in characters
-(defun set-mouse-position (any int int) -> nil)
+(defun set-mouse-position (frame int int) -> nil)
 
 ;; (set-mouse-pixel-position FRAME X Y) - set mouse position in pixels
-(defun set-mouse-pixel-position (any int int) -> nil)
+(defun set-mouse-pixel-position (frame int int) -> nil)
 
 ;; (frame-pointer-visible-p &optional FRAME) - test if pointer visible
-(defun frame-pointer-visible-p (&optional any) -> bool)
+(defun frame-pointer-visible-p (&optional frame) -> bool)
 
 ;; ===========================================================================
 ;; Frame terminal
 ;; ===========================================================================
 
 ;; (frame-terminal &optional FRAME) - return terminal of frame
-(defun frame-terminal (&optional any) -> (int | nil))
+(defun frame-terminal (&optional frame) -> (int | nil))
 
 ;; ===========================================================================
 ;; Display properties
 ;; ===========================================================================
 
 ;; (frame-scale-factor &optional FRAME) - return scale factor
-(defun frame-scale-factor (&optional any) -> float)
+(defun frame-scale-factor (&optional frame) -> float)
 
 ;; ===========================================================================
 ;; Display updates
 ;; ===========================================================================
 
 ;; (redraw-frame &optional FRAME) - redraw a frame
-(defun redraw-frame (&optional any) -> nil)
+(defun redraw-frame (&optional frame) -> nil)
 
 ;; (redraw-display) - redraw all frames
 (defun redraw-display () -> nil)
 
 ;; (handle-switch-frame EVENT) - handle switch-frame event
-(defun handle-switch-frame (any) -> any)
+(defun handle-switch-frame (any) -> frame)
 
 ;; ===========================================================================
 ;; Frame state
 ;; ===========================================================================
 
 ;; (frame-window-state-change &optional FRAME) - check state change flag
-(defun frame-window-state-change (&optional any) -> bool)
+(defun frame-window-state-change (&optional frame) -> bool)
 
 ;; (frame-or-buffer-changed-p &optional VARIABLE) - check for changes
 (defun frame-or-buffer-changed-p (&optional any) -> any)
@@ -267,16 +267,16 @@
 ;; ===========================================================================
 
 ;; (frame-font-cache &optional FRAME) - return font cache (debugging)
-(defun frame-font-cache (&optional any) -> any)
+(defun frame-font-cache (&optional frame) -> any)
 
 ;; (frame--face-hash-table &optional FRAME) - return face hash table
-(defun frame--face-hash-table (&optional any) -> any)
+(defun frame--face-hash-table (&optional frame) -> any)
 
 ;; (frame-after-make-frame FRAME MADE) - mark frame as made
-(defun frame-after-make-frame (any any) -> nil)
+(defun frame-after-make-frame (frame any) -> nil)
 
 ;; (frame--set-was-invisible FRAME WAS-INVISIBLE) - set was-invisible flag
-(defun frame--set-was-invisible (any any) -> nil)
+(defun frame--set-was-invisible (frame any) -> nil)
 
 ;; (frame--z-order-lessp A B) - compare z-order
-(defun frame--z-order-lessp (any any) -> bool)
+(defun frame--z-order-lessp (frame frame) -> bool)

@@ -23,23 +23,23 @@
 ;; ===========================================================================
 
 ;; (point-marker) - return point as a marker
-(defun point-marker () -> any)
+(defun point-marker () -> marker)
 
 ;; (point-min-marker) - return point-min as a marker
-(defun point-min-marker () -> any)
+(defun point-min-marker () -> marker)
 
 ;; (point-max-marker) - return point-max as a marker
-(defun point-max-marker () -> any)
+(defun point-max-marker () -> marker)
 
 ;; (mark-marker) - return the mark as a marker
-(defun mark-marker () -> any)
+(defun mark-marker () -> marker)
 
 ;; ===========================================================================
 ;; Point movement
 ;; ===========================================================================
 
 ;; (goto-char POSITION) - set point to position, return position
-(defun goto-char ((int | any)) -> (int | any))
+(defun goto-char ((int | marker)) -> (int | marker))
 
 ;; ===========================================================================
 ;; Buffer position predicates
@@ -62,10 +62,10 @@
 ;; ===========================================================================
 
 ;; (char-after &optional POS) - return character at position (or 0 at end)
-(defun char-after (&optional (int | any)) -> (int | nil))
+(defun char-after (&optional (int | marker)) -> (int | nil))
 
 ;; (char-before &optional POS) - return character before position (or 0 at start)
-(defun char-before (&optional (int | any)) -> (int | nil))
+(defun char-before (&optional (int | marker)) -> (int | nil))
 
 ;; (following-char) - return character after point (or 0 at end)
 (defun following-char () -> int)
@@ -98,7 +98,7 @@
 ;; ===========================================================================
 
 ;; (buffer-size &optional BUFFER) - return character count
-(defun buffer-size (&optional any) -> int)
+(defun buffer-size (&optional buffer) -> int)
 
 ;; (buffer-string) - return buffer contents as string
 (defun buffer-string () -> string)
@@ -168,7 +168,7 @@
 (defun insert-byte (int int &optional any) -> nil)
 
 ;; (insert-buffer-substring BUFFER &optional START END) - insert from buffer
-(defun insert-buffer-substring (any &optional int int) -> nil)
+(defun insert-buffer-substring ((buffer | string) &optional int int) -> nil)
 
 ;; ===========================================================================
 ;; Deletion
@@ -185,19 +185,19 @@
 ;; ===========================================================================
 
 ;; (field-beginning &optional POS ESCAPE-FROM-EDGE LIMIT) - return field start
-(defun field-beginning (&optional any any int) -> int)
+(defun field-beginning (&optional (int | marker) any int) -> int)
 
 ;; (field-end &optional POS ESCAPE-FROM-EDGE LIMIT) - return field end
-(defun field-end (&optional any any int) -> int)
+(defun field-end (&optional (int | marker) any int) -> int)
 
 ;; (field-string &optional POS) - return field contents
-(defun field-string (&optional any) -> string)
+(defun field-string (&optional (int | marker)) -> string)
 
 ;; (field-string-no-properties &optional POS) - return field contents without properties
-(defun field-string-no-properties (&optional any) -> string)
+(defun field-string-no-properties (&optional (int | marker)) -> string)
 
 ;; (delete-field &optional POS) - delete field around position
-(defun delete-field (&optional any) -> nil)
+(defun delete-field (&optional (int | marker)) -> nil)
 
 ;; (constrain-to-field NEW-POS OLD-POS &optional ESCAPE-FROM-EDGE ONLY-IN-LINE INHIBIT-CAPTURE-PROPERTY)
 ;; Return position closest to NEW-POS in same field as OLD-POS
