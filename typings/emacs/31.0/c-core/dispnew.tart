@@ -1,0 +1,63 @@
+;; Type signatures for Emacs dispnew.c
+;;
+;; Source: emacs/src/dispnew.c
+;; Emacs version: 31.0
+;;
+;; Contains display update functions: sleeping, beeping, screen refresh.
+
+;; ===========================================================================
+;; Sleep and wait
+;; ===========================================================================
+
+;; (sleep-for SECONDS &optional MILLISECONDS) - pause for duration
+(defun sleep-for (num &optional int) -> nil)
+
+;; ===========================================================================
+;; Screen update
+;; ===========================================================================
+
+;; (redraw-frame &optional FRAME) - force complete redraw of frame
+(defun redraw-frame (&optional frame) -> nil)
+
+;; (redraw-display) - force complete redraw of all frames
+(defun redraw-display () -> nil)
+
+;; ===========================================================================
+;; Bells and signals
+;; ===========================================================================
+
+;; (ding &optional DO-NOT-TERMINATE) - ring the bell
+(defun ding (&optional any) -> nil)
+
+;; ===========================================================================
+;; Terminal script
+;; ===========================================================================
+
+;; (open-termscript FILE) - record terminal output to file
+(defun open-termscript ((string | nil)) -> nil)
+
+;; ===========================================================================
+;; Internal/debugging
+;; ===========================================================================
+
+;; (frame-or-buffer-changed-p &optional VARIABLE) - check for changes
+(defun frame-or-buffer-changed-p (&optional symbol) -> any)
+
+;; (internal-show-cursor WINDOW SHOW) - show/hide cursor in window
+(defun internal-show-cursor (window any) -> nil)
+
+;; (internal-show-cursor-p &optional WINDOW) - query cursor visibility
+(defun internal-show-cursor-p (&optional window) -> bool)
+
+;; ===========================================================================
+;; Variables
+;; ===========================================================================
+
+;; (defvar visible-bell) - if non-nil, flash screen instead of beep
+(defvar visible-bell bool)
+
+;; (defvar redisplay-dont-pause) - legacy variable (always t now)
+(defvar redisplay-dont-pause bool)
+
+;; (defvar cursor-in-non-selected-windows) - cursor style for non-selected
+(defvar cursor-in-non-selected-windows any)

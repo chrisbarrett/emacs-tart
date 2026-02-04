@@ -1,0 +1,54 @@
+;; Type signatures for Emacs character.c
+;;
+;; Source: emacs/src/character.c
+;; Emacs version: 31.0
+;;
+;; Contains character-related functions: width calculations, character
+;; properties, and multibyte character handling.
+
+;; ===========================================================================
+;; Character width
+;; ===========================================================================
+
+;; (char-width CHAR) - return display width of CHAR
+(defun char-width (int) -> int)
+
+;; (string-width STRING &optional FROM TO) - return display width of STRING
+(defun string-width (string &optional int int) -> int)
+
+;; ===========================================================================
+;; Character properties
+;; ===========================================================================
+
+;; (characterp OBJECT) - test if OBJECT is a character
+(defun characterp (any) -> bool)
+
+;; (max-char &optional UNICODE) - return maximum valid character code
+(defun max-char (&optional any) -> int)
+
+;; (unibyte-char-to-multibyte CHAR) - convert unibyte char to multibyte
+(defun unibyte-char-to-multibyte (int) -> int)
+
+;; (multibyte-char-to-unibyte CHAR) - convert multibyte char to unibyte
+(defun multibyte-char-to-unibyte (int) -> int)
+
+;; (char-bytes CHAR) - return number of bytes needed for CHAR
+(defun char-bytes (int) -> int)
+
+;; ===========================================================================
+;; Character scripts and categories
+;; ===========================================================================
+
+;; (char-script CHAR) - return script symbol for CHAR
+(defun char-script (int) -> symbol)
+
+;; ===========================================================================
+;; Character to/from string
+;; ===========================================================================
+
+;; (string CHAR...) - create string from characters
+;; Note: defined in alloc.c but conceptually related
+(defun string (&rest int) -> string)
+
+;; (unibyte-string BYTES...) - create unibyte string from bytes
+(defun unibyte-string (&rest int) -> string)

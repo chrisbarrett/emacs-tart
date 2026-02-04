@@ -1,0 +1,110 @@
+;; Type signatures for Emacs xdisp.c
+;;
+;; Source: emacs/src/xdisp.c
+;; Emacs version: 31.0
+;;
+;; Contains display engine functions: mode line formatting, invisibility,
+;; display specifications, and redisplay control.
+
+;; ===========================================================================
+;; Mode line formatting
+;; ===========================================================================
+
+;; (format-mode-line FORMAT &optional FACE WINDOW BUFFER) - format mode line string
+(defun format-mode-line (any &optional any window buffer) -> string)
+
+;; ===========================================================================
+;; Invisibility
+;; ===========================================================================
+
+;; (invisible-p POS-OR-PROP) - test if position or property is invisible
+(defun invisible-p (any) -> any)
+
+;; ===========================================================================
+;; Line and pixel heights
+;; ===========================================================================
+
+;; (line-pixel-height) - return pixel height of current line
+(defun line-pixel-height () -> int)
+
+;; (current-line) - return current line number (1-based)
+(defun current-line () -> int)
+
+;; ===========================================================================
+;; Bidirectional text
+;; ===========================================================================
+
+;; (current-bidi-paragraph-direction &optional BUFFER) - return paragraph direction
+(defun current-bidi-paragraph-direction (&optional buffer) -> symbol)
+
+;; ===========================================================================
+;; Window display control
+;; ===========================================================================
+
+;; (window-text-pixel-size &optional WINDOW FROM TO X-LIMIT Y-LIMIT MODE ADD-HEIGHT)
+;; Return size of text in window as (WIDTH . HEIGHT) in pixels
+(defun window-text-pixel-size (&optional window any any int int any any) -> (cons int int))
+
+;; (buffer-text-pixel-size &optional BUFFER-OR-NAME WINDOW FROM TO X-LIMIT Y-LIMIT)
+(defun buffer-text-pixel-size (&optional buffer window any any int int) -> (cons int int))
+
+;; ===========================================================================
+;; Redisplay control
+;; ===========================================================================
+
+;; (redisplay &optional FORCE) - perform redisplay if needed
+(defun redisplay (&optional any) -> bool)
+
+;; (force-window-update &optional OBJECT) - force redisplay of windows
+(defun force-window-update (&optional any) -> bool)
+
+;; (tool-bar-height &optional FRAME PIXELWISE) - return tool bar height
+(defun tool-bar-height (&optional frame any) -> int)
+
+;; (tab-bar-height &optional FRAME PIXELWISE) - return tab bar height
+(defun tab-bar-height (&optional frame any) -> int)
+
+;; ===========================================================================
+;; Position calculations
+;; ===========================================================================
+
+;; (vertical-motion LINES &optional WINDOW CUR-COL) - move vertically
+(defun vertical-motion ((int | (cons int int)) &optional window int) -> int)
+
+;; (move-point-visually DIRECTION) - move point one visual position
+(defun move-point-visually (int) -> int)
+
+;; (window-absolute-pixel-position &optional POSITION WINDOW) - return (X . Y) coords
+(defun window-absolute-pixel-position (&optional int window) -> ((cons int int) | nil))
+
+;; ===========================================================================
+;; Display tables
+;; ===========================================================================
+
+;; (display-table-slot DISPLAY-TABLE SLOT) - get display table slot value
+(defun display-table-slot (any int) -> any)
+
+;; (set-display-table-slot DISPLAY-TABLE SLOT VALUE) - set display table slot
+(defun set-display-table-slot (any int any) -> any)
+
+;; (make-glyph-code CHAR &optional FACE) - create glyph code
+(defun make-glyph-code (int &optional symbol) -> int)
+
+;; (glyph-char GLYPH) - extract character from glyph code
+(defun glyph-char (int) -> int)
+
+;; (glyph-face GLYPH) - extract face from glyph code
+(defun glyph-face (int) -> (symbol | nil))
+
+;; ===========================================================================
+;; Dump/image state (debugging)
+;; ===========================================================================
+
+;; (dump-glyph-matrix &optional GLYPHS) - dump glyph matrix (debug)
+(defun dump-glyph-matrix (&optional any) -> nil)
+
+;; (dump-frame-glyph-matrix FRAME) - dump frame glyph matrix (debug)
+(defun dump-frame-glyph-matrix (frame) -> nil)
+
+;; (dump-tool-bar-row FRAME &optional GLYPHS) - dump tool bar row (debug)
+(defun dump-tool-bar-row (frame &optional any) -> nil)

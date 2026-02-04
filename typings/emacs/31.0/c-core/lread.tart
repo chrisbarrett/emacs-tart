@@ -1,0 +1,132 @@
+;; Type signatures for Emacs lread.c
+;;
+;; Source: emacs/src/lread.c
+;; Emacs version: 31.0
+;;
+;; Contains the Lisp reader: reading forms from streams, loading files,
+;; interning symbols, and managing obarrays.
+
+;; ===========================================================================
+;; Reading Lisp forms
+;; ===========================================================================
+
+;; (read &optional STREAM) - read one Lisp form from STREAM
+;; STREAM can be a buffer, marker, string, function, or t (minibuffer) or nil (stdin)
+(defun read (&optional any) -> any)
+
+;; (read-from-string STRING &optional START END) - read Lisp form from STRING
+;; Returns (OBJECT . NEXT-INDEX) where NEXT-INDEX is position after parsed form
+(defun read-from-string (string &optional int int) -> (cons any int))
+
+;; (read-positioning-symbols STRING &optional START END) - read with position info
+;; Like read-from-string but attaches position info to symbols
+(defun read-positioning-symbols (string &optional int int) -> (cons any int))
+
+;; ===========================================================================
+;; Loading files
+;; ===========================================================================
+
+;; (load FILE &optional NOERROR NOMESSAGE NOSUFFIX MUST-SUFFIX) - load Lisp file
+;; Returns t if file was found and loaded successfully
+(defun load (string &optional any any any any) -> bool)
+
+;; (eval-buffer &optional BUFFER PRINTFLAG FILENAME UNIBYTE DO-ALLOW-PRINT) - eval buffer contents
+(defun eval-buffer (&optional buffer any string any any) -> any)
+
+;; (get-file-char) - read next character from load stream (internal)
+(defun get-file-char () -> int)
+
+;; ===========================================================================
+;; Interning symbols
+;; ===========================================================================
+
+;; (intern STRING &optional OBARRAY) - intern symbol in obarray
+;; Creates or returns existing symbol with name STRING
+(defun intern (string &optional (vector any)) -> symbol)
+
+;; (intern-soft STRING &optional OBARRAY) - lookup symbol without creating
+;; Returns nil if symbol not found
+(defun intern-soft (string &optional (vector any)) -> (symbol | nil))
+
+;; (unintern NAME &optional OBARRAY) - remove symbol from obarray
+;; Returns t if symbol was removed, nil if not found
+(defun unintern ((string | symbol) &optional (vector any)) -> bool)
+
+;; ===========================================================================
+;; Obarray operations
+;; ===========================================================================
+
+;; (mapatoms FUNCTION &optional OBARRAY) - call FUNCTION on every symbol in obarray
+(defun mapatoms (any &optional (vector any)) -> nil)
+
+;; (obarray-make &optional SIZE) - create new obarray
+(defun obarray-make (&optional int) -> (vector any))
+
+;; (obarrayp OBJECT) - test if OBJECT is an obarray
+(defun obarrayp (any) -> bool)
+
+;; (obarray-get OBARRAY NAME) - lookup symbol in obarray without interning
+(defun obarray-get ((vector any) string) -> (symbol | nil))
+
+;; (obarray-put OBARRAY NAME) - intern symbol in obarray
+(defun obarray-put ((vector any) string) -> symbol)
+
+;; (obarray-remove OBARRAY NAME) - remove symbol from obarray
+(defun obarray-remove ((vector any) string) -> (symbol | nil))
+
+;; (obarray-size OBARRAY) - return number of symbols in obarray
+(defun obarray-size ((vector any)) -> int)
+
+;; ===========================================================================
+;; Features and provides
+;; ===========================================================================
+
+;; (featurep FEATURE &optional SUBFEATURE) - test if feature is loaded
+(defun featurep (symbol &optional symbol) -> bool)
+
+;; (provide FEATURE &optional SUBFEATURES) - announce that feature is loaded
+(defun provide (symbol &optional (list symbol)) -> symbol)
+
+;; (require FEATURE &optional FILENAME NOERROR) - ensure feature is loaded
+(defun require (symbol &optional string any) -> symbol)
+
+;; ===========================================================================
+;; Load path and locate
+;; ===========================================================================
+
+;; (locate-file FILENAME PATH &optional SUFFIXES PREDICATE) - search for file
+(defun locate-file (string (list string) &optional (list string) any) -> (string | nil))
+
+;; (locate-file-internal FILENAME PATH &optional SUFFIXES PREDICATE) - internal version
+(defun locate-file-internal (string (list string) &optional (list string) any) -> (string | nil))
+
+;; ===========================================================================
+;; Variables (for documentation only - types are any)
+;; ===========================================================================
+
+;; (defvar load-path) - list of directories to search for files to load
+(defvar load-path (list string))
+
+;; (defvar load-suffixes) - list of file suffixes to try when loading
+(defvar load-suffixes (list string))
+
+;; (defvar load-file-name) - name of file being loaded (or nil)
+(defvar load-file-name (string | nil))
+
+;; (defvar load-in-progress) - t if a load is in progress
+(defvar load-in-progress bool)
+
+;; (defvar load-read-function) - function used for reading during load
+(defvar load-read-function any)
+
+;; (defvar load-history) - alist mapping loaded files to defined symbols
+(defvar load-history (list any))
+
+;; (defvar features) - list of features provided by loaded files
+(defvar features (list symbol))
+
+;; (defvar obarray) - default obarray for interning symbols
+(defvar obarray (vector any))
+
+;; (defvar standard-input) - default input stream for read
+(defvar standard-input any)

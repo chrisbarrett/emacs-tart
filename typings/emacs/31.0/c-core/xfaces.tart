@@ -1,0 +1,97 @@
+;; Type signatures for Emacs xfaces.c
+;;
+;; Source: emacs/src/xfaces.c
+;; Emacs version: 31.0
+;;
+;; Contains face-related functions: creating, querying, and modifying faces.
+;; Most user-level face functions are in lisp/faces.el; these are internal
+;; primitives.
+
+;; ===========================================================================
+;; Face predicates
+;; ===========================================================================
+
+;; (internal-lisp-face-p FACE &optional FRAME) - test if FACE is a valid face
+(defun internal-lisp-face-p (symbol &optional frame) -> bool)
+
+;; (internal-lisp-face-empty-p FACE &optional FRAME) - test if face has no attributes
+(defun internal-lisp-face-empty-p (symbol &optional frame) -> bool)
+
+;; (internal-lisp-face-equal-p FACE1 FACE2 &optional FRAME) - compare faces
+(defun internal-lisp-face-equal-p (symbol symbol &optional frame) -> bool)
+
+;; ===========================================================================
+;; Face creation and copying
+;; ===========================================================================
+
+;; (internal-make-lisp-face FACE &optional FRAME) - create face if not exists
+(defun internal-make-lisp-face (symbol &optional frame) -> symbol)
+
+;; (internal-copy-lisp-face FROM TO &optional FRAME NEW-FRAME) - copy face attributes
+(defun internal-copy-lisp-face (symbol symbol &optional frame frame) -> symbol)
+
+;; ===========================================================================
+;; Face attributes
+;; ===========================================================================
+
+;; (internal-get-lisp-face-attribute FACE ATTRIBUTE &optional FRAME) - get attribute
+(defun internal-get-lisp-face-attribute (symbol symbol &optional frame) -> any)
+
+;; (internal-set-lisp-face-attribute FACE ATTRIBUTE VALUE &optional FRAME) - set attribute
+(defun internal-set-lisp-face-attribute (symbol symbol any &optional frame) -> symbol)
+
+;; (internal-set-lisp-face-attribute-from-resource FACE ATTRIBUTE VALUE &optional FRAME)
+(defun internal-set-lisp-face-attribute-from-resource (symbol symbol string &optional frame) -> any)
+
+;; (internal-lisp-face-attribute-values ATTRIBUTE) - return valid values for attribute
+(defun internal-lisp-face-attribute-values (symbol) -> (list any))
+
+;; (internal-merge-in-global-face FACE FRAME) - merge global face into frame-local
+(defun internal-merge-in-global-face (symbol frame) -> nil)
+
+;; ===========================================================================
+;; Face lookups
+;; ===========================================================================
+
+;; (face-attributes-as-vector FACE) - return face attributes as vector
+(defun face-attributes-as-vector (any) -> (vector any))
+
+;; (face-attribute-relative-p ATTRIBUTE VALUE) - test if VALUE is relative
+(defun face-attribute-relative-p (symbol any) -> bool)
+
+;; ===========================================================================
+;; Frame default faces
+;; ===========================================================================
+
+;; (face-set-after-frame-default FRAME &optional FACES) - reset faces to defaults
+(defun face-set-after-frame-default (frame &optional (list symbol)) -> nil)
+
+;; ===========================================================================
+;; Display capabilities
+;; ===========================================================================
+
+;; (display-supports-face-attributes-p ATTRIBUTES &optional DISPLAY) - test support
+(defun display-supports-face-attributes-p ((list any) &optional any) -> bool)
+
+;; (color-gray-p COLOR &optional FRAME) - test if COLOR is gray
+(defun color-gray-p (string &optional frame) -> bool)
+
+;; (color-supported-p COLOR &optional FRAME BACKGROUND-P) - test if COLOR is displayable
+(defun color-supported-p (string &optional frame any) -> bool)
+
+;; (color-distance COLOR1 COLOR2 &optional FRAME METRIC) - compute color distance
+(defun color-distance (string string &optional frame symbol) -> int)
+
+;; ===========================================================================
+;; Font-related (display)
+;; ===========================================================================
+
+;; (face-font FACE &optional FRAME CHARACTER) - return font used by face
+(defun face-font (symbol &optional frame int) -> (string | nil))
+
+;; ===========================================================================
+;; X resources (internal)
+;; ===========================================================================
+
+;; (internal-face-x-get-resource RESOURCE CLASS FRAME) - get X resource
+(defun internal-face-x-get-resource (string string frame) -> (string | nil))

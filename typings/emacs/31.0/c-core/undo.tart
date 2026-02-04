@@ -1,0 +1,45 @@
+;; Type signatures for Emacs undo.c
+;;
+;; Source: emacs/src/undo.c
+;; Emacs version: 31.0
+;;
+;; Contains undo/redo primitives. Higher-level undo commands are in
+;; lisp/simple.el.
+
+;; ===========================================================================
+;; Undo boundaries
+;; ===========================================================================
+
+;; (undo-boundary) - insert an undo boundary
+;; Returns nil. Used to group operations for undo.
+(defun undo-boundary () -> nil)
+
+;; (undo-auto-amalgamate) - auto-amalgamate undo records
+(defun undo-auto-amalgamate () -> nil)
+
+;; ===========================================================================
+;; Primitive undo
+;; ===========================================================================
+
+;; (primitive-undo COUNT LIST) - undo COUNT records from LIST
+;; Returns modified undo list tail
+(defun primitive-undo (int (list any)) -> (list any))
+
+;; ===========================================================================
+;; Variables
+;; ===========================================================================
+
+;; (defvar undo-limit) - soft limit on undo list size in bytes
+(defvar undo-limit int)
+
+;; (defvar undo-strong-limit) - hard limit on undo list size in bytes
+(defvar undo-strong-limit int)
+
+;; (defvar undo-outer-limit) - absolute maximum undo list size
+(defvar undo-outer-limit int)
+
+;; (defvar undo-outer-limit-function) - function called when limit exceeded
+(defvar undo-outer-limit-function any)
+
+;; (defvar undo-inhibit-record-point) - if non-nil, don't record point
+(defvar undo-inhibit-record-point bool)

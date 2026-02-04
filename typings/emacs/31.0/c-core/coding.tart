@@ -1,0 +1,110 @@
+;; Type signatures for Emacs coding.c
+;;
+;; Source: emacs/src/coding.c
+;; Emacs version: 31.0
+;;
+;; Contains coding system functions for character encoding conversion.
+
+;; ===========================================================================
+;; Coding system predicates and info
+;; ===========================================================================
+
+;; (coding-system-p OBJECT) - test if OBJECT is a coding system
+(defun coding-system-p (any) -> bool)
+
+;; (coding-system-base CODING-SYSTEM) - return base coding system
+(defun coding-system-base (symbol) -> symbol)
+
+;; (coding-system-aliases CODING-SYSTEM) - return list of aliases
+(defun coding-system-aliases (symbol) -> (list symbol))
+
+;; (coding-system-eol-type CODING-SYSTEM) - return EOL conversion type
+;; Returns 0 (LF), 1 (CRLF), 2 (CR), or vector of variants
+(defun coding-system-eol-type (symbol) -> (int | (vector symbol)))
+
+;; (coding-system-plist CODING-SYSTEM) - return property list
+(defun coding-system-plist (symbol) -> (list any))
+
+;; (coding-system-put CODING-SYSTEM PROP VAL) - set property
+(defun coding-system-put (symbol symbol any) -> nil)
+
+;; ===========================================================================
+;; Encoding/decoding regions and strings
+;; ===========================================================================
+
+;; (decode-coding-region START END CODING-SYSTEM &optional DESTINATION) - decode region
+(defun decode-coding-region (int int symbol &optional (buffer | nil)) -> int)
+
+;; (encode-coding-region START END CODING-SYSTEM &optional DESTINATION) - encode region
+(defun encode-coding-region (int int symbol &optional (buffer | nil)) -> int)
+
+;; (decode-coding-string STRING CODING-SYSTEM &optional NOCOPY BUFFER) - decode string
+(defun decode-coding-string (string symbol &optional any buffer) -> string)
+
+;; (encode-coding-string STRING CODING-SYSTEM &optional NOCOPY BUFFER) - encode string
+(defun encode-coding-string (string symbol &optional any buffer) -> string)
+
+;; ===========================================================================
+;; Detection
+;; ===========================================================================
+
+;; (detect-coding-region START END &optional HIGHEST) - detect coding in region
+(defun detect-coding-region (int int &optional any) -> (symbol | (list symbol)))
+
+;; (detect-coding-string STRING &optional HIGHEST) - detect coding in string
+(defun detect-coding-string (string &optional any) -> (symbol | (list symbol)))
+
+;; (check-coding-system CODING-SYSTEM) - signal error if invalid
+(defun check-coding-system (any) -> symbol)
+
+;; ===========================================================================
+;; Coding system queries
+;; ===========================================================================
+
+;; (coding-system-list &optional BASE-ONLY) - return list of all coding systems
+(defun coding-system-list (&optional any) -> (list symbol))
+
+;; (coding-system-priority-list &optional HIGHESTP) - return priority-ordered list
+(defun coding-system-priority-list (&optional any) -> (list symbol))
+
+;; (set-coding-system-priority &rest CODING-SYSTEMS) - set detection priority
+(defun set-coding-system-priority (&rest symbol) -> nil)
+
+;; ===========================================================================
+;; Coding categories
+;; ===========================================================================
+
+;; (define-coding-system-internal ARGS...) - internal definition function
+(defun define-coding-system-internal (&rest any) -> any)
+
+;; (coding-system-charset-list CODING-SYSTEM) - return supported charsets
+(defun coding-system-charset-list (symbol) -> (list symbol))
+
+;; ===========================================================================
+;; Terminal coding
+;; ===========================================================================
+
+;; (terminal-coding-system &optional TERMINAL) - return terminal's coding system
+(defun terminal-coding-system (&optional any) -> symbol)
+
+;; (set-terminal-coding-system-internal CODING-SYSTEM &optional TERMINAL)
+(defun set-terminal-coding-system-internal (symbol &optional any) -> symbol)
+
+;; (keyboard-coding-system &optional TERMINAL) - return keyboard coding system
+(defun keyboard-coding-system (&optional any) -> symbol)
+
+;; (set-keyboard-coding-system-internal CODING-SYSTEM &optional TERMINAL)
+(defun set-keyboard-coding-system-internal (symbol &optional any) -> symbol)
+
+;; ===========================================================================
+;; Safe coding check
+;; ===========================================================================
+
+;; (find-coding-systems-region-internal START END &optional STRING SAFE) - find codings
+(defun find-coding-systems-region-internal (int int &optional string any) -> (list symbol))
+
+;; (check-coding-systems-region START END CODING-SYSTEM-LIST) - check if safe
+(defun check-coding-systems-region (int int (list symbol)) -> (list any))
+
+;; (unencodable-char-position START END CODING-SYSTEM &optional COUNT STRING)
+(defun unencodable-char-position (int int symbol &optional int string) -> (int | (list int) | nil))

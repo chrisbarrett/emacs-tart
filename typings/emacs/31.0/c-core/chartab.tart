@@ -1,0 +1,70 @@
+;; Type signatures for Emacs chartab.c
+;;
+;; Source: emacs/src/chartab.c
+;; Emacs version: 31.0
+;;
+;; Contains character table functions. A char-table is a table indexed by
+;; character codes, used for syntax tables, display tables, case tables, etc.
+
+;; ===========================================================================
+;; Type predicate
+;; ===========================================================================
+
+;; (char-table-p OBJECT) - test if OBJECT is a char-table
+(defun char-table-p (any) -> bool)
+
+;; ===========================================================================
+;; Creation
+;; ===========================================================================
+
+;; (make-char-table PURPOSE &optional INIT) - create new char-table
+;; PURPOSE is a symbol naming the intended use
+(defun make-char-table (symbol &optional any) -> char-table)
+
+;; ===========================================================================
+;; Access
+;; ===========================================================================
+
+;; (char-table-subtype CHAR-TABLE) - return purpose symbol
+(defun char-table-subtype (char-table) -> symbol)
+
+;; (char-table-parent CHAR-TABLE) - return parent char-table or nil
+(defun char-table-parent (char-table) -> (char-table | nil))
+
+;; (set-char-table-parent CHAR-TABLE PARENT) - set parent char-table
+(defun set-char-table-parent (char-table (char-table | nil)) -> (char-table | nil))
+
+;; (char-table-range CHAR-TABLE RANGE) - get value for character range
+;; RANGE can be: char, (FROM . TO), nil (default), t (all)
+(defun char-table-range (char-table any) -> any)
+
+;; (set-char-table-range CHAR-TABLE RANGE VALUE) - set value for character range
+(defun set-char-table-range (char-table any any) -> any)
+
+;; ===========================================================================
+;; Extra slots
+;; ===========================================================================
+
+;; (char-table-extra-slots CHAR-TABLE) - return number of extra slots
+(defun char-table-extra-slots (char-table) -> int)
+
+;; (char-table-extra-slot CHAR-TABLE N) - get value in extra slot N
+(defun char-table-extra-slot (char-table int) -> any)
+
+;; (set-char-table-extra-slot CHAR-TABLE N VALUE) - set value in extra slot N
+(defun set-char-table-extra-slot (char-table int any) -> any)
+
+;; ===========================================================================
+;; Traversal
+;; ===========================================================================
+
+;; (map-char-table FUNCTION CHAR-TABLE) - call FUNCTION for each entry
+;; FUNCTION receives (RANGE VALUE) where RANGE is char or (FROM . TO)
+(defun map-char-table (any char-table) -> nil)
+
+;; ===========================================================================
+;; Unicode optimization
+;; ===========================================================================
+
+;; (optimize-char-table CHAR-TABLE &optional TEST) - optimize storage
+(defun optimize-char-table (char-table &optional any) -> nil)
