@@ -1,0 +1,90 @@
+;; Type signatures for Emacs font.c
+;;
+;; Source: emacs/src/font.c
+;; Emacs version: 31.0
+;;
+;; Contains font handling functions.
+;; Fonts are represented as font-spec, font-entity, or font-object.
+
+;; ===========================================================================
+;; Font predicates
+;; ===========================================================================
+
+;; (fontp OBJECT &optional EXTRA-TYPE)
+;; Return t if OBJECT is a font-spec, font-entity, or font-object
+;; EXTRA-TYPE specifies which kind to check: 'font-spec, 'font-entity, 'font-object
+(defun fontp (any &optional (symbol | nil)) -> bool)
+
+;; (font-match-p SPEC FONT) - return t if font-spec SPEC matches FONT
+(defun font-match-p (any any) -> bool)
+
+;; ===========================================================================
+;; Font creation and lookup
+;; ===========================================================================
+
+;; (font-spec &rest ARGS) - create a font-spec with given properties
+;; ARGS are KEY VALUE pairs like :family, :weight, :slant, :width, :size, etc.
+(defun font-spec (&rest any) -> any)
+
+;; (font-at POSITION &optional WINDOW STRING)
+;; Return font-object for character at POSITION
+(defun font-at (int &optional (window | nil) (string | nil)) -> (any | nil))
+
+;; (find-font FONT-SPEC &optional FRAME)
+;; Return font-entity matching FONT-SPEC
+(defun find-font (any &optional (frame | nil)) -> (any | nil))
+
+;; (list-fonts FONT-SPEC &optional FRAME NUM PREFER)
+;; List available fonts matching FONT-SPEC
+(defun list-fonts (any &optional (frame | nil) (int | nil) (any | nil)) -> (list any))
+
+;; ===========================================================================
+;; Font properties
+;; ===========================================================================
+
+;; (font-get FONT KEY) - return value of FONT's property KEY
+(defun font-get (any symbol) -> any)
+
+;; (font-put FONT PROP VAL) - set FONT's property PROP to VAL
+(defun font-put (any symbol any) -> any)
+
+;; (font-face-attributes FONT &optional FRAME)
+;; Return plist of face attributes from FONT
+(defun font-face-attributes (any &optional (frame | nil)) -> (list any))
+
+;; ===========================================================================
+;; Font information
+;; ===========================================================================
+
+;; (font-info NAME &optional FRAME)
+;; Return information vector about font NAME
+;; Vector: [OPENED-NAME FULL-NAME SIZE HEIGHT BASELINE-OFFSET RELATIVE-COMPOSE
+;;          DEFAULT-ASCENT MAX-WIDTH ASCENT DESCENT SPACE-WIDTH AVERAGE-WIDTH
+;;          FILENAME CAPABILITY]
+(defun font-info ((string | any) &optional (frame | nil)) -> ((vector any) | nil))
+
+;; (font-xlfd-name FONT &optional FOLD-WILDCARDS LONG-XLFDS)
+;; Return XLFD name of FONT
+(defun font-xlfd-name (any &optional any any) -> (string | nil))
+
+;; (font-family-list &optional FRAME) - list available font families
+(defun font-family-list (&optional (frame | nil)) -> (list string))
+
+;; ===========================================================================
+;; Font glyphs
+;; ===========================================================================
+
+;; (font-get-glyphs FONT-OBJECT FROM TO &optional OBJECT)
+;; Return vector of glyph information for characters
+(defun font-get-glyphs (any int int &optional (string | (vector any) | nil)) -> (vector any))
+
+;; (font-variation-glyphs FONT-OBJECT CHARACTER)
+;; Return list of variation glyphs as (VARIATION-SELECTOR . GLYPH-ID) pairs
+(defun font-variation-glyphs (any int) -> (list (pair int int)))
+
+;; ===========================================================================
+;; Font cache
+;; ===========================================================================
+
+;; (clear-font-cache) - clear font cache of each frame
+(defun clear-font-cache () -> nil)
