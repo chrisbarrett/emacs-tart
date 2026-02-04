@@ -1,0 +1,95 @@
+;; Type signatures for Emacs image.c
+;;
+;; Source: emacs/src/image.c
+;; Emacs version: 31.0
+;;
+;; Contains image display functions.
+;; Images are displayed using image descriptors (plists with :type, etc.)
+
+;; ===========================================================================
+;; Image type detection
+;; ===========================================================================
+
+;; (image-type SOURCE &optional TYPE DATA-P)
+;; Determine and return image type from source
+(defun image-type ((string | (vector any)) &optional (symbol | nil) any) -> (symbol | nil))
+
+;; (image-type-available-p TYPE) - return t if image type is available
+(defun image-type-available-p (symbol) -> bool)
+
+;; ===========================================================================
+;; Image creation
+;; ===========================================================================
+
+;; (create-image FILE-OR-DATA &optional TYPE DATA-P &rest PROPS)
+;; Create an image descriptor from file or data
+(defun create-image ((string | (vector any)) &optional (symbol | nil) any &rest any) -> ((list any) | nil))
+
+;; ===========================================================================
+;; Image insertion and display
+;; ===========================================================================
+
+;; (put-image IMAGE POS &optional STRING AREA)
+;; Put image in front of POS using overlay
+(defun put-image ((list any) (int | marker) &optional (string | nil) (symbol | nil)) -> overlay)
+
+;; (insert-image IMAGE &optional STRING AREA SLICE INHIBIT-ISEARCH)
+;; Insert image into buffer at point
+(defun insert-image ((list any) &optional (string | nil) (symbol | nil) ((list any) | nil) any) -> nil)
+
+;; (remove-images START END &optional BUFFER)
+;; Remove images put with put-image between START and END
+(defun remove-images (int int &optional (buffer | nil)) -> nil)
+
+;; ===========================================================================
+;; Image properties
+;; ===========================================================================
+
+;; (image-size SPEC &optional PIXELS FRAME)
+;; Return size of image as (WIDTH . HEIGHT)
+(defun image-size ((list any) &optional any (frame | nil)) -> (pair int int))
+
+;; (image-mask-p SPEC &optional FRAME) - return t if image has mask bitmap
+(defun image-mask-p ((list any) &optional (frame | nil)) -> bool)
+
+;; (image-metadata SPEC &optional FRAME) - return metadata for image
+(defun image-metadata ((list any) &optional (frame | nil)) -> ((list any) | nil))
+
+;; ===========================================================================
+;; Image cache
+;; ===========================================================================
+
+;; (clear-image-cache &optional FILTER ANIMATION-CACHE)
+;; Clear image cache for frame, all frames, or specific file
+(defun clear-image-cache (&optional (frame | bool | string | nil) any) -> nil)
+
+;; (image-flush SPEC &optional FRAME)
+;; Flush image from cache, next redisplay reads from file
+(defun image-flush ((list any) &optional (frame | bool | nil)) -> nil)
+
+;; ===========================================================================
+;; Multi-frame/animated images
+;; ===========================================================================
+
+;; (image-multi-frame-p IMAGE)
+;; Return (NIMAGES . DELAY) if image has multiple frames, nil otherwise
+(defun image-multi-frame-p ((list any)) -> ((pair int (float | nil)) | nil))
+
+;; (image-animated-p IMAGE)
+;; Like image-multi-frame-p but returns nil if no delay specified
+(defun image-animated-p ((list any)) -> ((pair int float) | nil))
+
+;; (image-current-frame IMAGE) - return current frame number (0-indexed)
+(defun image-current-frame ((list any)) -> int)
+
+;; (image-show-frame IMAGE N &optional NOCHECK)
+;; Show frame N of image (0-indexed)
+(defun image-show-frame ((list any) int &optional any) -> nil)
+
+;; ===========================================================================
+;; Image maps
+;; ===========================================================================
+
+;; (lookup-image-map MAP X Y)
+;; Lookup coordinates in image map, return matching area element
+(defun lookup-image-map ((list any) int int) -> ((list any) | nil))

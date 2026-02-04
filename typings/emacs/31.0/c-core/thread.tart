@@ -1,0 +1,98 @@
+;; Type signatures for Emacs thread.c
+;;
+;; Source: emacs/src/thread.c
+;; Emacs version: 31.0
+;;
+;; Contains native threading support (Emacs 26+).
+;; Threads share the same Lisp heap and can run concurrently.
+
+;; ===========================================================================
+;; Thread predicates and info
+;; ===========================================================================
+
+;; (threadp OBJECT) - return t if OBJECT is a thread
+(defun threadp (any) -> bool)
+
+;; (current-thread) - return the current thread
+(defun current-thread () -> any)
+
+;; (all-threads) - return list of all live threads
+(defun all-threads () -> (list any))
+
+;; (thread-name THREAD) - return name of thread
+(defun thread-name (any) -> (string | nil))
+
+;; (thread-live-p THREAD) - return t if thread is alive
+(defun thread-live-p (any) -> bool)
+
+;; ===========================================================================
+;; Thread creation and control
+;; ===========================================================================
+
+;; (make-thread FUNCTION &optional NAME BUFFER-DISPOSITION)
+;; Start new thread running FUNCTION
+;; BUFFER-DISPOSITION: t means buffer can't be killed, nil means thread
+;; gets error if buffer killed, 'silently means no error
+(defun make-thread ((-> () any) &optional (string | nil) any) -> any)
+
+;; (thread-join THREAD) - wait for thread to exit and return its result
+(defun thread-join (any) -> any)
+
+;; (thread-signal THREAD ERROR-SYMBOL DATA) - signal error in thread
+(defun thread-signal (any symbol any) -> nil)
+
+;; (thread-yield) - yield CPU to another thread
+(defun thread-yield () -> nil)
+
+;; (thread-last-error &optional CLEANUP) - return last thread error
+(defun thread-last-error (&optional any) -> any)
+
+;; (thread-buffer-disposition THREAD) - return thread's buffer disposition
+(defun thread-buffer-disposition (any) -> any)
+
+;; (thread-set-buffer-disposition THREAD DISPOSITION) - set buffer disposition
+(defun thread-set-buffer-disposition (any any) -> nil)
+
+;; ===========================================================================
+;; Mutex operations
+;; ===========================================================================
+
+;; (mutexp OBJECT) - return t if OBJECT is a mutex
+(defun mutexp (any) -> bool)
+
+;; (make-mutex &optional NAME) - create a mutex
+(defun make-mutex (&optional (string | nil)) -> any)
+
+;; (mutex-lock MUTEX) - acquire mutex, blocking if necessary
+(defun mutex-lock (any) -> nil)
+
+;; (mutex-unlock MUTEX) - release mutex
+(defun mutex-unlock (any) -> nil)
+
+;; (mutex-name MUTEX) - return name of mutex
+(defun mutex-name (any) -> (string | nil))
+
+;; ===========================================================================
+;; Condition variable operations
+;; ===========================================================================
+
+;; (condition-variable-p OBJECT) - return t if OBJECT is a condition variable
+(defun condition-variable-p (any) -> bool)
+
+;; (make-condition-variable MUTEX &optional NAME)
+;; Create condition variable associated with MUTEX
+(defun make-condition-variable (any &optional (string | nil)) -> any)
+
+;; (condition-wait COND) - wait for condition variable to be notified
+;; COND's mutex must be held; it is released during wait
+(defun condition-wait (any) -> nil)
+
+;; (condition-notify COND &optional ALL) - notify condition variable
+;; If ALL is non-nil, wake all waiting threads
+(defun condition-notify (any &optional any) -> nil)
+
+;; (condition-name COND) - return name of condition variable
+(defun condition-name (any) -> (string | nil))
+
+;; (condition-mutex COND) - return mutex associated with condition variable
+(defun condition-mutex (any) -> any)
