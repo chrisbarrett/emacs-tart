@@ -1,0 +1,72 @@
+;; Type signatures for Emacs category.c
+;;
+;; Source: emacs/src/category.c
+;; Emacs version: 31.0
+;;
+;; Contains character category functions. A category is a single-letter
+;; identifier (a-z, A-Z) used to classify characters. Category tables are
+;; char-tables that map characters to category sets (bool-vectors).
+
+;; ===========================================================================
+;; Category table predicates
+;; ===========================================================================
+
+;; (category-table-p OBJECT) - test if OBJECT is a category table
+(defun category-table-p (any) -> bool)
+
+;; (category-docstring CATEGORY &optional TABLE) - return docstring for CATEGORY
+(defun category-docstring (int &optional char-table) -> (string | nil))
+
+;; ===========================================================================
+;; Category table access
+;; ===========================================================================
+
+;; (category-table) - return current buffer's category table
+(defun category-table () -> char-table)
+
+;; (standard-category-table) - return Emacs's standard category table
+(defun standard-category-table () -> char-table)
+
+;; ===========================================================================
+;; Category table modification
+;; ===========================================================================
+
+;; (set-category-table TABLE) - set current buffer's category table
+(defun set-category-table (char-table) -> char-table)
+
+;; (make-category-table) - create new empty category table
+(defun make-category-table () -> char-table)
+
+;; (copy-category-table &optional TABLE) - copy a category table
+(defun copy-category-table (&optional char-table) -> char-table)
+
+;; (define-category CATEGORY DOCSTRING &optional TABLE) - define a new category
+;; CATEGORY is a character code (single letter a-z, A-Z)
+(defun define-category (int string &optional char-table) -> nil)
+
+;; ===========================================================================
+;; Character category access
+;; ===========================================================================
+
+;; (char-category-set CHAR) - return category set (bool-vector) for CHAR
+(defun char-category-set (int) -> bool-vector)
+
+;; (category-set-mnemonics CATEGORY-SET) - return string of category letters
+(defun category-set-mnemonics (bool-vector) -> string)
+
+;; ===========================================================================
+;; Category membership
+;; ===========================================================================
+
+;; (modify-category-entry CHAR CATEGORY &optional TABLE RESET) - modify membership
+;; Add or remove CHAR from CATEGORY in TABLE.
+;; If RESET is non-nil, remove; otherwise add.
+;; CHAR can be a character or (FROM . TO) range.
+(defun modify-category-entry ((int | (pair int int)) int &optional char-table any) -> nil)
+
+;; ===========================================================================
+;; Category lookup
+;; ===========================================================================
+
+;; (get-unused-category &optional TABLE) - return an unused category letter
+(defun get-unused-category (&optional char-table) -> (int | nil))
