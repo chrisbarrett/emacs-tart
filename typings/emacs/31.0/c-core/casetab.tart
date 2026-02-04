@@ -1,0 +1,45 @@
+;; Type signatures for Emacs casetab.c
+;;
+;; Source: emacs/src/casetab.c
+;; Emacs version: 31.0
+;;
+;; Contains case conversion table functions.
+;; Case tables control how upcase/downcase operations work.
+
+;; ===========================================================================
+;; Case table predicates and access
+;; ===========================================================================
+
+;; (case-table-p OBJECT) - return t if OBJECT is a case table
+(defun case-table-p (any) -> bool)
+
+;; (current-case-table) - return case table of current buffer
+(defun current-case-table () -> char-table)
+
+;; (standard-case-table) - return standard case table for new buffers
+(defun standard-case-table () -> char-table)
+
+;; (set-standard-case-table TABLE) - set standard case table for new buffers
+(defun set-standard-case-table (char-table) -> char-table)
+
+;; (case-table-get-table CASE-TABLE TABLE)
+;; Return TABLE component of CASE-TABLE
+;; TABLE can be 'down, 'up, 'eqv, or 'canon
+(defun case-table-get-table (char-table symbol) -> (char-table | nil))
+
+;; ===========================================================================
+;; Case syntax modification
+;; ===========================================================================
+
+;; (set-case-syntax-pair UC LC TABLE)
+;; Make UC and LC inter-case-converting letters in TABLE
+(defun set-case-syntax-pair (int int char-table) -> nil)
+
+;; (set-case-syntax-delims L R TABLE)
+;; Make L and R non-case-converting delimiter pair in TABLE
+(defun set-case-syntax-delims (int int char-table) -> nil)
+
+;; (set-case-syntax C SYNTAX TABLE)
+;; Make character C case-invariant with given SYNTAX in TABLE
+;; SYNTAX should be " ", "w", "." or "_"
+(defun set-case-syntax (int string char-table) -> nil)

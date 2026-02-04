@@ -1,0 +1,76 @@
+;; Type signatures for Emacs composite.c
+;;
+;; Source: emacs/src/composite.c
+;; Emacs version: 31.0
+;;
+;; Contains text composition functions for combining characters into
+;; composite glyphs (e.g., for complex scripts, emoji sequences).
+
+;; ===========================================================================
+;; Region composition
+;; ===========================================================================
+
+;; (compose-region START END &optional COMPONENTS MODIFICATION-FUNC)
+;; Compose characters in the current region
+(defun compose-region ((int | marker) (int | marker) &optional any any) -> nil)
+
+;; (compose-region-internal START END &optional COMPONENTS MODIFICATION-FUNC)
+;; Internal: compose text in region
+(defun compose-region-internal ((int | marker) (int | marker) &optional any any) -> nil)
+
+;; (decompose-region START END) - remove composition from region
+(defun decompose-region ((int | marker) (int | marker)) -> nil)
+
+;; ===========================================================================
+;; String composition
+;; ===========================================================================
+
+;; (compose-string STRING &optional START END COMPONENTS MODIFICATION-FUNC)
+;; Compose characters in string
+(defun compose-string (string &optional (int | nil) (int | nil) any any) -> string)
+
+;; (compose-string-internal STRING START END &optional COMPONENTS MODIFICATION-FUNC)
+;; Internal: compose text in string
+(defun compose-string-internal (string int int &optional any any) -> string)
+
+;; (decompose-string STRING) - return string with composition removed
+(defun decompose-string (string) -> string)
+
+;; ===========================================================================
+;; Character composition
+;; ===========================================================================
+
+;; (compose-chars &rest ARGS) - return composed string from characters
+;; For relative composition: characters
+;; For rule-based: characters and composition rules alternating
+(defun compose-chars (&rest (int | (pair symbol symbol))) -> string)
+
+;; (compose-chars-after POS &optional LIMIT OBJECT)
+;; Compose characters after position using composition-function-table
+(defun compose-chars-after (int &optional (int | nil) (string | nil)) -> nil)
+
+;; (compose-last-chars ARGS) - compose last N characters before point
+;; ARGS is (compose-last-chars N COMPONENTS) parameterized event
+(defun compose-last-chars (any) -> nil)
+
+;; ===========================================================================
+;; Composition lookup
+;; ===========================================================================
+
+;; (find-composition POS &optional LIMIT STRING DETAIL-P)
+;; Return information about composition at or near POS
+;; Returns (FROM TO VALID-P) or with DETAIL-P: (FROM TO COMPONENTS RELATIVE-P MOD-FUNC WIDTH)
+(defun find-composition (int &optional (int | nil) (string | nil) any) -> ((list any) | nil))
+
+;; (find-composition-internal POS LIMIT STRING DETAIL-P)
+;; Internal: return composition information
+(defun find-composition-internal (int (int | nil) (string | nil) any) -> ((list any) | nil))
+
+;; ===========================================================================
+;; Glyph string operations
+;; ===========================================================================
+
+;; (composition-get-gstring FROM TO FONT-OBJECT STRING)
+;; Return glyph-string for characters between FROM and TO
+;; FONT-OBJECT is font-object for graphic display or terminal ID for terminal
+(defun composition-get-gstring (int int any (string | nil)) -> (vector any))

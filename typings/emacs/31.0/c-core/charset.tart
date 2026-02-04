@@ -1,0 +1,108 @@
+;; Type signatures for Emacs charset.c
+;;
+;; Source: emacs/src/charset.c
+;; Emacs version: 31.0
+;;
+;; Contains character set (charset) functions.
+;; Charsets define mappings between character codes and Unicode code points.
+
+;; ===========================================================================
+;; Charset predicates and info
+;; ===========================================================================
+
+;; (charsetp OBJECT) - return non-nil if OBJECT is a charset
+(defun charsetp (any) -> bool)
+
+;; (charset-plist CHARSET) - return property list of charset
+(defun charset-plist (symbol) -> (list any))
+
+;; (set-charset-plist CHARSET PLIST) - set charset's property list
+(defun set-charset-plist (symbol (list any)) -> (list any))
+
+;; (charset-description CHARSET) - return description string
+(defun charset-description (symbol) -> (string | nil))
+
+;; (charset-dimension CHARSET) - return dimension of charset
+(defun charset-dimension (symbol) -> int)
+
+;; (charset-chars CHARSET &optional DIMENSION) - return number of characters
+(defun charset-chars (symbol &optional int) -> int)
+
+;; (charset-iso-final-char CHARSET) - return ISO final char
+(defun charset-iso-final-char (symbol) -> int)
+
+;; ===========================================================================
+;; Charset priority
+;; ===========================================================================
+
+;; (charset-priority-list &optional HIGHESTP) - return charset list by priority
+;; If HIGHESTP is non-nil, return only the highest priority charset
+(defun charset-priority-list (&optional any) -> ((list symbol) | symbol))
+
+;; (set-charset-priority &rest CHARSETS) - assign higher priority to charsets
+(defun set-charset-priority (&rest symbol) -> nil)
+
+;; ===========================================================================
+;; Character encoding/decoding
+;; ===========================================================================
+
+;; (char-charset CH &optional RESTRICTION) - return charset for character
+(defun char-charset (int &optional ((list symbol) | symbol | nil)) -> symbol)
+
+;; (decode-char CHARSET CODE-POINT) - decode charset code-point to character
+(defun decode-char (symbol (int | (pair int int))) -> (int | nil))
+
+;; (encode-char CH CHARSET) - encode character to charset code-point
+(defun encode-char (int symbol) -> (int | nil))
+
+;; ===========================================================================
+;; Charset lookup
+;; ===========================================================================
+
+;; (find-charset-region BEG END &optional TABLE) - return charsets in region
+(defun find-charset-region (int int &optional any) -> (list symbol))
+
+;; (find-charset-string STR &optional TABLE) - return charsets in string
+(defun find-charset-string (string &optional any) -> (list symbol))
+
+;; (iso-charset DIMENSION CHARS FINAL-CHAR) - return charset from ISO spec
+(defun iso-charset (int int int) -> (symbol | nil))
+
+;; ===========================================================================
+;; Charset mapping
+;; ===========================================================================
+
+;; (map-charset-chars FUNCTION CHARSET &optional ARG FROM-CODE TO-CODE)
+;; Call FUNCTION for all characters in CHARSET
+;; FUNCTION is called with (FROM . TO) range and ARG
+(defun map-charset-chars ((-> ((pair int int) any) any) symbol &optional any (int | nil) (int | nil)) -> nil)
+
+;; (unify-charset CHARSET &optional UNIFY-MAP DEUNIFY)
+;; Unify characters of CHARSET with Unicode
+(defun unify-charset (symbol &optional (string | (vector any) | nil) any) -> nil)
+
+;; (clear-charset-maps) - clear charset map tables
+(defun clear-charset-maps () -> nil)
+
+;; ===========================================================================
+;; Charset definition (internal)
+;; ===========================================================================
+
+;; (define-charset-internal ...) - internal charset definition
+(defun define-charset-internal (&rest any) -> nil)
+
+;; (define-charset-alias ALIAS CHARSET) - define charset alias
+(defun define-charset-alias (symbol symbol) -> nil)
+
+;; (declare-equiv-charset DIMENSION CHARS FINAL-CHAR CHARSET)
+;; Declare CHARSET as equivalent to ISO charset
+(defun declare-equiv-charset (int int int symbol) -> nil)
+
+;; (get-unused-iso-final-char DIMENSION CHARS) - get unused ISO final char
+(defun get-unused-iso-final-char (int int) -> int)
+
+;; (charset-id-internal &optional CHARSET) - return internal ID
+(defun charset-id-internal (&optional symbol) -> int)
+
+;; (charset-after &optional POS) - return charset of character after POS
+(defun charset-after (&optional (int | nil)) -> symbol)
