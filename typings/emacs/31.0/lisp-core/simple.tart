@@ -82,6 +82,15 @@
 ;; (previous-line &optional ARG TRY-VSCROLL) - move up
 (defun previous-line (&optional int bool) -> nil)
 
+;; (forward-visible-line ARG) - move forward by visible lines (respecting invisibility)
+(defun forward-visible-line (int) -> nil)
+
+;; (beginning-of-visual-line &optional N) - move to beginning of visual line
+(defun beginning-of-visual-line (&optional int) -> nil)
+
+;; (end-of-visual-line &optional N) - move to end of visual line
+(defun end-of-visual-line (&optional int) -> nil)
+
 ;; ===========================================================================
 ;; Kill/yank
 ;; ===========================================================================

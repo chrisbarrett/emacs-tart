@@ -162,3 +162,61 @@
 
 ;; Whether buffer is a next-error source
 (defvar next-error-buffer-p any)
+
+;; ===========================================================================
+;; Movement and display state
+;; ===========================================================================
+
+;; Explicit goal column for vertical movement
+(defvar goal-column (int | nil))
+
+;; Whether buffer is read-only
+(defvar buffer-read-only bool)
+
+;; Whether visual-line-mode is enabled
+(defvar visual-line-mode bool)
+
+;; Whether we're executing a keyboard macro
+(defvar executing-kbd-macro any)
+
+;; Keyboard translation map
+(defvar function-key-map any)
+
+;; ===========================================================================
+;; Auto-fill state
+;; ===========================================================================
+
+;; Auto-fill function (nil or function)
+(defvar auto-fill-function any)
+
+;; Characters that can trigger auto-fill
+(defvar auto-fill-chars char-table)
+
+;; Regexp to inhibit auto-fill
+(defvar auto-fill-inhibit-regexp (string | nil))
+
+;; Whether adaptive fill mode is enabled
+(defvar adaptive-fill-mode bool)
+
+;; ===========================================================================
+;; Blink matching paren
+;; ===========================================================================
+
+;; Whether to blink matching paren
+(defvar blink-matching-paren bool)
+
+;; Delay before blinking
+(defvar blink-matching-delay num)
+
+;; Maximum distance to search for matching paren
+(defvar blink-matching-paren-distance int)
+
+;; ===========================================================================
+;; Shell command
+;; ===========================================================================
+
+;; Buffer handling for async shell commands
+(defvar async-shell-command-buffer symbol)
+
+;; Whether to display async shell command buffer
+(defvar async-shell-command-display-buffer bool)

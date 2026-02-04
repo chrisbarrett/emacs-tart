@@ -348,3 +348,60 @@
 
 ;; (featurep FEATURE &optional SUBFEATURE) - test if feature is present
 (defun featurep (symbol &optional symbol) -> bool)
+
+;; ===========================================================================
+;; List manipulation
+;; ===========================================================================
+
+;; (add-to-list LIST-VAR ELEMENT &optional APPEND COMPARE-FN) - add unique to list
+(defun add-to-list (symbol any &optional bool any) -> (list any))
+
+;; (alist-get KEY ALIST &optional DEFAULT REMOVE TESTFN) - get alist value
+(defun alist-get [k v] (k (list (pair k v)) &optional v bool any) -> (v | nil))
+
+;; (assq-delete-all KEY ALIST) - delete all entries with KEY using eq
+(defun assq-delete-all [k v] (k (list (pair k v))) -> (list (pair k v)))
+
+;; (assoc-delete-all KEY ALIST &optional TEST) - delete all entries with KEY
+(defun assoc-delete-all [k v] (k (list (pair k v)) &optional any) -> (list (pair k v)))
+
+;; (add-to-history HISTORY-VAR NEWELT &optional MAXELT KEEP-ALL) - add to history
+(defun add-to-history (symbol any &optional int bool) -> (list any))
+
+;; ===========================================================================
+;; Event handling
+;; ===========================================================================
+
+;; (event-apply-modifier BASIC-EVENT MODIFIER) - add modifier to event
+(defun event-apply-modifier (int symbol) -> int)
+
+;; (event-modifiers EVENT) - get modifiers from event
+(defun event-modifiers (any) -> (list symbol))
+
+;; (event-basic-type EVENT) - get basic event type without modifiers
+(defun event-basic-type (any) -> (int | symbol))
+
+;; (event-start EVENT) - get start position of mouse event
+(defun event-start (any) -> any)
+
+;; (event-end EVENT) - get end position of mouse event
+(defun event-end (any) -> any)
+
+;; ===========================================================================
+;; Function manipulation
+;; ===========================================================================
+
+;; (add-function WHERE PLACE FUNCTION &optional PROPS) - add advice
+(defun add-function (symbol any any &optional any) -> nil)
+
+;; (remove-function PLACE FUNCTION) - remove advice
+(defun remove-function (any any) -> nil)
+
+;; (advice-add SYMBOL WHERE FUNCTION &optional PROPS) - add advice to symbol
+(defun advice-add (symbol symbol any &optional any) -> nil)
+
+;; (advice-remove SYMBOL FUNCTION) - remove advice from symbol
+(defun advice-remove (symbol any) -> nil)
+
+;; (autoloadp OBJECT) - test if object is an autoload
+(defun autoloadp (any) -> bool)

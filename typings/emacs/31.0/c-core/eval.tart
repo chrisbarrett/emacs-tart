@@ -100,6 +100,13 @@
 ;; (commandp FN &optional FOR-CALL-INTERACTIVELY) - test if command
 (defun commandp (any &optional any) -> bool)
 
+;; (called-interactively-p KIND) - test if called interactively
+;; KIND is 'interactive for M-x only, 'any for any interactive call
+(defun called-interactively-p (symbol) -> bool)
+
+;; (interactive-p) - legacy test for interactive call (deprecated)
+(defun interactive-p () -> bool)
+
 ;; ===========================================================================
 ;; Macros
 ;; ===========================================================================

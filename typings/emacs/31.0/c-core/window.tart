@@ -215,6 +215,9 @@
 ;; (window-vscroll &optional WINDOW PIXELS-P) - vertical scroll amount
 (defun window-vscroll (&optional window any) -> (int | float))
 
+;; (set-window-vscroll WINDOW VSCROLL &optional PIXELS-P PRESERVE-VSCROLL-P) - set vertical scroll
+(defun set-window-vscroll (window num &optional bool bool) -> num)
+
 ;; (scroll-left &optional ARG SET-MINIMUM) - scroll left
 (defun scroll-left (&optional any any) -> int)
 

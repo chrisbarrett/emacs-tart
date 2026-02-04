@@ -12,6 +12,10 @@
 ;; (sleep-for SECONDS &optional MILLISECONDS) - pause for duration
 (defun sleep-for (num &optional int) -> nil)
 
+;; (sit-for SECONDS &optional NODISP) - wait for input or timeout
+;; Returns t if no input arrived during SECONDS
+(defun sit-for (num &optional bool) -> bool)
+
 ;; ===========================================================================
 ;; Screen update
 ;; ===========================================================================
