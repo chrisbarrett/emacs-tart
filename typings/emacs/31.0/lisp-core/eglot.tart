@@ -1,0 +1,145 @@
+;; Type signatures for Emacs eglot.el
+;;
+;; Source: emacs/lisp/progmodes/eglot.el
+;; Emacs version: 31.0
+;;
+;; Emacs client for Language Server Protocol.
+
+;; ============================================================================
+;; Server Management
+;; ============================================================================
+
+;; (eglot MANAGED-MAJOR-MODES PROJECT CLASS CONTACT LANGUAGE-IDS &optional INTERACTIVE)
+(defun eglot (any any symbol any any &optional any) -> nil)
+
+;; (eglot-ensure) - start LSP server if not running
+(defun eglot-ensure () -> nil)
+
+;; (eglot-shutdown SERVER &optional INTERACTIVE TIMEOUT PRESERVE-BUFFERS)
+(defun eglot-shutdown (any &optional any int any) -> nil)
+
+;; (eglot-shutdown-all &optional PRESERVE-BUFFERS) - shutdown all servers
+(defun eglot-shutdown-all (&optional any) -> nil)
+
+;; (eglot-reconnect SERVER &optional INTERACTIVE) - reconnect to server
+(defun eglot-reconnect (any &optional any) -> nil)
+
+;; (eglot-current-server) - return current buffer's server
+(defun eglot-current-server () -> (any | nil))
+
+;; (eglot--current-server-or-lose) - return server or error
+(defun eglot--current-server-or-lose () -> any)
+
+;; ============================================================================
+;; Code Actions
+;; ============================================================================
+
+;; (eglot-code-actions BEG &optional END ACTION-KIND INTERACTIVE)
+(defun eglot-code-actions ((int | marker) &optional (int | marker) string any) -> (list any))
+
+;; (eglot-code-action-quickfix BEG &optional END)
+(defun eglot-code-action-quickfix ((int | marker) &optional (int | marker)) -> nil)
+
+;; (eglot-code-action-organize-imports BEG &optional END)
+(defun eglot-code-action-organize-imports ((int | marker) &optional (int | marker)) -> nil)
+
+;; (eglot-code-action-inline BEG &optional END)
+(defun eglot-code-action-inline ((int | marker) &optional (int | marker)) -> nil)
+
+;; (eglot-code-action-extract BEG &optional END)
+(defun eglot-code-action-extract ((int | marker) &optional (int | marker)) -> nil)
+
+;; (eglot-code-action-rewrite BEG &optional END)
+(defun eglot-code-action-rewrite ((int | marker) &optional (int | marker)) -> nil)
+
+;; ============================================================================
+;; Navigation
+;; ============================================================================
+
+;; (eglot-find-declaration) - find declaration at point
+(defun eglot-find-declaration () -> nil)
+
+;; (eglot-find-implementation) - find implementation at point
+(defun eglot-find-implementation () -> nil)
+
+;; (eglot-find-typeDefinition) - find type definition at point
+(defun eglot-find-typeDefinition () -> nil)
+
+;; ============================================================================
+;; Refactoring
+;; ============================================================================
+
+;; (eglot-rename NEWNAME) - rename symbol at point
+(defun eglot-rename (string) -> nil)
+
+;; (eglot-format &optional BEG END) - format region or buffer
+(defun eglot-format (&optional (int | marker) (int | marker)) -> nil)
+
+;; (eglot-format-buffer) - format entire buffer
+(defun eglot-format-buffer () -> nil)
+
+;; ============================================================================
+;; Information
+;; ============================================================================
+
+;; (eglot-show-workspace-configuration &optional SERVER) - show config
+(defun eglot-show-workspace-configuration (&optional any) -> nil)
+
+;; (eglot-signal-didChangeConfiguration SERVER) - notify config change
+(defun eglot-signal-didChangeConfiguration (any) -> nil)
+
+;; ============================================================================
+;; Inlay Hints
+;; ============================================================================
+
+;; (eglot-inlay-hints-mode &optional ARG) - toggle inlay hints
+(defun eglot-inlay-hints-mode (&optional any) -> nil)
+
+;; ============================================================================
+;; Variables
+;; ============================================================================
+
+;; Server program configuration
+(defvar eglot-server-programs (list (pair any any)))
+
+;; Whether to autoreconnect
+(defvar eglot-autoreconnect (any | int))
+
+;; Whether to auto-shutdown
+(defvar eglot-autoshutdown any)
+
+;; Sync kind
+(defvar eglot-sync-connect (int | any))
+
+;; Extend to cross-referenced
+(defvar eglot-extend-to-xref any)
+
+;; Send changes on will save
+(defvar eglot-send-changes-idle-time float)
+
+;; Confirm server edits
+(defvar eglot-confirm-server-initiated-edits any)
+
+;; Mode hook (for managed buffers)
+(defvar eglot-managed-mode-hook (list ((nil) -> any)))
+
+;; Connect hook
+(defvar eglot-connect-hook (list ((any) -> any)))
+
+;; Server initialized hook
+(defvar eglot-server-initialized-hook (list ((any) -> any)))
+
+;; Stay out of the way
+(defvar eglot-stay-out-of (list symbol))
+
+;; Workspace configuration
+(defvar eglot-workspace-configuration any)
+
+;; Report progress
+(defvar eglot-report-progress any)
+
+;; Events buffer size
+(defvar eglot-events-buffer-size int)
+
+;; Ignored server capabilities
+(defvar eglot-ignored-server-capabilities (list symbol))
