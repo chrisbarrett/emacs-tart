@@ -1,0 +1,121 @@
+;; Type signatures for Emacs xref.el
+;;
+;; Source: emacs/lisp/progmodes/xref.el
+;; Emacs version: 31.0
+;;
+;; Cross-reference infrastructure for navigation between definitions.
+
+;; ===========================================================================
+;; Xref item type (opaque)
+;; ===========================================================================
+
+;; Xref items represent cross-references (definition locations)
+(type xref-item)
+
+;; ===========================================================================
+;; Xref creation
+;; ===========================================================================
+
+;; (xref-make SUMMARY LOCATION) - create xref item
+(defun xref-make (string any) -> xref-item)
+
+;; (xref-make-match SUMMARY LOCATION LENGTH) - create match xref
+(defun xref-make-match (string any int) -> xref-item)
+
+;; ===========================================================================
+;; Xref accessors
+;; ===========================================================================
+
+;; (xref-item-summary ITEM) - return summary string
+(defun xref-item-summary (xref-item) -> string)
+
+;; (xref-item-location ITEM) - return location
+(defun xref-item-location (xref-item) -> any)
+
+;; (xref-match-length ITEM) - return match length (for match xrefs)
+(defun xref-match-length (xref-item) -> (int | nil))
+
+;; ===========================================================================
+;; Location types
+;; ===========================================================================
+
+;; (xref-make-file-location FILE LINE COLUMN) - create file location
+(defun xref-make-file-location (string int int) -> any)
+
+;; (xref-make-buffer-location BUFFER POSITION) - create buffer location
+(defun xref-make-buffer-location (buffer int) -> any)
+
+;; (xref-location-group LOCATION) - return location group (e.g., file name)
+(defun xref-location-group (any) -> string)
+
+;; (xref-location-line LOCATION) - return line number
+(defun xref-location-line (any) -> (int | nil))
+
+;; (xref-location-marker LOCATION) - return marker for location
+(defun xref-location-marker (any) -> marker)
+
+;; ===========================================================================
+;; Backend API
+;; ===========================================================================
+
+;; (xref-backend-identifier-at-point BACKEND) - return identifier at point
+(defun xref-backend-identifier-at-point (symbol) -> (string | nil))
+
+;; (xref-backend-identifier-completion-table BACKEND) - return completion table
+(defun xref-backend-identifier-completion-table (symbol) -> any)
+
+;; (xref-backend-definitions BACKEND IDENTIFIER) - find definitions
+(defun xref-backend-definitions (symbol string) -> (list xref-item))
+
+;; (xref-backend-references BACKEND IDENTIFIER) - find references
+(defun xref-backend-references (symbol string) -> (list xref-item))
+
+;; (xref-backend-apropos BACKEND PATTERN) - search for pattern
+(defun xref-backend-apropos (symbol string) -> (list xref-item))
+
+;; ===========================================================================
+;; User commands (interactive)
+;; ===========================================================================
+
+;; (xref-find-definitions IDENTIFIER) - find definitions of IDENTIFIER
+(defun xref-find-definitions (string) -> nil)
+
+;; (xref-find-definitions-other-window IDENTIFIER) - find in other window
+(defun xref-find-definitions-other-window (string) -> nil)
+
+;; (xref-find-definitions-other-frame IDENTIFIER) - find in other frame
+(defun xref-find-definitions-other-frame (string) -> nil)
+
+;; (xref-find-references IDENTIFIER) - find references to IDENTIFIER
+(defun xref-find-references (string) -> nil)
+
+;; (xref-find-apropos PATTERN) - search for PATTERN
+(defun xref-find-apropos (string) -> nil)
+
+;; (xref-go-back) - go back to previous location
+(defun xref-go-back () -> nil)
+
+;; (xref-go-forward) - go forward in location history
+(defun xref-go-forward () -> nil)
+
+;; (xref-pop-marker-stack) - pop location from marker stack
+(defun xref-pop-marker-stack () -> nil)
+
+;; (xref-push-marker-stack &optional MARKER) - push location to stack
+(defun xref-push-marker-stack (&optional marker) -> nil)
+
+;; ===========================================================================
+;; Xref buffer
+;; ===========================================================================
+
+;; (xref--show-xrefs FETCHER DISPLAY-ACTION) - display xrefs
+(defun xref--show-xrefs (any symbol) -> nil)
+
+;; (xref--show-defs XREFS DISPLAY-ACTION) - show definitions
+(defun xref--show-defs ((list xref-item) symbol) -> nil)
+
+;; (xref-show-xrefs FETCHER DISPLAY-ACTION) - public version
+(defun xref-show-xrefs (any symbol) -> nil)
+
+;; (xref-show-definitions-completing-read FETCHER ALIST) - use completing-read
+(defun xref-show-definitions-completing-read (any (list any)) -> nil)
