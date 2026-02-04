@@ -1,0 +1,79 @@
+;; Type signatures for Emacs eldoc.el
+;;
+;; Source: emacs/lisp/emacs-lisp/eldoc.el
+;; Emacs version: 31.0
+;;
+;; Show documentation in echo area while editing.
+
+;; ===========================================================================
+;; Mode
+;; ===========================================================================
+
+;; (eldoc-mode &optional ARG) - toggle eldoc mode
+(defun eldoc-mode (&optional int) -> nil)
+
+;; (global-eldoc-mode &optional ARG) - toggle global eldoc mode
+(defun global-eldoc-mode (&optional int) -> nil)
+
+;; (turn-on-eldoc-mode) - turn on eldoc mode unconditionally
+(defun turn-on-eldoc-mode () -> nil)
+
+;; ===========================================================================
+;; Documentation functions
+;; ===========================================================================
+
+;; (eldoc-message &optional FORMAT-STRING &rest ARGS) - display message
+(defun eldoc-message (&optional string &rest any) -> nil)
+
+;; (eldoc-print-current-symbol-info) - print info for symbol at point
+(defun eldoc-print-current-symbol-info () -> nil)
+
+;; (eldoc-documentation-functions) - buffer-local list of doc functions
+;; Each function is called with no args and should return string or nil
+(defvar eldoc-documentation-functions (list any))
+
+;; (eldoc-documentation-strategy) - how to call documentation functions
+;; Values: eldoc-documentation-default, eldoc-documentation-compose, etc.
+(defvar eldoc-documentation-strategy any)
+
+;; ===========================================================================
+;; Display
+;; ===========================================================================
+
+;; (eldoc-minibuffer-message FORMAT-STRING &rest ARGS) - show in minibuffer
+(defun eldoc-minibuffer-message (string &rest any) -> nil)
+
+;; (eldoc-display-message-p) - test if message should be displayed
+(defun eldoc-display-message-p () -> bool)
+
+;; (eldoc-display-message-no-interference-p) - test for interference
+(defun eldoc-display-message-no-interference-p () -> bool)
+
+;; ===========================================================================
+;; Highlighting
+;; ===========================================================================
+
+;; (eldoc-highlight-function-argument SYM ARGS INDEX) - highlight arg
+(defun eldoc-highlight-function-argument (string string int) -> string)
+
+;; ===========================================================================
+;; Variables
+;; ===========================================================================
+
+;; Idle delay before showing documentation
+(defvar eldoc-idle-delay float)
+
+;; Echo area message prefix
+(defvar eldoc-echo-area-prefix string)
+
+;; Echo area message display truncation preference
+(defvar eldoc-echo-area-use-multiline-p (bool | symbol))
+
+;; Echo area maximum message length
+(defvar eldoc-echo-area-display-truncation-message bool)
+
+;; Minor mode variable
+(defvar eldoc-mode bool)
+
+;; Last message displayed
+(defvar eldoc-last-message (string | nil))
