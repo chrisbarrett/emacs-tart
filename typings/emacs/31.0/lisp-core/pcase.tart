@@ -1,0 +1,67 @@
+;; Type signatures for Emacs pcase.el
+;;
+;; Source: emacs/lisp/emacs-lisp/pcase.el
+;; Emacs version: 31.0
+;;
+;; Pattern matching macros. All pcase forms are declared as defun since
+;; defmacro is not supported in the signature parser.
+
+;; ===========================================================================
+;; Core pattern matching
+;; ===========================================================================
+
+;; (pcase EXPR &rest CASES) - pattern matching on EXPR
+;; Each CASE is (PATTERN BODY...) where PATTERN can be:
+;; - _ : matches anything
+;; - 'LITERAL : matches literal value
+;; - (pred PRED) : matches if (PRED val) is non-nil
+;; - (guard EXPR) : matches if EXPR is non-nil
+;; - `BACKQUOTE-PATTERN : matches structure with ,var bindings
+;; - (and PATTERNS...) : matches if all patterns match
+;; - (or PATTERNS...) : matches if any pattern matches
+;; - (let PATTERN EXPR) : matches if PATTERN matches EXPR
+;; - (app FUN PATTERN) : matches if PATTERN matches (FUN val)
+(defun pcase (any &rest any) -> any)
+
+;; (pcase-exhaustive EXPR &rest CASES) - like pcase but errors if no match
+(defun pcase-exhaustive (any &rest any) -> any)
+
+;; ===========================================================================
+;; Destructuring binding
+;; ===========================================================================
+
+;; (pcase-let BINDINGS &rest BODY) - let with pattern destructuring
+;; BINDINGS is ((PATTERN VALUE) ...) where each PATTERN matches VALUE
+(defun pcase-let ((list any) &rest any) -> any)
+
+;; (pcase-let* BINDINGS &rest BODY) - sequential pattern binding
+;; Like pcase-let but bindings are evaluated sequentially
+(defun pcase-let* ((list any) &rest any) -> any)
+
+;; (pcase-setq PATTERN VALUE &rest MORE) - destructuring assignment
+;; Assigns variables from PATTERN to match VALUE
+(defun pcase-setq (any any &rest any) -> any)
+
+;; ===========================================================================
+;; Iteration
+;; ===========================================================================
+
+;; (pcase-dolist (PATTERN LIST) BODY...) - iterate with pattern binding
+;; Like dolist but binds PATTERN to each element
+(defun pcase-dolist (any &rest any) -> nil)
+
+;; ===========================================================================
+;; Lambda with patterns
+;; ===========================================================================
+
+;; (pcase-lambda LAMBDA-LIST &rest BODY) - lambda with pattern arguments
+;; Each element of LAMBDA-LIST can be a pcase pattern
+(defun pcase-lambda (any &rest any) -> any)
+
+;; ===========================================================================
+;; Pattern definition
+;; ===========================================================================
+
+;; (pcase-defmacro NAME ARGS &rest BODY) - define custom pattern
+;; Defines a new pattern type NAME that can be used in pcase forms
+(defun pcase-defmacro (symbol any &rest any) -> symbol)
