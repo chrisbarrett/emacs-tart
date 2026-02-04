@@ -1,0 +1,22 @@
+;; Type signatures for Emacs format-spec.el
+;;
+;; Source: emacs/lisp/format-spec.el
+;; Emacs version: 31.0
+;;
+;; Format specification expansion with %-escapes.
+
+;; ===========================================================================
+;; Format expansion
+;; ===========================================================================
+
+;; (format-spec STRING SPECIFICATION &optional IGNORE-MISSING SPLIT)
+;; Expand format specification STRING using SPECIFICATION alist.
+;; SPECIFICATION is ((CHAR . REPLACEMENT) ...) where CHAR is matched against
+;; %CHAR in STRING and replaced with REPLACEMENT.
+;; IGNORE-MISSING: if non-nil, leave unmatched %X as-is
+;; SPLIT: if non-nil, return list of parts instead of concatenated string
+(defun format-spec (string (list (pair int any)) &optional bool bool) -> (string | (list any)))
+
+;; (format-spec-make &rest PAIRS) - create format specification from pairs
+;; PAIRS alternates between characters and values: CHAR1 VAL1 CHAR2 VAL2 ...
+(defun format-spec-make (&rest any) -> (list (pair int any)))

@@ -1,0 +1,88 @@
+;; Type signatures for Emacs ring.el
+;;
+;; Source: emacs/lisp/emacs-lisp/ring.el
+;; Emacs version: 31.0
+;;
+;; Ring data structure - a fixed-size circular buffer.
+
+;; ===========================================================================
+;; Opaque type
+;; ===========================================================================
+
+;; Ring is implemented as (vector size length head . data) but treated as opaque
+(type ring)
+
+;; ===========================================================================
+;; Predicates and creation
+;; ===========================================================================
+
+;; (ring-p OBJECT) - test if OBJECT is a ring
+(defun ring-p (any) -> bool)
+
+;; (make-ring SIZE) - create a new ring of given SIZE
+(defun make-ring (int) -> ring)
+
+;; (ring-copy RING) - return a copy of RING
+(defun ring-copy (ring) -> ring)
+
+;; ===========================================================================
+;; Ring properties
+;; ===========================================================================
+
+;; (ring-size RING) - return maximum capacity
+(defun ring-size (ring) -> int)
+
+;; (ring-length RING) - return current number of elements
+(defun ring-length (ring) -> int)
+
+;; (ring-empty-p RING) - test if RING is empty
+(defun ring-empty-p (ring) -> bool)
+
+;; ===========================================================================
+;; Element access
+;; ===========================================================================
+
+;; (ring-ref RING INDEX) - return element at INDEX (0 = most recent)
+(defun ring-ref (ring int) -> any)
+
+;; (ring-elements RING) - return list of elements, newest first
+(defun ring-elements (ring) -> (list any))
+
+;; ===========================================================================
+;; Modification
+;; ===========================================================================
+
+;; (ring-insert RING ITEM) - insert ITEM at front of ring
+;; Returns ITEM
+(defun ring-insert (ring any) -> any)
+
+;; (ring-insert+extend RING ITEM &optional GROW-P)
+;; Insert ITEM, optionally growing ring if full
+(defun ring-insert+extend (ring any &optional bool) -> any)
+
+;; (ring-remove RING &optional INDEX) - remove and return element
+;; INDEX defaults to 0 (most recent)
+(defun ring-remove (ring &optional int) -> any)
+
+;; (ring-resize RING SIZE) - resize ring to new SIZE
+(defun ring-resize (ring int) -> ring)
+
+;; ===========================================================================
+;; Conversion
+;; ===========================================================================
+
+;; (ring-convert-sequence-to-ring SEQ) - convert sequence to ring
+(defun ring-convert-sequence-to-ring (((list any) | (vector any))) -> ring)
+
+;; ===========================================================================
+;; Search
+;; ===========================================================================
+
+;; (ring-member RING ITEM) - return index of ITEM in ring, or nil
+(defun ring-member (ring any) -> (int | nil))
+
+;; (ring-next RING ITEM) - return element after ITEM
+(defun ring-next (ring any) -> any)
+
+;; (ring-previous RING ITEM) - return element before ITEM
+(defun ring-previous (ring any) -> any)
