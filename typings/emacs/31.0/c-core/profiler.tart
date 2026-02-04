@@ -1,0 +1,54 @@
+;; Type signatures for Emacs profiler.c
+;;
+;; Source: emacs/src/profiler.c
+;; Emacs version: 31.0
+;;
+;; Contains profiling functions for CPU and memory usage analysis.
+
+;; ===========================================================================
+;; CPU Profiler
+;; ===========================================================================
+
+;; (profiler-cpu-start SAMPLING-INTERVAL) - start the cpu profiler
+;; Takes call-stack samples each SAMPLING-INTERVAL nanoseconds
+(defun profiler-cpu-start (int) -> nil)
+
+;; (profiler-cpu-stop) - stop the cpu profiler
+;; Returns non-nil if the profiler was running
+(defun profiler-cpu-stop () -> bool)
+
+;; (profiler-cpu-running-p) - check if cpu profiler is running
+(defun profiler-cpu-running-p () -> bool)
+
+;; (profiler-cpu-log) - return the current cpu profiler log
+;; Returns a hash-table mapping backtraces to counters
+(defun profiler-cpu-log () -> ((hash-table any any) | nil))
+
+;; ===========================================================================
+;; Memory Profiler
+;; ===========================================================================
+
+;; (profiler-memory-start) - start/restart the memory profiler
+;; Takes samples of the call-stack whenever a new allocation takes place
+(defun profiler-memory-start () -> nil)
+
+;; (profiler-memory-stop) - stop the memory profiler
+;; Returns non-nil if the profiler was running
+(defun profiler-memory-stop () -> bool)
+
+;; (profiler-memory-running-p) - check if memory profiler is running
+(defun profiler-memory-running-p () -> bool)
+
+;; (profiler-memory-log) - return the current memory profiler log
+;; Returns a hash-table mapping backtraces to counters
+(defun profiler-memory-log () -> ((hash-table any any) | nil))
+
+;; ===========================================================================
+;; Function Comparison
+;; ===========================================================================
+
+;; (function-equal F1 F2) - compare functions for source equality
+;; Returns non-nil if F1 and F2 come from the same source.
+;; Used to determine if different closures are just different instances
+;; of the same lambda expression.
+(defun function-equal (any any) -> bool)

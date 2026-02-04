@@ -1,0 +1,16 @@
+;; Type signatures for Emacs decompress.c
+;;
+;; Source: emacs/src/decompress.c
+;; Emacs version: 31.0
+;;
+;; Contains zlib decompression functions.
+
+;; (zlib-available-p) - check if zlib is available
+;; Returns t if zlib decompression is available in this Emacs instance.
+(defun zlib-available-p () -> bool)
+
+;; (zlib-decompress-region START END &optional ALLOW-PARTIAL) - decompress region
+;; Decompress a gzip- or zlib-compressed region.
+;; Replace the text in the region with the decompressed data.
+;; Returns the number of bytes of compressed data, or nil if decompression failed.
+(defun zlib-decompress-region (int int &optional any) -> (int | nil))

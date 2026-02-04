@@ -1,0 +1,22 @@
+;; Type signatures for Emacs inotify.c
+;;
+;; Source: emacs/src/inotify.c
+;; Emacs version: 31.0
+;;
+;; Contains inotify-based file notification functions (Linux).
+;; See also: kqueue.c (BSD), gfilenotify.c (GLib)
+
+;; (inotify-add-watch FILE-NAME ASPECT CALLBACK) - add a watch for file changes
+;; Return a watch descriptor that will invoke CALLBACK when monitored
+;; ASPECT events occur. ASPECT is a list of symbols like create, delete,
+;; modify, move-self, moved-from, moved-to, open, close-write, close-nowrite,
+;; access, attrib, isdir.
+(defun inotify-add-watch (string (list symbol) any) -> int)
+
+;; (inotify-rm-watch WATCH-DESCRIPTOR) - remove a watch
+;; Remove an existing watch previously obtained from `inotify-add-watch'.
+(defun inotify-rm-watch (int) -> nil)
+
+;; (inotify-valid-p WATCH-DESCRIPTOR) - check if watch is still valid
+;; Return nil if the watch has been removed or its target deleted.
+(defun inotify-valid-p (int) -> bool)

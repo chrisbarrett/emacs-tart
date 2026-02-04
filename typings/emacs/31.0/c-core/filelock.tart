@@ -1,0 +1,25 @@
+;; Type signatures for Emacs filelock.c
+;;
+;; Source: emacs/src/filelock.c
+;; Emacs version: 31.0
+;;
+;; Contains file locking functions for preventing concurrent editing.
+
+;; (lock-file FILE) - lock a file
+;; Check whether FILE was modified since it was visited, and lock it.
+(defun lock-file (string) -> nil)
+
+;; (unlock-file FILE) - unlock a file
+(defun unlock-file (string) -> nil)
+
+;; (lock-buffer) - lock the file visited in the current buffer
+;; Only locks if buffer is modified.
+(defun lock-buffer () -> nil)
+
+;; (unlock-buffer) - unlock the file visited in the current buffer
+(defun unlock-buffer () -> nil)
+
+;; (file-locked-p FILENAME) - check if a file is locked
+;; Returns nil if unlocked, t if locked by this Emacs, or a string
+;; identifying the user@host if locked by another process.
+(defun file-locked-p (string) -> (nil | t | string))

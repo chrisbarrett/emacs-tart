@@ -1,0 +1,32 @@
+;; Type signatures for Emacs fringe.c
+;;
+;; Source: emacs/src/fringe.c
+;; Emacs version: 31.0
+;;
+;; Contains fringe (editor margin) bitmap management functions.
+
+;; (destroy-fringe-bitmap BITMAP) - destroy a fringe bitmap
+;; If BITMAP overrides a standard fringe bitmap, the original is restored.
+(defun destroy-fringe-bitmap (symbol) -> nil)
+
+;; (define-fringe-bitmap BITMAP BITS &optional HEIGHT WIDTH ALIGN) - define bitmap
+;; Define fringe bitmap BITMAP from BITS of size HEIGHT x WIDTH.
+;; BITMAP is a symbol identifying the new fringe bitmap.
+;; BITS is a vector of integers specifying the bitmap pattern.
+;; HEIGHT is the height in pixels (default 8).
+;; WIDTH is the width in pixels (default 8, max 16).
+;; ALIGN specifies vertical alignment: top, center, or bottom (default center).
+;; Returns BITMAP.
+(defun define-fringe-bitmap (symbol (vector int) &optional (int | nil) (int | nil) (symbol | nil)) -> symbol)
+
+;; (set-fringe-bitmap-face BITMAP FACE) - set face for fringe bitmap
+;; FACE is merged with the `fringe' face, so normally FACE should specify
+;; only the foreground color.
+(defun set-fringe-bitmap-face (symbol (symbol | nil)) -> nil)
+
+;; (fringe-bitmaps-at-pos &optional POS WINDOW) - get fringe bitmaps at position
+;; Return fringe bitmaps of row containing position POS in window WINDOW.
+;; If WINDOW is nil, use selected window.
+;; If POS is nil, use point in the window.
+;; Returns a cons of (LEFT-BITMAP . RIGHT-BITMAP).
+(defun fringe-bitmaps-at-pos (&optional (int | nil) (window | nil)) -> (pair (symbol | nil) (symbol | nil)))
