@@ -220,3 +220,49 @@
 
 ;; Whether to display async shell command buffer
 (defvar async-shell-command-display-buffer bool)
+
+;; What to do before erasing shell command output buffer
+(defvar shell-command-dont-erase-buffer symbol)
+
+;; ===========================================================================
+;; Minibuffer variables
+;; ===========================================================================
+
+;; Keymap for minibuffer
+(defvar minibuffer-local-map any)
+
+;; Keymap for evaluating expressions
+(defvar read-expression-map any)
+
+;; Isearch message overlay in minibuffer history
+(defvar minibuffer-history-isearch-message-overlay (overlay | nil))
+
+;; ===========================================================================
+;; Editing mode variables
+;; ===========================================================================
+
+;; Overwrite mode state
+(defvar overwrite-mode (symbol | nil))
+
+;; Delete behavior when region is active
+(defvar delete-active-region any)
+
+;; Radix for read-quoted-char
+(defvar read-quoted-char-radix int)
+
+;; Whether to move by visual lines
+(defvar line-move-visual bool)
+
+;; ===========================================================================
+;; Mode line
+;; ===========================================================================
+
+;; Major mode name shown in mode line
+(defvar mode-name (string | symbol | (list any)))
+
+;; ===========================================================================
+;; Documentation
+;; ===========================================================================
+
+;; Function documentation property
+(defvar function-documentation any)

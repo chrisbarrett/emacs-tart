@@ -76,6 +76,14 @@
 (defvar obsolete symbol)
 
 ;; ===========================================================================
+;; Warning suppression
+;; ===========================================================================
+
+;; (with-suppressed-warnings WARNINGS &rest BODY) - suppress specific warnings
+;; WARNINGS is a list of warning types to suppress during BODY
+(defun with-suppressed-warnings ((list any) &rest any) -> any)
+
+;; ===========================================================================
 ;; Byte compilation functions
 ;; ===========================================================================
 

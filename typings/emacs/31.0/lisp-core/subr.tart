@@ -405,3 +405,30 @@
 
 ;; (autoloadp OBJECT) - test if object is an autoload
 (defun autoloadp (any) -> bool)
+
+;; ===========================================================================
+;; Documentation and key description
+;; ===========================================================================
+
+;; (substitute-command-keys STRING &optional NO-FACE) - replace \\=\\[...] with keys
+(defun substitute-command-keys (string &optional bool) -> string)
+
+;; (kbd KEYS) - convert key description to internal form
+(defun kbd (string) -> any)
+
+;; ===========================================================================
+;; Minibuffer utilities (from subr.el)
+;; ===========================================================================
+
+;; (minibuffer-message STRING &rest ARGS) - display message in minibuffer
+(defun minibuffer-message (string &rest any) -> nil)
+
+;; ===========================================================================
+;; Isearch
+;; ===========================================================================
+
+;; (isearch-forward &optional REGEXP-P NO-RECURSIVE-EDIT) - incremental search
+(defun isearch-forward (&optional bool bool) -> nil)
+
+;; (isearch-backward &optional REGEXP-P NO-RECURSIVE-EDIT) - reverse search
+(defun isearch-backward (&optional bool bool) -> nil)

@@ -64,10 +64,13 @@
 ;; ===========================================================================
 
 ;; (active-minibuffer-window) - return active minibuffer window
-(defun active-minibuffer-window () -> (any | nil))
+(defun active-minibuffer-window () -> (window | nil))
 
 ;; (set-minibuffer-window WINDOW) - set minibuffer window
-(defun set-minibuffer-window (any) -> any)
+(defun set-minibuffer-window (window) -> window)
+
+;; (minibuffer-selected-window) - return window selected when entering minibuffer
+(defun minibuffer-selected-window () -> (window | nil))
 
 ;; ===========================================================================
 ;; Minibuffer control
