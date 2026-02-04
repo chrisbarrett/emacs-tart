@@ -1,0 +1,167 @@
+;; Type signatures for Emacs faces.el
+;;
+;; Source: emacs/lisp/faces.el
+;; Emacs version: 31.0
+;;
+;; Face definition and manipulation functions.
+
+;; ===========================================================================
+;; Face predicates
+;; ===========================================================================
+
+;; (facep FACE) - return non-nil if FACE is a valid face name
+(defun facep (any) -> bool)
+
+;; (face-list) - return list of all defined faces
+(defun face-list () -> (list symbol))
+
+;; ===========================================================================
+;; Face attributes
+;; ===========================================================================
+
+;; (face-attribute FACE ATTRIBUTE &optional FRAME INHERIT)
+;; Return value of FACE's ATTRIBUTE on FRAME
+(defun face-attribute (symbol symbol &optional frame bool) -> any)
+
+;; (face-attribute-relative-p ATTRIBUTE VALUE) - test if VALUE is relative
+(defun face-attribute-relative-p (symbol any) -> bool)
+
+;; (face-all-attributes FACE &optional FRAME) - return alist of all attributes
+(defun face-all-attributes (symbol &optional frame) -> (list (pair symbol any)))
+
+;; (set-face-attribute FACE FRAME &rest ARGS) - set face attributes
+;; ARGS alternates :ATTRIBUTE VALUE pairs
+(defun set-face-attribute (symbol (frame | nil) &rest any) -> nil)
+
+;; (merge-face-attribute ATTRIBUTE VALUE1 VALUE2) - merge attribute values
+(defun merge-face-attribute (symbol any any) -> any)
+
+;; ===========================================================================
+;; Common attribute accessors
+;; ===========================================================================
+
+;; (face-foreground FACE &optional FRAME INHERIT) - return foreground color
+(defun face-foreground (symbol &optional frame bool) -> (string | nil))
+
+;; (face-background FACE &optional FRAME INHERIT) - return background color
+(defun face-background (symbol &optional frame bool) -> (string | nil))
+
+;; (face-stipple FACE &optional FRAME INHERIT) - return stipple pattern
+(defun face-stipple (symbol &optional frame bool) -> any)
+
+;; (face-font FACE &optional FRAME CHARACTER) - return font
+(defun face-font (symbol &optional frame int) -> (string | nil))
+
+;; (face-bold-p FACE &optional FRAME INHERIT) - test if bold
+(defun face-bold-p (symbol &optional frame bool) -> bool)
+
+;; (face-italic-p FACE &optional FRAME INHERIT) - test if italic
+(defun face-italic-p (symbol &optional frame bool) -> bool)
+
+;; (face-underline-p FACE &optional FRAME INHERIT) - test if underlined
+(defun face-underline-p (symbol &optional frame bool) -> bool)
+
+;; (face-inverse-video-p FACE &optional FRAME INHERIT) - test if inverse
+(defun face-inverse-video-p (symbol &optional frame bool) -> bool)
+
+;; ===========================================================================
+;; Common attribute setters
+;; ===========================================================================
+
+;; (set-face-foreground FACE COLOR &optional FRAME) - set foreground color
+(defun set-face-foreground (symbol (string | nil) &optional frame) -> nil)
+
+;; (set-face-background FACE COLOR &optional FRAME) - set background color
+(defun set-face-background (symbol (string | nil) &optional frame) -> nil)
+
+;; (set-face-stipple FACE STIPPLE &optional FRAME) - set stipple pattern
+(defun set-face-stipple (symbol any &optional frame) -> nil)
+
+;; (set-face-font FACE FONT &optional FRAME) - set font
+(defun set-face-font (symbol string &optional frame) -> nil)
+
+;; (set-face-bold FACE BOLD-P &optional FRAME) - set bold
+(defun set-face-bold (symbol bool &optional frame) -> nil)
+
+;; (set-face-italic FACE ITALIC-P &optional FRAME) - set italic
+(defun set-face-italic (symbol bool &optional frame) -> nil)
+
+;; (set-face-underline FACE UNDERLINE &optional FRAME) - set underline
+(defun set-face-underline (symbol any &optional frame) -> nil)
+
+;; (set-face-inverse-video FACE INVERSE-P &optional FRAME) - set inverse
+(defun set-face-inverse-video (symbol bool &optional frame) -> nil)
+
+;; ===========================================================================
+;; Face comparison and inheritance
+;; ===========================================================================
+
+;; (face-equal FACE1 FACE2 &optional FRAME) - compare faces
+(defun face-equal (symbol symbol &optional frame) -> bool)
+
+;; (face-differs-from-default-p FACE &optional FRAME) - test if different
+(defun face-differs-from-default-p (symbol &optional frame) -> bool)
+
+;; ===========================================================================
+;; Face definition
+;; ===========================================================================
+
+;; (defface NAME SPEC DOC &rest ARGS) - define a face
+;; This is actually a macro; declared as defun for parser compatibility
+(defun defface (symbol (list any) string &rest any) -> symbol)
+
+;; (face-spec-set FACE SPEC &optional SPEC-TYPE) - set face specification
+(defun face-spec-set (symbol (list any) &optional symbol) -> nil)
+
+;; (face-spec-reset-face FACE &optional FRAME) - reset face to default
+(defun face-spec-reset-face (symbol &optional frame) -> nil)
+
+;; (face-spec-recalc FACE FRAME) - recalculate face from spec
+(defun face-spec-recalc (symbol frame) -> nil)
+
+;; ===========================================================================
+;; Color utilities
+;; ===========================================================================
+
+;; (color-defined-p COLOR &optional FRAME) - test if color is defined
+(defun color-defined-p (string &optional frame) -> bool)
+
+;; (defined-colors &optional FRAME) - return list of defined colors
+(defun defined-colors (&optional frame) -> (list string))
+
+;; (color-values COLOR &optional FRAME) - return RGB values
+(defun color-values (string &optional frame) -> ((list int) | nil))
+
+;; (color-name-to-rgb COLOR &optional FRAME) - convert color to RGB
+(defun color-name-to-rgb (string &optional frame) -> ((list float) | nil))
+
+;; (color-rgb-to-hex R G B &optional DIGITS-PER-COMPONENT) - RGB to hex
+(defun color-rgb-to-hex (float float float &optional int) -> string)
+
+;; (color-lighten-name COLOR PERCENT) - lighten color by percentage
+(defun color-lighten-name (string int) -> string)
+
+;; (color-darken-name COLOR PERCENT) - darken color by percentage
+(defun color-darken-name (string int) -> string)
+
+;; (color-saturate-name COLOR PERCENT) - saturate color by percentage
+(defun color-saturate-name (string int) -> string)
+
+;; (color-desaturate-name COLOR PERCENT) - desaturate color
+(defun color-desaturate-name (string int) -> string)
+
+;; ===========================================================================
+;; Text property faces
+;; ===========================================================================
+
+;; (face-at-point &optional THING MULTIPLE) - return face at point
+(defun face-at-point (&optional bool bool) -> (symbol | (list symbol) | nil))
+
+;; (read-face-name PROMPT &optional DEFAULT MULTIPLE) - read face from user
+(defun read-face-name (string &optional any bool) -> (symbol | (list symbol)))
+
+;; (read-face-font FACE &optional FRAME) - read font for face
+(defun read-face-font (symbol &optional frame) -> string)
+
+;; (read-face-attribute FACE ATTRIBUTE &optional FRAME) - read attribute
+(defun read-face-attribute (symbol symbol &optional frame) -> any)
