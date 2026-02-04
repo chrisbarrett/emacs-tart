@@ -1,0 +1,17 @@
+;; Type signatures for Emacs xml.c
+;;
+;; Source: emacs/src/xml.c
+;; Emacs version: 31.0
+;;
+;; Contains XML/HTML parsing functions using libxml2.
+
+;; (libxml-available-p) - return t if libxml2 support is available
+(defun libxml-available-p () -> bool)
+
+;; (libxml-parse-xml-region &optional START END BASE-URL DISCARD-COMMENTS)
+;; Parse region as XML document and return parse tree
+(defun libxml-parse-xml-region (&optional (int | nil) (int | nil) (string | nil) any) -> (list any))
+
+;; (libxml-parse-html-region &optional START END BASE-URL DISCARD-COMMENTS)
+;; Parse region as HTML document and return parse tree
+(defun libxml-parse-html-region (&optional (int | nil) (int | nil) (string | nil) any) -> (list any))

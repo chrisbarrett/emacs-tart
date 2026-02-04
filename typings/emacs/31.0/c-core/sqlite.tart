@@ -1,0 +1,65 @@
+;; Type signatures for Emacs sqlite.c
+;;
+;; Source: emacs/src/sqlite.c
+;; Emacs version: 31.0
+;;
+;; Contains SQLite database interface (Emacs 29+).
+
+;; ===========================================================================
+;; SQLite availability and predicates
+;; ===========================================================================
+
+;; (sqlite-available-p) - return t if sqlite3 support is available
+(defun sqlite-available-p () -> bool)
+
+;; (sqlitep OBJECT) - return t if OBJECT is an SQLite object
+(defun sqlitep (any) -> bool)
+
+;; ===========================================================================
+;; Database operations
+;; ===========================================================================
+
+;; (sqlite-open &optional FILE READONLY DISABLE-URI)
+;; Open FILE as SQLite database, or in-memory if FILE is nil
+(defun sqlite-open (&optional (string | nil) any any) -> any)
+
+;; (sqlite-close DB) - close the database
+(defun sqlite-close (any) -> nil)
+
+;; (sqlite-execute DB QUERY &optional VALUES)
+;; Execute a non-select SQL statement, return number of affected rows
+(defun sqlite-execute (any string &optional ((list any) | (vector any) | nil)) -> int)
+
+;; (sqlite-select DB QUERY &optional VALUES RETURN-TYPE)
+;; Select data matching QUERY
+;; RETURN-TYPE: nil = list of rows, 'full = with column names, 'set = set object
+(defun sqlite-select (any string &optional ((list any) | (vector any) | nil) (symbol | nil)) -> ((list any) | any))
+
+;; ===========================================================================
+;; Result set operations
+;; ===========================================================================
+
+;; (sqlite-next SET) - return next result from SET, nil when done
+(defun sqlite-next (any) -> ((list any) | nil))
+
+;; (sqlite-columns SET) - return column names of SET
+(defun sqlite-columns (any) -> (list string))
+
+;; (sqlite-more-p SET) - return t if more results in SET
+(defun sqlite-more-p (any) -> bool)
+
+;; (sqlite-finalize SET) - mark SET as finished, free resources
+(defun sqlite-finalize (any) -> nil)
+
+;; ===========================================================================
+;; Transaction and configuration
+;; ===========================================================================
+
+;; (sqlite-transaction DB) - start a transaction
+(defun sqlite-transaction (any) -> nil)
+
+;; (sqlite-pragma DB PRAGMA) - execute PRAGMA statement
+(defun sqlite-pragma (any string) -> any)
+
+;; (sqlite-load-extension DB MODULE) - load SQLite extension module
+(defun sqlite-load-extension (any string) -> any)
