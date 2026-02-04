@@ -6,5 +6,5 @@
 
 (defun my-setup ()
   "Set up my configuration."
-  ;; seq-filter is from seq.el but we forgot (require 'seq)
-  (seq-filter #'numberp (list 1 "two" 3)))
+  ;; ert-deftest is from ert.el but we forgot (require 'ert)
+  (ert-deftest my-test () t))

@@ -1,0 +1,310 @@
+;; Type signatures for Emacs minibuffer.el
+;;
+;; Source: emacs/lisp/minibuffer.el
+;; Emacs version: 31.0
+;;
+;; Minibuffer completion functions and commands.
+;; See c-core/minibuf.tart for C primitives.
+
+;; ===========================================================================
+;; Completion reading functions
+;; ===========================================================================
+
+;; (completing-read-default PROMPT COLLECTION &optional PREDICATE REQUIRE-MATCH
+;;                          INITIAL-INPUT HIST DEF INHERIT-INPUT-METHOD)
+;; Default implementation for completing-read
+(defun completing-read-default (string any &optional any any any any any any) -> string)
+
+;; (completing-read-multiple PROMPT TABLE &optional PREDICATE REQUIRE-MATCH
+;;                           INITIAL-INPUT HIST DEF INHERIT-INPUT-METHOD)
+;; Read multiple strings with completion, separated by crm-separator
+(defun completing-read-multiple (string any &optional any any any any any any) -> (list string))
+
+;; ===========================================================================
+;; Completion tables
+;; ===========================================================================
+
+;; (completion-table-case-fold TABLE &optional DONT-FOLD)
+;; Return completion table that uses case-folding
+(defun completion-table-case-fold (any &optional bool) -> any)
+
+;; (completion-table-subvert TABLE S1 S2)
+;; Return completion table mapping prefix S1 to S2
+(defun completion-table-subvert (any string string) -> any)
+
+;; (completion-table-dynamic FUNCTION &optional SWITCH-BUFFER)
+;; Return dynamically-computed completion table
+(defun completion-table-dynamic (any &optional bool) -> any)
+
+;; (completion-table-with-context PREFIX TABLE STRING PRED ACTION)
+;; Return completion table with context
+(defun completion-table-with-context (string any string any any) -> any)
+
+;; (completion-table-with-terminator TERMINATOR TABLE)
+;; Return table that appends terminator after unique match
+(defun completion-table-with-terminator ((string | any) any) -> any)
+
+;; (completion-table-with-predicate TABLE PREDICATE &optional EXCLUSIVE)
+;; Return table with additional predicate
+(defun completion-table-with-predicate (any any &optional bool) -> any)
+
+;; (completion-table-in-turn &rest TABLES)
+;; Return table that tries each table in sequence
+(defun completion-table-in-turn (&rest any) -> any)
+
+;; (completion-table-merge &rest TABLES)
+;; Return table that merges completions from all tables
+(defun completion-table-merge (&rest any) -> any)
+
+;; (completion-table-with-cache TABLE &optional IGNORE-CASE)
+;; Return cached version of table
+(defun completion-table-with-cache (any &optional bool) -> any)
+
+;; ===========================================================================
+;; Completion styles
+;; ===========================================================================
+
+;; (completion-all-completions STRING TABLE PRED POINT &optional METADATA)
+;; Return all completions using completion styles
+(defun completion-all-completions (string any any int &optional any) -> (list string))
+
+;; (completion-try-completion STRING TABLE PRED POINT &optional METADATA)
+;; Try to complete STRING using completion styles
+(defun completion-try-completion (string any any int &optional any) -> (string | nil))
+
+;; (completion-pcm-all-completions STRING TABLE PRED POINT)
+;; Partial completion method
+(defun completion-pcm-all-completions (string any any int) -> (list string))
+
+;; (completion-basic-all-completions STRING TABLE PRED POINT)
+;; Basic prefix completion
+(defun completion-basic-all-completions (string any any int) -> (list string))
+
+;; ===========================================================================
+;; Completion at point
+;; ===========================================================================
+
+;; (completion-at-point) - perform completion at point
+(defun completion-at-point () -> nil)
+
+;; (completion-in-region START END COLLECTION &optional PREDICATE)
+;; Complete text between START and END
+(defun completion-in-region (int int any &optional any) -> (bool | nil))
+
+;; (completion-in-region-mode &optional ARG) - minor mode for in-region completion
+(defun completion-in-region-mode (&optional int) -> nil)
+
+;; ===========================================================================
+;; Completion metadata
+;; ===========================================================================
+
+;; (completion-metadata STRING TABLE PRED)
+;; Return metadata about completions for STRING in TABLE
+(defun completion-metadata (string any any) -> (list any))
+
+;; (completion-metadata-get METADATA PROP)
+;; Get property PROP from completion metadata
+(defun completion-metadata-get ((list any) symbol) -> any)
+
+;; ===========================================================================
+;; Completion boundaries
+;; ===========================================================================
+
+;; (completion-boundaries STRING TABLE PRED SUFFIX)
+;; Return completion boundaries
+(defun completion-boundaries (string any any string) -> (pair int int))
+
+;; ===========================================================================
+;; Minibuffer completion commands
+;; ===========================================================================
+
+;; (minibuffer-complete) - complete current input
+(defun minibuffer-complete () -> nil)
+
+;; (minibuffer-complete-word) - complete word
+(defun minibuffer-complete-word () -> nil)
+
+;; (minibuffer-completion-help) - display possible completions
+(defun minibuffer-completion-help () -> nil)
+
+;; (minibuffer-complete-and-exit) - complete and exit if valid
+(defun minibuffer-complete-and-exit () -> nil)
+
+;; (exit-minibuffer) - exit minibuffer with current input
+(defun exit-minibuffer () -> nil)
+
+;; ===========================================================================
+;; Minibuffer completion utilities
+;; ===========================================================================
+
+;; (minibuffer-force-complete) - force completion to unique match
+(defun minibuffer-force-complete () -> nil)
+
+;; (minibuffer-force-complete-and-exit) - force complete and exit
+(defun minibuffer-force-complete-and-exit () -> nil)
+
+;; (minibuffer-next-completion &optional N)
+;; Move to Nth next completion candidate
+(defun minibuffer-next-completion (&optional int) -> nil)
+
+;; (minibuffer-previous-completion &optional N)
+;; Move to Nth previous completion candidate
+(defun minibuffer-previous-completion (&optional int) -> nil)
+
+;; (minibuffer-choose-completion &optional NO-EXIT NO-QUIT)
+;; Choose current completion candidate
+(defun minibuffer-choose-completion (&optional bool bool) -> nil)
+
+;; ===========================================================================
+;; Completion cycling
+;; ===========================================================================
+
+;; (minibuffer-complete-history) - complete from minibuffer history
+(defun minibuffer-complete-history () -> nil)
+
+;; (next-history-element N) - insert Nth next history element
+(defun next-history-element (int) -> nil)
+
+;; (previous-history-element N) - insert Nth previous history element
+(defun previous-history-element (int) -> nil)
+
+;; (next-complete-history-element N) - move to next matching history
+(defun next-complete-history-element (int) -> nil)
+
+;; (previous-complete-history-element N) - move to previous matching history
+(defun previous-complete-history-element (int) -> nil)
+
+;; ===========================================================================
+;; Reading with file completion
+;; ===========================================================================
+
+;; (read-file-name PROMPT &optional DIR DEFAULT-FILENAME MUSTMATCH INITIAL PREDICATE)
+;; Read file name with completion
+(defun read-file-name (string &optional string string bool string any) -> string)
+
+;; (read-file-name-default PROMPT &optional DIR DEFAULT-FILENAME MUSTMATCH INITIAL PREDICATE)
+;; Default implementation of read-file-name
+(defun read-file-name-default (string &optional string string bool string any) -> string)
+
+;; (read-directory-name PROMPT &optional DIR DEFAULT-DIRNAME MUSTMATCH INITIAL)
+;; Read directory name with completion
+(defun read-directory-name (string &optional string string bool string) -> string)
+
+;; (read-shell-command PROMPT &optional INITIAL-CONTENTS HIST &rest ARGS)
+;; Read shell command with completion
+(defun read-shell-command (string &optional string symbol &rest any) -> string)
+
+;; ===========================================================================
+;; Annotation and affixation
+;; ===========================================================================
+
+;; (completion-annotate-function STRING) - return annotation for STRING
+(defun completion-annotate-function (string) -> (string | nil))
+
+;; ===========================================================================
+;; Minibuffer setup
+;; ===========================================================================
+
+;; (minibuffer-with-setup-hook FUN &rest BODY)
+;; Execute BODY with FUN on minibuffer-setup-hook
+(defun minibuffer-with-setup-hook (any &rest any) -> any)
+
+;; ===========================================================================
+;; Completions buffer
+;; ===========================================================================
+
+;; (display-completion-list COMPLETIONS &optional COMMON-SUBSTRING)
+;; Display list of completions
+(defun display-completion-list ((list any) &optional string) -> nil)
+
+;; (switch-to-completions) - switch to completions buffer
+(defun switch-to-completions () -> nil)
+
+;; (choose-completion &optional EVENT NO-EXIT NO-QUIT)
+;; Choose completion at point or mouse event
+(defun choose-completion (&optional any bool bool) -> nil)
+
+;; (next-completion N) - move to Nth next completion in completions buffer
+(defun next-completion (int) -> nil)
+
+;; (previous-completion N) - move to Nth previous completion
+(defun previous-completion (int) -> nil)
+
+;; (first-completion) - move to first completion
+(defun first-completion () -> nil)
+
+;; (last-completion) - move to last completion
+(defun last-completion () -> nil)
+
+;; ===========================================================================
+;; Variables
+;; ===========================================================================
+
+;; Completion table for minibuffer
+(defvar minibuffer-completion-table any)
+
+;; Predicate for completions
+(defvar minibuffer-completion-predicate any)
+
+;; Whether match is required
+(defvar minibuffer-completion-confirm (symbol | nil))
+
+;; Exit commands (list of symbols)
+(defvar minibuffer-completion-exit-commands (list symbol))
+
+;; Function to call for completing-read
+(defvar completing-read-function any)
+
+;; Function to call for read-file-name
+(defvar read-file-name-function any)
+
+;; Default completion styles
+(defvar completion-styles (list symbol))
+
+;; Category-specific completion styles
+(defvar completion-category-overrides (list any))
+
+;; Category-specific defaults
+(defvar completion-category-defaults (list any))
+
+;; Extra completion properties
+(defvar completion-extra-properties (list any))
+
+;; Whether to ignore case
+(defvar completion-ignore-case bool)
+
+;; Function to display completions
+(defvar completion-in-region-function any)
+
+;; Completion at point functions
+(defvar completion-at-point-functions (list any))
+
+;; Completions format
+(defvar completions-format symbol)
+
+;; Completions header format
+(defvar completions-header-format (string | nil))
+
+;; Maximum height for completions
+(defvar completions-max-height (int | nil))
+
+;; Group function for completions
+(defvar completions-group-function any)
+
+;; Sort function for completions
+(defvar completions-sort (symbol | any))
+
+;; How to show affixations in completions
+(defvar completions-detailed bool)
+
+;; Enable fido mode
+(defvar fido-mode bool)
+
+;; Enable icomplete mode
+(defvar icomplete-mode bool)
+
+;; Enable vertical completion
+(defvar icomplete-vertical-mode bool)
+
+;; Multiple selection separator
+(defvar crm-separator string)
