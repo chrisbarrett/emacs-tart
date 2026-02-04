@@ -1,0 +1,34 @@
+;; Type signatures for Emacs callproc.c
+;;
+;; Source: emacs/src/callproc.c
+;; Emacs version: 31.0
+;;
+;; Synchronous process invocation functions.
+
+;; ===========================================================================
+;; Process invocation
+;; ===========================================================================
+
+;; (call-process PROGRAM &optional INFILE DESTINATION DISPLAY &rest ARGS)
+;; Invoke PROGRAM synchronously, returning exit status or signal name.
+;; INFILE is input source (nil for /dev/null).
+;; DESTINATION is output destination:
+;;   nil - discard
+;;   t - current buffer
+;;   buffer or string - output to that buffer
+;;   (REAL-DESTINATION ERROR-DESTINATION) - separate stdout/stderr
+;;   0 - discard, don't wait for termination
+(defun call-process (string &optional (string | nil) any any &rest string) -> (int | string | nil))
+
+;; (call-process-region START END PROGRAM &optional DELETE DESTINATION DISPLAY &rest ARGS)
+;; Send region as stdin to PROGRAM and get output.
+;; DELETE non-nil means delete the region.
+(defun call-process-region (int int string &optional any any any &rest string) -> (int | string | nil))
+
+;; ===========================================================================
+;; Environment
+;; ===========================================================================
+
+;; (getenv-internal VARIABLE &optional ENV) - get environment variable
+;; Returns value of VARIABLE in ENV (defaults to process-environment).
+(defun getenv-internal (string &optional (list string)) -> (string | nil))

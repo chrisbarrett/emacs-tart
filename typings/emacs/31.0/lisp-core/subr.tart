@@ -432,3 +432,60 @@
 
 ;; (isearch-backward &optional REGEXP-P NO-RECURSIVE-EDIT) - reverse search
 (defun isearch-backward (&optional bool bool) -> nil)
+
+;; ===========================================================================
+;; File name utilities
+;; ===========================================================================
+
+;; (abbreviate-file-name FILENAME) - shorten filename using directory-abbrev-alist
+(defun abbreviate-file-name (string) -> string)
+
+;; ===========================================================================
+;; Shell command utilities
+;; ===========================================================================
+
+;; (call-process-shell-command COMMAND &optional INFILE DESTINATION DISPLAY)
+(defun call-process-shell-command (string &optional (string | nil) any any) -> (int | string | nil))
+
+;; (call-shell-region START END COMMAND &optional DELETE DESTINATION)
+(defun call-shell-region (int int string &optional any any) -> (int | string | nil))
+
+;; ===========================================================================
+;; Buffer utilities
+;; ===========================================================================
+
+;; (bury-buffer &optional BUFFER-OR-NAME) - put buffer at end of buffer list
+(defun bury-buffer (&optional (buffer | string | nil)) -> nil)
+
+;; (unbury-buffer) - switch to least recently used buffer
+(defun unbury-buffer () -> nil)
+
+;; (buffer-local-set-state &rest PAIRS) - set buffer-local state
+(defun buffer-local-set-state (&rest any) -> (list any))
+
+;; ===========================================================================
+;; Character utilities
+;; ===========================================================================
+
+;; (char-displayable-p CHAR) - test if character can be displayed
+(defun char-displayable-p (int) -> any)
+
+;; (char-resolve-modifiers CHAR) - resolve modifier bits in character
+(defun char-resolve-modifiers (int) -> int)
+
+;; ===========================================================================
+;; Button utilities
+;; ===========================================================================
+
+;; (button-get BUTTON PROP) - get button property
+(defun button-get (any symbol) -> any)
+
+;; (button-put BUTTON PROP VAL) - set button property
+(defun button-put (any symbol any) -> any)
+
+;; ===========================================================================
+;; Atomic operations
+;; ===========================================================================
+
+;; (atomic-change-group &rest BODY) - wrap in atomic change group
+(defun atomic-change-group (&rest any) -> any)
