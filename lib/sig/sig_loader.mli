@@ -144,6 +144,16 @@ type type_context = { tc_aliases : alias_context; tc_opaques : opaque_context }
 val empty_type_context : type_context
 (** Empty type context with no aliases or opaques *)
 
+(** {1 Bound Checking} *)
+
+val satisfies_bound : Core.Types.typ -> Core.Types.typ -> bool
+(** [satisfies_bound arg_typ bound_typ] checks if [arg_typ] satisfies the bound
+    constraint [bound_typ].
+
+    Supports:
+    - truthy bound: the argument type must not contain nil
+    - union bounds: the argument type must be a member of the union *)
+
 (** {1 Type Conversion} *)
 
 val sig_type_to_typ_with_aliases :

@@ -10,7 +10,10 @@
 ;; ===========================================================================
 
 ;; (eq A B) - identity comparison
-(defun eq (any any) -> bool)
+;; Disjointness is checked by the type checker as a special case.
+;; Using two independent type params allows polymorphic use while
+;; the checker reports errors when args are provably disjoint.
+(defun eq [a b] (a b) -> bool)
 
 ;; (null OBJ) - test if nil
 (defun null (any) -> bool)

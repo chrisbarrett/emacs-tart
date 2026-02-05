@@ -505,24 +505,56 @@ type type_context = { tc_aliases : alias_context; tc_opaques : opaque_context }
 let empty_type_context =
   { tc_aliases = empty_aliases; tc_opaques = empty_opaques }
 
+(** Simple structural type equality for bound checking.
+
+    Compares type constructors by name. Sufficient for checking whether a
+    concrete type is a member of a union bound like eq-safe. *)
+let rec bound_types_equal (t1 : Types.typ) (t2 : Types.typ) : bool =
+  match (t1, t2) with
+  | Types.TCon n1, Types.TCon n2 -> n1 = n2
+  | Types.TApp (con1, args1), Types.TApp (con2, args2) ->
+      bound_types_equal con1 con2
+      && List.length args1 = List.length args2
+      && List.for_all2 bound_types_equal args1 args2
+  | Types.TUnion m1, Types.TUnion m2 ->
+      List.length m1 = List.length m2 && List.for_all2 bound_types_equal m1 m2
+  | _ -> false
+
+(** Check if a type is a member of a union.
+
+    A type [t] is a member of a union if it is structurally equal to one of the
+    union's members. For example, [symbol] is a member of
+    [(symbol | keyword | int | t | nil)]. *)
+let is_union_member (arg_typ : Types.typ) (members : Types.typ list) : bool =
+  let arg = Types.repr arg_typ in
+  List.exists (fun member -> bound_types_equal arg (Types.repr member)) members
+
 (** Check if a type satisfies a bound constraint.
 
-    Currently supports:
+    Supports:
     - truthy bound: the argument type must not contain nil
+    - union bounds: the argument type must be a member of the union (e.g.,
+      eq-safe = symbol | keyword | int | t | nil)
 
-    This is a simplified subtype check for bound constraints. The key use case
-    is preventing [(a : truthy)] bound violations like [(option (option x))]
-    where the inner option can be nil, violating the truthy constraint. *)
+    This is a simplified subtype check for bound constraints. *)
 let satisfies_bound (arg_typ : Types.typ) (bound_typ : Types.typ) : bool =
   let bound_typ = Types.repr bound_typ in
   match bound_typ with
   | Types.TCon name when name = Types.intrinsic "Truthy" ->
       (* Truthy bound: arg must not contain nil *)
       Types.is_truthy arg_typ
+  | Types.TUnion members -> (
+      (* Union bound: arg must be one of the union members.
+         Also accept if arg itself is a union where all members satisfy the bound.
+         E.g., (symbol | int) satisfies eq-safe since both are members. *)
+      let arg = Types.repr arg_typ in
+      match arg with
+      | Types.TUnion arg_members ->
+          List.for_all (fun m -> is_union_member m members) arg_members
+      | _ -> is_union_member arg_typ members)
   | _ ->
-      (* For other bounds, we'd need a full subtyping check.
-         For now, conservatively accept anything. *)
-      true
+      (* For other bounds, check structural equality *)
+      bound_types_equal (Types.repr arg_typ) bound_typ
 
 (** Convert a signature type to a core type. [ctx] is the type context
     containing aliases and opaques. [tvar_names] is the list of bound type

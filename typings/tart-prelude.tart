@@ -93,6 +93,13 @@
 ;; (nonempty int) is equivalent to (cons int (list int))
 (type nonempty [a] (is (list a)))
 
+;; Equality predicate safety bounds.
+;; eq compares by identity — only safe for interned/fixnum types.
+(type eq-safe (symbol | keyword | int | t | nil))
+
+;; eql additionally handles numeric equality.
+(type eql-safe (symbol | keyword | int | float | t | nil))
+
 ;; -----------------------------------------------------------------------------
 ;; Opaque types (no intrinsic backing needed)
 ;; -----------------------------------------------------------------------------

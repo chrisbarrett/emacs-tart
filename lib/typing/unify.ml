@@ -486,6 +486,63 @@ let solve_all (constraints : C.set) : error list =
       | Error e -> Some (to_external_error c.context e))
     constraints
 
+(** Check if two types are provably disjoint (empty intersection).
+
+    Returns [true] when the types cannot share any value at runtime:
+    - Different base types ([int] vs [symbol]) are disjoint
+    - Numeric subtyping is respected: [int] and [num] are NOT disjoint
+    - Unions are disjoint from [T] only when every member is disjoint from [T]
+    - Type variables are conservatively non-disjoint
+    - [any] overlaps with everything
+    - [nil] only overlaps with [nil], unions containing [nil], and [any]
+
+    Used by eq/eql disjointness checking (Spec 11 R14). *)
+let rec types_disjoint t1 t2 : bool =
+  let t1 = repr t1 in
+  let t2 = repr t2 in
+  if t1 == t2 then false
+  else
+    match (t1, t2) with
+    (* Type variables: conservatively non-disjoint *)
+    | TVar _, _ | _, TVar _ -> false
+    (* Any overlaps with everything *)
+    | _ when is_any t1 || is_any t2 -> false
+    (* Base types: disjoint if different and no subtype relationship *)
+    | TCon n1, TCon n2 ->
+        if n1 = n2 then false
+        else
+          let is_int n = n = Prim.int_name in
+          let is_float n = n = Prim.float_name in
+          let is_num n = n = Prim.num_name in
+          let is_truthy n = n = intrinsic "Truthy" in
+          (* int <: num and float <: num, so not disjoint *)
+          if
+            (is_num n1 || is_num n2)
+            && (is_int n1 || is_int n2 || is_float n1 || is_float n2)
+          then false
+          else if
+            (* Truthy overlaps with all non-nil concrete types *)
+            is_truthy n1 || is_truthy n2
+          then
+            (* Truthy is disjoint only with Nil *)
+            let other = if is_truthy n1 then n2 else n1 in
+            other = intrinsic "Nil"
+          else (* Different concrete types with no subtype relationship *)
+            true
+    (* Union on either side: disjoint iff ALL members are disjoint *)
+    | TUnion ts, t -> List.for_all (fun ti -> types_disjoint ti t) ts
+    | t, TUnion ts -> List.for_all (fun ti -> types_disjoint t ti) ts
+    (* Type applications: disjoint if constructors are disjoint *)
+    | TApp (c1, _), TApp (c2, _) -> types_disjoint c1 c2
+    (* Function types are never disjoint with each other *)
+    | TArrow _, TArrow _ -> false
+    (* Different type forms are disjoint *)
+    | TCon _, TApp _ | TApp _, TCon _ -> true
+    | TCon _, TArrow _ | TArrow _, TCon _ -> true
+    | TApp _, TArrow _ | TArrow _, TApp _ -> true
+    (* Row, Tuple, Forall: conservatively non-disjoint *)
+    | _ -> false
+
 (** Public unify function - wraps internal unify with NoContext *)
 let unify t1 t2 loc =
   match unify t1 t2 loc with

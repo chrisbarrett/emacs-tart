@@ -38,6 +38,7 @@ type error_code =
   | E0005  (** AnnotationMismatch: Expression doesn't match tart annotation *)
   | E0006  (** ReturnMismatch: Function body doesn't match declared return *)
   | E0007  (** UnificationFailed: Types cannot be unified *)
+  | E0008  (** DisjointEquality: eq/eql args are provably disjoint *)
   (* Name Errors (E0100–E0199) *)
   | E0100  (** UndefinedVariable: Variable not in scope *)
   | E0101  (** UndefinedFunction: Function not in scope *)
@@ -65,6 +66,7 @@ let error_code_to_string = function
   | E0005 -> "E0005"
   | E0006 -> "E0006"
   | E0007 -> "E0007"
+  | E0008 -> "E0008"
   (* Name Errors *)
   | E0100 -> "E0100"
   | E0101 -> "E0101"
@@ -412,7 +414,8 @@ let arity_mismatch_with_context ~span ~expected ~actual ~context () =
         help = [];
       }
   | Constraint.NoContext | Constraint.IfBranch _ | Constraint.TartAnnotation _
-  | Constraint.DeclaredReturn _ | Constraint.ExplicitInstantiation _ ->
+  | Constraint.DeclaredReturn _ | Constraint.ExplicitInstantiation _
+  | Constraint.EqDisjointness _ ->
       arity_mismatch ~span ~expected ~actual ()
 
 (** Generate a note about the other branch in an if expression *)
@@ -635,6 +638,27 @@ let type_mismatch_with_context ~span ~expected ~actual ~context () =
         related;
         help = [];
       }
+  | Constraint.EqDisjointness { fn_name; arg1_type; arg2_type } ->
+      let message =
+        Printf.sprintf "values of type %s and %s can never be %s"
+          (Types.to_string arg1_type)
+          (Types.to_string arg2_type)
+          fn_name
+      in
+      let help =
+        [ "use `equal` for structural comparison across different types" ]
+      in
+      let related = [ { span = Loc.dummy_span; message } ] in
+      {
+        severity = Error;
+        code = Some E0008;
+        span;
+        message;
+        expected = Some arg1_type;
+        actual = Some arg2_type;
+        related;
+        help;
+      }
   | Constraint.NoContext ->
       let base_help = suggest_type_fix ~expected ~actual in
       let is_nil_error =
@@ -763,6 +787,7 @@ let error_type_of_code = function
   | Some E0005 -> "ANNOTATION MISMATCH"
   | Some E0006 -> "RETURN MISMATCH"
   | Some E0007 -> "UNIFICATION FAILED"
+  | Some E0008 -> "DISJOINT EQUALITY"
   | Some E0100 -> "UNDEFINED VARIABLE"
   | Some E0101 -> "UNDEFINED FUNCTION"
   | Some E0102 -> "UNDEFINED TYPE"

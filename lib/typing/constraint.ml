@@ -38,6 +38,11 @@ type context =
       expected : int;  (** Number of type parameters *)
       actual : int;  (** Number of type arguments provided *)
     }  (** Wrong number of type arguments in @type *)
+  | EqDisjointness of {
+      fn_name : string;  (** "eq" or "eql" *)
+      arg1_type : typ;  (** Type of first argument *)
+      arg2_type : typ;  (** Type of second argument *)
+    }  (** eq/eql called with provably disjoint types (Spec 11 R14) *)
 
 type t = {
   lhs : typ;  (** Left-hand side type *)

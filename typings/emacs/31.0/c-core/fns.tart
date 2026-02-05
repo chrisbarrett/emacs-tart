@@ -13,7 +13,8 @@
 (defun identity [a] (a) -> a)
 
 ;; (eql A B) - compare using eq for non-numbers, = for numbers
-(defun eql (any any) -> bool)
+;; Disjointness is checked by the type checker as a special case.
+(defun eql [a b] (a b) -> bool)
 
 ;; (equal A B) - structural equality
 (defun equal (any any) -> bool)

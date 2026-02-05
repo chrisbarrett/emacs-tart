@@ -169,6 +169,9 @@ let rec infer (env : Env.t) (sexp : Syntax.Sexp.t) : result =
         :: alist_expr :: rest_args,
         span ) ->
       infer_alist_get_row env key_name alist_expr rest_args span
+  (* === eq/eql with disjointness checking (Spec 11 R14) === *)
+  | List ([ Symbol ((("eq" | "eql") as fn_name), _); arg1; arg2 ], span) ->
+      infer_eq_with_disjointness env fn_name arg1 arg2 span
   (* === Function application (catch-all for lists) === *)
   | List (fn :: args, span) -> infer_application env fn args span
   | List ([], _span) ->
@@ -1173,6 +1176,78 @@ and infer_application env fn args span =
   let all_undefineds = fn_result.undefineds @ combine_undefineds arg_results in
 
   { ty = result_ty; constraints = all_constraints; undefineds = all_undefineds }
+
+(** Infer an eq/eql call with disjointness checking (Spec 11 R14).
+
+    Delegates to normal application inference for the standard type checking,
+    then checks if the argument types are provably disjoint. If so, injects a
+    failing constraint with [EqDisjointness] context.
+
+    The argument types are inferred first so we can inspect them directly. Those
+    inferred results are then reused as the arguments to
+    [infer_application_with_inferred_args] to avoid double-inference. *)
+and infer_eq_with_disjointness env fn_name arg1 arg2 span =
+  let open Syntax.Sexp in
+  (* Infer both argument types *)
+  let arg1_result = infer env arg1 in
+  let arg2_result = infer env arg2 in
+
+  (* Infer the function *)
+  let fn_sym = Symbol (fn_name, span) in
+  let fn_result = infer env fn_sym in
+
+  (* Build the application constraint as infer_application would *)
+  let result_ty = fresh_tvar (Env.current_level env) in
+
+  let arg_results = [ arg1_result; arg2_result ] in
+  let arg_types = List.map (fun r -> PPositional r.ty) arg_results in
+  let fn_constraint =
+    C.equal
+      ~context:
+        (C.FunctionArg
+           {
+             fn_name;
+             fn_type = fn_result.ty;
+             arg_index = 0;
+             arg_expr_source = None;
+           })
+      fn_result.ty
+      (TArrow (arg_types, result_ty))
+      span
+  in
+
+  let all_constraints =
+    C.add fn_constraint
+      (C.combine fn_result.constraints
+         (C.combine arg1_result.constraints arg2_result.constraints))
+  in
+  let all_undefineds =
+    fn_result.undefineds @ arg1_result.undefineds @ arg2_result.undefineds
+  in
+
+  let base_result =
+    {
+      ty = result_ty;
+      constraints = all_constraints;
+      undefineds = all_undefineds;
+    }
+  in
+
+  (* Check disjointness on the inferred argument types *)
+  let arg1_ty = repr arg1_result.ty in
+  let arg2_ty = repr arg2_result.ty in
+
+  if Unify.types_disjoint arg1_ty arg2_ty then
+    (* Types are provably disjoint — inject a failing constraint *)
+    let context =
+      C.EqDisjointness { fn_name; arg1_type = arg1_ty; arg2_type = arg2_ty }
+    in
+    let disjoint_constraint = C.equal ~context arg1_ty arg2_ty span in
+    {
+      base_result with
+      constraints = C.add disjoint_constraint base_result.constraints;
+    }
+  else base_result
 
 (** Try to extract a row type from an alist type: [(list (cons symbol TRow))].
 

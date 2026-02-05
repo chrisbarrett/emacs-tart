@@ -31,6 +31,7 @@ type error_code =
   | E0005  (** AnnotationMismatch: Expression doesn't match tart annotation *)
   | E0006  (** ReturnMismatch: Function body doesn't match declared return *)
   | E0007  (** UnificationFailed: Types cannot be unified *)
+  | E0008  (** DisjointEquality: eq/eql args are provably disjoint *)
   (* Name Errors (E0100–E0199) *)
   | E0100  (** UndefinedVariable: Variable not in scope *)
   | E0101  (** UndefinedFunction: Function not in scope *)

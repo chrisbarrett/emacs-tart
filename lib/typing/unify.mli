@@ -55,3 +55,14 @@ val solve : Constraint.set -> unit result
 val solve_all : Constraint.set -> error list
 (** [solve_all constraints] solves constraints and returns all errors. Useful
     for reporting multiple type errors at once. *)
+
+(** {1 Disjointness} *)
+
+val types_disjoint : Core.Types.typ -> Core.Types.typ -> bool
+(** [types_disjoint t1 t2] returns [true] when [t1] and [t2] are provably
+    disjoint (their intersection is empty).
+
+    Respects numeric subtyping: [int] and [num] are NOT disjoint. Type variables
+    are conservatively non-disjoint.
+
+    Used by eq/eql disjointness checking (Spec 11 R14). *)

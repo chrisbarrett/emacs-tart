@@ -128,58 +128,87 @@ from Spec 11 R4. Currently always returns `(field_type | nil)`.
 
 ---
 
-### Iteration 3: Equality predicate bounds
+### Iteration 3: Equality predicate disjointness checking
 
-**Goal:** `eq` and `eql` carry bounds that prevent unsafe comparisons;
-`alist-get` checks its default testfn against `eq-safe`. Implements Spec 48 R7
-and Spec 11 R14.
+**Goal:** `eq` and `eql` reject comparisons between statically disjoint types.
+Instead of encoding bounds in the signature language, use a special-case
+disjointness analysis in the type checker. Implements Spec 11 R14.
+
+**Design rationale:** A signature-level approach (`[a : eq-safe] (a a) -> bool`)
+doesn't capture disjointness — with union widening, `join(int, symbol)` passes
+the bound even though the values can never be `eq`. The constraint we need
+("types must have non-empty intersection") is relational between two type
+variables, which would require a new constraint form (`overlaps`) in the
+signature language just for this family of functions. A special-case check in
+`infer.ml` achieves the same result with no language extensions.
+
+**The rule:** `(eq a b)` is well-typed iff the types of `a` and `b` are not
+provably disjoint. "Provably disjoint" means their intersection is empty given
+what's statically known:
+- Two different base types (int vs symbol) → disjoint
+- A union overlaps with T if any member overlaps with T
+- Type variables are conservatively non-disjoint (no evidence to reject)
+- `any` overlaps with everything
+
+Examples:
+```
+(eq 1 'foo)        ;; int ∩ symbol = ∅ → error
+(eq num_val 1.0)   ;; num ∩ float ≠ ∅ → ok
+(eq num_val 'foo)  ;; num ∩ symbol = ∅ → error
+(eq poly_a poly_b) ;; both polymorphic → ok (conservative)
+```
 
 **What to build:**
 
-1. Add `eq-safe` and `eql-safe` type aliases to `typings/tart-prelude.tart`:
-   ```lisp
-   (type eq-safe (symbol | keyword | int | t | nil))
-   (type eql-safe (symbol | keyword | int | float | t | nil))
-   ```
+1. Keep `eq` and `eql` signatures simple — two independent type params, no
+   bounds:
+   - `typings/emacs/31.0/c-core/data.tart`: `(defun eq [a b] (a b) -> bool)`
+   - `typings/emacs/31.0/c-core/fns.tart`: `(defun eql [a b] (a b) -> bool)`
+   - `equal` stays as `(defun equal (any any) -> bool)` — no check needed
 
-2. Update equality predicate signatures:
-   - `typings/emacs/31.0/c-core/data.tart`: change `eq` to
-     `(defun eq [(a : eq-safe)] (a a) -> bool)`
-   - `typings/emacs/31.0/c-core/fns.tart`: change `eql` to
-     `(defun eql [(a : eql-safe)] (a a) -> bool)`
-   - `equal` stays as `(defun equal (any any) -> bool)` — no bound needed
+2. Add `types_disjoint : Type.t -> Type.t -> bool` in `lib/typing/unify.ml`
+   (or a new `lib/typing/disjointness.ml`):
+   - Walk both types after `repr` resolution
+   - Base types: disjoint if different type constructors with no subtype
+     relationship (e.g. `int` vs `symbol`; `int` vs `num` are NOT disjoint
+     because `int <: num`)
+   - Unions: `(A | B)` is disjoint from `T` iff both `A` disjoint from `T` and
+     `B` disjoint from `T`
+   - Type variables (unresolved): conservatively return `false` (not disjoint)
+   - `any`, `nil`: `any` overlaps everything; `nil` overlaps only `nil` and
+     unions/supertypes containing it
 
-3. Generalize `satisfies_bound` in `sig_loader.ml` (line 516):
-   - Currently only handles the `truthy` bound via special case
-   - Change to a proper subtype check: `arg_type <: bound_type`
-   - For union bounds (`eq-safe` = `symbol | keyword | int | t | nil`), check
-     that `arg_type` is a member of (or subtype of a member of) the union
-   - Keep the existing `truthy` fast path; add a general union-membership check
-     as fallback
+3. Add a special case in `infer.ml` for `eq` and `eql` calls:
+   - After inferring both argument types, run `types_disjoint` on them
+   - If disjoint, emit a type error ("values of type T1 and T2 can never be eq")
+   - Apply the same check for `memq`, `assq`, `remq` and other eq-family
+     functions (the first arg's type vs the element type of the list arg)
 
 4. Wire testfn checking into `infer_alist_get_row`:
-   - When no TESTFN argument is provided: check that the key type satisfies
-     `eq-safe` (look up `eq`'s signature, extract its bound)
+   - When no TESTFN argument is provided: run `types_disjoint` on the key type
+     and `symbol` (the default key type for alists using `eq`). If the key type
+     is e.g. `string`, the check fires because `string ∩ symbol = ∅` for `eq`
+     purposes
    - When TESTFN is provided: type-check it as `(K K) -> any` where K is the
-     key type. The TESTFN's own parameter types enforce compatibility (e.g.
-     `string=` requires `(string | symbol)` keys)
+     key type. The TESTFN's own parameter types enforce compatibility
    - This implements Case 7 from the decision table
 
 5. Add fixture tests:
-   - `test/fixtures/typing/rows/eq_safe_symbol.el` — symbol keys with default
-     eq: OK
-   - `test/fixtures/typing/rows/eq_safe_string.el` — string keys with default
-     eq: error
-   - `test/fixtures/typing/rows/eq_safe_equal.el` — string keys with explicit
-     `#'equal`: OK
+   - `test/fixtures/typing/eq_disjoint_base.el` — `(eq 1 'foo)` errors
+   - `test/fixtures/typing/eq_disjoint_union.el` — `(eq num_val 1)` ok,
+     `(eq num_val 'foo)` errors
+   - `test/fixtures/typing/eq_polymorphic.el` — polymorphic args ok
+   - `test/fixtures/typing/rows/alist_get_string_key.el` — string keys with
+     default eq: error
+   - `test/fixtures/typing/rows/alist_get_equal.el` — string keys with explicit
+     `#'equal`: ok
 
 **Files to change:**
-- `typings/tart-prelude.tart` — add `eq-safe`, `eql-safe`
-- `typings/emacs/31.0/c-core/data.tart` — update `eq` signature
-- `typings/emacs/31.0/c-core/fns.tart` — update `eql` signature
-- `lib/sig/sig_loader.ml` — generalize `satisfies_bound`
-- `lib/typing/infer.ml` — testfn checking in `infer_alist_get_row`
-- `test/fixtures/typing/rows/` — new fixture tests
+- `typings/emacs/31.0/c-core/data.tart` — update `eq` signature (two params)
+- `typings/emacs/31.0/c-core/fns.tart` — update `eql` signature (two params)
+- `lib/typing/unify.ml` (or new `lib/typing/disjointness.ml`) — `types_disjoint`
+- `lib/typing/infer.ml` — special-case eq/eql + testfn checking
+- `test/fixtures/typing/` — new fixture tests
 
 **Verify:** `dune test` passes
 
