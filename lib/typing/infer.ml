@@ -1174,17 +1174,31 @@ and infer_application env fn args span =
 
   { ty = result_ty; constraints = all_constraints; undefineds = all_undefineds }
 
+(** Try to extract a row type from an alist type: [(list (cons symbol TRow))].
+
+    Returns [Some row] if the type is a row-typed alist, [None] otherwise. *)
+and extract_alist_row ty =
+  match repr ty with
+  | TApp (list_con, [ TApp (pair_con, [ _key_ty; value_ty ]) ])
+    when equal (repr list_con) (TCon (intrinsic "List"))
+         && equal (repr pair_con) (TCon (intrinsic "Pair")) -> (
+      match repr value_ty with TRow row -> Some row | _ -> None)
+  | _ -> None
+
 (** Infer a row-typed alist-get call with a literal symbol key.
 
     [(alist-get 'KEY ALIST &optional DEFAULT REMOVE TESTFN)]
 
-    Design B expansion: the alist is constrained to
-    [(list (cons symbol {KEY field_ty & row_var}))] where [field_ty] is a fresh
-    type variable for the looked-up field and [row_var] is a fresh row variable
-    allowing extra fields.
+    Implements the 7-case decision table from Spec 11 R4:
 
-    Returns [(field_ty | nil)] since the key may not be present at runtime (the
-    alist could be empty even if the type allows the key). *)
+    - Cases 1–2: literal key found in row → return [field_type] (no nil)
+    - Cases 3–4: literal key absent from closed row → return [nil] or default
+    - Case 5: literal key absent from open row → return [(α | nil)]
+    - Case 6: variable key (not handled here, only literal keys reach this path)
+    - Case 7: incompatible testfn (deferred to Iteration 3)
+
+    When the alist's type is not yet known (fresh type variable), falls back to
+    generating fresh row constraints and returning [(field_ty | nil)]. *)
 and infer_alist_get_row env key_name alist_expr rest_args _span =
   (* Infer the alist expression *)
   let alist_result = infer env alist_expr in
@@ -1192,31 +1206,69 @@ and infer_alist_get_row env key_name alist_expr rest_args _span =
   (* Infer remaining optional args (DEFAULT, REMOVE, TESTFN) *)
   let rest_results = List.map (infer env) rest_args in
 
-  (* Fresh type variable for the field's value type *)
-  let field_ty = fresh_tvar (Env.current_level env) in
-
-  (* Fresh row variable for the open row (other fields) *)
-  let row_var = fresh_tvar (Env.current_level env) in
-
-  (* Build the row type: {key_name field_ty & row_var} *)
-  let expected_row = open_row [ (key_name, field_ty) ] row_var in
-
-  (* Build the expected alist type: (list (cons symbol {key_name field_ty & row_var})) *)
-  let expected_alist_ty = list_of (pair_of Prim.symbol expected_row) in
-
-  (* Constrain the alist expression to match *)
-  let alist_constraint =
-    C.equal expected_alist_ty alist_result.ty (Syntax.Sexp.span_of alist_expr)
+  (* Check if the alist already has a known row type (from annotation) *)
+  let result_ty, alist_constraint =
+    match extract_alist_row alist_result.ty with
+    | Some row -> (
+        match row_lookup row key_name with
+        | Some field_ty ->
+            (* Cases 1–2: key is in the row → return field_type directly *)
+            (field_ty, None)
+        | None -> (
+            match row.row_var with
+            | None ->
+                (* Cases 3–4: key absent from closed row → return nil or default *)
+                let result_ty =
+                  match rest_args with
+                  | default_expr :: _ ->
+                      (* Case 4: DEFAULT provided → return default's type *)
+                      let default_result =
+                        List.hd (List.map (infer env) [ default_expr ])
+                      in
+                      ignore default_result;
+                      (* The default was already inferred in rest_results above,
+                         so use the type from the first rest_result *)
+                      (List.hd rest_results).ty
+                  | [] ->
+                      (* Case 3: no default → return nil *)
+                      Prim.nil
+                in
+                (result_ty, None)
+            | Some _ ->
+                (* Case 5: key absent from open row → constrain and return
+                   (α | nil) *)
+                let field_ty = fresh_tvar (Env.current_level env) in
+                let row_var = fresh_tvar (Env.current_level env) in
+                let expected_row = open_row [ (key_name, field_ty) ] row_var in
+                let expected_alist_ty =
+                  list_of (pair_of Prim.symbol expected_row)
+                in
+                let c =
+                  C.equal expected_alist_ty alist_result.ty
+                    (Syntax.Sexp.span_of alist_expr)
+                in
+                (option_of field_ty, Some c)))
+    | None ->
+        (* Type not yet known — fall back to fresh row constraint *)
+        let field_ty = fresh_tvar (Env.current_level env) in
+        let row_var = fresh_tvar (Env.current_level env) in
+        let expected_row = open_row [ (key_name, field_ty) ] row_var in
+        let expected_alist_ty = list_of (pair_of Prim.symbol expected_row) in
+        let c =
+          C.equal expected_alist_ty alist_result.ty
+            (Syntax.Sexp.span_of alist_expr)
+        in
+        (option_of field_ty, Some c)
   in
-
-  (* Result type: (field_ty | nil) *)
-  let result_ty = option_of field_ty in
 
   (* Combine constraints *)
   let rest_constraints = combine_results rest_results in
-  let all_constraints =
-    C.combine alist_result.constraints (C.add alist_constraint rest_constraints)
+  let base_constraints =
+    match alist_constraint with
+    | Some c -> C.add c rest_constraints
+    | None -> rest_constraints
   in
+  let all_constraints = C.combine alist_result.constraints base_constraints in
   let all_undefineds =
     alist_result.undefineds @ combine_undefineds rest_results
   in
