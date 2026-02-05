@@ -1,4 +1,5 @@
 ;; Exhaustiveness: cond without catch-all
+;; test: emacs-version 31.0
 ;;
 ;; Note: cond exhaustiveness is not currently checked by tart.
 ;; Exhaustiveness checking is only implemented for pcase with

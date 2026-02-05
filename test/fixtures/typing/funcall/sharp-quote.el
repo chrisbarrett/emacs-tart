@@ -1,4 +1,5 @@
 ;; Test: #'name looks up function in function namespace
+;; test: emacs-version 31.0
 
 (defun add-one (n)
   (1+ n))

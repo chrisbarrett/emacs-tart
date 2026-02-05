@@ -1,5 +1,6 @@
 ;; List primitives test fixture
 ;; Tests: car cdr cons list nth mapcar length append reverse
+;; test: emacs-version 31.0
 
 ;; Passing cases - list construction
 (defun make-list-literal ()

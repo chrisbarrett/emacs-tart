@@ -1,5 +1,6 @@
 ;; String primitives test fixture
 ;; Tests: concat substring string-length upcase downcase
+;; test: emacs-version 31.0
 
 ;; Passing cases - string construction
 (defun string-concat ()

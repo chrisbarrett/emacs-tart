@@ -1,5 +1,6 @@
 ;; Control flow primitives test fixture
 ;; Tests: funcall apply signal throw run-hooks
+;; test: emacs-version 31.0
 
 ;; Passing cases - funcall and apply
 (defun call-func ()

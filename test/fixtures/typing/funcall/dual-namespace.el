@@ -1,4 +1,5 @@
 ;; Test: same name can exist in variable and function namespaces
+;; test: emacs-version 31.0
 
 ;; Define a function named 'foo'
 (defun foo (x)

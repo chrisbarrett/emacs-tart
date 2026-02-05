@@ -1,4 +1,5 @@
 ;; Realistic user scenario: function call with wrong arity
+;; test: emacs-version 31.0
 ;;
 ;; This fixture represents a common mistake when calling functions -
 ;; providing the wrong number of arguments.

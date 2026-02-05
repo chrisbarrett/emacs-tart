@@ -1,4 +1,5 @@
 ;; Kind Error: Type constructor with wrong number of arguments
+;; test: emacs-version 31.0
 ;;
 ;; Note: The type checker currently does not check arity of type
 ;; constructors in inline annotations. This fixture shows a case

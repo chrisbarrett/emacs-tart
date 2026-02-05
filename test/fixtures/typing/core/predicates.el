@@ -1,5 +1,6 @@
 ;; Predicate primitives test fixture
 ;; Tests: null listp stringp numberp integerp symbolp atom
+;; test: emacs-version 31.0
 
 ;; Passing cases - type predicates
 (defun check-null ()

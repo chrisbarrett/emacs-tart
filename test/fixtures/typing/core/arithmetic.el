@@ -1,5 +1,6 @@
 ;; Arithmetic primitives test fixture
 ;; Tests: + - * / % 1+ 1- abs max min
+;; test: emacs-version 31.0
 
 ;; Passing cases - basic arithmetic with integers
 (defun add-numbers ()
