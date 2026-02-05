@@ -1208,7 +1208,8 @@ let test_diagnostic_has_error_code () =
       ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
       ()
   in
-  (* Type error: adding string to int *)
+  (* Call an undefined function to trigger E0100 (UndefinedVariable).
+     Uses self-contained code to avoid depending on stdlib signatures. *)
   let did_open_msg =
     make_message ~method_:"textDocument/didOpen"
       ~params:
@@ -1220,7 +1221,8 @@ let test_diagnostic_has_error_code () =
                    ("uri", `String "file:///test.el");
                    ("languageId", `String "elisp");
                    ("version", `Int 1);
-                   ("text", `String "(+ 1 \"hello\")");
+                   (* Call undefined function 'undefined-fn' *)
+                   ("text", `String "(undefined-fn 42)");
                  ] );
            ])
       ()
@@ -1248,10 +1250,10 @@ let test_diagnostic_has_error_code () =
       let diagnostics = params |> member "diagnostics" |> to_list in
       Alcotest.(check bool) "has diagnostics" true (List.length diagnostics > 0);
       let first = List.hd diagnostics in
-      (* Check error code is present *)
+      (* Check error code is present - E0100 for undefined variable *)
       let code = first |> member "code" in
       Alcotest.(check bool) "has code" true (code <> `Null);
-      Alcotest.(check string) "code is E0001" "E0001" (code |> to_string)
+      Alcotest.(check string) "code is E0100" "E0100" (code |> to_string)
 
 (** Test that diagnostics include help suggestions in message *)
 let test_diagnostic_has_help_suggestions () =
@@ -1260,9 +1262,8 @@ let test_diagnostic_has_help_suggestions () =
       ~params:(`Assoc [ ("processId", `Null); ("capabilities", `Assoc []) ])
       ()
   in
-  (* Type error: passing int to string function.
-     Use string-to-char which only accepts string (unlike upcase which
-     accepts string|int since it can uppercase character codes). *)
+  (* Use a typo in a variable name to trigger the "similar name" help.
+     Uses self-contained code to avoid depending on stdlib signatures. *)
   let did_open_msg =
     make_message ~method_:"textDocument/didOpen"
       ~params:
@@ -1274,7 +1275,8 @@ let test_diagnostic_has_help_suggestions () =
                    ("uri", `String "file:///test.el");
                    ("languageId", `String "elisp");
                    ("version", `Int 1);
-                   ("text", `String "(string-to-char 42)");
+                   (* Define foo, then use typo 'fop' to trigger similar-name help *)
+                   ("text", `String "(defun foo () 42)\n(fop)");
                  ] );
            ])
       ()
@@ -1296,32 +1298,46 @@ let test_diagnostic_has_help_suggestions () =
   let messages = parse_messages output in
   match find_publish_diagnostics messages "file:///test.el" with
   | None -> Alcotest.fail "No publishDiagnostics notification found"
-  | Some json ->
+  | Some json -> (
       let open Yojson.Safe.Util in
       let params = json |> member "params" in
       let diagnostics = params |> member "diagnostics" |> to_list in
       Alcotest.(check bool) "has diagnostics" true (List.length diagnostics > 0);
-      let first = List.hd diagnostics in
-      let message = first |> member "message" |> to_string in
-      (* Check message includes help suggestion *)
-      let has_help =
-        try
-          let _ = Str.search_forward (Str.regexp_string "help:") message 0 in
-          true
-        with Not_found -> false
+      (* Find the diagnostic for the undefined 'fop' *)
+      let fop_diag =
+        List.find_opt
+          (fun d ->
+            let msg = d |> member "message" |> to_string in
+            String.length msg > 0
+            &&
+              try
+                let _ = Str.search_forward (Str.regexp_string "fop") msg 0 in
+                true
+              with Not_found -> false)
+          diagnostics
       in
-      Alcotest.(check bool) "message has help" true has_help;
-      (* Check specific suggestion for int->string conversion *)
-      let has_number_to_string =
-        try
-          let _ =
-            Str.search_forward (Str.regexp_string "number-to-string") message 0
+      match fop_diag with
+      | None -> Alcotest.fail "No diagnostic for 'fop' found"
+      | Some diag ->
+          let message = diag |> member "message" |> to_string in
+          (* Check message includes "similar name" suggestion *)
+          let has_similar_name =
+            try
+              let _ =
+                Str.search_forward (Str.regexp_string "similar name") message 0
+              in
+              true
+            with Not_found -> false
           in
-          true
-        with Not_found -> false
-      in
-      Alcotest.(check bool)
-        "suggests number-to-string" true has_number_to_string
+          Alcotest.(check bool) "message has similar name" true has_similar_name;
+          (* Check it suggests 'foo' *)
+          let has_foo =
+            try
+              let _ = Str.search_forward (Str.regexp_string "foo") message 0 in
+              true
+            with Not_found -> false
+          in
+          Alcotest.(check bool) "suggests foo" true has_foo)
 
 (** {1 Go to Definition Tests} *)
 

@@ -593,7 +593,8 @@ let diagnostics_of_result (result : check_result) : Diagnostic.t list =
   let missing_sig_diagnostics =
     List.map missing_signature_to_diagnostic result.missing_signature_warnings
   in
-  let candidates = Env.names result.final_env in
+  (* Include both variable and function names for typo suggestions *)
+  let candidates = Env.names result.final_env @ Env.fn_names result.final_env in
   let undefined_diagnostics =
     List.map (undefined_to_diagnostic candidates) result.undefined_errors
   in
