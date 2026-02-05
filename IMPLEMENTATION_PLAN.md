@@ -1,309 +1,272 @@
-# Implementation Plan: Emacs 31 Complete Typing Coverage
+# Row Polymorphism Implementation Plan
 
-Complete type signature coverage for all Emacs 31 C-layer and lisp-core modules.
-
-**Goal:** 100% coverage with the most accurate, specific types possible.
-
-**Specs:** 11 (Unions/Rows), 24 (Versioned Typings), 32 (Core Typings), 34 (Funcall/Apply), 46 (Truthiness), 49 (Feature Guards), 50 (Version Constraints), 52 (Type Predicates)
+Complete the row polymorphism feature (Spec 11, R4-R13). The foundation is
+already in place: `TRow` representation, row parsing in signatures, and row
+unification rules. This plan covers the remaining work broken into small,
+self-contained iterations.
 
 ## Current State
 
-- **C-layer:** 54/116 files (29.5% symbol coverage: 1418/4804)
-- **Lisp-core:** 34 files exist
+**Done:**
+- `TRow` variant in `types.ml` with `row_fields` + `row_var`
+- `closed_row`, `open_row` constructors; `row_lookup`, `row_has_field` utilities
+- Row unification in `unify.ml` (open vs closed, row variable threading)
+- `{name string & r}` parsing in `sig_parser.ml`
+- `STRow` → `TRow` conversion in `sig_loader.ml`
+- `alist`, `plist`, `hash-table` aliases in prelude
+- `alist-get` polymorphic signature in `subr.tart`
+- 5 parser tests + 7 unification tests passing
+
+**Remaining (Spec 11 R4-R13):**
+- R4: Row-polymorphic alist types (signature-driven)
+- R5: Row-polymorphic plist types (signature-driven)
+- R6: Map pattern exhaustiveness
+- R7: Closed unions vs open row types
+- R8: Row type inference from field access
+- R9: Literal types with deferred widening
+- R12: Generic `map` supertype
+- R13: All map type forms
+
+## Iterations
+
+### Iteration 1: Row-typed alist signatures work end-to-end
+
+**Goal:** A function annotated with `(alist {name string & r})` type-checks
+against callers providing alists with extra fields.
+
+**What to build:**
+
+1. Wire row types through `alist` type application in `sig_loader.ml`
+   - When `alist` is applied to a single row argument instead of `k v`, produce
+     `TApp(List, [TApp(Pair, [Symbol, TRow {...}])])` or a dedicated
+     representation
+   - Decision: treat `(alist {name string & r})` as sugar for
+     `(list (pair symbol (alist-row {name string & r})))`, OR introduce a new
+     internal type constructor for record-style alists that carries the row
+     directly. The simpler path: `alist` with a row arg is a distinct type
+     form — add a `TMap` or handle `TApp(alist, [TRow ...])` as a special case
+     in unification
+   - Start with the simplest approach: `(alist {name string & r})` parses as
+     `TApp(TCon "alist", [TRow {name:string & r}])` and unification matches this
+     against concrete alist values
+
+2. Add an `alist-get` overload that works with row-typed alists
+   - When calling `(alist-get 'name person)` where `person` has type
+     `(alist {name string & r})`, the return type should be `(string | nil)`
+   - This requires special-case logic in `infer.ml` for `alist-get` calls where
+     the first arg is a quoted symbol and the second arg has a row-typed alist
+     type
+
+3. Add fixture tests:
+   - `test/fixtures/typing/rows/alist_row_basic.el` — function with row-typed
+     alist param, called with extra fields
+   - `test/fixtures/typing/rows/alist_row_closed.el` — closed row rejects extra
+     fields
+
+**Files to change:**
+- `lib/sig/sig_loader.ml` — handle alist with row arg
+- `lib/typing/infer.ml` — special-case `alist-get` with literal key + row type
+- `lib/typing/unify.ml` — potentially handle `TApp(alist, [TRow])` matching
+- `test/fixtures/typing/rows/` — new fixture tests
+
+**Verify:** `dune test` passes; fixture tests demonstrate row-typed alist
+signatures accepting extra fields
 
 ---
 
-## Phase 0: Type System Features
+### Iteration 2: Row-typed plist signatures
 
-These features are needed for accurate Elisp typing. Complete before full coverage push.
+**Goal:** Same as Iteration 1 but for plist types with keyword fields.
 
-### 0.1 Row Polymorphism (Spec 11, R4-R13)
+**What to build:**
 
-Required for alist/plist/hash-table typing - pervasive in Elisp.
+1. Wire row types through `plist` type application
+   - `(plist {:name string & r})` should work analogously to alist rows
+   - Plist rows use `:keyword` prefixed field names (already parsed by
+     `sig_parser.ml`)
 
-- [ ] Implement row type representation (`row.ml`)
-- [ ] Parse row syntax: `(alist {name string & r})`
-- [ ] Row unification rules (open vs closed)
-- [ ] Infer row types from field access (literal vs variable keys)
-- [ ] Generic `map` supertype for alist/plist/hash-table
-- [ ] Literal types with deferred widening
-- [ ] Type subtraction operator `(a - b)`
+2. Add `plist-get` overload for row-typed plists
+   - When calling `(plist-get person :name)` where `person` has type
+     `(plist {:name string & r})`, return type should be `(string | nil)`
+   - Keyword argument detection: second arg is a `Keyword` literal
 
-**Files:** `lib/typing/row.ml`, `lib/sig/sig_parser.ml`, `lib/typing/unify.ml`
+3. Add fixture tests:
+   - `test/fixtures/typing/rows/plist_row_basic.el`
+   - `test/fixtures/typing/rows/plist_row_closed.el`
 
-### 0.2 Type Predicates & Occurrence Typing (Spec 52, Spec 34 R12-R13)
+**Files to change:**
+- `lib/sig/sig_loader.ml` — handle plist with row arg
+- `lib/typing/infer.ml` — special-case `plist-get` with keyword key + row type
+- `test/fixtures/typing/rows/` — new fixture tests
 
-Required for type predicates (`stringp`, `listp`, etc.) to narrow types.
-
-- [ ] Parse `(x is T)` return type syntax for predicates
-- [ ] Implement predicate narrowing in `if`/`cond`/`when`/`unless`
-- [ ] Type subtraction for else branches
-- [ ] Cumulative narrowing in cond chains
-- [ ] Handle predicates in `and`/`or` expressions
-- [ ] Restrict narrowing to inline checks only (not stored results)
-- [ ] Add standard library predicate declarations to `data.tart`
-
-**Files:** `lib/sig/sig_parser.ml`, `lib/typing/infer.ml`, `lib/typing/narrow.ml`
-
-### 0.3 Feature Guards (Spec 49)
-
-Required for platform-specific and version-conditional code.
-
-- [ ] Guard pattern recognition (`featurep`, `fboundp`, `boundp`)
-- [ ] Hard/soft `require` handling
-- [ ] Feature environment through control flow
-- [ ] Negated guards in else branches
-- [ ] Filename-based feature resolution (`json.tart` → feature `json`)
-
-**Files:** `lib/typing/feature_env.ml`, `lib/typing/guards.ml`
-
-### 0.4 Version Constraints (Spec 50, R4-R15)
-
-Required for cross-version typing accuracy.
-
-- [ ] Parse `Package-Requires` from .el headers
-- [ ] Constraint propagation (effective min version)
-- [ ] Feature guard exemption from version warnings
-- [ ] LSP code actions for version bumps
-
-**Files:** `lib/version/package_header.ml`, `lib/version/propagation.ml`
-
-### 0.5 Remaining Funcall/Apply (Spec 34, R9-R11)
-
-- [ ] Tuple <: list subtyping
-- [ ] Context-sensitive tuple inference for list literals
-- [ ] Union function types for dynamic dispatch
-
-**Files:** `lib/typing/unify.ml`, `lib/typing/infer.ml`
-
-### 0.6 Branch Error Messages (Spec 46, R7)
-
-- [ ] Point to specific offending branch in union errors
-- [ ] Include declared return type in error context
-
-**Files:** `lib/typing/diagnostic.ml`
+**Verify:** `dune test` passes
 
 ---
 
-## Workflow Per File
+### Iteration 3: Row type inference from field access (R8)
 
-1. Run `./tart emacs-coverage -v` to list uncovered DEFUNs/DEFVARs
-2. Create/update `.tart` file with precise types (avoid `any` in output positions)
-3. Validate: `./tart check` against Emacs lisp/ directory
-4. Document untypeable items in `BUGS.md` with category
-5. Iterate until 95%+ type-check success
+**Goal:** When `alist-get` or `plist-get` is called with a literal key, infer a
+row type for the map argument without requiring an explicit annotation.
 
-## Phase 1: Complete C-Layer Core (Cross-Platform)
+**What to build:**
 
-High-value portable modules. These define the primitives used everywhere.
+1. In `infer.ml`, detect `alist-get` calls with literal first arg:
+   - `(alist-get 'name x)` → constrain `x` to have type
+     `(alist {name α & r})` where `α` is a fresh type variable
+   - Multiple accesses accumulate fields:
+     `(alist-get 'name x)` + `(alist-get 'age x)` → `x : (alist {name α age β & r})`
 
-### 1.1 Missing Core Modules
+2. For variable keys, fall back to homogeneous inference:
+   - `(alist-get key m)` → `m : (alist k v)`, `key : k`, return `(v | nil)`
+   - This is the current behavior; no changes needed
 
-- [ ] `treesit.c` → `treesit.tart` (46 DEFUNs, 3 DEFVARs) — tree-sitter integration
-- [ ] `comp.c` → `comp.tart` (15 DEFUNs, 15 DEFVARs) — native compilation
-- [ ] `bytecode.c` → `bytecode.tart` (2 DEFUNs, 2 DEFVARs) — byte compiler
-- [ ] `emacs.c` → `emacs.tart` (6 DEFUNs, 21 DEFVARs) — core startup/state
-- [ ] `fontset.c` → `fontset.tart` (7 DEFUNs, 8 DEFVARs) — font management
-- [ ] `ccl.c` → `ccl.tart` (5 DEFUNs, 3 DEFVARs) — code conversion
-- [ ] `insdel.c` → `insdel.tart` (1 DEFUN, 2 DEFVARs) — insert/delete
-- [ ] `menu.c` → `menu.tart` (3 DEFUNs, 1 DEFVAR) — menu primitives
-- [ ] `term.c` → `term.tart` (12 DEFUNs, 5 DEFVARs) — terminal handling
-- [ ] `pdumper.c` → `pdumper.tart` (4 DEFUNs, 1 DEFVAR) — portable dumper
-- [ ] `sound.c` → `sound.tart` (1 DEFUN) — audio
-- [ ] `atimer.c` → `atimer.tart` (1 DEFUN) — async timers
-- [ ] `sysdep.c` → `sysdep.tart` (1 DEFUN) — system dependencies
-- [ ] `emacs-module.c` → `emacs-module.tart` (1 DEFUN) — dynamic modules
-- [ ] `textconv.c` → `textconv.tart` (1 DEFUN, 3 DEFVARs) — text conversion
-- [ ] `lcms.c` → `lcms.tart` (8 DEFUNs) — color management
+3. Add fixture tests:
+   - `test/fixtures/typing/rows/alist_infer_row.el` — row inferred from literal
+     access
+   - `test/fixtures/typing/rows/alist_infer_multi.el` — multiple accesses infer
+     multi-field row
 
-### 1.2 Audit Existing Core Files
+**Files to change:**
+- `lib/typing/infer.ml` — row inference for `alist-get` / `plist-get` with
+  literal keys
+- `test/fixtures/typing/rows/` — new fixture tests
 
-Verify existing .tart files have 100% symbol coverage:
+**Verify:** `dune test` passes
 
-- [ ] `data.tart` — verify 120 DEFUNs, 3 DEFVARs covered
-- [ ] `fns.tart` — verify 107 DEFUNs, 6 DEFVARs covered
-- [ ] `eval.tart` — verify 50 DEFUNs, 19 DEFVARs covered
-- [ ] `window.tart` — verify 117 DEFUNs, 22 DEFVARs covered
-- [ ] `editfns.tart` — verify 80 DEFUNs, 9 DEFVARs covered
-- [ ] `frame.tart` — verify 65 DEFUNs, 25 DEFVARs covered
-- [ ] `process.tart` — verify 64 DEFUNs, 10 DEFVARs covered
-- [ ] `fileio.tart` — verify 54 DEFUNs, 15 DEFVARs covered
-- [ ] `buffer.tart` — verify 53 DEFUNs, 16 DEFVARs covered
-- [ ] `keyboard.tart` — verify 33 DEFUNs, 77 DEFVARs covered
-- [ ] `coding.tart` — verify 34 DEFUNs, 29 DEFVARs covered
-- [ ] `xfaces.tart` — verify 33 DEFUNs, 10 DEFVARs covered
-- [ ] `keymap.tart` — verify 29 DEFUNs, 6 DEFVARs covered
-- [ ] `floatfns.tart` — verify 25 DEFUNs covered
-- [ ] `font.tart` — verify 25 DEFUNs, 5 DEFVARs covered
-- [ ] `charset.tart` — verify 23 DEFUNs, 4 DEFVARs covered
-- [ ] `xdisp.tart` — verify 23 DEFUNs, 96 DEFVARs covered
-- [ ] `minibuf.tart` — verify 23 DEFUNs, 25 DEFVARs covered
-- [ ] `syntax.tart` — verify 21 DEFUNs, 9 DEFVARs covered
-- [ ] `alloc.tart` — verify 23 DEFUNs, 18 DEFVARs covered
-- [ ] `textprop.tart` — verify 20 DEFUNs, 4 DEFVARs covered
-- [ ] `lread.tart` — verify 20 DEFUNs, 33 DEFVARs covered
-- [ ] `search.tart` — verify 19 DEFUNs, 2 DEFVARs covered
-- [ ] `thread.tart` — verify 19 DEFUNs, 1 DEFVAR covered
-- [ ] `gnutls.tart` — verify 19 DEFUNs, 2 DEFVARs covered
-- [ ] `sqlite.tart` — verify 17 DEFUNs covered
-- [ ] `timefns.tart` — verify 14 DEFUNs, 1 DEFVAR covered
-- [ ] `chartab.tart` — verify 13 DEFUNs, 1 DEFVAR covered
-- [ ] `category.tart` — verify 13 DEFUNs, 2 DEFVARs covered
-- [ ] `dispnew.tart` — verify 12 DEFUNs, 12 DEFVARs covered
-- [ ] `image.tart` — verify 11 DEFUNs, 7 DEFVARs covered
-- [ ] `casefiddle.tart` — verify 11 DEFUNs, 2 DEFVARs covered
-- [ ] `print.tart` — verify 11 DEFUNs, 18 DEFVARs covered
-- [ ] `character.tart` — verify 10 DEFUNs, 8 DEFVARs covered
-- [ ] `profiler.tart` — verify 9 DEFUNs, 2 DEFVARs covered
-- [ ] `terminal.tart` — verify 8 DEFUNs, 2 DEFVARs covered
-- [ ] `dired.tart` — verify 8 DEFUNs, 1 DEFVAR covered
-- [ ] `cmds.tart` — verify 7 DEFUNs, 1 DEFVAR covered
-- [ ] `marker.tart` — verify 7 DEFUNs covered
-- [ ] `indent.tart` — verify 7 DEFUNs, 1 DEFVAR covered
-- [ ] `composite.tart` — verify 6 DEFUNs, 5 DEFVARs covered
-- [ ] `doc.tart` — verify 6 DEFUNs, 4 DEFVARs covered
-- [ ] `macros.tart` — verify 6 DEFUNs, 3 DEFVARs covered
-- [ ] `casetab.tart` — verify 5 DEFUNs covered
-- [ ] `filelock.tart` — verify 5 DEFUNs, 2 DEFVARs covered
-- [ ] `inotify.tart` — verify 5 DEFUNs covered
-- [ ] `fringe.tart` — verify 4 DEFUNs, 2 DEFVARs covered
-- [ ] `json.tart` — verify 4 DEFUNs covered
-- [ ] `callint.tart` — verify 4 DEFUNs, 6 DEFVARs covered
-- [ ] `callproc.tart` — verify 3 DEFUNs, 17 DEFVARs covered
-- [ ] `xml.tart` — verify 3 DEFUNs covered
-- [ ] `decompress.tart` — verify 2 DEFUNs covered
-- [ ] `abbrev.tart` — verify symbols covered
-- [ ] `undo.tart` — verify 1 DEFUN, 5 DEFVARs covered
+---
 
-## Phase 2: Platform-Specific Modules
+### Iteration 4: Generic `map` supertype (R12)
 
-Conditional modules gated by `(featurep 'X)` per Spec 49.
+**Goal:** A `map` type that is a supertype of `alist`, `plist`, and
+`hash-table`, enabling functions that accept any map-like structure.
 
-### 2.1 X11/GTK Backend
+**What to build:**
 
-- [ ] `xfns.c` → `xfns.tart` (54 DEFUNs, 26 DEFVARs)
-- [ ] `xselect.c` → `xselect.tart` (9 DEFUNs, 7 DEFVARs)
-- [ ] `xwidget.c` → `xwidget.tart` (36 DEFUNs, 3 DEFVARs)
-- [ ] `xmenu.c` → `xmenu.tart` (3 DEFUNs)
-- [ ] `xsettings.c` → `xsettings.tart` (3 DEFUNs, 2 DEFVARs)
-- [ ] `xsmfns.c` → `xsmfns.tart` (1 DEFUN, 2 DEFVARs)
-- [ ] `xterm.c` → `xterm.tart` (39 DEFVARs) — variables only
-- [ ] `xfont.c` → `xfont.tart` — DEFSYMs only
-- [ ] `xftfont.c` → `xftfont.tart` (2 DEFVARs) — variables only
+1. Add `(type map [r] ...)` to the prelude
+   - `map` with a row argument represents "any map-like structure with at least
+     these fields"
+   - Subtyping: `(alist {name string & r}) <: (map {name string & r})`
+   - Similarly for plist and hash-table
 
-### 2.2 PGTK Backend
+2. Add `map-elt` function signature
+   - `(defun map-elt [k v] ((map k v) k) -> (v | nil))`
+   - Or with row types: `(defun map-elt (((m (map {f t & r}))) symbol) -> ...)`
+   - Start simple: `map-elt` with homogeneous map type, add row overload later
 
-- [ ] `pgtkfns.c` → `pgtkfns.tart` (38 DEFUNs, 7 DEFVARs)
-- [ ] `pgtkselect.c` → `pgtkselect.tart` (8 DEFUNs, 6 DEFVARs)
-- [ ] `pgtkmenu.c` → `pgtkmenu.tart` (2 DEFUNs)
-- [ ] `pgtkim.c` → `pgtkim.tart` (1 DEFUN, 1 DEFVAR)
-- [ ] `pgtkterm.c` → `pgtkterm.tart` (10 DEFVARs) — variables only
+3. Add subtyping rules in `unify.ml`
+   - `TApp(alist, [TRow r]) ~ TApp(map, [TRow r])` should unify
+   - Same for plist, hash-table
 
-### 2.3 Windows Backend
+4. Add fixture tests:
+   - `test/fixtures/typing/rows/map_supertype.el` — function typed with `map`
+     accepts alist, plist, hash-table
 
-- [ ] `w32fns.c` → `w32fns.tart` (55 DEFUNs, 38 DEFVARs)
-- [ ] `w32proc.c` → `w32proc.tart` (20 DEFUNs, 10 DEFVARs)
-- [ ] `w32select.c` → `w32select.tart` (4 DEFUNs, 2 DEFVARs)
-- [ ] `w32console.c` → `w32console.tart` (3 DEFUNs, 1 DEFVAR)
-- [ ] `w32notify.c` → `w32notify.tart` (3 DEFUNs)
-- [ ] `w32menu.c` → `w32menu.tart` (1 DEFUN)
-- [ ] `w32image.c` → `w32image.tart` (1 DEFUN)
-- [ ] `w32cygwinx.c` → `w32cygwinx.tart` (1 DEFUN)
-- [ ] `w32font.c` → `w32font.tart` (1 DEFUN, 1 DEFVAR)
-- [ ] `w32term.c` → `w32term.tart` (14 DEFVARs) — variables only
-- [ ] `w32.c` → `w32.tart` — DEFSYMs only
-- [ ] `w16select.c` → `w16select.tart` (3 DEFUNs, 2 DEFVARs)
-- [ ] `cygw32.c` → `cygw32.tart` (2 DEFUNs)
+**Files to change:**
+- `typings/tart-prelude.tart` — add `map` type
+- `typings/emacs/31.0/lisp-core/map.tart` — add `map-elt` signature (or
+  whichever file is appropriate)
+- `lib/typing/unify.ml` — subtyping for map/alist/plist/hash-table
+- `test/fixtures/typing/rows/` — new fixture tests
 
-### 2.4 macOS/NS Backend
+**Verify:** `dune test` passes
 
-(No direct NS files in scan - may be in separate location or use different naming)
+---
 
-### 2.5 Haiku Backend
+### Iteration 5: Closed unions vs open row types (R7)
 
-- [ ] `haikufns.c` → `haikufns.tart` (34 DEFUNs, 8 DEFVARs)
-- [ ] `haikuselect.c` → `haikuselect.tart` (9 DEFUNs, 4 DEFVARs)
-- [ ] `haikufont.c` → `haikufont.tart` (3 DEFUNs, 1 DEFVAR)
-- [ ] `haikumenu.c` → `haikumenu.tart` (2 DEFUNs)
-- [ ] `haikuterm.c` → `haikuterm.tart` (9 DEFVARs) — variables only
+**Goal:** Ensure unions are always exhaustive while row types permit extra
+fields. Document and test the boundary.
 
-### 2.6 Android Backend
+**What to build:**
 
-- [ ] `androidfns.c` → `androidfns.tart` (35 DEFUNs, 22 DEFVARs)
-- [ ] `androidselect.c` → `androidselect.tart` (8 DEFUNs)
-- [ ] `androidmenu.c` → `androidmenu.tart` (1 DEFUN)
-- [ ] `androidvfs.c` → `androidvfs.tart` (1 DEFUN)
-- [ ] `androidterm.c` → `androidterm.tart` (13 DEFVARs) — variables only
-- [ ] `androidfont.c` → `androidfont.tart` — DEFSYMs only
-- [ ] `sfntfont-android.c` → `sfntfont-android.tart` (1 DEFUN)
-- [ ] `sfntfont.c` → `sfntfont.tart` (3 DEFVARs) — variables only
+1. Verify exhaustiveness checker handles row-typed map patterns correctly
+   - `pcase` on a row-typed value with `map` patterns should not warn about
+     extra fields
+   - `pcase` on a union should still require exhaustive coverage
 
-### 2.7 DOS Backend
+2. Add fixture tests demonstrating the distinction:
+   - `test/fixtures/typing/rows/union_closed.el` — union exhaustiveness still
+     works
+   - `test/fixtures/typing/rows/row_open_no_warning.el` — row-typed map doesn't
+     warn about unmatched extra fields
 
-- [ ] `dosfns.c` → `dosfns.tart` (10 DEFUNs, 11 DEFVARs)
-- [ ] `msdos.c` → `msdos.tart` (5 DEFUNs, 1 DEFVAR)
+**Files to change:**
+- `lib/typing/exhaustiveness.ml` — potentially adjust for row types
+- `test/fixtures/typing/rows/` — new fixture tests
 
-### 2.8 File Notification Backends
+**Verify:** `dune test` passes
 
-- [ ] `gfilenotify.c` → `gfilenotify.tart` (4 DEFUNs) — GLib
-- [ ] `kqueue.c` → `kqueue.tart` (3 DEFUNs) — BSD/macOS
+---
 
-### 2.9 External Integrations
+### Iteration 6: Map pattern integration (R6)
 
-- [ ] `dbusbind.c` → `dbusbind.tart` (3 DEFUNs, 9 DEFVARs) — D-Bus
+**Goal:** `(pcase-let (((map :name :age) person)) ...)` integrates with row
+types for field extraction.
 
-### 2.10 Font Backends
+**What to build:**
 
-- [ ] `ftcrfont.c` → `ftcrfont.tart` — DEFSYMs only
-- [ ] `ftfont.c` → `ftfont.tart` — DEFSYMs only
+1. In `infer.ml`, handle `map` pcase patterns:
+   - Extract field names from the pattern
+   - Generate row type constraints for the matched expression
+   - Bind each extracted field to its row field type in the branch environment
 
-## Phase 3: Lisp-Core Validation Loop
+2. Error on accessing a field not present in the row type
 
-Type-check lisp-core files against C-layer types. Errors feed back into C-layer refinements.
+3. Add fixture tests:
+   - `test/fixtures/typing/rows/map_pattern.el` — map pattern extracts typed
+     fields
+   - `test/fixtures/typing/rows/map_pattern_error.el` — accessing absent field
+     produces type error
 
-### 3.1 Foundation Libraries
+**Files to change:**
+- `lib/typing/infer.ml` — handle map patterns in pcase
+- `test/fixtures/typing/rows/` — new fixture tests
 
-- [ ] Type-check `subr.tart` usage in Emacs lisp/subr.el
-- [ ] Type-check `simple.tart` usage in Emacs lisp/simple.el
-- [ ] Type-check `files.tart` usage in Emacs lisp/files.el
+**Verify:** `dune test` passes
 
-### 3.2 Data Structure Libraries
+---
 
-- [ ] Type-check `cl-lib.tart` against lisp/emacs-lisp/cl-lib.el
-- [ ] Type-check `seq.tart` against lisp/emacs-lisp/seq.el
-- [ ] Type-check `pcase.tart` against lisp/emacs-lisp/pcase.el
+### Iteration 7: All map type forms (R13)
 
-### 3.3 UI Libraries
+**Goal:** Support bare `(alist)`, homogeneous `(alist k v)`, and record
+`(alist {fields...})` forms, and ensure they interact correctly.
 
-- [ ] Type-check `faces.tart` against lisp/faces.el
-- [ ] Type-check `button.tart` against lisp/button.el
-- [ ] Type-check `custom.tart` against lisp/custom.el
+**What to build:**
 
-### 3.4 Development Tool Libraries
+1. Support bare `(alist)` in signatures — inferred from body
+2. Ensure homogeneous and record forms both work and don't interfere
+3. Ensure `hash-table` gets the same row support as alist/plist
 
-- [ ] Type-check `xref.tart` against lisp/progmodes/xref.el
-- [ ] Type-check `project.tart` against lisp/progmodes/project.el
-- [ ] Type-check `eglot.tart` against lisp/progmodes/eglot.el
-- [ ] Type-check `flymake.tart` against lisp/progmodes/flymake.el
-- [ ] Type-check `compile.tart` against lisp/progmodes/compile.el
-- [ ] Type-check `eldoc.tart` against lisp/emacs-lisp/eldoc.el
+4. Add fixture tests for each form:
+   - `test/fixtures/typing/rows/alist_forms.el`
+   - `test/fixtures/typing/rows/hashtable_row.el`
 
-### 3.5 Remaining Lisp-Core
+**Files to change:**
+- `lib/sig/sig_loader.ml` — handle bare alist form
+- `lib/typing/infer.ml` — row inference for hash-table access functions
+- `test/fixtures/typing/rows/` — new fixture tests
 
-- [ ] Type-check remaining 34 lisp-core modules
-- [ ] Document type refinements needed in C-layer
+**Verify:** `dune test` passes
 
-## Phase 4: Documentation and Gaps
+---
 
-- [ ] Ensure `typings/emacs/BUGS.md` documents cross-version issues
-- [ ] Ensure `typings/emacs/31.0/BUGS.md` documents version-specific issues
-- [ ] Categorize all gaps: `type-system-gap` | `untypeable` | `ergonomic` | `version-specific`
-- [ ] Final coverage report: target 95%+ type-check success on Emacs lisp/
+## Deferred
 
-## Acceptance Criteria
+**R9 (Literal types with deferred widening)** is listed under Spec 11 but is a
+cross-cutting concern that affects more than row polymorphism. It should be
+planned separately. The row polymorphism iterations above do not depend on it.
 
-1. All 116 C source files have corresponding `.tart` files
-2. `./tart emacs-coverage` shows 100% symbol coverage
-3. `./tart check` against Emacs lisp/ passes with 95%+ success
-4. All untypeable items documented in BUGS.md with categories
-5. No unjustified `any` in output positions
+## Ordering
+
+Iterations are ordered by dependency:
+
+```
+1 (alist rows) ──► 2 (plist rows) ──► 3 (row inference)
+                                           │
+                        4 (map supertype) ◄─┘
+                             │
+              5 (unions vs rows) ──► 6 (map patterns) ──► 7 (all forms)
+```
+
+Iterations 1-3 form the critical path. Iterations 4-7 can be parallelized to
+some degree after 3 is complete.
