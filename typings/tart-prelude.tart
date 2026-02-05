@@ -59,6 +59,17 @@
 ;; Hash table - alias for intrinsic HashTable
 (type hash-table [k v] (%tart-intrinsic%HashTable k v))
 
+;; Alist - association list (list of pairs)
+;; For homogeneous alists: (alist symbol int) = (list (pair symbol int))
+;; For record-style rows, use the row type directly in signatures:
+;;   (list (pair symbol {name string age int & r}))
+(type alist [k v] (list (pair k v)))
+
+;; Plist - property list (flat key-value sequence)
+;; Plists are stored as flat lists: (:key1 val1 :key2 val2 ...)
+;; For homogeneous plists: (plist keyword string)
+(type plist [k v] (list (k | v)))
+
 ;; -----------------------------------------------------------------------------
 ;; Derived types (built on intrinsics)
 ;; -----------------------------------------------------------------------------

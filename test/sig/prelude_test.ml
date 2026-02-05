@@ -191,6 +191,22 @@ let test_prelude_nonempty_available () =
   | None -> Alcotest.fail "first-elem not found"
   | Some _ -> ()
 
+(** Test that alist type is available in signatures *)
+let test_prelude_alist_available () =
+  let sig_src = "(defun lookup [k v] ((alist k v) k) -> (v | nil))" in
+  let env = load_sig_with_prelude sig_src in
+  match Type_env.lookup "lookup" env with
+  | None -> Alcotest.fail "lookup not found"
+  | Some _ -> ()
+
+(** Test that plist type is available in signatures *)
+let test_prelude_plist_available () =
+  let sig_src = "(defun plist-lookup [k v] ((plist k v) k) -> (v | nil))" in
+  let env = load_sig_with_prelude sig_src in
+  match Type_env.lookup "plist-lookup" env with
+  | None -> Alcotest.fail "plist-lookup not found"
+  | Some _ -> ()
+
 (** Test that prelude types work in polymorphic functions *)
 let test_prelude_polymorphic_usage () =
   let sig_src = "(defun my-head [a] ((list a)) -> (option a))" in
@@ -384,6 +400,10 @@ let () =
           Alcotest.test_case "is available" `Quick test_prelude_is_available;
           Alcotest.test_case "nonempty available" `Quick
             test_prelude_nonempty_available;
+          Alcotest.test_case "alist available" `Quick
+            test_prelude_alist_available;
+          Alcotest.test_case "plist available" `Quick
+            test_prelude_plist_available;
           Alcotest.test_case "polymorphic usage" `Quick
             test_prelude_polymorphic_usage;
         ] );
