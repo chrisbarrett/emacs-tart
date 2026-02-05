@@ -906,6 +906,39 @@ and sig_param_to_param_with_scope_ctx (ctx : type_context)
     These functions convert signature declarations to type environment entries.
 *)
 
+(** Extract predicate info from a defun declaration if it has a predicate return
+    type.
+
+    Returns [Some info] if the return type is [STPredicate], where info contains
+    the parameter index that gets narrowed. Returns [None] otherwise. *)
+let extract_predicate_info (ctx : type_context) (d : defun_decl) :
+    Type_env.predicate_info option =
+  match d.defun_return with
+  | STPredicate (param_name, narrowed_sig_type, _) -> (
+      (* Find the parameter index that matches the predicate's param_name *)
+      let find_param_index () =
+        let rec find_in_params idx = function
+          | [] -> None
+          | SPPositional (Some name, _) :: _ when name = param_name -> Some idx
+          | SPOptional (Some name, _) :: _ when name = param_name -> Some idx
+          | SPKey (name, _) :: _ when name = param_name -> Some idx
+          | _ :: rest -> find_in_params (idx + 1) rest
+        in
+        find_in_params 0 d.defun_params
+      in
+      match find_param_index () with
+      | None ->
+          (* Parameter name not found - validation error would be reported
+              elsewhere *)
+          None
+      | Some param_index ->
+          let tvar_names = List.map (fun b -> b.name) d.defun_tvar_binders in
+          let narrowed_type =
+            sig_type_to_typ_with_ctx ctx tvar_names narrowed_sig_type
+          in
+          Some { Type_env.param_index; param_name; narrowed_type })
+  | _ -> None
+
 (** Convert a defun declaration to a type scheme with full type context. Returns
     a Poly scheme if the function has type parameters, otherwise a Mono scheme
     with an arrow type. *)
@@ -1398,6 +1431,18 @@ and load_decls_into_state ?(from_include = false) (sig_file : signature)
           let scheme = load_defun_with_ctx state.ls_type_ctx d in
           (* Add to function namespace for Lisp-2 semantics *)
           let state = add_fn_to_state d.defun_name scheme state in
+          (* Register predicate info if this is a type predicate *)
+          let state =
+            match extract_predicate_info state.ls_type_ctx d with
+            | Some pred_info ->
+                {
+                  state with
+                  ls_env =
+                    Type_env.extend_predicate d.defun_name pred_info
+                      state.ls_env;
+                }
+            | None -> state
+          in
           (* Mark as imported if from include *)
           if from_include then mark_value_imported d.defun_name state else state
       | DDefvar d ->
@@ -1502,6 +1547,17 @@ and load_scoped_decl ?(from_include = false) (sig_file : signature)
       let scheme = load_defun_with_scope state.ls_type_ctx scope_tvars d in
       (* Add to function namespace for Lisp-2 semantics *)
       let state = add_fn_to_state d.defun_name scheme state in
+      (* Register predicate info if this is a type predicate *)
+      let state =
+        match extract_predicate_info state.ls_type_ctx d with
+        | Some pred_info ->
+            {
+              state with
+              ls_env =
+                Type_env.extend_predicate d.defun_name pred_info state.ls_env;
+            }
+        | None -> state
+      in
       if from_include then mark_value_imported d.defun_name state else state
   | DDefvar d ->
       (* Check shadowing if from current file *)

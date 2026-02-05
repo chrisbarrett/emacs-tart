@@ -1573,6 +1573,62 @@ let test_subtract_from_3_way_union () =
            true
          with Not_found -> false)
 
+(** {1 Predicate Registration Tests (Spec 52)} *)
+
+(** Test that predicates with named parameters are registered. R1: Basic
+    predicate registration *)
+let test_predicate_registration () =
+  let sig_src = {|
+    (defun stringp (((x any))) -> (x is string))
+  |} in
+  let env = load_sig_str sig_src in
+  (* stringp should have predicate info registered *)
+  match Type_env.lookup_predicate "stringp" env with
+  | None -> Alcotest.fail "stringp should be registered as a predicate"
+  | Some info ->
+      Alcotest.(check int) "param_index is 0" 0 info.param_index;
+      Alcotest.(check string) "param_name is x" "x" info.param_name;
+      (* narrowed_type should be string *)
+      Alcotest.(check string)
+        "narrowed to string" "string"
+        (Types.to_string info.narrowed_type)
+
+(** Test that non-predicates don't have predicate info registered *)
+let test_non_predicate_not_registered () =
+  let sig_src = {|
+    (defun regular-fn (int) -> string)
+  |} in
+  let env = load_sig_str sig_src in
+  match Type_env.lookup_predicate "regular-fn" env with
+  | None -> () (* Expected - no predicate info *)
+  | Some _ -> Alcotest.fail "regular-fn should NOT be a predicate"
+
+(** Test predicate with union narrowed type *)
+let test_predicate_union_narrowed_type () =
+  let sig_src =
+    {|
+    (defun number-or-string-p (((x any))) -> (x is (num | string)))
+  |}
+  in
+  let env = load_sig_str sig_src in
+  match Type_env.lookup_predicate "number-or-string-p" env with
+  | None -> Alcotest.fail "number-or-string-p should be registered"
+  | Some info ->
+      (* narrowed_type should be a union *)
+      let ty_str = Types.to_string info.narrowed_type in
+      Alcotest.(check bool)
+        "has num" true
+        (try
+           let _ = Str.search_forward (Str.regexp_string "num") ty_str 0 in
+           true
+         with Not_found -> false);
+      Alcotest.(check bool)
+        "has string" true
+        (try
+           let _ = Str.search_forward (Str.regexp_string "string") ty_str 0 in
+           true
+         with Not_found -> false)
+
 let () =
   Alcotest.run "sig_loader"
     [
@@ -1756,5 +1812,14 @@ let () =
           Alcotest.test_case "with type var" `Quick test_subtract_with_type_var;
           Alcotest.test_case "from 3-way union" `Quick
             test_subtract_from_3_way_union;
+        ] );
+      ( "predicate-registration",
+        [
+          Alcotest.test_case "predicate registration" `Quick
+            test_predicate_registration;
+          Alcotest.test_case "non-predicate not registered" `Quick
+            test_non_predicate_not_registered;
+          Alcotest.test_case "predicate with union type" `Quick
+            test_predicate_union_narrowed_type;
         ] );
     ]
