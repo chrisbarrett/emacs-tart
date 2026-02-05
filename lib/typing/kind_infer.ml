@@ -196,6 +196,17 @@ let rec infer_sig_type_kind (env : Kind.env) (ty : sig_type) :
           "subtraction subtrahend"
       in
       Ok (Kind.KConcrete Kind.KStar)
+  | STRow (row, _) ->
+      (* Row type: all field types must be kind *, row has kind * *)
+      let* () =
+        List.fold_left
+          (fun acc (_, ty) ->
+            let* () = acc in
+            let* kind = infer_sig_type_kind env ty in
+            unify_scheme_with_kind kind Kind.KStar "row field type")
+          (Ok ()) row.srow_fields
+      in
+      Ok (Kind.KConcrete Kind.KStar)
 
 (** Infer the kind of a function parameter type. *)
 and infer_param_kind (env : Kind.env) (param : sig_param) :

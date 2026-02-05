@@ -32,6 +32,9 @@ let rec sexp_to_value = function
   | List (elts, _) -> of_list (List.map sexp_to_value elts)
   | Vector (elts, _) ->
       Value.Vector (Array.of_list (List.map sexp_to_value elts))
+  | Curly (elts, _) ->
+      (* Curly braces are for type syntax; convert to list for runtime *)
+      of_list (List.map sexp_to_value elts)
   | Cons (car, cdr, _) -> Value.Cons (sexp_to_value car, sexp_to_value cdr)
   | Error (msg, _span) -> Opaque ("parse-error: " ^ msg)
 
@@ -98,6 +101,8 @@ let rec eval env global sexp =
   | Char (c, _) -> Value.Int c
   | Vector (elts, _span) ->
       Value.Vector (Array.of_list (List.map (eval env global) elts))
+  | Curly (_, span) ->
+      error span "curly braces are for type syntax, not expressions"
   | Error (msg, span) -> error span msg
   (* Special symbols *)
   | Symbol ("nil", _) -> Nil

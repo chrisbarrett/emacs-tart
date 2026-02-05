@@ -58,7 +58,9 @@ let rec extract_edges_from_sexp (sexp : Sexp.t) : Graph.edge list =
   in
   let child_edges =
     match sexp with
-    | Sexp.List (children, _) | Sexp.Vector (children, _) ->
+    | Sexp.List (children, _)
+    | Sexp.Vector (children, _)
+    | Sexp.Curly (children, _) ->
         List.concat_map extract_edges_from_sexp children
     | Sexp.Cons (car, cdr, _) ->
         extract_edges_from_sexp car @ extract_edges_from_sexp cdr

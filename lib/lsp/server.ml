@@ -858,6 +858,7 @@ let find_references (name : string) (sexps : Syntax.Sexp.t list) :
     | Int _ | Float _ | String _ | Char _ | Keyword _ | Error _ -> acc
     | List (elems, _) -> List.fold_left collect_sexp acc elems
     | Vector (elems, _) -> List.fold_left collect_sexp acc elems
+    | Curly (elems, _) -> List.fold_left collect_sexp acc elems
     | Cons (car, cdr, _) -> collect_sexp (collect_sexp acc car) cdr
   in
   List.fold_left collect_sexp [] sexps |> List.rev
@@ -1288,6 +1289,7 @@ let collect_symbol_refs (sexp : Syntax.Sexp.t) : string list =
         head_refs @ List.concat_map (collect ~bound) args
     | Syntax.Sexp.List ([], _) -> []
     | Syntax.Sexp.Vector (elems, _) -> List.concat_map (collect ~bound) elems
+    | Syntax.Sexp.Curly (elems, _) -> List.concat_map (collect ~bound) elems
     | Syntax.Sexp.Cons (car, cdr, _) -> collect ~bound car @ collect ~bound cdr
     | Syntax.Sexp.Int _ | Syntax.Sexp.Float _ | Syntax.Sexp.String _
     | Syntax.Sexp.Keyword _ | Syntax.Sexp.Char _ | Syntax.Sexp.Error _ ->

@@ -134,6 +134,8 @@ let rec to_string (sexp : Sexp.t) : string =
       | _ -> "(" ^ String.concat " " (List.map to_string elts) ^ ")")
   | Sexp.Vector (elts, _) ->
       "#(" ^ String.concat " " (List.map to_string elts) ^ ")"
+  | Sexp.Curly (elts, _) ->
+      "{" ^ String.concat " " (List.map to_string elts) ^ "}"
   | Sexp.Cons (car, cdr, _) ->
       (* Handle improper lists: collect elements until we hit a non-Cons tail *)
       let rec collect acc = function

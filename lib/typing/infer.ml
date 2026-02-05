@@ -174,6 +174,8 @@ let rec infer (env : Env.t) (sexp : Syntax.Sexp.t) : result =
       (* Dotted pairs as expressions are typically errors,
          but we'll give them a fresh type variable *)
       pure (fresh_tvar (Env.current_level env))
+  (* === Curly braces - type syntax, not valid expressions === *)
+  | Curly (_, _span) -> pure (fresh_tvar (Env.current_level env))
   (* === Error nodes === *)
   | Error (_, _) -> pure (fresh_tvar (Env.current_level env))
 
@@ -194,6 +196,7 @@ and infer_quoted (sexp : Syntax.Sexp.t) : result =
   | Symbol (_, _) -> pure Prim.symbol
   | List (_, _) -> pure (list_of Prim.any) (* Quoted lists: (List Any) *)
   | Vector (_, _) -> pure (vector_of Prim.any)
+  | Curly (_, _) -> pure Prim.any (* Curly braces: Any *)
   | Cons (_, _, _) -> pure Prim.any (* Dotted pairs: Any *)
   | Error (_, _) -> pure Prim.any
 

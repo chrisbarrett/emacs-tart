@@ -155,6 +155,86 @@ let test_tuple_types () =
       ()
   | _ -> Alcotest.fail "Expected tuple type"
 
+let test_row_types_closed () =
+  (* {name string age int} - closed row *)
+  match parse_type_str "{name string age int}" with
+  | Ok
+      (Sig_ast.STRow
+         ( {
+             srow_fields =
+               [
+                 ("name", Sig_ast.STCon ("string", _));
+                 ("age", Sig_ast.STCon ("int", _));
+               ];
+             srow_var = None;
+           },
+           _ )) ->
+      ()
+  | Ok _ -> Alcotest.fail "Expected closed row with name and age fields"
+  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
+
+let test_row_types_open () =
+  (* {name string & r} - open row with row variable *)
+  match parse_type_str "{name string & r}" with
+  | Ok
+      (Sig_ast.STRow
+         ( {
+             srow_fields = [ ("name", Sig_ast.STCon ("string", _)) ];
+             srow_var = Some "r";
+           },
+           _ )) ->
+      ()
+  | Ok _ -> Alcotest.fail "Expected open row with name field and row variable r"
+  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
+
+let test_row_types_empty () =
+  (* {} - empty row *)
+  match parse_type_str "{}" with
+  | Ok (Sig_ast.STRow ({ srow_fields = []; srow_var = None }, _)) -> ()
+  | Ok _ -> Alcotest.fail "Expected empty closed row"
+  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
+
+let test_row_types_plist () =
+  (* {:name string :age int} - plist-style row *)
+  match parse_type_str "{:name string :age int}" with
+  | Ok
+      (Sig_ast.STRow
+         ( {
+             srow_fields =
+               [
+                 (":name", Sig_ast.STCon ("string", _));
+                 (":age", Sig_ast.STCon ("int", _));
+               ];
+             srow_var = None;
+           },
+           _ )) ->
+      ()
+  | Ok _ -> Alcotest.fail "Expected plist-style closed row"
+  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
+
+let test_row_types_nested () =
+  (* {person {name string age int}} - nested row type *)
+  match parse_type_str "{person {name string}}" with
+  | Ok
+      (Sig_ast.STRow
+         ( {
+             srow_fields =
+               [
+                 ( "person",
+                   Sig_ast.STRow
+                     ( {
+                         srow_fields = [ ("name", Sig_ast.STCon ("string", _)) ];
+                         srow_var = None;
+                       },
+                       _ ) );
+               ];
+             srow_var = None;
+           },
+           _ )) ->
+      ()
+  | Ok _ -> Alcotest.fail "Expected row with nested row field"
+  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
+
 (** {1 Declaration Tests} *)
 
 let test_defun_simple () =
@@ -376,6 +456,11 @@ let () =
           Alcotest.test_case "polymorphic types" `Quick test_polymorphic_types;
           Alcotest.test_case "union types" `Quick test_union_types;
           Alcotest.test_case "tuple types" `Quick test_tuple_types;
+          Alcotest.test_case "row types closed" `Quick test_row_types_closed;
+          Alcotest.test_case "row types open" `Quick test_row_types_open;
+          Alcotest.test_case "row types empty" `Quick test_row_types_empty;
+          Alcotest.test_case "row types plist" `Quick test_row_types_plist;
+          Alcotest.test_case "row types nested" `Quick test_row_types_nested;
         ] );
       ( "declarations",
         [

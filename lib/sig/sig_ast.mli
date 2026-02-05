@@ -64,6 +64,8 @@ and sig_type =
       (** Tuple type (e.g., [(tuple int string bool)]) *)
   | STSubtract of sig_type * sig_type * span
       (** Type subtraction (e.g., [(a - nil)], removes nil from union a) *)
+  | STRow of sig_row * span
+      (** Row type for record-style typing (e.g., [{name string age int}]) *)
 
 (** Function parameter in signature types *)
 and sig_param =
@@ -71,6 +73,20 @@ and sig_param =
   | SPOptional of sig_type  (** Optional parameter (&optional) *)
   | SPRest of sig_type  (** Rest parameter (&rest) *)
   | SPKey of string * sig_type  (** Keyword parameter (&key :name type) *)
+
+and sig_row = {
+  srow_fields : (string * sig_type) list;  (** Named fields *)
+  srow_var : string option;  (** Optional row variable name for open rows *)
+}
+(** Row type for record-style maps (alists, plists, hash-tables).
+
+    A row is a collection of field name-type pairs, optionally with a row
+    variable for open rows (polymorphism).
+
+    Examples:
+    - [{name string age int}] - closed row, exactly these fields
+    - [{name string & r}] - open row, at least name field, r captures the rest
+*)
 
 (** {1 Declarations} *)
 
@@ -236,3 +252,7 @@ val st_tuple : sig_type list -> span -> sig_type
 
 val st_subtract : sig_type -> sig_type -> span -> sig_type
 (** Create a type subtraction *)
+
+val st_row : (string * sig_type) list -> string option -> span -> sig_type
+(** Create a row type. [st_row fields var_opt loc] creates a row with the given
+    fields and optional row variable name for open rows. *)

@@ -20,6 +20,7 @@ type t =
   | Char of int * span  (** Character literals ?a, ?\n, etc. *)
   | List of t list * span
   | Vector of t list * span  (** #(...) vectors *)
+  | Curly of t list * span  (** Curly braces {...} for row types *)
   | Cons of t * t * span  (** Dotted pairs (a . b) *)
   | Error of string * span  (** Error node for recovery *)
 [@@deriving show, eq]
@@ -34,6 +35,7 @@ let span_of = function
   | Char (_, s)
   | List (_, s)
   | Vector (_, s)
+  | Curly (_, s)
   | Cons (_, _, s)
   | Error (_, s) ->
       s
@@ -49,6 +51,7 @@ let with_span sexp span =
   | Char (v, _) -> Char (v, span)
   | List (v, _) -> List (v, span)
   | Vector (v, _) -> Vector (v, span)
+  | Curly (v, _) -> Curly (v, span)
   | Cons (a, b, _) -> Cons (a, b, span)
   | Error (v, _) -> Error (v, span)
 
@@ -73,6 +76,7 @@ let rec to_string = function
       | [ Symbol ("function", _); x ] -> "#'" ^ to_string x
       | _ -> "(" ^ String.concat " " (List.map to_string elts) ^ ")")
   | Vector (elts, _) -> "#(" ^ String.concat " " (List.map to_string elts) ^ ")"
+  | Curly (elts, _) -> "{" ^ String.concat " " (List.map to_string elts) ^ "}"
   | Cons (car, cdr, _) ->
       (* Handle improper lists: collect elements until we hit a non-Cons tail *)
       let rec collect acc = function
@@ -97,6 +101,8 @@ let rec find_at_position ~(line : int) ~(col : int) (sexp : t) : t option =
       | List (children, _) ->
           List.find_map (find_at_position ~line ~col) children
       | Vector (children, _) ->
+          List.find_map (find_at_position ~line ~col) children
+      | Curly (children, _) ->
           List.find_map (find_at_position ~line ~col) children
       | Cons (car, cdr, _) -> (
           match find_at_position ~line ~col car with
@@ -156,6 +162,13 @@ let rec find_with_context ~(line : int) ~(col : int) (sexp : t) :
           | None -> Some { target = sexp; enclosing_application = None })
     | List ([], _) -> Some { target = sexp; enclosing_application = None }
     | Vector (children, _) -> (
+        let children_result =
+          List.find_map (find_with_context ~line ~col) children
+        in
+        match children_result with
+        | Some _ as result -> result
+        | None -> Some { target = sexp; enclosing_application = None })
+    | Curly (children, _) -> (
         let children_result =
           List.find_map (find_with_context ~line ~col) children
         in

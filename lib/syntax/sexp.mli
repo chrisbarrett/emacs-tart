@@ -20,6 +20,7 @@ type t =
   | Char of int * Location.span  (** Character literals [?a], [?\n], etc. *)
   | List of t list * Location.span
   | Vector of t list * Location.span  (** [#(...)] vectors *)
+  | Curly of t list * Location.span  (** Curly braces [{...}] for row types *)
   | Cons of t * t * Location.span  (** Dotted pairs [(a . b)] *)
   | Error of string * Location.span  (** Error node for recovery *)
 

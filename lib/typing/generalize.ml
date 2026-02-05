@@ -37,6 +37,8 @@ let rec is_syntactic_value (sexp : Syntax.Sexp.t) : bool =
   | List ([], _) -> true
   (* Vectors of values are values *)
   | Vector (elems, _) -> List.for_all is_syntactic_value elems
+  (* Curly braces are type syntax, treat as non-value for safety *)
+  | Curly _ -> false
   (* Function applications are NOT values - they might have effects *)
   | List (_ :: _, _) -> false
   (* Cons pairs and errors are not values *)

@@ -278,6 +278,8 @@ rule token = parse
   | ")"            { Parser.RPAREN }
   | "["            { Parser.LBRACKET }
   | "]"            { Parser.RBRACKET }
+  | "{"            { Parser.LBRACE }
+  | "}"            { Parser.RBRACE }
 
   (* Character literals *)
   (* Space character literal ? (question mark followed by space) *)

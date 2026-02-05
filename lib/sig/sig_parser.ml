@@ -126,6 +126,7 @@ let rec parse_tvar_binder (sexp : Sexp.t) : tvar_binder result =
         | Error e -> Error e)
   | Sexp.List (_, span)
   | Sexp.Vector (_, span)
+  | Sexp.Curly (_, span)
   | Sexp.Keyword (_, span)
   | Sexp.Int (_, span)
   | Sexp.Float (_, span)
@@ -169,6 +170,8 @@ and parse_sig_type (sexp : Sexp.t) : sig_type result =
         Ok (STVar (name, span))
   (* Parenthesized form - could be application, union, arrow, or forall *)
   | Sexp.List (contents, span) -> parse_list_type contents span
+  (* Curly braces for row types: {name string age int} or {name string & r} *)
+  | Sexp.Curly (contents, span) -> parse_row_type contents span
   (* Vector syntax [a b] is for quantifiers, not valid as standalone type *)
   | Sexp.Vector (_, span) ->
       error "Unexpected [...] in type position (quantifiers go before ->)" span
@@ -289,6 +292,50 @@ and parse_tuple_type (args : Sexp.t list) (span : Loc.span) : sig_type result =
   match parse_args [] args with
   | Ok types when List.length types >= 2 -> Ok (STTuple (types, span))
   | Ok _ -> error "Tuple type requires at least two elements" span
+  | Error e -> Error e
+
+(** Parse a row type: {name type name type ...} or {name type & var}
+
+    Row syntax:
+    - [{name string age int}] - closed row with alist field names
+    - [{name string & r}] - open row with row variable
+    - [{:name string :age int}] - closed row with plist keyword field names
+    - [{:name string & r}] - open row with plist field names
+
+    Fields are pairs of name (symbol or keyword) and type. The optional [& var]
+    at the end specifies a row variable for open rows (row polymorphism). *)
+and parse_row_type (contents : Sexp.t list) (span : Loc.span) : sig_type result
+    =
+  (* Check if there's a row variable (& symbol at end) *)
+  let rec split_at_ampersand acc = function
+    | [] -> (List.rev acc, None)
+    | [ Sexp.Symbol ("&", _); Sexp.Symbol (var_name, _) ] ->
+        (List.rev acc, Some var_name)
+    | x :: rest -> split_at_ampersand (x :: acc) rest
+  in
+  let fields_sexp, row_var = split_at_ampersand [] contents in
+  (* Parse fields as pairs of name/type *)
+  let rec parse_fields acc = function
+    | [] -> Ok (List.rev acc)
+    | Sexp.Symbol (name, _) :: type_sexp :: rest -> (
+        (* Alist-style field: name type *)
+        match parse_sig_type type_sexp with
+        | Ok ty -> parse_fields ((name, ty) :: acc) rest
+        | Error e -> Error e)
+    | Sexp.Keyword (name, _) :: type_sexp :: rest -> (
+        (* Plist-style field: :name type - prefix with : for plist semantics *)
+        match parse_sig_type type_sexp with
+        | Ok ty -> parse_fields ((":" ^ name, ty) :: acc) rest
+        | Error e -> Error e)
+    | [ Sexp.Symbol (_, sp) ] | [ Sexp.Keyword (_, sp) ] ->
+        error "Row field missing type" sp
+    | other :: _ ->
+        error "Expected field name (symbol or keyword)" (Sexp.span_of other)
+  in
+  match parse_fields [] fields_sexp with
+  | Ok fields ->
+      let row = { srow_fields = fields; srow_var = row_var } in
+      Ok (STRow (row, span))
   | Error e -> Error e
 
 (** Parse an arrow type: (params) -> return or [vars] (params) -> return *)

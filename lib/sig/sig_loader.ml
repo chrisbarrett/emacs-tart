@@ -96,6 +96,9 @@ let rec validate_type (ctx : tvar_context) (ty : sig_type) : unit result =
   | STSubtract (minuend, subtrahend, _) ->
       let* () = validate_type ctx minuend in
       validate_type ctx subtrahend
+  | STRow (row, _) ->
+      let field_types = List.map snd row.srow_fields in
+      validate_types ctx field_types
 
 and validate_types ctx types =
   List.fold_left
@@ -471,6 +474,13 @@ let rec substitute_sig_type (subst : (string * sig_type) list) (ty : sig_type) :
       let minuend' = substitute_sig_type subst minuend in
       let subtrahend' = substitute_sig_type subst subtrahend in
       STSubtract (minuend', subtrahend', loc)
+  | STRow (row, _) ->
+      let fields' =
+        List.map
+          (fun (name, ty) -> (name, substitute_sig_type subst ty))
+          row.srow_fields
+      in
+      STRow ({ row with srow_fields = fields' }, loc)
 
 and substitute_sig_param subst = function
   | SPPositional ty -> SPPositional (substitute_sig_type subst ty)
@@ -636,6 +646,19 @@ let rec sig_type_to_typ_with_ctx (ctx : type_context) (tvar_names : string list)
         sig_type_to_typ_with_ctx ctx tvar_names subtrahend
       in
       subtract_type minuend_type subtrahend_type
+  | STRow (row, _) ->
+      (* Convert sig_row to core TRow *)
+      let fields =
+        List.map
+          (fun (name, ty) -> (name, sig_type_to_typ_with_ctx ctx tvar_names ty))
+          row.srow_fields
+      in
+      let row_var =
+        match row.srow_var with
+        | None -> None
+        | Some var_name -> Some (Types.TCon var_name)
+      in
+      Types.TRow { row_fields = fields; row_var }
 
 (** Subtract a type from another type.
 
@@ -822,6 +845,24 @@ let rec sig_type_to_typ_with_scope_ctx (ctx : type_context)
         sig_type_to_typ_with_scope_ctx ctx scope_tvars tvar_names subtrahend
       in
       subtract_type minuend_type subtrahend_type
+  | STRow (row, _) ->
+      (* Convert sig_row to core TRow with scope type variables *)
+      let fields =
+        List.map
+          (fun (name, ty) ->
+            (name, sig_type_to_typ_with_scope_ctx ctx scope_tvars tvar_names ty))
+          row.srow_fields
+      in
+      let row_var =
+        match row.srow_var with
+        | None -> None
+        | Some var_name -> (
+            (* Check if the row variable is a scope type variable *)
+            match List.assoc_opt var_name scope_tvars with
+            | Some tvar -> Some tvar
+            | None -> Some (Types.TCon var_name))
+      in
+      Types.TRow { row_fields = fields; row_var }
 
 (** Convert a signature parameter to a core parameter with scope type variables
 *)

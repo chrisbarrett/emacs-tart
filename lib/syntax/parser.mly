@@ -20,6 +20,7 @@ let list_span ~lparen ~rparen =
 %token <int> CHAR
 %token LPAREN RPAREN
 %token LBRACKET RBRACKET
+%token LBRACE RBRACE
 %token DOT
 %token QUOTE BACKQUOTE COMMA COMMA_AT
 %token HASH_QUOTE HASH_LPAREN HASH_S_LPAREN
@@ -49,6 +50,7 @@ sexp:
   | BOOL_VECTOR { Symbol ("bool-vector", span_of_loc $loc) }  (* opaque type *)
   | l = list_sexp { l }
   | v = vector { v }
+  | c = curly { c }
   | q = quoted { q }
 
 list_sexp:
@@ -93,6 +95,14 @@ vector:
       let span = list_span ~lparen:lp_span ~rparen:rp_span in
       (* Wrap in (record ...) form for type-checker to handle *)
       List (Symbol ("record", span_of_loc lp_span) :: elts, span)
+    }
+
+curly:
+  | LBRACE; elts = list(sexp); RBRACE
+    {
+      let lp_span = $loc($1) in
+      let rp_span = $loc($3) in
+      Curly (elts, list_span ~lparen:lp_span ~rparen:rp_span)
     }
 
 quoted:
