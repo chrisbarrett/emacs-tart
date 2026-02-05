@@ -136,7 +136,7 @@
 (defun put (symbol symbol any) -> any)
 
 ;; (plist-get PLIST PROP &optional PREDICATE) - get from plist
-(defun plist-get ((list any) any &optional any) -> any)
+(defun plist-get [k v] ((list (k | v)) k &optional any) -> (v | nil))
 
 ;; (plist-put PLIST PROP VALUE &optional PREDICATE) - put in plist
 (defun plist-put ((list any) any any &optional any) -> (list any))

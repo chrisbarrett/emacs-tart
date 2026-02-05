@@ -169,6 +169,14 @@ let rec infer (env : Env.t) (sexp : Syntax.Sexp.t) : result =
         :: alist_expr :: rest_args,
         span ) ->
       infer_alist_get_row env key_name alist_expr rest_args span
+  (* === plist-get with literal keyword key: row-typed inference === *)
+  | List
+      ( Symbol ("plist-get", _)
+        :: plist_expr
+        :: Keyword (key_name, _)
+        :: rest_args,
+        span ) ->
+      infer_plist_get_row env (":" ^ key_name) plist_expr rest_args span
   (* === eq/eql with disjointness checking (Spec 11 R14) === *)
   | List ([ Symbol ((("eq" | "eql") as fn_name), _); arg1; arg2 ], span) ->
       infer_eq_with_disjointness env fn_name arg1 arg2 span
@@ -1346,6 +1354,110 @@ and infer_alist_get_row env key_name alist_expr rest_args _span =
   let all_constraints = C.combine alist_result.constraints base_constraints in
   let all_undefineds =
     alist_result.undefineds @ combine_undefineds rest_results
+  in
+
+  { ty = result_ty; constraints = all_constraints; undefineds = all_undefineds }
+
+(** Try to extract a row type from a plist type: [(list (keyword | TRow))].
+
+    Returns [Some row] if the type is a row-typed plist, [None] otherwise. *)
+and extract_plist_row ty =
+  match repr ty with
+  | TApp (list_con, [ union_ty ])
+    when equal (repr list_con) (TCon (intrinsic "List")) -> (
+      match repr union_ty with
+      | TUnion members -> (
+          (* Look for a (keyword | TRow) union *)
+          let has_keyword =
+            List.exists
+              (fun m ->
+                match repr m with
+                | TCon n -> n = intrinsic "Keyword"
+                | _ -> false)
+              members
+          in
+          let row_member =
+            List.find_map
+              (fun m -> match repr m with TRow row -> Some row | _ -> None)
+              members
+          in
+          match (has_keyword, row_member) with
+          | true, Some row -> Some row
+          | _ -> None)
+      | _ -> None)
+  | _ -> None
+
+(** Infer a row-typed plist-get call with a literal keyword key.
+
+    [(plist-get PLIST :KEY &optional PREDICATE)]
+
+    Implements the same decision table as alist-get (Spec 11 R4/R5):
+
+    - Cases 1–2: literal key found in row → return [field_type] (no nil)
+    - Cases 3–4: literal key absent from closed row → return [nil]
+    - Case 5: literal key absent from open row → return [(α | nil)]
+
+    When the plist's type is not yet known, falls back to generating fresh row
+    constraints and returning [(field_ty | nil)]. *)
+and infer_plist_get_row env key_name plist_expr rest_args _span =
+  (* Infer the plist expression *)
+  let plist_result = infer env plist_expr in
+
+  (* Infer remaining optional args (PREDICATE) *)
+  let rest_results = List.map (infer env) rest_args in
+
+  (* Check if the plist already has a known row type (from annotation) *)
+  let result_ty, plist_constraint =
+    match extract_plist_row plist_result.ty with
+    | Some row -> (
+        match row_lookup row key_name with
+        | Some field_ty ->
+            (* Cases 1–2: key is in the row → return field_type directly *)
+            (field_ty, None)
+        | None -> (
+            match row.row_var with
+            | None ->
+                (* Cases 3–4: key absent from closed row → return nil *)
+                (Prim.nil, None)
+            | Some _ ->
+                (* Case 5: key absent from open row → constrain and return
+                   (α | nil) *)
+                let field_ty = fresh_tvar (Env.current_level env) in
+                let row_var = fresh_tvar (Env.current_level env) in
+                let expected_row = open_row [ (key_name, field_ty) ] row_var in
+                let expected_plist_ty =
+                  list_of (TUnion [ Prim.keyword; expected_row ])
+                in
+                let c =
+                  C.equal expected_plist_ty plist_result.ty
+                    (Syntax.Sexp.span_of plist_expr)
+                in
+                (option_of field_ty, Some c)))
+    | None ->
+        (* Type not yet known — fall back to fresh row constraint *)
+        let field_ty = fresh_tvar (Env.current_level env) in
+        let row_var = fresh_tvar (Env.current_level env) in
+        let expected_row = open_row [ (key_name, field_ty) ] row_var in
+        let expected_plist_ty =
+          list_of (TUnion [ Prim.keyword; expected_row ])
+        in
+        let c =
+          C.equal expected_plist_ty plist_result.ty
+            (Syntax.Sexp.span_of plist_expr)
+        in
+        (option_of field_ty, Some c)
+  in
+
+  (* Combine constraints *)
+  let rest_constraints = combine_results rest_results in
+  let base_constraints =
+    match plist_constraint with
+    | Some c -> C.add c rest_constraints
+    | None -> rest_constraints
+  in
+  let all_constraints = C.combine plist_result.constraints base_constraints in
+  let all_undefineds =
+    plist_result.undefineds @ combine_undefineds rest_results
   in
 
   { ty = result_ty; constraints = all_constraints; undefineds = all_undefineds }
