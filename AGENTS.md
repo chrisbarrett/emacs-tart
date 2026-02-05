@@ -6,7 +6,7 @@ Write `.mli` for every `lib/**/*.ml`. Docstrings ok; no redundant comments.
 
 ## Type Definitions
 
-OCaml defines minimal intrinsics; everything else bootstraps in user-land.
+OCaml layer defines minimal intrinsics; everything else bootstraps in user-land.
 
 | file                                       | defines                                 |
 | ------------------------------------------ | --------------------------------------- |
