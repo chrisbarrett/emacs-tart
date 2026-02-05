@@ -1031,6 +1031,18 @@ let rec type_to_sig_string (ty : Core.Types.typ) : string =
   | Core.Types.TTuple types ->
       Printf.sprintf "(tuple %s)"
         (String.concat " " (List.map type_to_sig_string types))
+  | Core.Types.TRow { row_fields; row_var } -> (
+      let fields_str =
+        String.concat " "
+          (List.map
+             (fun (name, ty) ->
+               Printf.sprintf "%s %s" name (type_to_sig_string ty))
+             row_fields)
+      in
+      match row_var with
+      | None -> Printf.sprintf "{%s}" fields_str
+      | Some var ->
+          Printf.sprintf "{%s & %s}" fields_str (type_to_sig_string var))
 
 and param_to_sig_string = function
   | Core.Types.PPositional ty -> type_to_sig_string ty

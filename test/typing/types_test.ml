@@ -375,6 +375,67 @@ let test_validation_error_message () =
     (String.length msg > 0 && String.sub msg 0 6 = "Option")
 
 (* =============================================================================
+   Row Type Tests
+   ============================================================================= *)
+
+let test_closed_row () =
+  let row = closed_row [ ("name", Prim.string); ("age", Prim.int) ] in
+  Alcotest.(check string)
+    "closed row format" "{name string age int}" (to_string row)
+
+let test_open_row () =
+  reset_tvar_counter ();
+  let row_var = fresh_tvar 0 in
+  let row = open_row [ ("name", Prim.string) ] row_var in
+  Alcotest.(check string)
+    "open row format" "{name string & '_0}" (to_string row)
+
+let test_row_lookup () =
+  let row =
+    match closed_row [ ("name", Prim.string); ("age", Prim.int) ] with
+    | TRow r -> r
+    | _ -> Alcotest.fail "expected TRow"
+  in
+  Alcotest.(check (option string))
+    "lookup name" (Some "string")
+    (Option.map to_string (row_lookup row "name"));
+  Alcotest.(check (option string))
+    "lookup missing" None
+    (Option.map to_string (row_lookup row "missing"))
+
+let test_row_has_field () =
+  let row =
+    match closed_row [ ("name", Prim.string) ] with
+    | TRow r -> r
+    | _ -> Alcotest.fail "expected TRow"
+  in
+  Alcotest.(check bool) "has name" true (row_has_field row "name");
+  Alcotest.(check bool) "no age" false (row_has_field row "age")
+
+let test_row_is_row () =
+  let row = closed_row [ ("x", Prim.int) ] in
+  Alcotest.(check bool) "row is row" true (is_row row);
+  Alcotest.(check bool) "int is not row" false (is_row Prim.int)
+
+let test_row_is_open () =
+  reset_tvar_counter ();
+  let closed = closed_row [ ("x", Prim.int) ] in
+  let open_ = open_row [ ("x", Prim.int) ] (fresh_tvar 0) in
+  Alcotest.(check bool) "closed is not open" false (is_open_row closed);
+  Alcotest.(check bool) "open is open" true (is_open_row open_)
+
+let test_row_truthy () =
+  let row = closed_row [ ("name", Prim.string) ] in
+  Alcotest.(check bool) "row is truthy" true (is_truthy row)
+
+let test_row_equal () =
+  let r1 = closed_row [ ("name", Prim.string); ("age", Prim.int) ] in
+  let r2 = closed_row [ ("name", Prim.string); ("age", Prim.int) ] in
+  let r3 = closed_row [ ("name", Prim.string) ] in
+  Alcotest.(check bool) "same rows equal" true (equal r1 r2);
+  Alcotest.(check bool) "different rows not equal" false (equal r1 r3)
+
+(* =============================================================================
    Test Suite
    ============================================================================= *)
 
@@ -459,5 +520,16 @@ let () =
             test_option_of_checked_option_fails;
           Alcotest.test_case "validation error message" `Quick
             test_validation_error_message;
+        ] );
+      ( "row",
+        [
+          Alcotest.test_case "closed row" `Quick test_closed_row;
+          Alcotest.test_case "open row" `Quick test_open_row;
+          Alcotest.test_case "row lookup" `Quick test_row_lookup;
+          Alcotest.test_case "row has field" `Quick test_row_has_field;
+          Alcotest.test_case "is row" `Quick test_row_is_row;
+          Alcotest.test_case "is open row" `Quick test_row_is_open;
+          Alcotest.test_case "row truthy" `Quick test_row_truthy;
+          Alcotest.test_case "row equal" `Quick test_row_equal;
         ] );
     ]

@@ -30,7 +30,8 @@ type tvar = Unbound of tvar_id * int  (** id, level *) | Link of typ
     - [TArrow] - Function type with grouped parameters
     - [TForall] - Universally quantified type
     - [TUnion] - Union types (Or a b)
-    - [TTuple] - Fixed-length heterogeneous tuples *)
+    - [TTuple] - Fixed-length heterogeneous tuples
+    - [TRow] - Row type for record-style map types (alist, plist, hash-table) *)
 and typ =
   | TVar of tvar ref
   | TCon of string
@@ -39,6 +40,21 @@ and typ =
   | TForall of string list * typ
   | TUnion of typ list
   | TTuple of typ list
+  | TRow of row
+
+and row = {
+  row_fields : (string * typ) list;  (** Named fields in declaration order *)
+  row_var : typ option;  (** Optional row variable (TVar) for open rows *)
+}
+(** Row type representation for record-style typing of
+    alists/plists/hash-tables.
+
+    A row is a collection of field name-type pairs, optionally with a row
+    variable for polymorphism (open rows).
+
+    - [{name string age int}] - closed row, exactly these fields
+    - [{name string & r}] - open row, at least name field, r captures the rest
+*)
 
 (** Function parameter kinds.
 
@@ -169,6 +185,30 @@ val arrow : typ list -> typ -> typ
 
 val forall : string list -> typ -> typ
 (** [forall vars ty] creates a polymorphic type. *)
+
+(** {1 Row Types} *)
+
+val closed_row : (string * typ) list -> typ
+(** [closed_row fields] creates a closed row type with the given fields.
+    Example: [closed_row [("name", string); ("age", int)]] creates
+    [{name string age int}]. *)
+
+val open_row : (string * typ) list -> typ -> typ
+(** [open_row fields var] creates an open row type with a row variable. Example:
+    [open_row [("name", string)] (fresh_tvar 0)] creates [{name string & r}]. *)
+
+val row_lookup : row -> string -> typ option
+(** [row_lookup row field] looks up a field in a row, returning its type if
+    present. *)
+
+val row_has_field : row -> string -> bool
+(** [row_has_field row field] returns true if the row has the given field. *)
+
+val is_row : typ -> bool
+(** Check if a type is a row type. *)
+
+val is_open_row : typ -> bool
+(** Check if a type is an open row (has a row variable). *)
 
 (** {1 Truthiness} *)
 

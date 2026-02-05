@@ -116,6 +116,13 @@ and substitute subst ty =
       TForall (vars, substitute subst' body)
   | TUnion types -> TUnion (List.map (substitute subst) types)
   | TTuple types -> TTuple (List.map (substitute subst) types)
+  | TRow { row_fields; row_var } ->
+      TRow
+        {
+          row_fields =
+            List.map (fun (n, t) -> (n, substitute subst t)) row_fields;
+          row_var = Option.map (substitute subst) row_var;
+        }
 
 and substitute_param subst = function
   | PPositional ty -> PPositional (substitute subst ty)

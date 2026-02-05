@@ -85,6 +85,15 @@ let rec substitute_tvar_names (subst : (string * typ) list) (ty : typ) : typ =
       TForall (vars, substitute_tvar_names subst' body)
   | TUnion types -> TUnion (List.map (substitute_tvar_names subst) types)
   | TTuple types -> TTuple (List.map (substitute_tvar_names subst) types)
+  | TRow { row_fields; row_var } ->
+      TRow
+        {
+          row_fields =
+            List.map
+              (fun (n, t) -> (n, substitute_tvar_names subst t))
+              row_fields;
+          row_var = Option.map (substitute_tvar_names subst) row_var;
+        }
 
 (** Convert a sig_type to a typ at the given level with alias expansion.
 

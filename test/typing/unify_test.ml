@@ -456,6 +456,62 @@ let test_hk_arity_mismatch () =
   Alcotest.(check bool) "(f a b) != (list int)" true (unify_fails app target)
 
 (* =============================================================================
+   Row Type Tests
+   ============================================================================= *)
+
+let test_row_same_closed () =
+  let r1 = closed_row [ ("name", Prim.string); ("age", Prim.int) ] in
+  let r2 = closed_row [ ("name", Prim.string); ("age", Prim.int) ] in
+  Alcotest.(check bool) "{name string age int} = same" true (unify_ok r1 r2)
+
+let test_row_different_fields () =
+  let r1 = closed_row [ ("name", Prim.string) ] in
+  let r2 = closed_row [ ("name", Prim.string); ("age", Prim.int) ] in
+  (* Closed row with fewer fields cannot unify with one with more fields *)
+  Alcotest.(check bool)
+    "{name string} != {name string age int}" true (unify_fails r1 r2)
+
+let test_row_different_types () =
+  let r1 = closed_row [ ("name", Prim.string) ] in
+  let r2 = closed_row [ ("name", Prim.int) ] in
+  Alcotest.(check bool) "{name string} != {name int}" true (unify_fails r1 r2)
+
+let test_row_open_unifies_with_more_fields () =
+  setup ();
+  let row_var = fresh () in
+  let r1 = open_row [ ("name", Prim.string) ] row_var in
+  let r2 = closed_row [ ("name", Prim.string); ("age", Prim.int) ] in
+  Alcotest.(check bool)
+    "{name string & r} = {name string age int}" true (unify_ok r1 r2);
+  (* After unification, row_var should be bound to {age int} *)
+  Alcotest.(check string) "row_var = {age int}" "{age int}" (to_string row_var)
+
+let test_row_open_unifies_with_open () =
+  setup ();
+  let rv1 = fresh () in
+  let rv2 = fresh () in
+  let r1 = open_row [ ("name", Prim.string) ] rv1 in
+  let r2 = open_row [ ("name", Prim.string); ("age", Prim.int) ] rv2 in
+  Alcotest.(check bool)
+    "{name string & r1} = {name string age int & r2}" true (unify_ok r1 r2)
+
+let test_row_field_type_unification () =
+  setup ();
+  let tv = fresh () in
+  let r1 = closed_row [ ("name", tv) ] in
+  let r2 = closed_row [ ("name", Prim.string) ] in
+  Alcotest.(check bool) "{name 'a} = {name string}" true (unify_ok r1 r2);
+  Alcotest.(check string) "tv = string" "string" (to_string tv)
+
+let test_row_occurs_check () =
+  setup ();
+  let rv = fresh () in
+  let r = open_row [ ("self", rv) ] rv in
+  (* This creates a row that contains itself - should fail occurs check *)
+  (* rv appears both in fields and as the row variable *)
+  Alcotest.(check bool) "occurs check in row" true (unify_fails rv r)
+
+(* =============================================================================
    Complex Tests
    ============================================================================= *)
 
@@ -608,6 +664,19 @@ let () =
           Alcotest.test_case "HK nested application" `Quick
             test_hk_nested_application;
           Alcotest.test_case "HK arity mismatch" `Quick test_hk_arity_mismatch;
+        ] );
+      ( "rows",
+        [
+          Alcotest.test_case "same closed row" `Quick test_row_same_closed;
+          Alcotest.test_case "different fields" `Quick test_row_different_fields;
+          Alcotest.test_case "different types" `Quick test_row_different_types;
+          Alcotest.test_case "open unifies with more" `Quick
+            test_row_open_unifies_with_more_fields;
+          Alcotest.test_case "open unifies with open" `Quick
+            test_row_open_unifies_with_open;
+          Alcotest.test_case "field type unification" `Quick
+            test_row_field_type_unification;
+          Alcotest.test_case "occurs check in row" `Quick test_row_occurs_check;
         ] );
       ( "complex",
         [

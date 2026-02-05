@@ -291,6 +291,13 @@ let instantiate_forall (ty : Types.typ) : Types.typ =
         | Types.TForall (vs, t) -> Types.TForall (vs, substitute t)
         | Types.TUnion tys -> Types.TUnion (List.map substitute tys)
         | Types.TTuple tys -> Types.TTuple (List.map substitute tys)
+        | Types.TRow { row_fields; row_var } ->
+            Types.TRow
+              {
+                row_fields =
+                  List.map (fun (n, t) -> (n, substitute t)) row_fields;
+                row_var = Option.map substitute row_var;
+              }
       and substitute_param (p : Types.param) : Types.param =
         match p with
         | Types.PPositional t -> Types.PPositional (substitute t)

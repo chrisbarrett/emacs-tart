@@ -28,7 +28,8 @@ type tvar = Unbound of tvar_id * int  (** id, level *) | Link of typ
     - [TArrow] - Function type with grouped parameters
     - [TForall] - Universally quantified type
     - [TUnion] - Union types (Or a b)
-    - [TTuple] - Fixed-length heterogeneous tuples *)
+    - [TTuple] - Fixed-length heterogeneous tuples
+    - [TRow] - Row type for record-style map types (alist, plist, hash-table) *)
 and typ =
   | TVar of tvar ref
   | TCon of string
@@ -37,6 +38,21 @@ and typ =
   | TForall of string list * typ
   | TUnion of typ list
   | TTuple of typ list
+  | TRow of row
+
+and row = {
+  row_fields : (string * typ) list;  (** Named fields in declaration order *)
+  row_var : typ option;  (** Optional row variable (TVar) for open rows *)
+}
+(** Row type representation for record-style typing of
+    alists/plists/hash-tables.
+
+    A row is a collection of field name-type pairs, optionally with a row
+    variable for polymorphism (open rows).
+
+    - [{name string age int}] - closed row, exactly these fields
+    - [{name string & r}] - open row, at least name field, r captures the rest
+*)
 
 (** Function parameter kinds.
 
@@ -188,6 +204,25 @@ let arrow params ret = TArrow (List.map (fun p -> PPositional p) params, ret)
 (** Create a simple polymorphic type *)
 let forall vars ty = TForall (vars, ty)
 
+(** Create a closed row type (no row variable) *)
+let closed_row fields = TRow { row_fields = fields; row_var = None }
+
+(** Create an open row type with a row variable for polymorphism *)
+let open_row fields var = TRow { row_fields = fields; row_var = Some var }
+
+(** Look up a field in a row, returning its type if present *)
+let row_lookup row field = List.assoc_opt field row.row_fields
+
+(** Check if a row has a given field *)
+let row_has_field row field = List.mem_assoc field row.row_fields
+
+(** Check if a type is a row type *)
+let is_row ty = match repr ty with TRow _ -> true | _ -> false
+
+(** Check if a type is an open row (has a row variable) *)
+let is_open_row ty =
+  match repr ty with TRow { row_var = Some _; _ } -> true | _ -> false
+
 (** Pretty-print a type to string.
 
     For user-facing output, intrinsic types are shown with their base name
@@ -217,6 +252,16 @@ let rec to_string ty =
       Printf.sprintf "(Or %s)" (String.concat " " (List.map to_string types))
   | TTuple types ->
       Printf.sprintf "(Tuple %s)" (String.concat " " (List.map to_string types))
+  | TRow { row_fields; row_var } -> (
+      let fields_str =
+        String.concat " "
+          (List.map
+             (fun (name, ty) -> Printf.sprintf "%s %s" name (to_string ty))
+             row_fields)
+      in
+      match row_var with
+      | None -> Printf.sprintf "{%s}" fields_str
+      | Some var -> Printf.sprintf "{%s & %s}" fields_str (to_string var))
 
 and param_to_string = function
   | PPositional ty -> to_string ty
@@ -246,6 +291,19 @@ let rec equal t1 t2 =
       List.length ts1 = List.length ts2 && List.for_all2 equal ts1 ts2
   | TTuple ts1, TTuple ts2 ->
       List.length ts1 = List.length ts2 && List.for_all2 equal ts1 ts2
+  | TRow r1, TRow r2 -> row_equal r1 r2
+  | _ -> false
+
+and row_equal r1 r2 =
+  (* Fields must match exactly in order and types *)
+  List.length r1.row_fields = List.length r2.row_fields
+  && List.for_all2
+       (fun (n1, t1) (n2, t2) -> n1 = n2 && equal t1 t2)
+       r1.row_fields r2.row_fields
+  &&
+  match (r1.row_var, r2.row_var) with
+  | None, None -> true
+  | Some v1, Some v2 -> equal v1 v2
   | _ -> false
 
 and param_equal p1 p2 =
@@ -339,6 +397,9 @@ let rec is_truthy ty =
       List.for_all is_truthy types
   | TTuple _ ->
       (* Tuples (vectors) are always truthy *)
+      true
+  | TRow _ ->
+      (* Rows are always truthy - they represent non-nil map structures *)
       true
 
 (** Validate that a type is suitable as an Option argument.

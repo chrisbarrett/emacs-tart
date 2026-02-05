@@ -77,6 +77,15 @@ let rec collect_generalizable_tvars level ty acc =
       List.fold_left
         (fun acc ty -> collect_generalizable_tvars level ty acc)
         acc types
+  | TRow { row_fields; row_var } -> (
+      let acc =
+        List.fold_left
+          (fun acc (_, ty) -> collect_generalizable_tvars level ty acc)
+          acc row_fields
+      in
+      match row_var with
+      | None -> acc
+      | Some var -> collect_generalizable_tvars level var acc)
 
 (** Generate fresh variable names for generalization.
 
@@ -112,6 +121,15 @@ let rec replace_tvars_with_names var_map ty =
   | TForall (vars, body) -> TForall (vars, replace_tvars_with_names var_map body)
   | TUnion types -> TUnion (List.map (replace_tvars_with_names var_map) types)
   | TTuple types -> TTuple (List.map (replace_tvars_with_names var_map) types)
+  | TRow { row_fields; row_var } ->
+      TRow
+        {
+          row_fields =
+            List.map
+              (fun (n, t) -> (n, replace_tvars_with_names var_map t))
+              row_fields;
+          row_var = Option.map (replace_tvars_with_names var_map) row_var;
+        }
 
 and replace_tvar_in_param var_map = function
   | PPositional ty -> PPositional (replace_tvars_with_names var_map ty)
