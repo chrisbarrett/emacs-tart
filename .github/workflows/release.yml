@@ -30,7 +30,7 @@ jobs:
 
       - uses: DeterminateSystems/determinate-nix-action@v3
 
-      - uses: DeterminateSystems/magic-nix-cache-action@v8
+      - uses: DeterminateSystems/magic-nix-cache-action@v13
 
       - name: Build
         run: nix develop --command dune build
@@ -63,7 +63,7 @@ jobs:
 
       - uses: DeterminateSystems/determinate-nix-action@v3
 
-      - uses: DeterminateSystems/magic-nix-cache-action@v8
+      - uses: DeterminateSystems/magic-nix-cache-action@v13
 
       - name: Build tart
         run: nix build .#default
