@@ -2,7 +2,16 @@ tart: `Bash(command="./tart $args")`
 
 build: `Bash(command="nix develop --command dune build 2>&1")`
 
+## Style guidelines
+
 Write `.mli` for every `lib/**/*.ml`. Docstrings ok; no redundant comments.
+
+Write a `match` arm for every constructor of the scrutinee--avoids fallthrough
+bugs; type checking shows where updates are required as data types are modified.
+
+# Testing
+
+Tests under `tests/fixtures/typings/` are pairs of `$name.{el,expected}` files.
 
 ## Type Definitions
 
