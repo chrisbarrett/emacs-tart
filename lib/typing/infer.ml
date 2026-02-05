@@ -1280,8 +1280,10 @@ and extract_alist_row ty =
     - Case 6: variable key (not handled here, only literal keys reach this path)
     - Case 7: incompatible testfn (deferred to Iteration 3)
 
-    When the alist's type is not yet known (fresh type variable), falls back to
-    generating fresh row constraints and returning [(field_ty | nil)]. *)
+    When the alist's type is not yet known (fresh type variable, R8), infers a
+    row type from field access: constrains the alist to an open row containing
+    the key and returns [field_ty] directly (the constraint guarantees
+    presence). *)
 and infer_alist_get_row env key_name alist_expr rest_args _span =
   (* Infer the alist expression *)
   let alist_result = infer env alist_expr in
@@ -1332,7 +1334,10 @@ and infer_alist_get_row env key_name alist_expr rest_args _span =
                 in
                 (option_of field_ty, Some c)))
     | None ->
-        (* Type not yet known — fall back to fresh row constraint *)
+        (* R8: Type not yet known — infer row from field access.
+           We constrain the alist to have an open row containing this key,
+           so the key is provably present. Return field_ty directly
+           (not option_of field_ty) since our constraint guarantees presence. *)
         let field_ty = fresh_tvar (Env.current_level env) in
         let row_var = fresh_tvar (Env.current_level env) in
         let expected_row = open_row [ (key_name, field_ty) ] row_var in
@@ -1341,7 +1346,7 @@ and infer_alist_get_row env key_name alist_expr rest_args _span =
           C.equal expected_alist_ty alist_result.ty
             (Syntax.Sexp.span_of alist_expr)
         in
-        (option_of field_ty, Some c)
+        (field_ty, Some c)
   in
 
   (* Combine constraints *)
@@ -1397,8 +1402,10 @@ and extract_plist_row ty =
     - Cases 3–4: literal key absent from closed row → return [nil]
     - Case 5: literal key absent from open row → return [(α | nil)]
 
-    When the plist's type is not yet known, falls back to generating fresh row
-    constraints and returning [(field_ty | nil)]. *)
+    When the plist's type is not yet known (fresh type variable, R8), infers a
+    row type from field access: constrains the plist to an open row containing
+    the key and returns [field_ty] directly (the constraint guarantees
+    presence). *)
 and infer_plist_get_row env key_name plist_expr rest_args _span =
   (* Infer the plist expression *)
   let plist_result = infer env plist_expr in
@@ -1434,7 +1441,10 @@ and infer_plist_get_row env key_name plist_expr rest_args _span =
                 in
                 (option_of field_ty, Some c)))
     | None ->
-        (* Type not yet known — fall back to fresh row constraint *)
+        (* R8: Type not yet known — infer row from field access.
+           We constrain the plist to have an open row containing this key,
+           so the key is provably present. Return field_ty directly
+           (not option_of field_ty) since our constraint guarantees presence. *)
         let field_ty = fresh_tvar (Env.current_level env) in
         let row_var = fresh_tvar (Env.current_level env) in
         let expected_row = open_row [ (key_name, field_ty) ] row_var in
@@ -1445,7 +1455,7 @@ and infer_plist_get_row env key_name plist_expr rest_args _span =
           C.equal expected_plist_ty plist_result.ty
             (Syntax.Sexp.span_of plist_expr)
         in
-        (option_of field_ty, Some c)
+        (field_ty, Some c)
   in
 
   (* Combine constraints *)
