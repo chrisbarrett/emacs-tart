@@ -220,6 +220,33 @@ let rec unify ?(invariant = false) t1 t2 loc : unit internal_result =
         else unify_list ~invariant ts1 ts2 loc
     (* Row types: field-by-field unification with row variable handling *)
     | TRow r1, TRow r2 -> unify_rows ~invariant r1 r2 loc
+    (* Row-to-homogeneous unification (Spec 11 R15):
+       TRow {f1:t1, f2:t2, ...} ~ T succeeds when every ti ~ T.
+       For open rows, the row variable is bound to T so that any
+       future fields also satisfy the constraint. This enables
+       row-typed alists to be compatible with homogeneous alists. *)
+    | TRow r, t when not (is_row t) -> (
+        let* () =
+          List.fold_left
+            (fun acc (_name, field_ty) ->
+              let* () = acc in
+              unify ~invariant field_ty t loc)
+            (Ok ()) r.row_fields
+        in
+        match r.row_var with
+        | None -> Ok ()
+        | Some rv -> unify ~invariant rv t loc)
+    | t, TRow r when not (is_row t) -> (
+        let* () =
+          List.fold_left
+            (fun acc (_name, field_ty) ->
+              let* () = acc in
+              unify ~invariant t field_ty loc)
+            (Ok ()) r.row_fields
+        in
+        match r.row_var with
+        | None -> Ok ()
+        | Some rv -> unify ~invariant t rv loc)
     (* All other combinations are type mismatches *)
     | _ -> Error (ITypeMismatch (t1, t2, loc))
 

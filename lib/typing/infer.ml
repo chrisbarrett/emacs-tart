@@ -162,6 +162,13 @@ let rec infer (env : Env.t) (sexp : Syntax.Sexp.t) : result =
   (* === Apply: (apply f arg1 arg2 ... list) === *)
   | List (Symbol ("apply", _) :: fn_expr :: args, span) when args <> [] ->
       infer_apply env fn_expr args span
+  (* === alist-get with literal symbol key: row-typed inference === *)
+  | List
+      ( Symbol ("alist-get", _)
+        :: List ([ Symbol ("quote", _); Symbol (key_name, _) ], _)
+        :: alist_expr :: rest_args,
+        span ) ->
+      infer_alist_get_row env key_name alist_expr rest_args span
   (* === Function application (catch-all for lists) === *)
   | List (fn :: args, span) -> infer_application env fn args span
   | List ([], _span) ->
@@ -1164,6 +1171,55 @@ and infer_application env fn args span =
       (C.combine arg_constraints (C.add fn_constraint arg_type_constraints))
   in
   let all_undefineds = fn_result.undefineds @ combine_undefineds arg_results in
+
+  { ty = result_ty; constraints = all_constraints; undefineds = all_undefineds }
+
+(** Infer a row-typed alist-get call with a literal symbol key.
+
+    [(alist-get 'KEY ALIST &optional DEFAULT REMOVE TESTFN)]
+
+    Design B expansion: the alist is constrained to
+    [(list (cons symbol {KEY field_ty & row_var}))] where [field_ty] is a fresh
+    type variable for the looked-up field and [row_var] is a fresh row variable
+    allowing extra fields.
+
+    Returns [(field_ty | nil)] since the key may not be present at runtime (the
+    alist could be empty even if the type allows the key). *)
+and infer_alist_get_row env key_name alist_expr rest_args _span =
+  (* Infer the alist expression *)
+  let alist_result = infer env alist_expr in
+
+  (* Infer remaining optional args (DEFAULT, REMOVE, TESTFN) *)
+  let rest_results = List.map (infer env) rest_args in
+
+  (* Fresh type variable for the field's value type *)
+  let field_ty = fresh_tvar (Env.current_level env) in
+
+  (* Fresh row variable for the open row (other fields) *)
+  let row_var = fresh_tvar (Env.current_level env) in
+
+  (* Build the row type: {key_name field_ty & row_var} *)
+  let expected_row = open_row [ (key_name, field_ty) ] row_var in
+
+  (* Build the expected alist type: (list (cons symbol {key_name field_ty & row_var})) *)
+  let expected_alist_ty = list_of (pair_of Prim.symbol expected_row) in
+
+  (* Constrain the alist expression to match *)
+  let alist_constraint =
+    C.equal expected_alist_ty alist_result.ty (Syntax.Sexp.span_of alist_expr)
+  in
+
+  (* Result type: (field_ty | nil) *)
+  let result_ty = option_of field_ty in
+
+  (* Combine constraints *)
+  let rest_constraints = combine_results rest_results in
+  let all_constraints =
+    C.combine alist_result.constraints (C.add alist_constraint rest_constraints)
+  in
+  let all_undefineds =
+    alist_result.undefineds @ combine_undefineds rest_results
+  in
 
   { ty = result_ty; constraints = all_constraints; undefineds = all_undefineds }
 

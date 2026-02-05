@@ -602,23 +602,60 @@ let rec sig_type_to_typ_with_ctx (ctx : type_context) (tvar_names : string list)
           let expanded = substitute_sig_type subst alias.alias_body in
           sig_type_to_typ_with_ctx ctx tvar_names expanded
       | _ -> (
-          (* Check for opaque type with phantom parameters *)
-          match lookup_opaque name ctx.tc_opaques with
-          | Some opaque when List.length opaque.opaque_params = List.length args
-            ->
-              (* Parameterized opaque - create TApp with unique constructor and args *)
-              let arg_types =
-                List.map (sig_type_to_typ_with_ctx ctx tvar_names) args
+          (* Special case: map types with a single row argument (Design B).
+             (alist {name string & r}) expands to (list (cons symbol {name string & r}))
+             (plist {:name string & r}) expands to (list (keyword | {name string & r}))
+             (hash-table {name string & r}) expands to (HashTable symbol {name string & r})
+             This preserves field names for static key lookup while maintaining
+             structural compatibility with homogeneous map types. *)
+          match (name, args) with
+          | "alist", [ single_arg ] -> (
+              let arg_typ =
+                sig_type_to_typ_with_ctx ctx tvar_names single_arg
               in
-              Types.TApp (Types.TCon opaque.opaque_con, arg_types)
-          | _ ->
-              (* Not an alias/opaque or arity mismatch - treat as type application.
-                 If name is a type variable, keep it as TCon for later substitution
-                 during instantiation. This enables higher-kinded types. *)
-              let arg_types =
-                List.map (sig_type_to_typ_with_ctx ctx tvar_names) args
+              match Types.repr arg_typ with
+              | TRow _ ->
+                  Types.list_of (Types.pair_of Types.Prim.symbol arg_typ)
+              | _ ->
+                  Types.TApp
+                    (Types.TCon (canonicalize_type_name name), [ arg_typ ]))
+          | "plist", [ single_arg ] -> (
+              let arg_typ =
+                sig_type_to_typ_with_ctx ctx tvar_names single_arg
               in
-              Types.TApp (Types.TCon (canonicalize_type_name name), arg_types)))
+              match Types.repr arg_typ with
+              | TRow _ -> Types.list_of (TUnion [ Types.Prim.keyword; arg_typ ])
+              | _ ->
+                  Types.TApp
+                    (Types.TCon (canonicalize_type_name name), [ arg_typ ]))
+          | "hash-table", [ single_arg ] -> (
+              let arg_typ =
+                sig_type_to_typ_with_ctx ctx tvar_names single_arg
+              in
+              match Types.repr arg_typ with
+              | TRow _ -> Types.hash_table_of Types.Prim.symbol arg_typ
+              | _ ->
+                  Types.TApp
+                    (Types.TCon (canonicalize_type_name name), [ arg_typ ]))
+          | _ -> (
+              (* Check for opaque type with phantom parameters *)
+              match lookup_opaque name ctx.tc_opaques with
+              | Some opaque
+                when List.length opaque.opaque_params = List.length args ->
+                  (* Parameterized opaque - create TApp with unique constructor and args *)
+                  let arg_types =
+                    List.map (sig_type_to_typ_with_ctx ctx tvar_names) args
+                  in
+                  Types.TApp (Types.TCon opaque.opaque_con, arg_types)
+              | _ ->
+                  (* Not an alias/opaque or arity mismatch - treat as type application.
+                     If name is a type variable, keep it as TCon for later substitution
+                     during instantiation. This enables higher-kinded types. *)
+                  let arg_types =
+                    List.map (sig_type_to_typ_with_ctx ctx tvar_names) args
+                  in
+                  Types.TApp
+                    (Types.TCon (canonicalize_type_name name), arg_types))))
   | STArrow (params, ret, _) ->
       (* Function type *)
       let param_types =
