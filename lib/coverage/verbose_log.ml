@@ -3,7 +3,7 @@
     Provides conditional logging to stderr with a [verbose] prefix.
     Used by coverage and emacs-coverage commands for debugging output.
 
-    @see Spec 30 for requirements. *)
+    See Spec 30 for requirements. *)
 
 (** Log a message to stderr when verbose mode is enabled.
 

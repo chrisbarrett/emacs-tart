@@ -3,7 +3,7 @@
     Provides conditional logging to stderr with a [verbose] prefix.
     Used by coverage and emacs-coverage commands for debugging output.
 
-    @see Spec 30 for requirements. *)
+    See Spec 30 for requirements. *)
 
 val verbose_log : bool -> ('a, out_channel, unit) format -> 'a
 (** [verbose_log verbose fmt ...] logs a formatted message to stderr when

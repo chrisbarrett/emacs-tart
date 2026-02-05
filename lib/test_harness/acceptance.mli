@@ -3,7 +3,7 @@
     This module implements a test harness that runs `tart check` against `.el`
     fixture files and verifies the output against `.expected` sidecar files.
 
-    @see Spec 25 for full requirements. *)
+    See Spec 25 for full requirements. *)
 
 (** {1 Types} *)
 

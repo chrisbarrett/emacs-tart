@@ -3,7 +3,7 @@
     This module compares definitions from .el files against signatures
     in .tart files to calculate coverage.
 
-    @see Spec 28, R10-R13 for requirements. *)
+    See Spec 28, R10-R13 for requirements. *)
 
 (** {1 Types} *)
 

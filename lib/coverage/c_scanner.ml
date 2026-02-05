@@ -3,7 +3,7 @@
     Parses Emacs C source files to extract Lisp-accessible definitions.
     Supports DEFUN (functions), DEFVAR_* (variables), and DEFSYM (symbols).
 
-    @see Spec 29, R4-R6 for requirements. *)
+    See Spec 29, R4-R6 for requirements. *)
 
 (** {1 Types} *)
 

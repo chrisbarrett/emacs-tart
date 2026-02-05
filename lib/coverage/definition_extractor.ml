@@ -7,7 +7,7 @@
     - Classes (defclass with slots)
     - Faces (defface)
 
-    @see Spec 28 for full requirements. *)
+    See Spec 28 for full requirements. *)
 
 (** {1 Types} *)
 

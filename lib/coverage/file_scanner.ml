@@ -4,7 +4,7 @@
     supporting recursive directory traversal, explicit paths, and exclude
     patterns.
 
-    @see Spec 28, R1, R2, R17 for requirements. *)
+    See Spec 28, R1, R2, R17 for requirements. *)
 
 (** {1 Types} *)
 

@@ -3,7 +3,7 @@
     Discovers the Emacs C source directory for scanning DEFUNs and DEFVARs.
     Supports auto-detection via running Emacs, or explicit path override.
 
-    @see Spec 29, R1-R3 for requirements. *)
+    See Spec 29, R1-R3 for requirements. *)
 
 (** {1 Types} *)
 

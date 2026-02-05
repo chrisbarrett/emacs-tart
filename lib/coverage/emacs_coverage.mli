@@ -3,7 +3,7 @@
     Compares C definitions (DEFUNs, DEFVARs, DEFSYMs) scanned from Emacs source
     against loaded typings to determine type coverage.
 
-    @see Spec 29, R8 for requirements. *)
+    See Spec 29, R8 for requirements. *)
 
 (** {1 Types} *)
 
