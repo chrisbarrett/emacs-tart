@@ -220,7 +220,8 @@ and infer_param_kind (env : Kind.env) (param : sig_param) :
     (unit, kind_error) result =
   let ty =
     match param with
-    | SPPositional ty | SPOptional ty | SPRest ty | SPKey (_, ty) -> ty
+    | SPPositional (_, ty) | SPOptional (_, ty) | SPRest ty | SPKey (_, ty) ->
+        ty
   in
   let* kind = infer_sig_type_kind env ty in
   unify_scheme_with_kind kind Kind.KStar "parameter type"

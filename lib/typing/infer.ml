@@ -1338,8 +1338,8 @@ and infer_defun_with_declaration (env : Env.t) (name : string)
       | Symbol (pname, _) :: ps, sp :: sps ->
           let ty =
             match sp with
-            | Sig_ast.SPPositional sty
-            | Sig_ast.SPOptional sty
+            | Sig_ast.SPPositional (_, sty)
+            | Sig_ast.SPOptional (_, sty)
             | Sig_ast.SPRest sty
             | Sig_ast.SPKey (_, sty) ->
                 convert_and_subst sty
@@ -1376,8 +1376,8 @@ and infer_defun_with_declaration (env : Env.t) (name : string)
     List.map
       (fun sp ->
         match sp with
-        | Sig_ast.SPPositional sty -> PPositional (convert_and_subst sty)
-        | Sig_ast.SPOptional sty -> POptional (convert_and_subst sty)
+        | Sig_ast.SPPositional (_, sty) -> PPositional (convert_and_subst sty)
+        | Sig_ast.SPOptional (_, sty) -> POptional (convert_and_subst sty)
         | Sig_ast.SPRest sty -> PRest (convert_and_subst sty)
         | Sig_ast.SPKey (kname, sty) -> PKey (kname, convert_and_subst sty))
       sig_params

@@ -403,11 +403,24 @@ and parse_params_list (params_sexp : Sexp.t list) (span : Loc.span) :
   | [ single ] -> (
       (* Single type: type -> return *)
       match parse_sig_type single with
-      | Ok ty -> Ok [ SPPositional ty ]
+      | Ok ty -> Ok [ SPPositional (None, ty) ]
       | Error e -> Error e)
   | _ -> error "Expected parameter list before ->" span
 
-(** Parse function parameters *)
+(** Parse function parameters.
+
+    Parameters can be:
+    - Just a type: [int] → SPPositional (None, int)
+    - Named: [((x int))] → SPPositional (Some "x", int)
+    - Named optional: [&optional ((x int))] → SPOptional (Some "x", int)
+
+    Named parameters use double parens to disambiguate from type applications.
+    For example:
+    - [(seq a)] is a type application (seq applied to a)
+    - [((x int))] is a named parameter x of type int
+
+    Named parameters are useful for predicate return types that reference the
+    parameter name, e.g., [(((x any)) -> (x is string))] *)
 and parse_params (params : Sexp.t list) : sig_param list result =
   let rec loop acc mode = function
     | [] -> Ok (List.rev acc)
@@ -418,15 +431,33 @@ and parse_params (params : Sexp.t list) : sig_param list result =
         match parse_sig_type ty_sexp with
         | Ok ty -> loop (SPKey (name, ty) :: acc) `Key rest
         | Error e -> Error e)
+    (* Named parameter: ((name type)) - extra parens to disambiguate *)
+    | Sexp.List ([ Sexp.List ([ Sexp.Symbol (name, _); ty_sexp ], _) ], _)
+      :: rest
+      when mode <> `Key -> (
+        match parse_sig_type ty_sexp with
+        | Ok ty ->
+            let param =
+              match mode with
+              | `Positional -> SPPositional (Some name, ty)
+              | `Optional -> SPOptional (Some name, ty)
+              | `Rest -> SPRest ty (* Rest can't be named *)
+              | `Key -> SPKey (name, ty)
+              (* Shouldn't happen *)
+            in
+            loop (param :: acc) mode rest
+        | Error e -> Error e)
+    (* Unnamed parameter: just a type *)
     | ty_sexp :: rest -> (
         match parse_sig_type ty_sexp with
         | Ok ty ->
             let param =
               match mode with
-              | `Positional -> SPPositional ty
-              | `Optional -> SPOptional ty
+              | `Positional -> SPPositional (None, ty)
+              | `Optional -> SPOptional (None, ty)
               | `Rest -> SPRest ty
-              | `Key -> SPPositional ty (* Shouldn't happen, but fallback *)
+              | `Key -> SPPositional (None, ty)
+              (* Shouldn't happen, but fallback *)
             in
             loop (param :: acc) mode rest
         | Error e -> Error e)

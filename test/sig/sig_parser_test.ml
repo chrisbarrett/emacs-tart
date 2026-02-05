@@ -86,7 +86,7 @@ let test_arrow_types () =
   (match parse_type_str "((int) -> string)" with
   | Ok
       (Sig_ast.STArrow
-         ( [ Sig_ast.SPPositional (Sig_ast.STCon ("int", _)) ],
+         ( [ Sig_ast.SPPositional (_, Sig_ast.STCon ("int", _)) ],
            Sig_ast.STCon ("string", _),
            _ )) ->
       ()
@@ -96,7 +96,7 @@ let test_arrow_types () =
   (match parse_type_str "(int -> string)" with
   | Ok
       (Sig_ast.STArrow
-         ( [ Sig_ast.SPPositional (Sig_ast.STCon ("int", _)) ],
+         ( [ Sig_ast.SPPositional (_, Sig_ast.STCon ("int", _)) ],
            Sig_ast.STCon ("string", _),
            _ )) ->
       ()
@@ -258,13 +258,62 @@ let test_predicate_in_defun () =
       (Sig_ast.DDefun
          {
            defun_name = "stringp";
-           defun_params = [ Sig_ast.SPPositional (Sig_ast.STVar ("x", _)) ];
+           defun_params = [ Sig_ast.SPPositional (_, Sig_ast.STVar ("x", _)) ];
            defun_return =
              Sig_ast.STPredicate ("x", Sig_ast.STCon ("string", _), _);
            _;
          }) ->
       ()
   | Ok _ -> Alcotest.fail "Expected defun with predicate return type"
+  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
+
+let test_named_parameter () =
+  (* (defun stringp (((x any))) -> (x is string)) - named param for predicates *)
+  match parse_decl_str "(defun stringp (((x any))) -> (x is string))" with
+  | Ok
+      (Sig_ast.DDefun
+         {
+           defun_name = "stringp";
+           defun_params =
+             [ Sig_ast.SPPositional (Some "x", Sig_ast.STCon ("any", _)) ];
+           defun_return =
+             Sig_ast.STPredicate ("x", Sig_ast.STCon ("string", _), _);
+           _;
+         }) ->
+      ()
+  | Ok _ -> Alcotest.fail "Expected defun with named param"
+  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
+
+let test_named_parameter_optional () =
+  (* Named param in optional position *)
+  match parse_decl_str "(defun f (&optional ((x int))) -> int)" with
+  | Ok
+      (Sig_ast.DDefun
+         {
+           defun_name = "f";
+           defun_params =
+             [ Sig_ast.SPOptional (Some "x", Sig_ast.STCon ("int", _)) ];
+           defun_return = Sig_ast.STCon ("int", _);
+           _;
+         }) ->
+      ()
+  | Ok _ -> Alcotest.fail "Expected defun with named optional param"
+  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
+
+let test_type_app_not_named_param () =
+  (* (seq a) should be type application, not named param *)
+  match parse_decl_str "(defun f [a] ((seq a)) -> a)" with
+  | Ok
+      (Sig_ast.DDefun
+         {
+           defun_name = "f";
+           defun_params =
+             [ Sig_ast.SPPositional (None, Sig_ast.STApp ("seq", _, _)) ];
+           defun_return = Sig_ast.STVar ("a", _);
+           _;
+         }) ->
+      ()
+  | Ok _ -> Alcotest.fail "Expected defun with type app param (not named)"
   | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
 
 (** {1 Declaration Tests} *)
@@ -279,8 +328,8 @@ let test_defun_simple () =
            defun_tvar_binders = [];
            defun_params =
              [
-               Sig_ast.SPPositional (Sig_ast.STCon ("int", _));
-               Sig_ast.SPPositional (Sig_ast.STCon ("int", _));
+               Sig_ast.SPPositional (_, Sig_ast.STCon ("int", _));
+               Sig_ast.SPPositional (_, Sig_ast.STCon ("int", _));
              ];
            defun_return = Sig_ast.STCon ("int", _);
            _;
@@ -297,7 +346,7 @@ let test_defun_polymorphic () =
          {
            defun_name = "identity";
            defun_tvar_binders = [ { name = "a"; bound = None; _ } ];
-           defun_params = [ Sig_ast.SPPositional (Sig_ast.STVar ("a", _)) ];
+           defun_params = [ Sig_ast.SPPositional (_, Sig_ast.STVar ("a", _)) ];
            defun_return = Sig_ast.STVar ("a", _);
            _;
          }) ->
@@ -501,6 +550,15 @@ let () =
           Alcotest.test_case "predicate with app" `Quick
             test_predicate_type_application;
           Alcotest.test_case "predicate in defun" `Quick test_predicate_in_defun;
+        ] );
+      ( "named-parameters",
+        [
+          Alcotest.test_case "named param for predicate" `Quick
+            test_named_parameter;
+          Alcotest.test_case "named optional param" `Quick
+            test_named_parameter_optional;
+          Alcotest.test_case "type app not confused with named param" `Quick
+            test_type_app_not_named_param;
         ] );
       ( "declarations",
         [

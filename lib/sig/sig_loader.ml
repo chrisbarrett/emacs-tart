@@ -115,7 +115,8 @@ and validate_params ctx params =
     (fun acc param ->
       let* () = acc in
       match param with
-      | SPPositional ty | SPOptional ty | SPRest ty -> validate_type ctx ty
+      | SPPositional (_, ty) | SPOptional (_, ty) | SPRest ty ->
+          validate_type ctx ty
       | SPKey (_, ty) -> validate_type ctx ty)
     (Ok ()) params
 
@@ -489,8 +490,8 @@ let rec substitute_sig_type (subst : (string * sig_type) list) (ty : sig_type) :
       STPredicate (param_name, narrowed_type', loc)
 
 and substitute_sig_param subst = function
-  | SPPositional ty -> SPPositional (substitute_sig_type subst ty)
-  | SPOptional ty -> SPOptional (substitute_sig_type subst ty)
+  | SPPositional (name, ty) -> SPPositional (name, substitute_sig_type subst ty)
+  | SPOptional (name, ty) -> SPOptional (name, substitute_sig_type subst ty)
   | SPRest ty -> SPRest (substitute_sig_type subst ty)
   | SPKey (name, ty) -> SPKey (name, substitute_sig_type subst ty)
 
@@ -737,9 +738,9 @@ and params_equal (p1 : Types.param) (p2 : Types.param) : bool =
 and sig_param_to_param_with_ctx (ctx : type_context) (tvar_names : string list)
     (p : sig_param) : Types.param =
   match p with
-  | SPPositional ty ->
+  | SPPositional (_, ty) ->
       Types.PPositional (sig_type_to_typ_with_ctx ctx tvar_names ty)
-  | SPOptional ty ->
+  | SPOptional (_, ty) ->
       Types.POptional (sig_type_to_typ_with_ctx ctx tvar_names ty)
   | SPRest ty -> Types.PRest (sig_type_to_typ_with_ctx ctx tvar_names ty)
   | SPKey (name, ty) ->
@@ -888,10 +889,10 @@ and sig_param_to_param_with_scope_ctx (ctx : type_context)
     (scope_tvars : (string * Types.typ) list) (tvar_names : string list)
     (p : sig_param) : Types.param =
   match p with
-  | SPPositional ty ->
+  | SPPositional (_, ty) ->
       Types.PPositional
         (sig_type_to_typ_with_scope_ctx ctx scope_tvars tvar_names ty)
-  | SPOptional ty ->
+  | SPOptional (_, ty) ->
       Types.POptional
         (sig_type_to_typ_with_scope_ctx ctx scope_tvars tvar_names ty)
   | SPRest ty ->

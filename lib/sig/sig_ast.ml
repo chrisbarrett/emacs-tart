@@ -70,10 +70,15 @@ and sig_type =
       (** Type predicate return (e.g., [(x is string)] means "if truthy, x has
           type string") *)
 
-(** Function parameter in signature types *)
+(** Function parameter in signature types.
+
+    Parameters can optionally have names for predicate type references. E.g.,
+    [(x any)] allows writing return type [(x is string)] *)
 and sig_param =
-  | SPPositional of sig_type  (** Required positional parameter *)
-  | SPOptional of sig_type  (** Optional parameter (&optional) *)
+  | SPPositional of string option * sig_type
+      (** Required positional parameter with optional name *)
+  | SPOptional of string option * sig_type
+      (** Optional parameter (&optional) with optional name *)
   | SPRest of sig_type  (** Rest parameter (&rest) *)
   | SPKey of string * sig_type  (** Keyword parameter (&key :name type) *)
 
