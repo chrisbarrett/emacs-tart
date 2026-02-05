@@ -31,6 +31,15 @@ jobs:
 
       - uses: DeterminateSystems/magic-nix-cache-action@v8
 
+      - name: Cache opam
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.opam
+            _opam
+          key: opam-${{ runner.os }}-${{ hashFiles('tart.opam') }}
+          restore-keys: opam-${{ runner.os }}-
+
       - name: Build
         run: nix develop .#${{ matrix.emacs }} --command dune build
 
@@ -46,6 +55,15 @@ jobs:
       - uses: DeterminateSystems/determinate-nix-action@v3
 
       - uses: DeterminateSystems/magic-nix-cache-action@v8
+
+      - name: Cache opam
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.opam
+            _opam
+          key: opam-${{ runner.os }}-${{ hashFiles('tart.opam') }}
+          restore-keys: opam-${{ runner.os }}-
 
       - name: Format check
         run: |

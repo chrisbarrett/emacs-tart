@@ -24,4 +24,4 @@
   yojson
   (alcotest :with-test)
   (ocaml-lsp-server :with-dev-setup)
-  (ocamlformat :with-dev-setup)))
+  (ocamlformat (and (= 0.27.0) :with-dev-setup))))
