@@ -395,9 +395,9 @@ least a `name` field are accepted
 
 ## Tasks
 
-- [ ] [R1] Implement union type representation and subtyping
-- [ ] [R2] Implement type narrowing in pcase branches
-- [ ] [R3] Implement exhaustiveness checking for unions
+- [x] [R1] Implement union type representation and subtyping
+- [x] [R2] Implement type narrowing in pcase branches
+- [x] [R3] Implement exhaustiveness checking for unions
 - [ ] [R4] Implement row-polymorphic alist types
 - [ ] [R5] Implement row-polymorphic plist types
 - [ ] [R6] Handle map pattern exhaustiveness correctly
@@ -408,3 +408,5 @@ least a `name` field are accepted
 - [ ] [R11] Implement row unification rules
 - [ ] [R12] Implement generic `map` supertype
 - [ ] [R13] Implement all map type forms (bare, homogeneous, record)
+
+**Status:** Union types implemented (`TUnion` in `lib/core/types.mli`), pcase narrowing in `lib/typing/infer.ml`, exhaustiveness in `lib/typing/exhaustiveness.ml`. Row polymorphism (R4-R13) not yet implemented.

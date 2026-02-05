@@ -226,13 +226,15 @@ Error: type mismatch
 
 - [x] [R6] Add `tart` macro to tart.el
 - [x] [R7] Format error messages with annotation context
-- [ ] [R0] Emit note diagnostic for arity-1 `(tart expr)`
-- [ ] [R1] Parse `(name = type)` pairs in vector
-- [ ] [R1] Match named bindings to type parameters by name
-- [ ] [R2] Infer unspecified type parameters
-- [ ] [R3] Test order independence
-- [ ] [R4] Test HK type constructor instantiation
-- [ ] [R5] Error on unknown type parameter names
+- [x] [R0] Emit note diagnostic for arity-1 `(tart expr)`
+- [x] [R1] Parse `(name = type)` pairs in vector
+- [x] [R1] Match named bindings to type parameters by name
+- [x] [R2] Infer unspecified type parameters
+- [x] [R3] Test order independence
+- [x] [R4] Test HK type constructor instantiation
+- [x] [R5] Error on unknown type parameter names
+
+**Status:** Implemented in `lib/typing/infer.ml` (lines 758-882) with `infer_explicit_instantiation`.
 
 ## Design Notes
 

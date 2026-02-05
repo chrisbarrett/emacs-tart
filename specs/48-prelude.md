@@ -236,8 +236,10 @@ redefining any imported binding—including prelude types—is an error.
 
 ## Tasks
 
-- [ ] [R1] Create `typings/tart-prelude.tart` with type definitions
-- [ ] [R2,R3] Modify sig_loader.ml to load prelude first
-- [ ] [R4] Covered by Spec 07 R17 (no-shadowing rule)
-- [ ] [R5] Ensure type aliases expand correctly
-- [ ] [R6] Validate bounded quantifier on `option`
+- [x] [R1] Create `typings/tart-prelude.tart` with type definitions
+- [x] [R2,R3] Modify sig_loader.ml to load prelude first
+- [x] [R4] Covered by Spec 07 R17 (no-shadowing rule)
+- [x] [R5] Ensure type aliases expand correctly
+- [x] [R6] Validate bounded quantifier on `option`
+
+**Status:** Fully implemented. Prelude at `typings/tart-prelude.tart` (104 lines) with management via `lib/sig/prelude.mli`.

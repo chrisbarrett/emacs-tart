@@ -183,14 +183,16 @@ note: function declared to return Int
 
 ## Checklist
 
-- [ ] [R1] or short-circuits on truthy
-- [ ] [R2] or strips nil from non-final
-- [ ] [R3] or preserves nil from final
-- [ ] [R4] and returns last when all truthy
-- [ ] [R5] and adds nil when any nullable
-- [ ] [R5a] and short-circuits on nil
-- [ ] [R6] not inverts truthiness
+- [x] [R1] or short-circuits on truthy
+- [x] [R2] or strips nil from non-final
+- [x] [R3] or preserves nil from final
+- [x] [R4] and returns last when all truthy
+- [x] [R5] and adds nil when any nullable
+- [x] [R5a] and short-circuits on nil
+- [x] [R6] not inverts truthiness
 - [ ] [R7] Branch error points to offending + declaration
-- [ ] [R8] cond unions branches
-- [ ] [R9] cond implicit nil
-- [ ] [R10] if without else adds nil
+- [x] [R8] cond unions branches
+- [x] [R9] cond implicit nil
+- [x] [R10] if without else adds nil
+
+**Status:** Core truthiness semantics implemented in `lib/typing/infer.ml` via `infer_if`, `infer_cond`, `infer_and`, `infer_or` and `is_truthy` in `lib/core/types.mli`. Remaining: R7 (branch-specific error messages).

@@ -187,18 +187,17 @@ parsed **Then** error is reported:
 
 ## Tasks
 
-- [ ] [R1] Add Let variant to sig_ast.ml
-- [ ] [R1] Parse `let` blocks in sig_parser.ml
-- [ ] [R2] Implement scope variable binding during loading
-- [ ] [R3] Handle explicit forall inside scope
-- [ ] [R4] Integrate with kind inference for HK scoped variables
-- [ ] [R5] Implement nested scope shadowing
-- [ ] [R6] Handle opaque types in scopes
-- [ ] [R7] Export scoped declarations with correct types
-- [ ] [R8] Validate variable binding in scopes
+- [x] [R1] Add Let variant to sig_ast.ml
+- [x] [R1] Parse `let` blocks in sig_parser.ml
+- [x] [R2] Implement scope variable binding during loading
+- [x] [R3] Handle explicit forall inside scope
+- [x] [R4] Integrate with kind inference for HK scoped variables
+- [x] [R5] Implement nested scope shadowing
+- [x] [R6] Handle opaque types in scopes
+- [x] [R7] Export scoped declarations with correct types
+- [x] [R8] Validate variable binding in scopes
 
-Run review agent after R1-R3 work to validate approach before implementing
-R4-R8.
+**Status:** Implemented via `DTypeScope` in `lib/sig/sig_ast.mli` with kind inference support in `lib/typing/kind_infer.mli`.
 
 ## Design Notes
 

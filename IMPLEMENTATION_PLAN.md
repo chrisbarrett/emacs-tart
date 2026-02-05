@@ -1,539 +1,309 @@
-# Implementation Plan: Accurate Types via LSP for Emacs Core
+# Implementation Plan: Emacs 31 Complete Typing Coverage
 
-**Goal:** Open any core lisp file that ships with Emacs and get accurate types via the LSP.
+Complete type signature coverage for all Emacs 31 C-layer and lisp-core modules.
 
-**Scope:** E2E completion for core Emacs primitives, not complete typing of all packages.
+**Goal:** 100% coverage with the most accurate, specific types possible.
 
----
+**Specs:** 11 (Unions/Rows), 24 (Versioned Typings), 32 (Core Typings), 34 (Funcall/Apply), 46 (Truthiness), 49 (Feature Guards), 50 (Version Constraints), 52 (Type Predicates)
 
-## Phase 2: Core Type System Completeness
+## Current State
 
-### 2.4 Union Types and Row Polymorphism (Spec 11)
-
-**Status:** NOT STARTED (except R10 type subtraction, complete)
-
-**Goal:** Type-safe structural typing for Elisp's idiomatic alist/plist patterns.
-Elisp represents structured data as alists `((name . "Alice") (age . 30))` and
-plists `(:name "Alice" :age 30)`. Row polymorphism types these patterns directly.
-
-**Requirements from Spec 11:**
-
-| Req | Description | Status |
-|-----|-------------|--------|
-| R1 | Union type representation and subtyping | Not started |
-| R2 | Type narrowing in pcase branches | Not started |
-| R3 | Exhaustiveness checking for unions | Not started |
-| R4 | Row-polymorphic alist types `(alist {name string & r})` | Not started |
-| R5 | Row-polymorphic plist types `(plist {:name string & r})` | Not started |
-| R6 | Map pattern exhaustiveness | Not started |
-| R7 | Closed unions vs open row types | Not started |
-| R8 | Row type inference from field access | Not started |
-| R9 | Literal types with deferred widening | Not started |
-| R10 | Type subtraction operator | ✅ Complete |
-
-**Type forms to support:**
-
-```lisp
-;; Homogeneous (all keys/values share types)
-(alist k v)                      ; e.g., (alist symbol int)
-(plist k v)                      ; e.g., (plist keyword string)
-
-;; Record-style (specific fields via row types)
-(alist {name string age int})    ; closed—exactly these fields
-(alist {name string & r})        ; open—at least these fields
-(plist {:name string :age int})  ; closed plist
-(plist {:name string & r})       ; open plist
-
-;; Generic map supertype
-(map {name string & r})          ; any map-like with these fields
-```
-
-**Key implementation points:**
-
-1. **Row variables** (`& r`) enable structural subtyping—a record with extra
-   fields can be passed where fewer fields are required
-
-2. **Literal vs variable key inference:**
-   - `(alist-get 'name x)` → infer `x : (alist {name a & r})`
-   - `(alist-get key x)` → infer `x : (alist k v)`, `key : k`
-
-3. **Map supertype** allows functions to accept alist, plist, or hash-table:
-   ```lisp
-   (defun get-name (person)
-     (declare (tart ((map {name string & r}) -> string)))
-     (map-elt person 'name))
-   ```
-
-**Files likely affected:**
-- `lib/core/types.ml` — Add row type representation
-- `lib/typing/unify.ml` — Row unification
-- `lib/typing/infer.ml` — Infer row types from field access
-- `lib/sig/sig_loader.ml` — Parse row type syntax
-- `lib/sig/sig_parser.ml` — Row type grammar
-
-**Verify:** See Spec 11 for detailed test scenarios.
-
-### 2.5 Funcall and Apply Typing (Spec 34)
-
-**Status:** NOT STARTED
-
-**Goal:** Type `funcall` and `apply` accurately instead of returning `any`.
-These are fundamental Lisp primitives that currently lose all type information.
-
-**Key insight:** `funcall`/`apply` must NOT have signatures—they need special
-type-checker handling that extracts the return type from the function argument.
-
-**Requirements from Spec 34:**
-
-| Req | Description | Status |
-|-----|-------------|--------|
-| R1 | Dual namespace (function vs variable bindings) | Not started |
-| R2 | `#'name` and `'name` lookup in function namespace | Not started |
-| R3 | Variable references use variable namespace | Not started |
-| R4 | Funcall type checking (infer f, verify args, return result type) | Not started |
-| R5 | Style warning for `'name` vs `#'name` in funcall | Not started |
-| R6 | Funcall-specific error messages | Not started |
-| R7 | Apply with `&rest` functions | Not started |
-| R8 | Apply with fixed-arity functions (tuple argument) | Not started |
-| R9 | Tuple `<:` list subtyping | Not started |
-| R10 | Context-sensitive tuple inference for list literals | Not started |
-| R11 | Union function types (dynamic dispatch) | Not started |
-| R12 | Occurrence typing for type predicates | Not started |
-| R13 | Thread narrowed types through funcall | Not started |
-| R14 | Never widen to top type (error instead) | Not started |
-
-**Example of correct typing:**
-
-```elisp
-(defun add1 (x) (+ x 1))    ; add1 : (-> (Int) Int)
-(funcall #'add1 5)          ; result: Int (not any!)
-
-(apply #'+ '(1 2 3))        ; + : (-> (&rest Int) Int), result: Int
-(apply #'cons '(1 (2 3)))   ; infer tuple (Tuple Int (List Int)), result: (List Int)
-```
-
-**Anti-pattern (current state):**
-```elisp
-;; WRONG - this is what we have now, loses type info
-(defun funcall (any &rest any) -> any)
-```
-
-**Files likely affected:**
-- `lib/typing/type_env.ml` — Add separate function namespace
-- `lib/typing/infer.ml` — Special-case funcall/apply, occurrence typing
-- `lib/typing/unify.ml` — Tuple <: list subtyping
-- `lib/typing/builtin_types.ml` — Remove funcall/apply signatures entirely
-
-**Note:** Spec 34 lists HKT (Spec 17) as a dependency, but most requirements
-don't need it. HKT is only needed for the most polymorphic cases. Basic
-funcall/apply typing can proceed without HKT.
-
-**Verify:** See Spec 34 for detailed test scenarios.
+- **C-layer:** 54/116 files (29.5% symbol coverage: 1418/4804)
+- **Lisp-core:** 34 files exist
 
 ---
 
-## Phase 4: Emacs Core Typings Validation
+## Phase 0: Type System Features
 
-### 4.4 BUGS.md Documentation (Spec 32 R5-R8)
+These features are needed for accurate Elisp typing. Complete before full coverage push.
 
-Document untypeable or problematic symbols using these categories:
+### 0.1 Row Polymorphism (Spec 11, R4-R13)
 
-| Category | Description |
-|----------|-------------|
-| `type-system-gap` | Needs features tart doesn't have (dependent types, row polymorphism) |
-| `untypeable` | Behavior can't be captured soundly (dynamic dispatch, eval-based) |
-| `ergonomic` | Typeable but awkward (excessive annotations at call sites) |
-| `version-specific` | Signature changed between Emacs versions |
+Required for alist/plist/hash-table typing - pervasive in Elisp.
 
-**Format:**
-```markdown
-## type-system-gap
-### `apply`
-- **Location:** eval.c:2847
-- **Issue:** Requires dependent types
-- **Suggested feature:** First-class function type introspection
+- [ ] Implement row type representation (`row.ml`)
+- [ ] Parse row syntax: `(alist {name string & r})`
+- [ ] Row unification rules (open vs closed)
+- [ ] Infer row types from field access (literal vs variable keys)
+- [ ] Generic `map` supertype for alist/plist/hash-table
+- [ ] Literal types with deferred widening
+- [ ] Type subtraction operator `(a - b)`
 
-## untypeable
-### `funcall`
-- **Location:** eval.c:2789
-- **Issue:** Dynamic dispatch
-- **Resolution:** See Spec 34
-```
+**Files:** `lib/typing/row.ml`, `lib/sig/sig_parser.ml`, `lib/typing/unify.ml`
 
-### 4.5 Backfill Older Versions (DEFERRED)
+### 0.2 Type Predicates & Occurrence Typing (Spec 52, Spec 34 R12-R13)
 
-Focus on 31.0 only for now. Backfilling 30.1/29.1 is future work after the 31.0 typings are stable and validated.
+Required for type predicates (`stringp`, `listp`, etc.) to narrow types.
 
----
+- [ ] Parse `(x is T)` return type syntax for predicates
+- [ ] Implement predicate narrowing in `if`/`cond`/`when`/`unless`
+- [ ] Type subtraction for else branches
+- [ ] Cumulative narrowing in cond chains
+- [ ] Handle predicates in `and`/`or` expressions
+- [ ] Restrict narrowing to inline checks only (not stored results)
+- [ ] Add standard library predicate declarations to `data.tart`
 
-## Phase 5: Error Quality & Developer Experience
+**Files:** `lib/sig/sig_parser.ml`, `lib/typing/infer.ml`, `lib/typing/narrow.ml`
 
-### 5.1 Error Code Registry (Spec 47) ✅ COMPLETE
+### 0.3 Feature Guards (Spec 49)
 
-**Status:** COMPLETE
+Required for platform-specific and version-conditional code.
 
-Updated error codes to follow Spec 47. All codes are now sequential starting
-from E0001 instead of using Rust-style codes.
+- [ ] Guard pattern recognition (`featurep`, `fboundp`, `boundp`)
+- [ ] Hard/soft `require` handling
+- [ ] Feature environment through control flow
+- [ ] Negated guards in else branches
+- [ ] Filename-based feature resolution (`json.tart` → feature `json`)
 
-Key mappings:
-- E0001-E0007: Type Errors (mismatch, branch, infinite, signature, annotation, return)
-- E0100-E0104: Name Errors (undefined variable, missing signature)
-- E0200-E0201: Arity Errors (wrong args, wrong type args)
-- E0300-E0302: Kind Errors (mismatch, infinite, arity)
-- E0400: Pattern Errors (non-exhaustive)
-- E0700+: Module Errors (reserved)
+**Files:** `lib/typing/feature_env.ml`, `lib/typing/guards.ml`
 
-### 5.2 Source Excerpts in Errors (Spec 45) ✅ COMPLETE
+### 0.4 Version Constraints (Spec 50, R4-R15)
 
-**Status:** COMPLETE
+Required for cross-version typing accuracy.
 
-Implemented Elm-style error messages with source excerpts per Spec 45.
+- [ ] Parse `Package-Requires` from .el headers
+- [ ] Constraint propagation (effective min version)
+- [ ] Feature guard exemption from version warnings
+- [ ] LSP code actions for version bumps
 
-**Files created/modified:**
-- `lib/typing/ansi.ml` — TTY detection, semantic colors, syntax highlighting
-- `lib/typing/source_excerpt.ml` — Source reading, underline rendering, prose
-- `lib/typing/diagnostic.ml` — `to_string_human` for Elm-style formatting
-- `lib/error.ml` — `to_string_human` and `report_human` functions
-- `bin/main.ml` — Wired human format into CLI check command
+**Files:** `lib/version/package_header.ml`, `lib/version/propagation.ml`
 
-The `./tart check` command now displays Elm-style error messages by default:
-```
--- TYPE MISMATCH -------------------------- file.el:42:10
+### 0.5 Remaining Funcall/Apply (Spec 34, R9-R11)
 
-I found a type mismatch in this expression:
+- [ ] Tuple <: list subtyping
+- [ ] Context-sensitive tuple inference for list literals
+- [ ] Union function types for dynamic dispatch
 
-42 |   (upcase count)
-   |           ^^^^^
+**Files:** `lib/typing/unify.ml`, `lib/typing/infer.ml`
 
-The function `upcase` expects argument 1 to be:
+### 0.6 Branch Error Messages (Spec 46, R7)
 
-    String
+- [ ] Point to specific offending branch in union errors
+- [ ] Include declared return type in error context
 
-But this expression has type:
-
-    Int
-
-Hint: convert the integer to a string: (number-to-string ...)
-```
-
-### 5.3 File I/O Errors (Spec 37) ✅ COMPLETE
-
-**Status:** COMPLETE (already implemented)
-
-All file I/O error handling is in place in `lib/errors/file_error.ml`:
-1. ✅ Levenshtein suggestions for file not found
-2. ✅ "did you mean: foo.el" for missing `.el` extension
-3. ✅ Directory vs file detection (`Is_directory` error type)
-4. ✅ Signature not found with search path listing
+**Files:** `lib/typing/diagnostic.ml`
 
 ---
 
-## Phase 6: Testing Infrastructure
+## Workflow Per File
+
+1. Run `./tart emacs-coverage -v` to list uncovered DEFUNs/DEFVARs
+2. Create/update `.tart` file with precise types (avoid `any` in output positions)
+3. Validate: `./tart check` against Emacs lisp/ directory
+4. Document untypeable items in `BUGS.md` with category
+5. Iterate until 95%+ type-check success
+
+## Phase 1: Complete C-Layer Core (Cross-Platform)
+
+High-value portable modules. These define the primitives used everywhere.
+
+### 1.1 Missing Core Modules
+
+- [ ] `treesit.c` → `treesit.tart` (46 DEFUNs, 3 DEFVARs) — tree-sitter integration
+- [ ] `comp.c` → `comp.tart` (15 DEFUNs, 15 DEFVARs) — native compilation
+- [ ] `bytecode.c` → `bytecode.tart` (2 DEFUNs, 2 DEFVARs) — byte compiler
+- [ ] `emacs.c` → `emacs.tart` (6 DEFUNs, 21 DEFVARs) — core startup/state
+- [ ] `fontset.c` → `fontset.tart` (7 DEFUNs, 8 DEFVARs) — font management
+- [ ] `ccl.c` → `ccl.tart` (5 DEFUNs, 3 DEFVARs) — code conversion
+- [ ] `insdel.c` → `insdel.tart` (1 DEFUN, 2 DEFVARs) — insert/delete
+- [ ] `menu.c` → `menu.tart` (3 DEFUNs, 1 DEFVAR) — menu primitives
+- [ ] `term.c` → `term.tart` (12 DEFUNs, 5 DEFVARs) — terminal handling
+- [ ] `pdumper.c` → `pdumper.tart` (4 DEFUNs, 1 DEFVAR) — portable dumper
+- [ ] `sound.c` → `sound.tart` (1 DEFUN) — audio
+- [ ] `atimer.c` → `atimer.tart` (1 DEFUN) — async timers
+- [ ] `sysdep.c` → `sysdep.tart` (1 DEFUN) — system dependencies
+- [ ] `emacs-module.c` → `emacs-module.tart` (1 DEFUN) — dynamic modules
+- [ ] `textconv.c` → `textconv.tart` (1 DEFUN, 3 DEFVARs) — text conversion
+- [ ] `lcms.c` → `lcms.tart` (8 DEFUNs) — color management
+
+### 1.2 Audit Existing Core Files
+
+Verify existing .tart files have 100% symbol coverage:
+
+- [ ] `data.tart` — verify 120 DEFUNs, 3 DEFVARs covered
+- [ ] `fns.tart` — verify 107 DEFUNs, 6 DEFVARs covered
+- [ ] `eval.tart` — verify 50 DEFUNs, 19 DEFVARs covered
+- [ ] `window.tart` — verify 117 DEFUNs, 22 DEFVARs covered
+- [ ] `editfns.tart` — verify 80 DEFUNs, 9 DEFVARs covered
+- [ ] `frame.tart` — verify 65 DEFUNs, 25 DEFVARs covered
+- [ ] `process.tart` — verify 64 DEFUNs, 10 DEFVARs covered
+- [ ] `fileio.tart` — verify 54 DEFUNs, 15 DEFVARs covered
+- [ ] `buffer.tart` — verify 53 DEFUNs, 16 DEFVARs covered
+- [ ] `keyboard.tart` — verify 33 DEFUNs, 77 DEFVARs covered
+- [ ] `coding.tart` — verify 34 DEFUNs, 29 DEFVARs covered
+- [ ] `xfaces.tart` — verify 33 DEFUNs, 10 DEFVARs covered
+- [ ] `keymap.tart` — verify 29 DEFUNs, 6 DEFVARs covered
+- [ ] `floatfns.tart` — verify 25 DEFUNs covered
+- [ ] `font.tart` — verify 25 DEFUNs, 5 DEFVARs covered
+- [ ] `charset.tart` — verify 23 DEFUNs, 4 DEFVARs covered
+- [ ] `xdisp.tart` — verify 23 DEFUNs, 96 DEFVARs covered
+- [ ] `minibuf.tart` — verify 23 DEFUNs, 25 DEFVARs covered
+- [ ] `syntax.tart` — verify 21 DEFUNs, 9 DEFVARs covered
+- [ ] `alloc.tart` — verify 23 DEFUNs, 18 DEFVARs covered
+- [ ] `textprop.tart` — verify 20 DEFUNs, 4 DEFVARs covered
+- [ ] `lread.tart` — verify 20 DEFUNs, 33 DEFVARs covered
+- [ ] `search.tart` — verify 19 DEFUNs, 2 DEFVARs covered
+- [ ] `thread.tart` — verify 19 DEFUNs, 1 DEFVAR covered
+- [ ] `gnutls.tart` — verify 19 DEFUNs, 2 DEFVARs covered
+- [ ] `sqlite.tart` — verify 17 DEFUNs covered
+- [ ] `timefns.tart` — verify 14 DEFUNs, 1 DEFVAR covered
+- [ ] `chartab.tart` — verify 13 DEFUNs, 1 DEFVAR covered
+- [ ] `category.tart` — verify 13 DEFUNs, 2 DEFVARs covered
+- [ ] `dispnew.tart` — verify 12 DEFUNs, 12 DEFVARs covered
+- [ ] `image.tart` — verify 11 DEFUNs, 7 DEFVARs covered
+- [ ] `casefiddle.tart` — verify 11 DEFUNs, 2 DEFVARs covered
+- [ ] `print.tart` — verify 11 DEFUNs, 18 DEFVARs covered
+- [ ] `character.tart` — verify 10 DEFUNs, 8 DEFVARs covered
+- [ ] `profiler.tart` — verify 9 DEFUNs, 2 DEFVARs covered
+- [ ] `terminal.tart` — verify 8 DEFUNs, 2 DEFVARs covered
+- [ ] `dired.tart` — verify 8 DEFUNs, 1 DEFVAR covered
+- [ ] `cmds.tart` — verify 7 DEFUNs, 1 DEFVAR covered
+- [ ] `marker.tart` — verify 7 DEFUNs covered
+- [ ] `indent.tart` — verify 7 DEFUNs, 1 DEFVAR covered
+- [ ] `composite.tart` — verify 6 DEFUNs, 5 DEFVARs covered
+- [ ] `doc.tart` — verify 6 DEFUNs, 4 DEFVARs covered
+- [ ] `macros.tart` — verify 6 DEFUNs, 3 DEFVARs covered
+- [ ] `casetab.tart` — verify 5 DEFUNs covered
+- [ ] `filelock.tart` — verify 5 DEFUNs, 2 DEFVARs covered
+- [ ] `inotify.tart` — verify 5 DEFUNs covered
+- [ ] `fringe.tart` — verify 4 DEFUNs, 2 DEFVARs covered
+- [ ] `json.tart` — verify 4 DEFUNs covered
+- [ ] `callint.tart` — verify 4 DEFUNs, 6 DEFVARs covered
+- [ ] `callproc.tart` — verify 3 DEFUNs, 17 DEFVARs covered
+- [ ] `xml.tart` — verify 3 DEFUNs covered
+- [ ] `decompress.tart` — verify 2 DEFUNs covered
+- [ ] `abbrev.tart` — verify symbols covered
+- [ ] `undo.tart` — verify 1 DEFUN, 5 DEFVARs covered
+
+## Phase 2: Platform-Specific Modules
+
+Conditional modules gated by `(featurep 'X)` per Spec 49.
+
+### 2.1 X11/GTK Backend
+
+- [ ] `xfns.c` → `xfns.tart` (54 DEFUNs, 26 DEFVARs)
+- [ ] `xselect.c` → `xselect.tart` (9 DEFUNs, 7 DEFVARs)
+- [ ] `xwidget.c` → `xwidget.tart` (36 DEFUNs, 3 DEFVARs)
+- [ ] `xmenu.c` → `xmenu.tart` (3 DEFUNs)
+- [ ] `xsettings.c` → `xsettings.tart` (3 DEFUNs, 2 DEFVARs)
+- [ ] `xsmfns.c` → `xsmfns.tart` (1 DEFUN, 2 DEFVARs)
+- [ ] `xterm.c` → `xterm.tart` (39 DEFVARs) — variables only
+- [ ] `xfont.c` → `xfont.tart` — DEFSYMs only
+- [ ] `xftfont.c` → `xftfont.tart` (2 DEFVARs) — variables only
 
-### 6.1 Type Checker Acceptance Tests (Spec 25)
+### 2.2 PGTK Backend
 
-**Files:**
-- `lib/test_harness/acceptance.ml` — EXISTS, enhance
-- `test/fixtures/typing/` — Expand fixtures
+- [ ] `pgtkfns.c` → `pgtkfns.tart` (38 DEFUNs, 7 DEFVARs)
+- [ ] `pgtkselect.c` → `pgtkselect.tart` (8 DEFUNs, 6 DEFVARs)
+- [ ] `pgtkmenu.c` → `pgtkmenu.tart` (2 DEFUNs)
+- [ ] `pgtkim.c` → `pgtkim.tart` (1 DEFUN, 1 DEFVAR)
+- [ ] `pgtkterm.c` → `pgtkterm.tart` (10 DEFVARs) — variables only
 
-**Changes:**
-1. Create `.expected` files for pass/fail cases
-2. Fixtures for each error category (type-mismatch, arity, unbound, etc.)
-3. Version-specific fixtures
-4. Wire into `dune test`
+### 2.3 Windows Backend
 
-### 6.2 Typing Fixtures by Category (Spec 33)
+- [ ] `w32fns.c` → `w32fns.tart` (55 DEFUNs, 38 DEFVARs)
+- [ ] `w32proc.c` → `w32proc.tart` (20 DEFUNs, 10 DEFVARs)
+- [ ] `w32select.c` → `w32select.tart` (4 DEFUNs, 2 DEFVARs)
+- [ ] `w32console.c` → `w32console.tart` (3 DEFUNs, 1 DEFVAR)
+- [ ] `w32notify.c` → `w32notify.tart` (3 DEFUNs)
+- [ ] `w32menu.c` → `w32menu.tart` (1 DEFUN)
+- [ ] `w32image.c` → `w32image.tart` (1 DEFUN)
+- [ ] `w32cygwinx.c` → `w32cygwinx.tart` (1 DEFUN)
+- [ ] `w32font.c` → `w32font.tart` (1 DEFUN, 1 DEFVAR)
+- [ ] `w32term.c` → `w32term.tart` (14 DEFVARs) — variables only
+- [ ] `w32.c` → `w32.tart` — DEFSYMs only
+- [ ] `w16select.c` → `w16select.tart` (3 DEFUNs, 2 DEFVARs)
+- [ ] `cygw32.c` → `cygw32.tart` (2 DEFUNs)
 
-**Structure:**
-```
-test/fixtures/typing/
-├── core/           # Passing primitives
-├── errors/
-│   ├── type-mismatch/
-│   ├── arity/
-│   ├── unbound/
-│   ├── occurs-check/
-│   ├── kind/
-│   └── exhaustiveness/
-└── regression/     # Bug reproductions
-```
+### 2.4 macOS/NS Backend
 
----
+(No direct NS files in scan - may be in separate location or use different naming)
 
-## Phase 7: CLI & Tooling Polish
+### 2.5 Haiku Backend
 
-### 7.1 Cmdliner Migration (Spec 36) ✅ COMPLETE
+- [ ] `haikufns.c` → `haikufns.tart` (34 DEFUNs, 8 DEFVARs)
+- [ ] `haikuselect.c` → `haikuselect.tart` (9 DEFUNs, 4 DEFVARs)
+- [ ] `haikufont.c` → `haikufont.tart` (3 DEFUNs, 1 DEFVAR)
+- [ ] `haikumenu.c` → `haikumenu.tart` (2 DEFUNs)
+- [ ] `haikuterm.c` → `haikuterm.tart` (9 DEFVARs) — variables only
 
-**Status:** COMPLETE (already implemented)
+### 2.6 Android Backend
 
-The CLI already uses Cmdliner for argument parsing:
-- Auto-generated `--help` with subcommand documentation
-- Structured argument validation
-- Subcommand dispatch (check, eval, expand, repl, lsp, coverage)
-
----
-
-## Dependency Order
-
-```
-Phase 2.4 (Row polymorphism) ─────────────────────────────┐
-Phase 2.5 (Funcall/apply) ────────────────────────────────┤
-                                                          ├──→ Phase 8 (Remove builtins)
-Phase 5.* (Error quality) ────────────────────────────────┤
-Phase 6.* (Testing) ──────────────────────────────────────┘
-Phase 7.* (CLI polish)
-```
-
-**Notes:**
-- Phase 2.4 enables row-polymorphic alist/plist types (Spec 11)—improves c-core typing accuracy
-- Phase 2.5 enables accurate typing of funcall/apply (currently return any)
-- Phase 8 can proceed in parallel with type system improvements
-
----
-
-## Remaining Acceptance Criteria
+- [ ] `androidfns.c` → `androidfns.tart` (35 DEFUNs, 22 DEFVARs)
+- [ ] `androidselect.c` → `androidselect.tart` (8 DEFUNs)
+- [ ] `androidmenu.c` → `androidmenu.tart` (1 DEFUN)
+- [ ] `androidvfs.c` → `androidvfs.tart` (1 DEFUN)
+- [ ] `androidterm.c` → `androidterm.tart` (13 DEFVARs) — variables only
+- [ ] `androidfont.c` → `androidfont.tart` — DEFSYMs only
+- [ ] `sfntfont-android.c` → `sfntfont-android.tart` (1 DEFUN)
+- [ ] `sfntfont.c` → `sfntfont.tart` (3 DEFVARs) — variables only
 
-**Milestone 4: Typings (partial)**
-- [ ] 95%+ success rate on Emacs lisp/ subset
+### 2.7 DOS Backend
 
-**Final: E2E**
-- [ ] Open `simple.el` from Emacs, get accurate hover types
-- [ ] Open `subr.el` from Emacs, get accurate hover types
-- [ ] Type errors in user code show helpful messages with source excerpts
+- [ ] `dosfns.c` → `dosfns.tart` (10 DEFUNs, 11 DEFVARs)
+- [ ] `msdos.c` → `msdos.tart` (5 DEFUNs, 1 DEFVAR)
 
----
+### 2.8 File Notification Backends
 
-## Phase 8: Remove Redundant Built-in Types
+- [ ] `gfilenotify.c` → `gfilenotify.tart` (4 DEFUNs) — GLib
+- [ ] `kqueue.c` → `kqueue.tart` (3 DEFUNs) — BSD/macOS
 
-### Problem
+### 2.9 External Integrations
 
-`lib/typing/builtin_types.ml` contains 60+ hardcoded function signatures that
-duplicate and conflict with the c-core `.tart` typings in `typings/emacs/31.0/c-core/`.
+- [ ] `dbusbind.c` → `dbusbind.tart` (3 DEFUNs, 9 DEFVARs) — D-Bus
 
-**Current loading order:**
-1. `Builtin_types.initial_env()` creates base environment with hardcoded types
-2. `Search_path.load_c_core` extends that environment with `.tart` signatures
+### 2.10 Font Backends
 
-When a function exists in both, the c-core definition wins (loaded second), but
-the existence of duplicate hardcoded types:
-- Causes confusion about source of truth
-- Makes DESIGN.md documentation inconsistent with c-core
-- Bloats the codebase with unmaintained duplicates
+- [ ] `ftcrfont.c` → `ftcrfont.tart` — DEFSYMs only
+- [ ] `ftfont.c` → `ftfont.tart` — DEFSYMs only
 
-**Example conflict:**
-- `builtin_types.ml`: `length : (List a) -> Int` (too narrow—rejects strings)
-- `fns.tart`: `length : any -> int` (too permissive—accepts anything)
+## Phase 3: Lisp-Core Validation Loop
 
-The correct signature is a union of all sequence types that `length` accepts:
-```elisp
-(defun length (((list any) | string | (vector any) | bool-vector | char-table)) -> int)
-```
+Type-check lisp-core files against C-layer types. Errors feed back into C-layer refinements.
 
-**Principle:** Every use of `any` must be treated with absolute suspicion. Even
-`funcall`/`apply` should NOT return `any`—they should extract the return type
-from their function argument. The only legitimate use of `any` is in input
-positions for truly polymorphic predicates like `(null any) -> bool`.
+### 3.1 Foundation Libraries
 
-For functions like `length`, use precise union types of the accepted inputs.
+- [ ] Type-check `subr.tart` usage in Emacs lisp/subr.el
+- [ ] Type-check `simple.tart` usage in Emacs lisp/simple.el
+- [ ] Type-check `files.tart` usage in Emacs lisp/files.el
 
-### Goal
+### 3.2 Data Structure Libraries
 
-Remove **all** function typings from `builtin_types.ml`:
+- [ ] Type-check `cl-lib.tart` against lisp/emacs-lisp/cl-lib.el
+- [ ] Type-check `seq.tart` against lisp/emacs-lisp/seq.el
+- [ ] Type-check `pcase.tart` against lisp/emacs-lisp/pcase.el
 
-1. **`funcall`/`apply`** — These need special type-checker handling per Spec 34,
-   not signatures. The type checker must extract the return type from the
-   function argument, not return `any` or a polymorphic variable.
-2. **`function`** — Already handled as a special form in the type checker.
-3. **Everything else** — Comes from c-core `.tart` files.
+### 3.3 UI Libraries
 
-`builtin_types.ml` should become empty or be deleted entirely.
+- [ ] Type-check `faces.tart` against lisp/faces.el
+- [ ] Type-check `button.tart` against lisp/button.el
+- [ ] Type-check `custom.tart` against lisp/custom.el
 
-### 8.1 Verify C-Core Coverage
+### 3.4 Development Tool Libraries
 
-Confirm all functions being removed have corresponding definitions:
+- [ ] Type-check `xref.tart` against lisp/progmodes/xref.el
+- [ ] Type-check `project.tart` against lisp/progmodes/project.el
+- [ ] Type-check `eglot.tart` against lisp/progmodes/eglot.el
+- [ ] Type-check `flymake.tart` against lisp/progmodes/flymake.el
+- [ ] Type-check `compile.tart` against lisp/progmodes/compile.el
+- [ ] Type-check `eldoc.tart` against lisp/emacs-lisp/eldoc.el
 
-| builtin_types.ml | c-core file | Notes |
-|------------------|-------------|-------|
-| car, cdr, cons | data.tart | ✓ polymorphic |
-| list | alloc.tart | ✓ polymorphic |
-| length, nth, nthcdr | fns.tart | ⚠️ `length` needs union type fix |
-| append, reverse, last | fns.tart | ✓ polymorphic |
-| mapcar, member, memq | fns.tart | ✓ polymorphic |
-| assoc, assq | fns.tart | ✓ polymorphic |
-| +, -, *, /, mod, % | data.tart | ✓ uses `num` type |
-| abs, max, min, 1+, 1- | data.tart | ✓ uses `num` type |
-| logand, logior, logxor, lognot | data.tart | ✓ |
-| <, >, <=, >=, = | data.tart | ✓ comparison |
-| null, atom, listp, consp | data.tart | ✓ predicates |
-| symbolp, stringp, numberp, integerp, floatp | data.tart | ✓ predicates |
-| vectorp, functionp | data.tart | ✓ predicates |
-| eq, equal, not | data.tart, fns.tart | ✓ |
-| concat, substring, string-length | fns.tart | ✓ |
-| upcase, downcase | editfns.tart | Need to add if missing |
-| string-to-list | fns.tart | Need to add if missing |
-| format | editfns.tart | ✓ |
-| vector, aref, aset | data.tart | ✓ polymorphic |
-| symbol-name | data.tart | ✓ |
-| number-to-string, string-to-number | data.tart | ✓ |
-| run-hooks, run-hook-with-args | eval.tart | ✓ |
-| commandp, macroexpand, backtrace-frames | eval.tart | ✓ |
+### 3.5 Remaining Lisp-Core
 
-### 8.2 Delete or empty builtin_types.ml
+- [ ] Type-check remaining 34 lisp-core modules
+- [ ] Document type refinements needed in C-layer
 
-**Files:**
-- `lib/typing/builtin_types.ml` — Delete or make empty
-- `lib/typing/builtin_types.mli` — Update interface
+## Phase 4: Documentation and Gaps
 
-**Option A: Delete entirely**
+- [ ] Ensure `typings/emacs/BUGS.md` documents cross-version issues
+- [ ] Ensure `typings/emacs/31.0/BUGS.md` documents version-specific issues
+- [ ] Categorize all gaps: `type-system-gap` | `untypeable` | `ergonomic` | `version-specific`
+- [ ] Final coverage report: target 95%+ type-check success on Emacs lisp/
 
-Remove `builtin_types.ml` and update all callers of `initial_env()` to use
-`Type_env.empty` directly.
+## Acceptance Criteria
 
-**Option B: Keep as empty placeholder**
-
-```ocaml
-(** Built-in type signatures.
-
-    This module is intentionally empty. All Elisp function types are defined in
-    .tart signature files under typings/emacs/{version}/c-core/.
-
-    Special forms (funcall, apply, function, if, let, etc.) are handled directly
-    by the type checker, not via signatures. See Spec 34 for funcall/apply. *)
-
-module Env = Core.Type_env
-
-let initial_env () : Env.t = Env.empty
-```
-
-**Note on funcall/apply:** These must NOT have signatures returning `any` or
-unbound type variables. Per Spec 34, the type checker must:
-1. Require the first argument to be a function type `(-> (T1 ... Tn) R)`
-2. Check remaining arguments against `T1 ... Tn`
-3. Return `R` as the result type
-
-This requires special-case handling in the type checker, not a signature.
-
-### 8.3 Add Missing Types and Signatures
-
-**Add opaque types to prelude:**
-
-Add `bool-vector` and `char-table` as opaque types in `typings/tart-prelude.tart`:
-```lisp
-;; Opaque types (no intrinsic backing needed)
-(type bool-vector)
-(type char-table)
-```
-
-These don't need to be intrinsics—they have no special type-checker behavior
-(no subtyping rules, no special truthiness handling). As opaque types, they
-produce `TCon` values that only unify with themselves.
-
-**Fix `length` signature in `fns.tart`:**
-
-Current (wrong):
-```elisp
-(defun length (any) -> int)
-```
-
-Correct:
-```elisp
-(defun length (((list any) | string | (vector any) | bool-vector | char-table)) -> int)
-```
-
-**Missing signatures:**
-
-1. `upcase`, `downcase` — from `casefiddle.c`, need new file `casefiddle.tart`
-2. `string-to-list` — from `fns.c`, add to `fns.tart`
-
-**Create `typings/emacs/31.0/c-core/casefiddle.tart`:**
-```elisp
-;; Type signatures for Emacs casefiddle.c
-;;
-;; Source: emacs/src/casefiddle.c
-;; Emacs version: 31.0
-;;
-;; Contains case conversion functions.
-
-;; (upcase OBJ) - convert string or char to uppercase
-(defun upcase ((string | int)) -> (string | int))
-
-;; (downcase OBJ) - convert string or char to lowercase
-(defun downcase ((string | int)) -> (string | int))
-
-;; (capitalize OBJ) - capitalize string or char
-(defun capitalize ((string | int)) -> (string | int))
-
-;; (upcase-initials OBJ) - upcase initials in string
-(defun upcase-initials ((string | int)) -> (string | int))
-
-;; (upcase-region START END &optional REGION-NONCONTIGUOUS-P) - upcase region
-(defun upcase-region (int int &optional any) -> nil)
-
-;; (downcase-region START END &optional REGION-NONCONTIGUOUS-P) - downcase region
-(defun downcase-region (int int &optional any) -> nil)
-
-;; (capitalize-region START END &optional REGION-NONCONTIGUOUS-P) - capitalize region
-(defun capitalize-region (int int &optional any) -> nil)
-
-;; (upcase-word ARG) - upcase word(s) from point
-(defun upcase-word (int) -> nil)
-
-;; (downcase-word ARG) - downcase word(s) from point
-(defun downcase-word (int) -> nil)
-
-;; (capitalize-word ARG) - capitalize word(s) from point
-(defun capitalize-word (int) -> nil)
-```
-
-**Add to `typings/emacs/31.0/c-core/fns.tart`:**
-```elisp
-;; (string-to-list STRING) - convert string to list of character codes
-(defun string-to-list (string) -> (list int))
-```
-
-### 8.4 Update DESIGN.md
-
-Update "Built-in Function Types" section to explain the new architecture:
-- Intrinsics (`funcall`, `apply`, `function`) in `builtin_types.ml`
-- Standard library in `typings/emacs/{version}/c-core/*.tart`
-
-### 8.5 Run Tests
-
-```bash
-nix develop --command dune build 2>&1
-nix develop --command dune test 2>&1
-./tart check test/fixtures/**/*.el
-```
-
-### 8.6 Validate with Real Elisp
-
-```bash
-./tart check /path/to/emacs/lisp/simple.el
-```
-
-### 8.7 Audit `-> any` Return Types in C-Core
-
-Many c-core signatures return `any` inappropriately. Audit and fix:
-
-**Likely legitimate (truly dynamic):**
-- `symbol-value` — stored value is dynamic
-- `symbol-function` — could be any function type
-- `eval` — result depends on runtime form
-
-**Likely fixable:**
-- `selected-frame` → should return `frame` type
-- `frame-first-window`, `frame-root-window` → should return `window` type
-- `car-safe`, `cdr-safe` → could use polymorphism with option
-- Bool-vector operations → should use `bool-vector` type once added
-
-Run `grep '-> any)' typings/emacs/31.0/c-core/*.tart` and review each case.
-
-### Acceptance Criteria
-
-- [ ] `builtin_types.ml` is empty (returns `Type_env.empty`)
-- [ ] `bool-vector` and `char-table` opaque types added to `tart-prelude.tart`
-- [ ] `length` uses precise union type
-- [ ] All `-> any` return types audited and justified or fixed
-- [ ] All tests pass
-- [ ] `./tart check` works correctly on test fixtures
-- [ ] No regression in type errors for real Elisp files
+1. All 116 C source files have corresponding `.tart` files
+2. `./tart emacs-coverage` shows 100% symbol coverage
+3. `./tart check` against Emacs lisp/ passes with 95%+ success
+4. All untypeable items documented in BUGS.md with categories
+5. No unjustified `any` in output positions

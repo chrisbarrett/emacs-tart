@@ -128,9 +128,11 @@ On Package-Requires when version could be lower:
 
 ## Tasks
 
-- [ ] [R1-R3] Version metadata from typings paths
+- [x] [R1-R3] Version metadata from typings paths
 - [ ] [R4-R7] Package header parsing
 - [ ] [R8-R10] Constraint propagation
 - [ ] [R11] Feature guard exemption
 - [ ] [R13-R15] LSP code actions
 - [ ] Add E0900-E0902 to Spec 47
+
+**Status:** Version detection implemented in `lib/sig/emacs_version.mli` with `detect()`, `parse_version()`, `version_to_dir()`. Package header parsing and constraint propagation not yet implemented.
