@@ -168,7 +168,9 @@ Same narrowing infrastructure, different tracking:
 
 ## Tasks
 
-- [ ] Parse `(x is T)` return syntax
+- [x] Parse `(x is T)` return syntax
+- [x] Named parameter syntax for signatures `((name type))`
+- [x] Register predicate info in sig_loader
 - [ ] Predicate narrowing in if/when/unless
 - [ ] Type subtraction for else branches
 - [ ] Cumulative narrowing in cond
@@ -178,3 +180,5 @@ Same narrowing infrastructure, different tracking:
 - [ ] Validate predicate parameter names
 - [ ] Inline-only restriction
 - [ ] Standard library declarations
+
+**Status:** Parsing infrastructure complete. `STPredicate` AST node added, named parameter syntax `((x type))` parsed, predicate info extracted and registered during signature loading. Remaining: apply narrowing in conditional branches.

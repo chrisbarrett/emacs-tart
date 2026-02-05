@@ -404,9 +404,9 @@ least a `name` field are accepted
 - [ ] [R7] Distinguish closed unions from open row types
 - [ ] [R8] Infer row types from field access (literal vs variable keys)
 - [ ] [R9] Implement literal types with deferred widening
-- [ ] [R10] Implement type subtraction operator
-- [ ] [R11] Implement row unification rules
+- [x] [R10] Implement type subtraction operator
+- [x] [R11] Implement row unification rules
 - [ ] [R12] Implement generic `map` supertype
 - [ ] [R13] Implement all map type forms (bare, homogeneous, record)
 
-**Status:** Union types implemented (`TUnion` in `lib/core/types.mli`), pcase narrowing in `lib/typing/infer.ml`, exhaustiveness in `lib/typing/exhaustiveness.ml`. Row polymorphism (R4-R13) not yet implemented.
+**Status:** Union types implemented (`TUnion` in `lib/core/types.mli`), pcase narrowing in `lib/typing/infer.ml`, exhaustiveness in `lib/typing/exhaustiveness.ml`. Row type foundation implemented: `TRow` variant in types.ml with row unification rules (a56b4e2), row syntax parsing in signature files (f1edff7), type subtraction in sig_loader.ml, `alist`/`plist` aliases in prelude. Remaining: row type inference from field access (R8), literal types (R9), generic `map` supertype (R12).
