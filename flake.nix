@@ -1,57 +1,65 @@
 {
   inputs = {
-    opam-nix.url = "github:tweag/opam-nix";
     flake-utils.url = "github:numtide/flake-utils";
-    nixpkgs.follows = "opam-nix/nixpkgs";
-    nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    emacs-overlay = {
+      url = "github:nix-community/emacs-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
   outputs =
     { self
     , flake-utils
-    , opam-nix
     , nixpkgs
-    , nixpkgs-unstable
+    , emacs-overlay
     , ...
     }:
     flake-utils.lib.eachDefaultSystem (
       system:
       let
-        pkgs = nixpkgs.legacyPackages.${system};
-        pkgs-unstable = nixpkgs-unstable.legacyPackages.${system};
-        on = opam-nix.lib.${system};
-        devPackagesQuery = {
-          # Build
-          dune = "*";
-          menhir = "*";
-
-          # Runtime deps
-          ppx_deriving = "*";
-          yojson = "*";
-
-          # Testing
-          alcotest = "*";
-
-          # Dev tools
-          ocaml-lsp-server = "*";
-          ocamlformat = "*";
+        pkgs = import nixpkgs {
+          inherit system;
+          overlays = [ emacs-overlay.overlays.default ];
         };
-        query = devPackagesQuery // {
-          ocaml-base-compiler = "*";
-        };
-        scope = on.buildDuneProject { } "tart" self query;
-        devPackages = builtins.attrValues (pkgs.lib.getAttrs (builtins.attrNames devPackagesQuery) scope);
-      in
-      {
-        legacyPackages = scope;
 
-        packages.default = scope.tart;
+        mkDevShell = emacs: pkgs.mkShell {
+          buildInputs = [
+            # OCaml toolchain
+            pkgs.opam
+            pkgs.pkg-config
 
-        devShells.default = pkgs.mkShell {
-          inputsFrom = [ scope.tart ];
-          buildInputs = devPackages ++ [
-            pkgs-unstable.prek
+            # C deps for some OCaml packages
+            pkgs.gmp
+            pkgs.libev
+
+            # Project tools
+            emacs
+            pkgs.prek
             pkgs.asciidoctor
           ];
+
+          shellHook = ''
+            if [ ! -f "$HOME/.opam/config" ]; then
+              echo "Initializing opam..."
+              opam init --bare --no-setup -y
+            fi
+            if [ ! -d "_opam" ]; then
+              echo "Creating local opam switch..."
+              opam switch create . --deps-only --with-test --with-dev-setup -y
+            fi
+            eval $(opam env)
+          '';
+        };
+      in
+      {
+        # Emacs version matrix:
+        # - emacs30: current stable (blocking in CI)
+        # - emacsGit: development HEAD (advisory in CI)
+        # Note: emacs29 removed from nixpkgs due to CVEs
+        devShells = {
+          default = mkDevShell pkgs.emacs30;
+          emacs30 = mkDevShell pkgs.emacs30;
+          emacsGit = mkDevShell pkgs.emacs-unstable;
         };
       }
     );

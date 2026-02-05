@@ -22,4 +22,6 @@
   menhir
   ppx_deriving
   yojson
-  (alcotest :with-test)))
+  (alcotest :with-test)
+  (ocaml-lsp-server :with-dev-setup)
+  (ocamlformat :with-dev-setup)))
