@@ -99,7 +99,7 @@ let test_option_type () =
 let test_pair_type () =
   let ty = pair_of Prim.string Prim.int in
   (* Intrinsic types display as lowercase for user-facing output *)
-  Alcotest.(check string) "pair string int" "(pair string int)" (to_string ty)
+  Alcotest.(check string) "cons string int" "(cons string int)" (to_string ty)
 
 let test_nested_type () =
   let ty = list_of (option_of Prim.int) in

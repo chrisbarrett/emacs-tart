@@ -241,7 +241,7 @@
 (defun window-fringes (&optional window) -> (list any))
 
 ;; (window-margins &optional WINDOW) - return margin widths
-(defun window-margins (&optional window) -> (pair (int | nil) (int | nil)))
+(defun window-margins (&optional window) -> (cons (int | nil) (int | nil)))
 
 ;; (window-scroll-bars &optional WINDOW) - return scroll bar settings
 (defun window-scroll-bars (&optional window) -> (list any))
@@ -368,7 +368,7 @@
 (defun window-at (int int &optional frame) -> (window | nil))
 
 ;; (coordinates-in-window-p COORDINATES WINDOW) - test if coords in window
-(defun coordinates-in-window-p ((pair int int) window) -> any)
+(defun coordinates-in-window-p ((cons int int) window) -> any)
 
 ;; (pos-visible-in-window-p &optional POS WINDOW PARTIALLY) - test if position visible
 (defun pos-visible-in-window-p (&optional any window any) -> any)
@@ -391,7 +391,7 @@
 (defun window-line-height (&optional any window) -> (list int))
 
 ;; (window-text-pixel-size &optional WINDOW FROM TO X-LIMIT Y-LIMIT MODE-LINES IGNORE-LINE-AT-END) - text dimensions
-(defun window-text-pixel-size (&optional window any any any any any any) -> (pair int int))
+(defun window-text-pixel-size (&optional window any any any any any any) -> (cons int int))
 
 ;; (window-lines-pixel-dimensions &optional WINDOW FIRST LAST BODY INVERSE LEFT) - line dimensions
 (defun window-lines-pixel-dimensions (&optional window any any any any any) -> (list any))

@@ -302,7 +302,7 @@
 (defvar dired-actual-switches (string | nil))
 
 ;; Alist of listed directories and positions
-(defvar dired-subdir-alist (list (pair string int)))
+(defvar dired-subdir-alist (list (cons string int)))
 
 ;; Mode hook
 (defvar dired-mode-hook (list ((nil) -> any)))

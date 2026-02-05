@@ -161,16 +161,16 @@
 ;; ===========================================================================
 
 ;; (caar X) - (car (car x))
-(defun caar [a b] ((pair (pair a any) any)) -> a)
+(defun caar [a b] ((cons (cons a any) any)) -> a)
 
 ;; (cadr X) - (car (cdr x))
-(defun cadr [a] ((pair any (pair a any))) -> a)
+(defun cadr [a] ((cons any (cons a any))) -> a)
 
 ;; (cdar X) - (cdr (car x))
-(defun cdar [a b] ((pair (pair any a) any)) -> a)
+(defun cdar [a b] ((cons (cons any a) any)) -> a)
 
 ;; (cddr X) - (cdr (cdr x))
-(defun cddr [a] ((pair any (pair any a))) -> a)
+(defun cddr [a] ((cons any (cons any a))) -> a)
 
 ;; Third and fourth level accessors - simplified to any
 (defun caaar (any) -> any)
@@ -357,13 +357,13 @@
 (defun add-to-list (symbol any &optional bool any) -> (list any))
 
 ;; (alist-get KEY ALIST &optional DEFAULT REMOVE TESTFN) - get alist value
-(defun alist-get [k v] (k (list (pair k v)) &optional v bool any) -> (v | nil))
+(defun alist-get [k v] (k (list (cons k v)) &optional v bool any) -> (v | nil))
 
 ;; (assq-delete-all KEY ALIST) - delete all entries with KEY using eq
-(defun assq-delete-all [k v] (k (list (pair k v))) -> (list (pair k v)))
+(defun assq-delete-all [k v] (k (list (cons k v))) -> (list (cons k v)))
 
 ;; (assoc-delete-all KEY ALIST &optional TEST) - delete all entries with KEY
-(defun assoc-delete-all [k v] (k (list (pair k v)) &optional any) -> (list (pair k v)))
+(defun assoc-delete-all [k v] (k (list (cons k v)) &optional any) -> (list (cons k v)))
 
 ;; (add-to-history HISTORY-VAR NEWELT &optional MAXELT KEEP-ALL) - add to history
 (defun add-to-history (symbol any &optional int bool) -> (list any))

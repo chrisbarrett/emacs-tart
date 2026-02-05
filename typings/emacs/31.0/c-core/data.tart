@@ -76,7 +76,7 @@
 (defun cl-type-of (any) -> symbol)
 
 ;; (subr-arity SUBR) - return (MIN . MAX) or (MIN . many)
-(defun subr-arity (any) -> (pair int any))
+(defun subr-arity (any) -> (cons int any))
 
 ;; (subr-name SUBR) - return symbol name
 (defun subr-name (any) -> symbol)
@@ -101,10 +101,10 @@
 (defun cdr-safe (any) -> any)
 
 ;; (setcar CELL NEWCAR) - destructive update
-(defun setcar [a] ((pair any any) a) -> a)
+(defun setcar [a] ((cons any any) a) -> a)
 
 ;; (setcdr CELL NEWCDR) - destructive update
-(defun setcdr [a] ((pair any any) a) -> a)
+(defun setcdr [a] ((cons any any) a) -> a)
 
 ;; ===========================================================================
 ;; Array operations

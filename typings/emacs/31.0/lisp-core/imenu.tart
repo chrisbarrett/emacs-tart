@@ -96,7 +96,7 @@
 (defvar imenu-generic-expression (list any))
 
 ;; Syntax modifications during generic matching
-(defvar imenu-syntax-alist (list (pair int int)))
+(defvar imenu-syntax-alist (list (cons int int)))
 
 ;; Function to handle jumping to index position
 (defvar imenu-default-goto-function ((string (int | marker) &rest any) -> nil))
@@ -120,7 +120,7 @@
 (defvar imenu-use-popup-menu any)
 
 ;; Marker for special rescan entry
-(defvar imenu--rescan-item (pair string int))
+(defvar imenu--rescan-item (cons string int))
 
 ;; Cached index alist
 (defvar imenu--index-alist ((list any) | nil))

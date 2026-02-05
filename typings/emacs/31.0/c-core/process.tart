@@ -66,7 +66,7 @@
 (defun process-plist (process) -> (list any))
 
 ;; (process-coding-system PROCESS) - return (DECODE . ENCODE)
-(defun process-coding-system (process) -> (pair any any))
+(defun process-coding-system (process) -> (cons any any))
 
 ;; (process-running-child-p PROCESS &optional COMPLETELY) - test if child running
 (defun process-running-child-p (&optional process any) -> bool)

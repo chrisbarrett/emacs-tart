@@ -10,7 +10,7 @@
 ;; ===========================================================================
 
 ;; (cons CAR CDR) - create cons cell
-(defun cons [a b] (a b) -> (pair a b))
+(defun cons [a b] (a b) -> (cons a b))
 
 ;; (list &rest OBJECTS) - create list
 (defun list [a] (&rest a) -> (list a))

@@ -139,7 +139,7 @@
 (defvar compilation-error-regexp-alist (list (symbol | (list any))))
 
 ;; Error regexp alist-alist
-(defvar compilation-error-regexp-alist-alist (list (pair symbol (list any))))
+(defvar compilation-error-regexp-alist-alist (list (cons symbol (list any))))
 
 ;; Current compilation directory
 (defvar compilation-directory (string | nil))
@@ -202,7 +202,7 @@
 (defvar grep-command string)
 
 ;; Grep find command
-(defvar grep-find-command (string | (pair string int)))
+(defvar grep-find-command (string | (cons string int)))
 
 ;; Grep template
 (defvar grep-template string)
@@ -211,7 +211,7 @@
 (defvar grep-find-template string)
 
 ;; Grep files aliases
-(defvar grep-files-aliases (list (pair string string)))
+(defvar grep-files-aliases (list (cons string string)))
 
 ;; Grep mode hook
 (defvar grep-mode-hook (list ((nil) -> any)))

@@ -62,7 +62,7 @@
 ;; Add or remove CHAR from CATEGORY in TABLE.
 ;; If RESET is non-nil, remove; otherwise add.
 ;; CHAR can be a character or (FROM . TO) range.
-(defun modify-category-entry ((int | (pair int int)) int &optional char-table any) -> nil)
+(defun modify-category-entry ((int | (cons int int)) int &optional char-table any) -> nil)
 
 ;; ===========================================================================
 ;; Category lookup

@@ -99,7 +99,7 @@
 
 ;; (frexp X) - return mantissa and exponent of X
 ;; Returns (SGNFCAND . EXP) where X = SGNFCAND * 2^EXP.
-(defun frexp (num) -> (pair float int))
+(defun frexp (num) -> (cons float int))
 
 ;; (ldexp SGNFCAND EXP) - construct float from mantissa and exponent
 ;; Returns SGNFCAND * 2^EXP.

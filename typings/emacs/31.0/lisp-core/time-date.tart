@@ -101,4 +101,4 @@
 (defun current-time-string (&optional any any) -> string)
 
 ;; (current-time-zone &optional TIME ZONE) - return timezone info
-(defun current-time-zone (&optional any any) -> (pair int string))
+(defun current-time-zone (&optional any any) -> (cons int string))

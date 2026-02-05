@@ -27,7 +27,7 @@
 (defun face-attribute-relative-p (symbol any) -> bool)
 
 ;; (face-all-attributes FACE &optional FRAME) - return alist of all attributes
-(defun face-all-attributes (symbol &optional frame) -> (list (pair symbol any)))
+(defun face-all-attributes (symbol &optional frame) -> (list (cons symbol any)))
 
 ;; (set-face-attribute FACE FRAME &rest ARGS) - set face attributes
 ;; ARGS alternates :ATTRIBUTE VALUE pairs

@@ -43,7 +43,7 @@
 ;; (compose-chars &rest ARGS) - return composed string from characters
 ;; For relative composition: characters
 ;; For rule-based: characters and composition rules alternating
-(defun compose-chars (&rest (int | (pair symbol symbol))) -> string)
+(defun compose-chars (&rest (int | (cons symbol symbol))) -> string)
 
 ;; (compose-chars-after POS &optional LIMIT OBJECT)
 ;; Compose characters after position using composition-function-table

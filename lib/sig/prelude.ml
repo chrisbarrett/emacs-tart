@@ -122,13 +122,7 @@ let prelude_aliases : (string * Sig_loader.type_alias) list =
         Sig_loader.alias_params = [ param "a" ];
         alias_body = tapp (intrinsic "Vector") [ tvar "a" ];
       } );
-    (* (type pair [a b] (Pair a b)) - maps pair/cons to intrinsic Pair *)
-    ( "pair",
-      {
-        Sig_loader.alias_params = [ param "a"; param "b" ];
-        alias_body = tapp (intrinsic "Pair") [ tvar "a"; tvar "b" ];
-      } );
-    (* Also add "cons" as alias for pair - elisp uses cons cells *)
+    (* (type cons [a b] (Pair a b)) - maps cons to intrinsic Pair *)
     ( "cons",
       {
         Sig_loader.alias_params = [ param "a"; param "b" ];

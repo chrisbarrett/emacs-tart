@@ -27,7 +27,7 @@
 
 ;; (terminal-parameters &optional TERMINAL) - return parameter-alist of terminal
 ;; Value is a list of (PARM . VALUE) pairs where PARM is a symbol
-(defun terminal-parameters (&optional (terminal | frame | nil)) -> (list (pair symbol any)))
+(defun terminal-parameters (&optional (terminal | frame | nil)) -> (list (cons symbol any)))
 
 ;; (terminal-parameter TERMINAL PARAMETER) - return TERMINAL's value for PARAMETER
 (defun terminal-parameter ((terminal | frame | nil) symbol) -> any)

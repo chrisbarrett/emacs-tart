@@ -83,7 +83,7 @@ let is_primitive_type name =
 (** Check if a name is a type constructor *)
 let is_type_constructor name =
   match name with
-  | "list" | "vector" | "pair" | "option" | "hash-table" | "tuple" -> true
+  | "list" | "vector" | "cons" | "option" | "hash-table" | "tuple" -> true
   | _ -> false
 
 (** {1 Type Syntax Parsing} *)

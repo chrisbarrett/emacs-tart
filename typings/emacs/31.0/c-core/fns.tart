@@ -88,16 +88,16 @@
 (defun memql [a] (a (list a)) -> (list a))
 
 ;; (assoc KEY ALIST &optional TESTFN) - find by key using equal
-(defun assoc [k v] (k (list (pair k v)) &optional any) -> ((pair k v) | nil))
+(defun assoc [k v] (k (list (cons k v)) &optional any) -> ((cons k v) | nil))
 
 ;; (assq KEY ALIST) - find by key using eq
-(defun assq [k v] (k (list (pair k v))) -> ((pair k v) | nil))
+(defun assq [k v] (k (list (cons k v))) -> ((cons k v) | nil))
 
 ;; (rassoc VALUE ALIST) - find by value using equal
-(defun rassoc [k v] (v (list (pair k v))) -> ((pair k v) | nil))
+(defun rassoc [k v] (v (list (cons k v))) -> ((cons k v) | nil))
 
 ;; (rassq VALUE ALIST) - find by value using eq
-(defun rassq [k v] (v (list (pair k v))) -> ((pair k v) | nil))
+(defun rassq [k v] (v (list (cons k v))) -> ((cons k v) | nil))
 
 ;; (delete ELT SEQ) - remove element using equal (destructive for lists)
 (defun delete [a] (a (list a)) -> (list a))
@@ -106,7 +106,7 @@
 (defun delq [a] (a (list a)) -> (list a))
 
 ;; (copy-alist ALIST) - shallow copy of alist
-(defun copy-alist [k v] ((list (pair k v))) -> (list (pair k v)))
+(defun copy-alist [k v] ((list (cons k v))) -> (list (cons k v)))
 
 ;; ===========================================================================
 ;; List construction

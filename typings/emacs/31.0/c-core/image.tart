@@ -47,7 +47,7 @@
 
 ;; (image-size SPEC &optional PIXELS FRAME)
 ;; Return size of image as (WIDTH . HEIGHT)
-(defun image-size ((list any) &optional any (frame | nil)) -> (pair int int))
+(defun image-size ((list any) &optional any (frame | nil)) -> (cons int int))
 
 ;; (image-mask-p SPEC &optional FRAME) - return t if image has mask bitmap
 (defun image-mask-p ((list any) &optional (frame | nil)) -> bool)
@@ -73,11 +73,11 @@
 
 ;; (image-multi-frame-p IMAGE)
 ;; Return (NIMAGES . DELAY) if image has multiple frames, nil otherwise
-(defun image-multi-frame-p ((list any)) -> ((pair int (float | nil)) | nil))
+(defun image-multi-frame-p ((list any)) -> ((cons int (float | nil)) | nil))
 
 ;; (image-animated-p IMAGE)
 ;; Like image-multi-frame-p but returns nil if no delay specified
-(defun image-animated-p ((list any)) -> ((pair int float) | nil))
+(defun image-animated-p ((list any)) -> ((cons int float) | nil))
 
 ;; (image-current-frame IMAGE) - return current frame number (0-indexed)
 (defun image-current-frame ((list any)) -> int)

@@ -100,7 +100,7 @@
 ;; ============================================================================
 
 ;; Server program configuration
-(defvar eglot-server-programs (list (pair any any)))
+(defvar eglot-server-programs (list (cons any any)))
 
 ;; Whether to autoreconnect
 (defvar eglot-autoreconnect (any | int))

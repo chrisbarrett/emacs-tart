@@ -92,7 +92,7 @@
 
 ;; (func-arity FN) - return (MIN . MAX) or (MIN . many)
 ;; Note: MAX is 'many symbol for variadic functions
-(defun func-arity (any) -> (pair int (int | symbol)))
+(defun func-arity (any) -> (cons int (int | symbol)))
 
 ;; (functionp OBJ) - test if callable
 (defun functionp (any) -> bool)

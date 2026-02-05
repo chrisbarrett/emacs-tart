@@ -285,7 +285,7 @@
 (defvar default-directory string)
 
 ;; Alist of directory abbreviations
-(defvar directory-abbrev-alist (list (pair string string)))
+(defvar directory-abbrev-alist (list (cons string string)))
 
 ;; Hooks run before saving each buffer
 (defvar before-save-hook (list any))
@@ -297,7 +297,7 @@
 (defvar find-file-hook (list any))
 
 ;; List of functions to try for visiting special files
-(defvar file-name-handler-alist (list (pair string any)))
+(defvar file-name-handler-alist (list (cons string any)))
 
 ;; Most recent directory used in file-related minibuffer prompts
 (defvar minibuffer-default-add-shell-commands bool)

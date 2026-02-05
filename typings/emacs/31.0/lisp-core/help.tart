@@ -101,7 +101,7 @@
 ;; ===========================================================================
 
 ;; (help-split-fundoc DOCSTRING DEF) - split docstring into usage and doc
-(defun help-split-fundoc ((string | nil) any) -> ((pair string string) | nil))
+(defun help-split-fundoc ((string | nil) any) -> ((cons string string) | nil))
 
 ;; (help-add-fundoc-usage DOCSTRING ARGLIST) - add usage line to docstring
 (defun help-add-fundoc-usage ((string | nil) any) -> (string | nil))

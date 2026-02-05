@@ -203,7 +203,7 @@
 (defun previous-overlay-change (int) -> int)
 
 ;; (overlay-lists) - return overlay lists for current buffer
-(defun overlay-lists () -> (pair (list overlay) (list overlay)))
+(defun overlay-lists () -> (cons (list overlay) (list overlay)))
 
 ;; (overlay-recenter POS) - recenter overlays around position
 (defun overlay-recenter (int) -> nil)

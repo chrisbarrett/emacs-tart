@@ -76,7 +76,7 @@
 ;; ============================================================================
 
 ;; (flymake-make-diagnostic BUFFER BEG END TYPE TEXT &optional DATA OVERLAY-PROPERTIES)
-(defun flymake-make-diagnostic (buffer int int symbol string &optional any (list (pair symbol any))) -> any)
+(defun flymake-make-diagnostic (buffer int int symbol string &optional any (list (cons symbol any))) -> any)
 
 ;; ============================================================================
 ;; Backend Management
@@ -146,9 +146,9 @@
 (defvar flymake-note symbol)
 
 ;; Diagnostic type bitmap alist
-(defvar flymake-error-bitmap (pair symbol symbol))
-(defvar flymake-warning-bitmap (pair symbol symbol))
-(defvar flymake-note-bitmap (pair symbol symbol))
+(defvar flymake-error-bitmap (cons symbol symbol))
+(defvar flymake-warning-bitmap (cons symbol symbol))
+(defvar flymake-note-bitmap (cons symbol symbol))
 
 ;; Number of errors/warnings/notes
 (defvar flymake--state any)

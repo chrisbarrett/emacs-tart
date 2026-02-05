@@ -112,7 +112,7 @@
 
 ;; (completion-boundaries STRING TABLE PRED SUFFIX)
 ;; Return completion boundaries
-(defun completion-boundaries (string any any string) -> (pair int int))
+(defun completion-boundaries (string any any string) -> (cons int int))
 
 ;; ===========================================================================
 ;; Minibuffer completion commands

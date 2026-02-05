@@ -131,6 +131,7 @@ let intrinsic_base_name name =
 let intrinsic_display_name base_name =
   match base_name with
   | "HashTable" -> "hash-table"
+  | "Pair" -> "cons"
   | other -> String.lowercase_ascii other
 
 (** Primitive type constants.

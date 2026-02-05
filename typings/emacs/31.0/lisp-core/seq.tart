@@ -90,7 +90,7 @@
 (defun seq-uniq (((list any) | (vector any) | string) &optional ((((any any) -> any)) | nil)) -> (list any))
 
 ;; (seq-group-by FUNCTION SEQUENCE) - group elements by function result
-(defun seq-group-by (((any -> any)) ((list any) | (vector any) | string)) -> (list (pair any (list any))))
+(defun seq-group-by (((any -> any)) ((list any) | (vector any) | string)) -> (list (cons any (list any))))
 
 ;; (seq-partition SEQUENCE N) - partition into sublists of length N
 (defun seq-partition (((list any) | (vector any) | string) int) -> (list (list any)))

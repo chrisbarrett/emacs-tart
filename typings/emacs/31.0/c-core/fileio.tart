@@ -175,7 +175,7 @@
 
 ;; (insert-file-contents FILENAME &optional VISIT BEG END REPLACE) - insert file contents
 ;; Returns (ABSOLUTE-FILE-NAME . BYTES-INSERTED)
-(defun insert-file-contents (string &optional any int int any) -> (pair string int))
+(defun insert-file-contents (string &optional any int int any) -> (cons string int))
 
 ;; (write-region START END FILENAME &optional APPEND VISIT LOCKNAME MUSTBENEW)
 ;; Write region to file. Returns nil.

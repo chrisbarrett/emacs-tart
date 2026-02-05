@@ -17,7 +17,7 @@
 ;;
 ;; This prelude provides:
 ;;   int, float, num, string, symbol, keyword, nil, truthy, never
-;;   list, vector, pair, cons, hash-table
+;;   list, vector, cons, hash-table
 ;;   t, any, bool, option, is, nonempty
 
 ;; -----------------------------------------------------------------------------
@@ -52,18 +52,17 @@
 ;; Vector - alias for intrinsic Vector
 (type vector [a] (%tart-intrinsic%Vector a))
 
-;; Cons cell / pair - alias for intrinsic Pair
-(type pair [a b] (%tart-intrinsic%Pair a b))
+;; Cons cell - alias for intrinsic Pair
 (type cons [a b] (%tart-intrinsic%Pair a b))
 
 ;; Hash table - alias for intrinsic HashTable
 (type hash-table [k v] (%tart-intrinsic%HashTable k v))
 
 ;; Alist - association list (list of pairs)
-;; For homogeneous alists: (alist symbol int) = (list (pair symbol int))
+;; For homogeneous alists: (alist symbol int) = (list (cons symbol int))
 ;; For record-style rows, use the row type directly in signatures:
-;;   (list (pair symbol {name string age int & r}))
-(type alist [k v] (list (pair k v)))
+;;   (list (cons symbol {name string age int & r}))
+(type alist [k v] (list (cons k v)))
 
 ;; Plist - property list (flat key-value sequence)
 ;; Plists are stored as flat lists: (:key1 val1 :key2 val2 ...)

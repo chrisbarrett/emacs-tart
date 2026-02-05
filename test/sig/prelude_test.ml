@@ -55,7 +55,6 @@ let test_prelude_aliases_defined () =
       (* Container bridges *)
       "list";
       "vector";
-      "pair";
       "cons";
       "hash-table";
       (* Derived types *)

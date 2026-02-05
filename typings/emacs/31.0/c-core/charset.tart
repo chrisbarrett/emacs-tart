@@ -50,7 +50,7 @@
 (defun char-charset (int &optional ((list symbol) | symbol | nil)) -> symbol)
 
 ;; (decode-char CHARSET CODE-POINT) - decode charset code-point to character
-(defun decode-char (symbol (int | (pair int int))) -> (int | nil))
+(defun decode-char (symbol (int | (cons int int))) -> (int | nil))
 
 ;; (encode-char CH CHARSET) - encode character to charset code-point
 (defun encode-char (int symbol) -> (int | nil))
@@ -75,7 +75,7 @@
 ;; (map-charset-chars FUNCTION CHARSET &optional ARG FROM-CODE TO-CODE)
 ;; Call FUNCTION for all characters in CHARSET
 ;; FUNCTION is called with (FROM . TO) range and ARG
-(defun map-charset-chars ((((pair int int) any) -> any) symbol &optional any (int | nil) (int | nil)) -> nil)
+(defun map-charset-chars ((((cons int int) any) -> any) symbol &optional any (int | nil) (int | nil)) -> nil)
 
 ;; (unify-charset CHARSET &optional UNIFY-MAP DEUNIFY)
 ;; Unify characters of CHARSET with Unicode

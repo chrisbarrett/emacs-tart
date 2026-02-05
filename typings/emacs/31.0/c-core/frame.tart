@@ -169,7 +169,7 @@
 ;; ===========================================================================
 
 ;; (frame-position &optional FRAME) - return (x . y) position
-(defun frame-position (&optional frame) -> (pair int int))
+(defun frame-position (&optional frame) -> (cons int int))
 
 ;; ===========================================================================
 ;; Frame decorations
@@ -211,10 +211,10 @@
 ;; ===========================================================================
 
 ;; (mouse-position) - return (FRAME X . Y) in characters
-(defun mouse-position () -> (pair frame (pair (int | nil) (int | nil))))
+(defun mouse-position () -> (cons frame (cons (int | nil) (int | nil))))
 
 ;; (mouse-pixel-position) - return (FRAME X . Y) in pixels
-(defun mouse-pixel-position () -> (pair frame (pair (int | nil) (int | nil))))
+(defun mouse-pixel-position () -> (cons frame (cons (int | nil) (int | nil))))
 
 ;; (set-mouse-position FRAME X Y) - set mouse position in characters
 (defun set-mouse-position (frame int int) -> nil)

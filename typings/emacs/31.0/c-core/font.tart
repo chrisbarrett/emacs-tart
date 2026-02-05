@@ -80,7 +80,7 @@
 
 ;; (font-variation-glyphs FONT-OBJECT CHARACTER)
 ;; Return list of variation glyphs as (VARIATION-SELECTOR . GLYPH-ID) pairs
-(defun font-variation-glyphs (any int) -> (list (pair int int)))
+(defun font-variation-glyphs (any int) -> (list (cons int int)))
 
 ;; ===========================================================================
 ;; Font cache

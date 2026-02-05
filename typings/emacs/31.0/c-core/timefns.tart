@@ -23,7 +23,7 @@
 (defun current-time-string (&optional any any) -> string)
 
 ;; (current-time-zone &optional TIME ZONE) - return timezone info as (OFFSET NAME)
-(defun current-time-zone (&optional any any) -> (pair int string))
+(defun current-time-zone (&optional any any) -> (cons int string))
 
 ;; ===========================================================================
 ;; Time conversion
