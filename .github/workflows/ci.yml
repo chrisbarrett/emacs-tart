@@ -40,6 +40,9 @@ jobs:
           key: opam-${{ runner.os }}-${{ hashFiles('tart.opam') }}
           restore-keys: opam-${{ runner.os }}-
 
+      - name: Register problem matchers
+        run: echo "::add-matcher::.github/matchers/ocaml.json"
+
       - name: Build
         run: nix develop .#${{ matrix.emacs }} --command dune build
 
@@ -64,6 +67,9 @@ jobs:
             _opam
           key: opam-${{ runner.os }}-${{ hashFiles('tart.opam') }}
           restore-keys: opam-${{ runner.os }}-
+
+      - name: Register problem matchers
+        run: echo "::add-matcher::.github/matchers/ocaml.json"
 
       - name: Format check
         run: |

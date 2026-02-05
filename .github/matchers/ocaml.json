@@ -1,0 +1,21 @@
+{
+  "problemMatcher": [
+    {
+      "owner": "ocaml",
+      "pattern": [
+        {
+          "regexp": "^File \"(.+)\", lines? (\\d+)(?:-(\\d+))?, characters (\\d+)-(\\d+):$",
+          "file": 1,
+          "line": 2,
+          "endLine": 3,
+          "column": 4,
+          "endColumn": 5
+        },
+        {
+          "regexp": "^(?:Error|Warning \\d+(?: \\[\\w+\\])?): (.+)$",
+          "message": 1
+        }
+      ]
+    }
+  ]
+}
