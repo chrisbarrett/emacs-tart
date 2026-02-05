@@ -1890,7 +1890,7 @@ let deduplicate_completions (items : Protocol.completion_item list) :
     items;
   Hashtbl.fold (fun _ item acc -> item :: acc) tbl []
   |> List.sort (fun a b ->
-         String.compare a.Protocol.ci_label b.Protocol.ci_label)
+      String.compare a.Protocol.ci_label b.Protocol.ci_label)
 
 (** Handle textDocument/completion request.
 

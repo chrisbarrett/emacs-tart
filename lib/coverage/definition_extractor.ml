@@ -1,6 +1,7 @@
 (** Extract definitions from Emacs Lisp files.
 
-    This module parses `.el` files and extracts all public definitions including:
+    This module parses `.el` files and extracts all public definitions
+    including:
     - Functions (defun, defsubst, cl-defun, defmacro, cl-defmacro)
     - Variables (defvar, defcustom, defconst, defvar-local)
     - Structs (cl-defstruct with generated accessors)

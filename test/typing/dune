@@ -1,21 +1,26 @@
 (test
  (name types_test)
+ (modules types_test)
  (libraries tart alcotest))
 
 (test
  (name infer_test)
+ (modules infer_test)
  (libraries tart alcotest))
 
 (test
  (name unify_test)
+ (modules unify_test)
  (libraries tart alcotest))
 
 (test
  (name generalize_test)
+ (modules generalize_test)
  (libraries tart alcotest))
 
 (test
  (name check_test)
+ (modules check_test)
  (libraries tart alcotest str)
  (deps
   (source_tree %{project_root}/typings))
@@ -26,10 +31,12 @@
 
 (test
  (name diagnostic_test)
+ (modules diagnostic_test)
  (libraries tart alcotest str))
 
 (test
  (name module_check_test)
+ (modules module_check_test)
  (libraries tart alcotest unix)
  (deps
   (source_tree %{project_root}/typings))
@@ -40,16 +47,20 @@
 
 (test
  (name exhaustiveness_test)
+ (modules exhaustiveness_test)
  (libraries tart alcotest))
 
 (test
  (name kind_test)
+ (modules kind_test)
  (libraries tart alcotest))
 
 (test
  (name kind_infer_test)
+ (modules kind_infer_test)
  (libraries tart alcotest))
 
 (test
  (name source_excerpt_test)
+ (modules source_excerpt_test)
  (libraries tart alcotest str unix))

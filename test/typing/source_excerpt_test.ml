@@ -159,10 +159,10 @@ let test_fallback_format () =
     (String.length result > 0
      && Str.string_match (Str.regexp_string "String") result 0
     ||
-    try
-      ignore (Str.search_forward (Str.regexp_string "String") result 0);
-      true
-    with Not_found -> false);
+      try
+        ignore (Str.search_forward (Str.regexp_string "String") result 0);
+        true
+      with Not_found -> false);
   Alcotest.(check bool)
     "shows found" true
     (try

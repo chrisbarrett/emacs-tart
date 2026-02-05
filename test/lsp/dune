@@ -1,9 +1,11 @@
 (test
  (name rpc_test)
+ (modules rpc_test)
  (libraries tart str alcotest))
 
 (test
  (name server_test)
+ (modules server_test)
  (libraries tart str alcotest)
  (deps
   (source_tree %{project_root}/typings))
@@ -14,10 +16,12 @@
 
 (test
  (name document_test)
+ (modules document_test)
  (libraries tart alcotest))
 
 (test
  (name form_cache_test)
+ (modules form_cache_test)
  (libraries tart alcotest)
  (deps
   (source_tree %{project_root}/typings))
@@ -28,8 +32,10 @@
 
 (test
  (name graph_tracker_test)
+ (modules graph_tracker_test)
  (libraries tart alcotest))
 
 (test
  (name signature_tracker_test)
+ (modules signature_tracker_test)
  (libraries tart alcotest))

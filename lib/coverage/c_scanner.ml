@@ -1,7 +1,7 @@
 (** C source scanner for Emacs DEFUNs, DEFVARs, and DEFSYMs.
 
-    Parses Emacs C source files to extract Lisp-accessible definitions.
-    Supports DEFUN (functions), DEFVAR_* (variables), and DEFSYM (symbols).
+    Parses Emacs C source files to extract Lisp-accessible definitions. Supports
+    DEFUN (functions), DEFVAR_* (variables), and DEFSYM (symbols).
 
     See Spec 29, R4-R6 for requirements. *)
 
@@ -73,36 +73,21 @@ let scan_file (path : string) : c_definition list =
       let defuns =
         find_all_matches defun_re 1 content
         |> List.map (fun (name, pos) ->
-               {
-                 name;
-                 kind = Defun;
-                 file;
-                 line = count_lines_up_to content pos;
-               })
+            { name; kind = Defun; file; line = count_lines_up_to content pos })
       in
 
       (* Find DEFVARs - group 2 has the name (group 1 is LISP|INT|BOOL) *)
       let defvars =
         find_all_matches defvar_re 2 content
         |> List.map (fun (name, pos) ->
-               {
-                 name;
-                 kind = Defvar;
-                 file;
-                 line = count_lines_up_to content pos;
-               })
+            { name; kind = Defvar; file; line = count_lines_up_to content pos })
       in
 
       (* Find DEFSYMs - group 1 has the name *)
       let defsyms =
         find_all_matches defsym_re 1 content
         |> List.map (fun (name, pos) ->
-               {
-                 name;
-                 kind = Defsym;
-                 file;
-                 line = count_lines_up_to content pos;
-               })
+            { name; kind = Defsym; file; line = count_lines_up_to content pos })
       in
 
       defuns @ defvars @ defsyms

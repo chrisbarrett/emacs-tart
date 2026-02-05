@@ -1,9 +1,11 @@
 (test
  (name acceptance_test)
+ (modules acceptance_test)
  (libraries test_harness alcotest))
 
 (test
  (name fixture_test)
+ (modules fixture_test)
  (libraries test_harness alcotest)
  (deps
   %{bin:tart}

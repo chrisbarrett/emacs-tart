@@ -1,27 +1,34 @@
 (test
  (name definition_extractor_test)
+ (modules definition_extractor_test)
  (libraries coverage syntax alcotest))
 
 (test
  (name file_scanner_test)
+ (modules file_scanner_test)
  (libraries coverage alcotest))
 
 (test
  (name coverage_report_test)
+ (modules coverage_report_test)
  (libraries coverage core syntax alcotest))
 
 (test
  (name report_format_test)
+ (modules report_format_test)
  (libraries coverage syntax str alcotest))
 
 (test
  (name emacs_source_test)
+ (modules emacs_source_test)
  (libraries coverage str alcotest))
 
 (test
  (name c_scanner_test)
+ (modules c_scanner_test)
  (libraries coverage unix alcotest))
 
 (test
  (name emacs_coverage_test)
+ (modules emacs_coverage_test)
  (libraries coverage sig core unix alcotest))

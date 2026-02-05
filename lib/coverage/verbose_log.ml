@@ -1,7 +1,7 @@
 (** Verbose logging utility for coverage commands.
 
-    Provides conditional logging to stderr with a [verbose] prefix.
-    Used by coverage and emacs-coverage commands for debugging output.
+    Provides conditional logging to stderr with a [verbose] prefix. Used by
+    coverage and emacs-coverage commands for debugging output.
 
     See Spec 30 for requirements. *)
 

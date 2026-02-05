@@ -93,11 +93,11 @@ let () =
         if Sys.file_exists errors_dir && Sys.is_directory errors_dir then
           Sys.readdir errors_dir |> Array.to_list
           |> List.filter_map (fun name ->
-                 let subdir = Filename.concat errors_dir name in
-                 if Sys.is_directory subdir then
-                   let tests = fixture_tests_for_dir ~tart_bin ~dir:subdir in
-                   if tests <> [] then Some ("errors/" ^ name, tests) else None
-                 else None)
+              let subdir = Filename.concat errors_dir name in
+              if Sys.is_directory subdir then
+                let tests = fixture_tests_for_dir ~tart_bin ~dir:subdir in
+                if tests <> [] then Some ("errors/" ^ name, tests) else None
+              else None)
         else []
       in
       let tests =

@@ -128,23 +128,22 @@ let coverage_percentage (summary : c_coverage_summary) : float =
 let uncovered_public (result : c_coverage_result) : c_coverage_item list =
   result.items
   |> List.filter (fun item ->
-         (not (C_scanner.is_private item.definition.name))
-         && item.status = Uncovered)
+      (not (C_scanner.is_private item.definition.name))
+      && item.status = Uncovered)
   |> List.sort (fun a b ->
-         String.compare a.definition.C_scanner.name b.definition.C_scanner.name)
+      String.compare a.definition.C_scanner.name b.definition.C_scanner.name)
 
 (** Get all covered public definitions, sorted alphabetically. *)
 let covered_public (result : c_coverage_result) : c_coverage_item list =
   result.items
   |> List.filter (fun item ->
-         (not (C_scanner.is_private item.definition.name))
-         && item.status = Covered)
+      (not (C_scanner.is_private item.definition.name)) && item.status = Covered)
   |> List.sort (fun a b ->
-         String.compare a.definition.C_scanner.name b.definition.C_scanner.name)
+      String.compare a.definition.C_scanner.name b.definition.C_scanner.name)
 
 (** Get all private definitions, sorted alphabetically. *)
 let private_definitions (result : c_coverage_result) : c_coverage_item list =
   result.items
   |> List.filter (fun item -> C_scanner.is_private item.definition.name)
   |> List.sort (fun a b ->
-         String.compare a.definition.C_scanner.name b.definition.C_scanner.name)
+      String.compare a.definition.C_scanner.name b.definition.C_scanner.name)

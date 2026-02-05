@@ -62,8 +62,8 @@ let find_similar_files ~max_distance dir basename =
     in
     entries
     |> List.filter_map (fun name ->
-           let dist = levenshtein basename name in
-           if dist > 0 && dist <= max_distance then Some (name, dist) else None)
+        let dist = levenshtein basename name in
+        if dist > 0 && dist <= max_distance then Some (name, dist) else None)
     |> List.sort (fun (_, d1) (_, d2) -> compare d1 d2)
     |> List.map fst
 

@@ -1,7 +1,7 @@
 (** Coverage report generation.
 
-    This module compares definitions from .el files against signatures
-    in .tart files to calculate coverage.
+    This module compares definitions from .el files against signatures in .tart
+    files to calculate coverage.
 
     See Spec 28, R10-R13 for requirements. *)
 

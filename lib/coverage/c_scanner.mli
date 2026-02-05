@@ -1,7 +1,7 @@
 (** C source scanner for Emacs DEFUNs, DEFVARs, and DEFSYMs.
 
-    Parses Emacs C source files to extract Lisp-accessible definitions.
-    Supports DEFUN (functions), DEFVAR_* (variables), and DEFSYM (symbols).
+    Parses Emacs C source files to extract Lisp-accessible definitions. Supports
+    DEFUN (functions), DEFVAR_* (variables), and DEFSYM (symbols).
 
     See Spec 29, R4-R6 for requirements. *)
 

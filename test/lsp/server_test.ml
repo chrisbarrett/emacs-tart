@@ -791,10 +791,10 @@ let test_hover_on_literal () =
         "contains Int type" true
         (String.length value > 0
         &&
-        try
-          let _ = Str.search_forward (Str.regexp_string "int") value 0 in
-          true
-        with Not_found -> false)
+          try
+            let _ = Str.search_forward (Str.regexp_string "int") value 0 in
+            true
+          with Not_found -> false)
 
 let test_hover_on_function_call () =
   let init_msg =

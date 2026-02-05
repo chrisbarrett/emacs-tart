@@ -1,7 +1,7 @@
 (** Report formatting for coverage output.
 
-    This module generates human-readable and JSON output formats
-    for coverage reports.
+    This module generates human-readable and JSON output formats for coverage
+    reports.
 
     See Spec 28, R11-R13, R15, R18 for requirements. *)
 
