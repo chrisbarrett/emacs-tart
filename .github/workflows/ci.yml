@@ -73,7 +73,12 @@ jobs:
 
       - name: Format check
         run: |
-          nix develop --command dune fmt
+          output=$(nix develop --command dune fmt 2>&1)
+          echo "$output"
+          if echo "$output" | grep -q "^Warning:"; then
+            echo "::error::Lint warnings found. Fix the warnings above."
+            exit 1
+          fi
           if ! git diff --quiet; then
             echo "::error::Formatting check failed. Run 'dune fmt' locally to fix."
             git diff --stat
