@@ -81,7 +81,7 @@ jobs:
 
       - name: Format check
         run: |
-          output=$(nix develop --command dune fmt 2>&1)
+          output=$(nix develop --command sh -c 'dune fmt 2>&1')
           echo "$output"
           if echo "$output" | grep -q "^Warning:"; then
             echo "::error::Lint warnings found. Fix the warnings above."
