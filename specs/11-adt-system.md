@@ -78,6 +78,12 @@ Row types use `{ ... }` syntax. Map-like constructors come in two forms:
 (map {name string & r})          ; any map-like with these fields
 ```
 
+Row-typed map forms expand structurally. The row occupies the value position of
+the underlying key-value pair, so `(alist {name string & r})` becomes
+`(list (cons symbol {name string & r}))`. The field names are preserved in the
+row and used for static key lookup (see R4). Row-to-plain-type unification
+enables compatibility between row-typed and homogeneous forms (see R15).
+
 Example function accepting any map with at least a `name` field:
 
 ```lisp
@@ -150,7 +156,51 @@ warning—single branch is exhaustive
 **When** called with an alist having extra fields **Then** type-checks
 successfully
 
-**Verify:** `dune test`; extra fields don't cause type errors
+#### Row-typed alist expansion
+
+When `alist` receives a single row argument instead of the standard `k v` pair,
+the signature loader expands it structurally—the row occupies the value position
+of the cons pair:
+
+```
+(alist {name string age int & r})
+  expands to → (list (cons symbol {name string age int & r}))
+```
+
+The expanded form preserves the full field-name-to-type mapping in the `TRow`.
+The type checker extracts the row from the value slot of `(cons symbol TRow)`
+and uses `row_lookup` to statically resolve whether a literal key is present and
+what its type is.
+
+This means row-typed alists are structurally compatible with homogeneous alists
+(see R15). For example, `(alist {name string age string})` is compatible with
+`(alist symbol string)` because both expand to `(list (cons symbol ...))` and
+the row `{name string age string}` unifies with `string`.
+
+#### alist-get return type rules
+
+`(alist-get KEY ALIST &optional DEFAULT REMOVE TESTFN)` return types depend on
+whether KEY is a literal symbol and whether the row contains that field:
+
+| Case | KEY                | Row    | TESTFN     | Result     | Diagnostic |
+| ---- | ------------------ | ------ | ---------- | ---------- | ---------- |
+| 1    | literal, in row    | any    | compatible | field_type | —          |
+| 2    | literal, in row    | any    | compat+DEF | field_type | —          |
+| 3    | literal, NOT in row | closed | compatible | nil        | note       |
+| 4    | literal, NOT in row | closed | compat+DEF | default    | note       |
+| 5    | literal, NOT in row | open   | compatible | (a \| nil) | —          |
+| 6    | variable key       | any    | compatible | join \| nil | —          |
+| 7    | any                | any    | incompat   | —          | error      |
+
+Cases 1–2: literal key found in the row—return the field's type directly (no
+`| nil`), since the key is provably present. Cases 3–4: literal key absent from
+a closed row—statically known absent, emit a note. Case 5: absent from an open
+row—might exist in the unknown tail. Case 6: variable key—cannot determine
+which field, return the join of all field value types. Case 7: incompatible
+equality predicate for the key type (see R14).
+
+**Verify:** `dune test`; extra fields don't cause type errors; literal key
+access returns precise field types
 
 ### R5: Row-polymorphic plist types
 
@@ -393,12 +443,63 @@ least a `name` field are accepted
 
 **Verify:** `dune test`; all three forms work correctly
 
+### R14: Equality predicate bounds for alist-get testfn
+
+`alist-get` uses `eq` by default, which only produces meaningful results for
+types where identity coincides with equality (symbols, keywords, small
+integers). The prelude (Spec 48) defines `eq-safe` and `eql-safe` union types
+as bounds for equality predicates.
+
+**Given** an `alist-get` call with no TESTFN (default `eq`):
+
+```lisp
+(alist-get 'name person)          ; OK: symbol <: eq-safe
+(alist-get "name" person)          ; Error: string not <: eq-safe
+```
+
+**When** the key type is checked **Then** it must satisfy the `eq-safe` bound
+(be a subtype of `(symbol | keyword | int | t | nil)`)
+
+**Given** an `alist-get` call with an explicit TESTFN:
+
+```lisp
+(alist-get key person nil nil #'equal)   ; OK: equal accepts any
+(alist-get key person nil nil #'string=) ; key must be (string | symbol)
+```
+
+**When** the TESTFN is provided **Then** normal function type checking applies:
+TESTFN must accept `(K K) -> any` where K is the key type. No separate
+`eq-safe` check is required—the TESTFN's own parameter types enforce
+compatibility.
+
+**Verify:** `dune test`; string keys without explicit testfn produce a
+diagnostic; incompatible testfn produces a type error
+
+### R15: Row-to-homogeneous unification
+
+When a row type appears where a plain type is expected (e.g. in the value slot
+of a cons pair during unification with a homogeneous alist), the unification
+succeeds if all field types in the row unify with that plain type:
+
+```
+{name string age string} ~ string        => OK (all fields are string)
+{name string age int} ~ string           => FAIL (int /~ string)
+{name string & r} ~ string               => OK with constraint: r's fields ~ string
+```
+
+This rule enables structural compatibility between `(alist {name string age
+string})` (which expands to `(list (cons symbol {name string age string}))`) and
+`(alist symbol string)` (which expands to `(list (cons symbol string))`).
+
+**Verify:** `dune test`; row-typed alist with uniform field types unifies with
+homogeneous alist type
+
 ## Tasks
 
 - [x] [R1] Implement union type representation and subtyping
 - [x] [R2] Implement type narrowing in pcase branches
 - [x] [R3] Implement exhaustiveness checking for unions
-- [ ] [R4] Implement row-polymorphic alist types
+- [~] [R4] Implement row-polymorphic alist types (basic literal-key path done)
 - [ ] [R5] Implement row-polymorphic plist types
 - [ ] [R6] Handle map pattern exhaustiveness correctly
 - [ ] [R7] Distinguish closed unions from open row types
@@ -408,5 +509,16 @@ least a `name` field are accepted
 - [x] [R11] Implement row unification rules
 - [ ] [R12] Implement generic `map` supertype
 - [ ] [R13] Implement all map type forms (bare, homogeneous, record)
+- [ ] [R14] Implement equality predicate bounds for alist-get testfn
+- [ ] [R15] Implement row-to-homogeneous unification rule
 
-**Status:** Union types implemented (`TUnion` in `lib/core/types.mli`), pcase narrowing in `lib/typing/infer.ml`, exhaustiveness in `lib/typing/exhaustiveness.ml`. Row type foundation implemented: `TRow` variant in types.ml with row unification rules (a56b4e2), row syntax parsing in signature files (f1edff7), type subtraction in sig_loader.ml, `alist`/`plist` aliases in prelude. Remaining: row type inference from field access (R8), literal types (R9), generic `map` supertype (R12).
+**Status:** Union types implemented (`TUnion` in `lib/core/types.mli`), pcase
+narrowing in `lib/typing/infer.ml`, exhaustiveness in
+`lib/typing/exhaustiveness.ml`. Row type foundation implemented: `TRow` variant
+in types.ml with row unification rules (a56b4e2), row syntax parsing in
+signature files (f1edff7), type subtraction in sig_loader.ml, `alist`/`plist`
+aliases in prelude. Basic row-typed `alist-get` inference for literal symbol keys
+(b8942b6) returns `(field_type | nil)`. Remaining: Design B alist expansion
+(R4), refined `alist-get` return types (R4 table), row-to-homogeneous
+unification (R15), equality predicate bounds (R14), row type inference from
+field access (R8), literal types (R9), generic `map` supertype (R12).

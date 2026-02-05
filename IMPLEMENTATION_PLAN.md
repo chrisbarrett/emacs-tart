@@ -1,6 +1,6 @@
 # Row Polymorphism Implementation Plan
 
-Complete the row polymorphism feature (Spec 11, R4-R13). The foundation is
+Complete the row polymorphism feature (Spec 11, R4-R15). The foundation is
 already in place: `TRow` representation, row parsing in signatures, and row
 unification rules. This plan covers the remaining work broken into small,
 self-contained iterations.
@@ -15,10 +15,14 @@ self-contained iterations.
 - `STRow` → `TRow` conversion in `sig_loader.ml`
 - `alist`, `plist`, `hash-table` aliases in prelude
 - `alist-get` polymorphic signature in `subr.tart`
+- Basic row-typed `alist-get` inference for literal symbol keys (b8942b6):
+  constrains alist to `TApp(TCon "alist", [TRow {key α & r}])`, returns
+  `(α | nil)`. This is a stepping stone—Iteration 1 changes the internal
+  representation to Design B.
 - 5 parser tests + 7 unification tests passing
 
-**Remaining (Spec 11 R4-R13):**
-- R4: Row-polymorphic alist types (signature-driven)
+**Remaining (Spec 11 R4-R15):**
+- R4: Design B alist expansion + refined `alist-get` return types
 - R5: Row-polymorphic plist types (signature-driven)
 - R6: Map pattern exhaustiveness
 - R7: Closed unions vs open row types
@@ -26,55 +30,162 @@ self-contained iterations.
 - R9: Literal types with deferred widening
 - R12: Generic `map` supertype
 - R13: All map type forms
+- R14: Equality predicate bounds for `alist-get` testfn
+- R15: Row-to-homogeneous unification rule
 
 ## Iterations
 
-### Iteration 1: Row-typed alist signatures work end-to-end
+### Iteration 1: Design B alist expansion
 
-**Goal:** A function annotated with `(alist {name string & r})` type-checks
-against callers providing alists with extra fields.
+**Goal:** `(alist {name string & r})` expands to
+`(list (cons symbol {name string & r}))` in `sig_loader.ml`. The row occupies
+the value position of the cons pair, preserving field names for static key
+lookup while maintaining structural compatibility with homogeneous alists.
 
 **What to build:**
 
-1. Wire row types through `alist` type application in `sig_loader.ml`
-   - When `alist` is applied to a single row argument instead of `k v`, produce
-     `TApp(List, [TApp(Pair, [Symbol, TRow {...}])])` or a dedicated
-     representation
-   - Decision: treat `(alist {name string & r})` as sugar for
-     `(list (pair symbol (alist-row {name string & r})))`, OR introduce a new
-     internal type constructor for record-style alists that carries the row
-     directly. The simpler path: `alist` with a row arg is a distinct type
-     form — add a `TMap` or handle `TApp(alist, [TRow ...])` as a special case
-     in unification
-   - Start with the simplest approach: `(alist {name string & r})` parses as
-     `TApp(TCon "alist", [TRow {name:string & r}])` and unification matches this
-     against concrete alist values
-
-2. Add an `alist-get` overload that works with row-typed alists
-   - When calling `(alist-get 'name person)` where `person` has type
-     `(alist {name string & r})`, the return type should be `(string | nil)`
-   - This requires special-case logic in `infer.ml` for `alist-get` calls where
-     the first arg is a quoted symbol and the second arg has a row-typed alist
+1. In `sig_loader.ml`, add a special case for the `alist` alias when applied to
+   a single row argument. Currently the arity mismatch (1 arg vs 2 params)
+   causes a fall-through to `TApp(TCon "alist", [TRow ...])`. Change this to
+   expand as `TApp(List, [TApp(Pair, [Symbol, TRow {...}])])`:
+   - Detect: name is `"alist"`, args has length 1, and the single arg is a row
      type
+   - Expand: `list_of (pair_of Prim.symbol row_type)`
+   - Apply the same pattern for `plist` (key type: `keyword`) and `hash-table`
 
-3. Add fixture tests:
-   - `test/fixtures/typing/rows/alist_row_basic.el` — function with row-typed
-     alist param, called with extra fields
-   - `test/fixtures/typing/rows/alist_row_closed.el` — closed row rejects extra
-     fields
+2. Update `infer_alist_get_row` in `infer.ml` (from b8942b6) to use the
+   expanded form:
+   - Instead of `TApp(TCon "alist", [TRow ...])`, constrain the alist expression
+     to `TApp(List, [TApp(Pair, [Symbol, TRow {KEY α & r}])])` where `α` is a
+     fresh type variable for the field's value type and `r` is a fresh row
+     variable
+   - The `row_lookup` on the extracted `TRow` is what enables static key
+     resolution
+
+3. Add the `TRow ~ T` unification rule in `unify.ml` (Spec 11 R15):
+   - When unifying `TRow {f1:t1, f2:t2, ...}` with a plain type `T`, succeed
+     when every `ti ~ T`
+   - Open rows: the row variable must also satisfy the constraint (bind it to a
+     row where all field types are `T`)
+   - This enables compatibility between row-typed and homogeneous alists
+
+4. Existing fixture tests should continue passing (may need updated expectations
+   if the type printer output changes due to the expanded representation)
 
 **Files to change:**
-- `lib/sig/sig_loader.ml` — handle alist with row arg
-- `lib/typing/infer.ml` — special-case `alist-get` with literal key + row type
-- `lib/typing/unify.ml` — potentially handle `TApp(alist, [TRow])` matching
-- `test/fixtures/typing/rows/` — new fixture tests
+- `lib/sig/sig_loader.ml` — 1-arg alist/plist/hash-table expansion
+- `lib/typing/infer.ml` — update `infer_alist_get_row` to use expanded form
+- `lib/typing/unify.ml` — add `TRow ~ T` compatibility rule
+- `test/fixtures/typing/rows/` — update expectations if needed
 
-**Verify:** `dune test` passes; fixture tests demonstrate row-typed alist
-signatures accepting extra fields
+**Verify:** `dune test` passes; existing row fixtures still pass
 
 ---
 
-### Iteration 2: Row-typed plist signatures
+### Iteration 2: Refined alist-get return types
+
+**Goal:** `alist-get` returns precise types based on the 7-case decision table
+from Spec 11 R4. Currently always returns `(field_type | nil)`.
+
+**What to build:**
+
+1. Expand `infer_alist_get_row` in `infer.ml` to handle all cases:
+   - **Cases 1–2** (literal key, present in row): return `field_type` directly,
+     not `field_type | nil`. The key is provably present, so nil is impossible
+     (assuming the value type itself doesn't include nil).
+   - **Cases 3–4** (literal key, absent from closed row): return `nil` (or the
+     DEFAULT type if provided). Emit a note diagnostic—the key is statically
+     known absent.
+   - **Case 5** (literal key, absent from open row): current behavior—return
+     `(α | nil)` since the key might exist in the unknown row tail.
+   - **Case 6** (variable key): return the join of all field value types `| nil`.
+     Cannot determine which field, so use the union of all possibilities.
+   - **Case 7** (incompatible testfn): defer to Iteration 3.
+
+2. This requires two-phase inference for literal keys:
+   - First, try to resolve the alist expression's type to see if it already has
+     a known row (from an annotation or prior constraint)
+   - If the row is known, use `row_lookup` to check field membership
+   - If the row is not yet known (fresh type variable), fall back to current
+     behavior (constrain with fresh row, return `α | nil`)
+
+3. Add fixture tests for new cases:
+   - `test/fixtures/typing/rows/alist_get_precise.el` — literal key in row
+     returns exact type (no nil)
+   - `test/fixtures/typing/rows/alist_get_absent.el` — literal key absent from
+     closed row returns nil with note
+   - `test/fixtures/typing/rows/alist_get_default.el` — absent key with default
+     returns default type
+   - `test/fixtures/typing/rows/alist_get_variable.el` — variable key returns
+     join of field types
+
+**Files to change:**
+- `lib/typing/infer.ml` — expand `infer_alist_get_row` for all cases
+- `lib/typing/diagnostic.ml` — add note-level diagnostic for absent key
+- `test/fixtures/typing/rows/` — new fixture tests
+
+**Verify:** `dune test` passes
+
+---
+
+### Iteration 3: Equality predicate bounds
+
+**Goal:** `eq` and `eql` carry bounds that prevent unsafe comparisons;
+`alist-get` checks its default testfn against `eq-safe`. Implements Spec 48 R7
+and Spec 11 R14.
+
+**What to build:**
+
+1. Add `eq-safe` and `eql-safe` type aliases to `typings/tart-prelude.tart`:
+   ```lisp
+   (type eq-safe (symbol | keyword | int | t | nil))
+   (type eql-safe (symbol | keyword | int | float | t | nil))
+   ```
+
+2. Update equality predicate signatures:
+   - `typings/emacs/31.0/c-core/data.tart`: change `eq` to
+     `(defun eq [(a : eq-safe)] (a a) -> bool)`
+   - `typings/emacs/31.0/c-core/fns.tart`: change `eql` to
+     `(defun eql [(a : eql-safe)] (a a) -> bool)`
+   - `equal` stays as `(defun equal (any any) -> bool)` — no bound needed
+
+3. Generalize `satisfies_bound` in `sig_loader.ml` (line 516):
+   - Currently only handles the `truthy` bound via special case
+   - Change to a proper subtype check: `arg_type <: bound_type`
+   - For union bounds (`eq-safe` = `symbol | keyword | int | t | nil`), check
+     that `arg_type` is a member of (or subtype of a member of) the union
+   - Keep the existing `truthy` fast path; add a general union-membership check
+     as fallback
+
+4. Wire testfn checking into `infer_alist_get_row`:
+   - When no TESTFN argument is provided: check that the key type satisfies
+     `eq-safe` (look up `eq`'s signature, extract its bound)
+   - When TESTFN is provided: type-check it as `(K K) -> any` where K is the
+     key type. The TESTFN's own parameter types enforce compatibility (e.g.
+     `string=` requires `(string | symbol)` keys)
+   - This implements Case 7 from the decision table
+
+5. Add fixture tests:
+   - `test/fixtures/typing/rows/eq_safe_symbol.el` — symbol keys with default
+     eq: OK
+   - `test/fixtures/typing/rows/eq_safe_string.el` — string keys with default
+     eq: error
+   - `test/fixtures/typing/rows/eq_safe_equal.el` — string keys with explicit
+     `#'equal`: OK
+
+**Files to change:**
+- `typings/tart-prelude.tart` — add `eq-safe`, `eql-safe`
+- `typings/emacs/31.0/c-core/data.tart` — update `eq` signature
+- `typings/emacs/31.0/c-core/fns.tart` — update `eql` signature
+- `lib/sig/sig_loader.ml` — generalize `satisfies_bound`
+- `lib/typing/infer.ml` — testfn checking in `infer_alist_get_row`
+- `test/fixtures/typing/rows/` — new fixture tests
+
+**Verify:** `dune test` passes
+
+---
+
+### Iteration 4: Row-typed plist signatures
 
 **Goal:** Same as Iteration 1 but for plist types with keyword fields.
 
@@ -84,6 +195,8 @@ signatures accepting extra fields
    - `(plist {:name string & r})` should work analogously to alist rows
    - Plist rows use `:keyword` prefixed field names (already parsed by
      `sig_parser.ml`)
+   - If not already handled in Iteration 1 step 1, add the plist expansion:
+     `(plist {:name string & r})` → `(list (keyword | TRow {...}))`
 
 2. Add `plist-get` overload for row-typed plists
    - When calling `(plist-get person :name)` where `person` has type
@@ -95,7 +208,7 @@ signatures accepting extra fields
    - `test/fixtures/typing/rows/plist_row_closed.el`
 
 **Files to change:**
-- `lib/sig/sig_loader.ml` — handle plist with row arg
+- `lib/sig/sig_loader.ml` — handle plist with row arg (if not done in Iter 1)
 - `lib/typing/infer.ml` — special-case `plist-get` with keyword key + row type
 - `test/fixtures/typing/rows/` — new fixture tests
 
@@ -103,7 +216,7 @@ signatures accepting extra fields
 
 ---
 
-### Iteration 3: Row type inference from field access (R8)
+### Iteration 5: Row type inference from field access (R8)
 
 **Goal:** When `alist-get` or `plist-get` is called with a literal key, infer a
 row type for the map argument without requiring an explicit annotation.
@@ -112,7 +225,7 @@ row type for the map argument without requiring an explicit annotation.
 
 1. In `infer.ml`, detect `alist-get` calls with literal first arg:
    - `(alist-get 'name x)` → constrain `x` to have type
-     `(alist {name α & r})` where `α` is a fresh type variable
+     `(list (cons symbol {name α & r}))` where `α` is a fresh type variable
    - Multiple accesses accumulate fields:
      `(alist-get 'name x)` + `(alist-get 'age x)` → `x : (alist {name α age β & r})`
 
@@ -135,7 +248,7 @@ row type for the map argument without requiring an explicit annotation.
 
 ---
 
-### Iteration 4: Generic `map` supertype (R12)
+### Iteration 6: Generic `map` supertype (R12)
 
 **Goal:** A `map` type that is a supertype of `alist`, `plist`, and
 `hash-table`, enabling functions that accept any map-like structure.
@@ -172,7 +285,7 @@ row type for the map argument without requiring an explicit annotation.
 
 ---
 
-### Iteration 5: Closed unions vs open row types (R7)
+### Iteration 7: Closed unions vs open row types (R7)
 
 **Goal:** Ensure unions are always exhaustive while row types permit extra
 fields. Document and test the boundary.
@@ -198,7 +311,7 @@ fields. Document and test the boundary.
 
 ---
 
-### Iteration 6: Map pattern integration (R6)
+### Iteration 8: Map pattern integration (R6)
 
 **Goal:** `(pcase-let (((map :name :age) person)) ...)` integrates with row
 types for field extraction.
@@ -226,7 +339,7 @@ types for field extraction.
 
 ---
 
-### Iteration 7: All map type forms (R13)
+### Iteration 9: All map type forms (R13)
 
 **Goal:** Support bare `(alist)`, homogeneous `(alist k v)`, and record
 `(alist {fields...})` forms, and ensure they interact correctly.
@@ -261,12 +374,16 @@ planned separately. The row polymorphism iterations above do not depend on it.
 Iterations are ordered by dependency:
 
 ```
-1 (alist rows) ──► 2 (plist rows) ──► 3 (row inference)
-                                           │
-                        4 (map supertype) ◄─┘
-                             │
-              5 (unions vs rows) ──► 6 (map patterns) ──► 7 (all forms)
+1 (Design B expansion) ──► 2 (refined alist-get) ──► 3 (eq bounds)
+                                                          │
+                                   4 (plist rows) ◄───────┘
+                                        │
+                                   5 (row inference) ──► 6 (map supertype)
+                                                              │
+                            7 (unions vs rows) ──► 8 (map patterns) ──► 9 (all forms)
 ```
 
-Iterations 1-3 form the critical path. Iterations 4-7 can be parallelized to
-some degree after 3 is complete.
+Iterations 1–3 form the critical path: Design B expansion, precise return
+types, then equality bounds. Iteration 4 (plist rows) follows the established
+alist pattern. Iterations 5–9 can be parallelized to some degree after 5 is
+complete.

@@ -80,6 +80,13 @@ The prelude defines these types in terms of intrinsics:
 
 ;; Non-empty list (list without nil)
 (type nonempty [a] (is (list a)))
+
+;; Equality predicate safety bounds
+;; eq compares by identity—only safe for interned/fixnum types
+(type eq-safe (symbol | keyword | int | t | nil))
+
+;; eql additionally handles numeric equality
+(type eql-safe (symbol | keyword | int | float | t | nil))
 ```
 
 ### Type Relationships
@@ -89,6 +96,10 @@ Subtyping:
   (nonempty a) <: (list a) <: any
   (nonempty a) <: truthy
   (is (a | nil)) <: a (when a <: truthy)
+  symbol <: eq-safe
+  keyword <: eq-safe
+  int <: eq-safe
+  eq-safe <: eql-safe <: any
 
 Equivalences:
   (list a) = ((cons a (list a)) | nil)
@@ -136,6 +147,40 @@ Every use of `any` must be justified—treat it with absolute suspicion.
 **Rule of thumb:** If you can enumerate the possible types, use a union. Only
 use `any` when the type is genuinely unknowable at compile time AND the value
 is in input position for a predicate.
+
+### Equality Safety Types
+
+Emacs Lisp's `eq` tests identity (pointer equality). For immutable, interned
+types (symbols, keywords, small integers, `t`, `nil`), identity coincides with
+equality, making `eq` safe. For strings, lists, floats, and other
+heap-allocated types, `eq` can return `nil` for structurally equal values.
+
+The prelude defines `eq-safe` and `eql-safe` as union types that bound which
+types can be safely compared by identity:
+
+- `eq-safe`: types where `eq` is reliable—`(symbol | keyword | int | t | nil)`
+- `eql-safe`: adds `float` to `eq-safe`—`eql` handles numeric equality
+
+Note: Emacs Lisp characters are integers (`?A` = `65`), so there is no separate
+`char` type; `int` already covers characters.
+
+These types serve as bounds on equality predicate signatures:
+
+```lisp
+;; In data.tart
+(defun eq [(a : eq-safe)] (a a) -> bool)
+
+;; In fns.tart
+(defun eql [(a : eql-safe)] (a a) -> bool)
+(defun equal (any any) -> bool)   ;; no bound needed—structural equality
+```
+
+This catches a common Emacs Lisp bug: `(eq str1 str2)` compares string pointers
+rather than contents, which is almost never correct. With the `eq-safe` bound,
+`string` arguments to `eq` produce a type error.
+
+For `alist-get` (Spec 11 R14): the default testfn is `eq`, so the key type must
+satisfy `eq-safe`. An explicit TESTFN like `#'equal` bypasses this check.
 
 ## Output
 
@@ -226,6 +271,27 @@ redefining any imported binding—including prelude types—is an error.
 
 **Verify:** `dune test`; nested option is a type error
 
+### R7: Equality safety types
+
+**Given** the prelude types `eq-safe` and `eql-safe`
+**When** used as bounds on type parameters
+**Then** they restrict arguments to types where identity comparison is sound
+
+```lisp
+(eq 'a 'b)        ; OK: symbol <: eq-safe
+(eq "a" "b")       ; Error: string not <: eq-safe
+(eql 1.0 2.0)      ; OK: float <: eql-safe
+(equal "a" "b")    ; OK: equal has no bound
+```
+
+**Given** `satisfies_bound` in `sig_loader.ml`
+**When** checking a type against a union bound like `eq-safe`
+**Then** the argument type must be a subtype of the union (i.e. a member or
+subtype of one of its members)
+
+**Verify:** `dune test`; `eq` with string args produces a type error; `eql`
+with float args succeeds
+
 ## Non-Goals
 
 - **Emacs primitives:** Functions like `car`, `cdr`, `cons` are defined in
@@ -241,5 +307,8 @@ redefining any imported binding—including prelude types—is an error.
 - [x] [R4] Covered by Spec 07 R17 (no-shadowing rule)
 - [x] [R5] Ensure type aliases expand correctly
 - [x] [R6] Validate bounded quantifier on `option`
+- [ ] [R7] Add `eq-safe` and `eql-safe` types; generalize `satisfies_bound`
 
-**Status:** Fully implemented. Prelude at `typings/tart-prelude.tart` (104 lines) with management via `lib/sig/prelude.mli`.
+**Status:** R1–R6 fully implemented. Prelude at `typings/tart-prelude.tart`
+with management via `lib/sig/prelude.mli`. R7 (`eq-safe`, `eql-safe`) specified
+but not yet implemented.
