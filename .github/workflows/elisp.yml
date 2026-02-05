@@ -1,0 +1,72 @@
+name: Emacs Lisp
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'lisp/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'lisp/**'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - emacs: emacsGit
+            advisory: false
+          - emacs: emacs30
+            advisory: true
+
+    name: test (${{ matrix.emacs }})
+    continue-on-error: ${{ matrix.advisory }}
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: DeterminateSystems/determinate-nix-action@89ab342bd48ff7318caf8d39d6a330c7b1df8f2f # v3.15.2
+
+      - uses: DeterminateSystems/magic-nix-cache-action@565684385bcd71bad329742eefe8d12f2e765b39 # v13
+
+      - name: Byte compile
+        run: |
+          nix develop .#${{ matrix.emacs }} --command emacs -Q --batch \
+            -L lisp/ \
+            --eval "(setq byte-compile-error-on-warn t)" \
+            -f batch-byte-compile lisp/tart.el lisp/tart-mode.el
+
+      - name: Run tests
+        run: |
+          nix develop .#${{ matrix.emacs }} --command emacs -Q --batch \
+            -L lisp/ \
+            -l ert \
+            -l lisp/tart-test-helpers.el \
+            -l lisp/tart-tests.el \
+            -l lisp/tart-mode-tests.el \
+            -f ert-run-tests-batch-and-exit
+
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: DeterminateSystems/determinate-nix-action@89ab342bd48ff7318caf8d39d6a330c7b1df8f2f # v3.15.2
+
+      - uses: DeterminateSystems/magic-nix-cache-action@565684385bcd71bad329742eefe8d12f2e765b39 # v13
+
+      - name: Checkdoc
+        run: |
+          nix develop .#emacs30 --command emacs -Q --batch \
+            -L lisp/ \
+            --eval "(require 'checkdoc)" \
+            --eval "(setq checkdoc-force-docstrings-flag nil)" \
+            --eval "(checkdoc-file \"lisp/tart.el\")" \
+            --eval "(checkdoc-file \"lisp/tart-mode.el\")"
