@@ -80,15 +80,4 @@ jobs:
         run: echo "::add-matcher::.github/matchers/ocaml.json"
 
       - name: Format check
-        run: |
-          output=$(nix develop --command sh -c 'eval $(opam env) && dune fmt 2>&1')
-          echo "$output"
-          if echo "$output" | grep -q "^Warning:"; then
-            echo "::error::Lint warnings found. Fix the warnings above."
-            exit 1
-          fi
-          if ! git diff --quiet; then
-            echo "::error::Formatting check failed. Run 'dune fmt' locally to fix."
-            git diff --stat
-            exit 1
-          fi
+        run: nix develop --command dune build @fmt
