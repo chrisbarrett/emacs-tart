@@ -184,6 +184,9 @@ and parse_list_type (contents : Sexp.t list) (span : Loc.span) : sig_type result
   | [] ->
       (* Empty list: nil type *)
       Ok (STCon ("nil", span))
+  (* Check for type predicate: (x is T) where x is a parameter name *)
+  | [ Sexp.Symbol (param_name, _); Sexp.Symbol ("is", _); type_sexp ] ->
+      parse_predicate_type param_name type_sexp span
   (* Check for tuple type *)
   | Sexp.Symbol ("tuple", _) :: args -> parse_tuple_type args span
   (* Check for union type: (type | type | ...) *)
@@ -254,6 +257,20 @@ and parse_union_type (contents : Sexp.t list) (span : Loc.span) :
   | Ok types when List.length types >= 2 -> Ok (STUnion (types, span))
   | Ok _ -> error "Union type requires at least two alternatives" span
   | Error e -> Error e
+
+(** Parse a type predicate: (x is T)
+
+    Type predicates indicate that when the predicate returns truthy, the
+    parameter x has type T. Used for type narrowing in conditionals.
+
+    Examples:
+    - (x is string) - when truthy, x is a string
+    - (x is (list any)) - when truthy, x is a list *)
+and parse_predicate_type (param_name : string) (type_sexp : Sexp.t)
+    (span : Loc.span) : sig_type result =
+  match parse_sig_type type_sexp with
+  | Error e -> Error e
+  | Ok narrowed_type -> Ok (STPredicate (param_name, narrowed_type, span))
 
 (** Parse a type subtraction: (type1 - type2)
 

@@ -66,6 +66,9 @@ and sig_type =
       (** Type subtraction (e.g., [(a - nil)], removes nil from union a) *)
   | STRow of sig_row * span
       (** Row type for record-style typing (e.g., [{name string age int}]) *)
+  | STPredicate of string * sig_type * span
+      (** Type predicate return (e.g., [(x is string)] means "if truthy, x has
+          type string") *)
 
 (** Function parameter in signature types *)
 and sig_param =
@@ -256,3 +259,8 @@ val st_subtract : sig_type -> sig_type -> span -> sig_type
 val st_row : (string * sig_type) list -> string option -> span -> sig_type
 (** Create a row type. [st_row fields var_opt loc] creates a row with the given
     fields and optional row variable name for open rows. *)
+
+val st_predicate : string -> sig_type -> span -> sig_type
+(** Create a type predicate return type.
+    [st_predicate param_name narrowed_type loc] creates a predicate type meaning
+    "if truthy, param_name has type narrowed_type". *)

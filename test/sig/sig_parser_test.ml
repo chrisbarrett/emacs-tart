@@ -235,6 +235,38 @@ let test_row_types_nested () =
   | Ok _ -> Alcotest.fail "Expected row with nested row field"
   | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
 
+(** {1 Type Predicate Tests} *)
+
+let test_predicate_type_simple () =
+  (* (x is string) - type predicate for string *)
+  match parse_type_str "(x is string)" with
+  | Ok (Sig_ast.STPredicate ("x", Sig_ast.STCon ("string", _), _)) -> ()
+  | Ok _ -> Alcotest.fail "Expected predicate type (x is string)"
+  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
+
+let test_predicate_type_application () =
+  (* (x is (list any)) - type predicate with type application *)
+  match parse_type_str "(x is (list any))" with
+  | Ok (Sig_ast.STPredicate ("x", Sig_ast.STApp ("list", _, _), _)) -> ()
+  | Ok _ -> Alcotest.fail "Expected predicate type with list app"
+  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
+
+let test_predicate_in_defun () =
+  (* (defun stringp (x) -> (x is string)) *)
+  match parse_decl_str "(defun stringp (x) -> (x is string))" with
+  | Ok
+      (Sig_ast.DDefun
+         {
+           defun_name = "stringp";
+           defun_params = [ Sig_ast.SPPositional (Sig_ast.STVar ("x", _)) ];
+           defun_return =
+             Sig_ast.STPredicate ("x", Sig_ast.STCon ("string", _), _);
+           _;
+         }) ->
+      ()
+  | Ok _ -> Alcotest.fail "Expected defun with predicate return type"
+  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
+
 (** {1 Declaration Tests} *)
 
 let test_defun_simple () =
@@ -461,6 +493,14 @@ let () =
           Alcotest.test_case "row types empty" `Quick test_row_types_empty;
           Alcotest.test_case "row types plist" `Quick test_row_types_plist;
           Alcotest.test_case "row types nested" `Quick test_row_types_nested;
+        ] );
+      ( "predicate-types",
+        [
+          Alcotest.test_case "simple predicate" `Quick
+            test_predicate_type_simple;
+          Alcotest.test_case "predicate with app" `Quick
+            test_predicate_type_application;
+          Alcotest.test_case "predicate in defun" `Quick test_predicate_in_defun;
         ] );
       ( "declarations",
         [

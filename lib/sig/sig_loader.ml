@@ -99,6 +99,9 @@ let rec validate_type (ctx : tvar_context) (ty : sig_type) : unit result =
   | STRow (row, _) ->
       let field_types = List.map snd row.srow_fields in
       validate_types ctx field_types
+  | STPredicate (_, narrowed_type, _) ->
+      (* Validate the narrowed type *)
+      validate_type ctx narrowed_type
 
 and validate_types ctx types =
   List.fold_left
@@ -481,6 +484,9 @@ let rec substitute_sig_type (subst : (string * sig_type) list) (ty : sig_type) :
           row.srow_fields
       in
       STRow ({ row with srow_fields = fields' }, loc)
+  | STPredicate (param_name, narrowed_type, _) ->
+      let narrowed_type' = substitute_sig_type subst narrowed_type in
+      STPredicate (param_name, narrowed_type', loc)
 
 and substitute_sig_param subst = function
   | SPPositional ty -> SPPositional (substitute_sig_type subst ty)
@@ -659,6 +665,11 @@ let rec sig_type_to_typ_with_ctx (ctx : type_context) (tvar_names : string list)
         | Some var_name -> Some (Types.TCon var_name)
       in
       Types.TRow { row_fields = fields; row_var }
+  | STPredicate (_, narrowed_type, _) ->
+      (* For now, predicate types are just bool at the type level.
+         The predicate information will be tracked separately in the type environment. *)
+      let _ = sig_type_to_typ_with_ctx ctx tvar_names narrowed_type in
+      Types.Prim.bool
 
 (** Subtract a type from another type.
 
@@ -863,6 +874,13 @@ let rec sig_type_to_typ_with_scope_ctx (ctx : type_context)
             | None -> Some (Types.TCon var_name))
       in
       Types.TRow { row_fields = fields; row_var }
+  | STPredicate (_, narrowed_type, _) ->
+      (* For now, predicate types are just bool at the type level.
+         The predicate information will be tracked separately in the type environment. *)
+      let _ =
+        sig_type_to_typ_with_scope_ctx ctx scope_tvars tvar_names narrowed_type
+      in
+      Types.Prim.bool
 
 (** Convert a signature parameter to a core parameter with scope type variables
 *)

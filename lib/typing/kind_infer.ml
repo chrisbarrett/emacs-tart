@@ -207,6 +207,13 @@ let rec infer_sig_type_kind (env : Kind.env) (ty : sig_type) :
           (Ok ()) row.srow_fields
       in
       Ok (Kind.KConcrete Kind.KStar)
+  | STPredicate (_, narrowed_type, _) ->
+      (* Predicate type: narrowed type must be kind *, result is kind * *)
+      let* kind = infer_sig_type_kind env narrowed_type in
+      let* () =
+        unify_scheme_with_kind kind Kind.KStar "predicate narrowed type"
+      in
+      Ok (Kind.KConcrete Kind.KStar)
 
 (** Infer the kind of a function parameter type. *)
 and infer_param_kind (env : Kind.env) (param : sig_param) :
