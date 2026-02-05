@@ -1,9 +1,28 @@
 (** Type environment for tracking variable bindings during type inference.
 
     The type environment maps variable names to their type schemes. It also
-    tracks the current level for let-generalization. *)
+    tracks the current level for let-generalization.
+
+    Additionally tracks predicate information for type narrowing (Spec 52). When
+    a function is declared with a predicate return type like [(x is string)],
+    the predicate info is stored so that conditionals can narrow variable types.
+*)
 
 open Types
+
+type predicate_info = {
+  param_index : int;  (** Index of the parameter being narrowed (0-based) *)
+  param_name : string;  (** Name of the parameter (for validation) *)
+  narrowed_type : typ;  (** Type the parameter narrows to when true *)
+}
+(** Information about a type predicate function.
+
+    When a function is declared as a predicate, it narrows the type of a
+    specific parameter when called in a conditional. For example:
+    {[
+      (defun stringp (x) -> (x is string))
+    ]}
+    Declares [stringp] as narrowing parameter [x] to [string] when true. *)
 
 (** A type scheme is a possibly-polymorphic type.
 
@@ -19,15 +38,18 @@ type t = {
       (** Variable namespace: let, setq, defvar, lambda params *)
   fn_bindings : (string * scheme) list;
       (** Function namespace: defun, defalias, flet *)
+  predicates : (string * predicate_info) list;
+      (** Type predicates: maps function names to their predicate info *)
   level : int;  (** Current scope level for generalization *)
 }
 (** Type environment with dual namespaces for Elisp's Lisp-2 semantics *)
 
 (** Empty environment at level 0 *)
-let empty = { bindings = []; fn_bindings = []; level = 0 }
+let empty = { bindings = []; fn_bindings = []; predicates = []; level = 0 }
 
 (** Create an environment with initial bindings (in variable namespace) *)
-let of_list bindings = { bindings; fn_bindings = []; level = 0 }
+let of_list bindings =
+  { bindings; fn_bindings = []; predicates = []; level = 0 }
 
 (** Get the current level *)
 let current_level env = env.level
@@ -79,6 +101,13 @@ let extend_fn_mono name ty env = extend_fn name (Mono ty) env
 
 (** Extend function namespace with a polymorphic binding *)
 let extend_fn_poly name vars ty env = extend_fn name (Poly (vars, ty)) env
+
+(** Look up predicate info for a function name *)
+let lookup_predicate name env = List.assoc_opt name env.predicates
+
+(** Register a function as a type predicate *)
+let extend_predicate name info env =
+  { env with predicates = (name, info) :: env.predicates }
 
 (** Instantiate a type scheme at the current level.
 
