@@ -3,9 +3,6 @@
     Provides helpers for colorized terminal output that gracefully degrades to
     plain text when stdout is not a TTY (e.g., when piped). *)
 
-val init : unit -> unit
-(** Initialize color detection. Call once at startup. *)
-
 val force_colors : bool -> unit
 (** Force colors on or off regardless of TTY detection. *)
 
@@ -19,14 +16,8 @@ val use_colors : unit -> bool
 val error : string -> string
 (** Red bold - for "error" severity label *)
 
-val warning : string -> string
-(** Yellow bold - for "warning" severity label *)
-
 val hint : string -> string
 (** Cyan - for "hint" severity label *)
-
-val error_code : string -> string
-(** Red - for error codes like [E0001] *)
 
 val location : string -> string
 (** Blue - for --> location arrows and file paths *)

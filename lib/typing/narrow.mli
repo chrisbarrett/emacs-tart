@@ -27,8 +27,3 @@ val narrow_type : typ -> typ -> typ
     - [any ∩ T] → [T]
 
     For non-union types, returns [original] when it overlaps with [target]. *)
-
-val subtract_type : typ -> typ -> typ
-(** [subtract_type original subtracted] returns [original - subtracted]. For
-    unions, removes matching members. For non-union types, returns [TUnion []]
-    (empty/never type) when equal. Delegates to {!Core.Types.subtract_type}. *)

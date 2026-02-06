@@ -99,9 +99,6 @@ let rec repr ty =
       | Unbound _ -> ty)
   | _ -> ty
 
-(** Check if a type is a type variable (after following links) *)
-let is_tvar ty = match repr ty with TVar _ -> true | _ -> false
-
 (** Intrinsic prefix for built-in types.
 
     All built-in types use this prefix to distinguish them from user-defined

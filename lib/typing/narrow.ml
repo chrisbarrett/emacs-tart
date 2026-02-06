@@ -57,7 +57,3 @@ let narrow_type (original : typ) (target : typ) : typ =
         (* Non-union original: if not disjoint with target, keep original;
            otherwise return target as conservative fallback *)
         if not (Unify.types_disjoint original target) then original else target
-
-(** Subtract a type from another type. Delegates to [Core.Types.subtract_type].
-*)
-let subtract_type = Core.Types.subtract_type

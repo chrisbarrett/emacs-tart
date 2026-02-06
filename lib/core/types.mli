@@ -104,9 +104,6 @@ val repr : typ -> typ
 (** [repr ty] follows links to find the representative type. Performs path
     compression for amortized near-constant lookup. *)
 
-val is_tvar : typ -> bool
-(** Check if a type is a type variable (after following links). *)
-
 (** {1 Intrinsic Types} *)
 
 val intrinsic_prefix : string

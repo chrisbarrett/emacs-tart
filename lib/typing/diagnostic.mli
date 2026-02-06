@@ -272,20 +272,6 @@ val of_kind_error : Syntax.Location.span -> Kind_infer.kind_error -> t
 
     The span is the location of the declaration that failed kind checking. *)
 
-val missing_instance :
-  span:Syntax.Location.span ->
-  class_name:string ->
-  typ:Core.Types.typ ->
-  unit ->
-  t
-(** Create a missing type class instance diagnostic.
-
-    Used when a function with type class constraints is called but no instance
-    exists for the required constraint.
-
-    Note: Type classes are not yet fully implemented. Error code will be
-    assigned when type class support is added to the type system. *)
-
 (** {1 JSON Serialization} *)
 
 val to_json : t -> Yojson.Safe.t

@@ -182,9 +182,6 @@ let empty_env : env = []
 (** Push a new scope onto the environment *)
 let push_scope (env : env) : env = [] :: env
 
-(** Pop the innermost scope *)
-let pop_scope (env : env) : env = match env with [] -> [] | _ :: rest -> rest
-
 (** Bind a variable in the innermost scope *)
 let bind (name : string) (v : value) (env : env) : env =
   match env with

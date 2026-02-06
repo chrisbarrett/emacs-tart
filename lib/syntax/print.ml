@@ -147,6 +147,3 @@ let rec to_string (sexp : Sexp.t) : string =
       ^ String.concat " " (List.map to_string elts)
       ^ " . " ^ to_string tail ^ ")"
   | Sexp.Error (msg, _) -> Printf.sprintf "#<error: %s>" msg
-
-(** Print an S-expression list to multiple lines. *)
-let to_strings (sexps : Sexp.t list) : string list = List.map to_string sexps

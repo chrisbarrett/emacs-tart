@@ -118,9 +118,6 @@ val empty_env : env
 val push_scope : env -> env
 (** Push a new scope onto the environment. *)
 
-val pop_scope : env -> env
-(** Pop the innermost scope. *)
-
 val bind : string -> value -> env -> env
 (** [bind name value env] binds [name] to [value] in the innermost scope. *)
 

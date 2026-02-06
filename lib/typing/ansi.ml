@@ -66,9 +66,7 @@ let style codes text =
 (** Semantic color functions for error output per Spec 45 R11. *)
 
 let error text = style [ Code.red; Code.bold ] text
-let warning text = style [ Code.yellow; Code.bold ] text
 let hint text = style [ Code.cyan ] text
-let error_code text = style [ Code.red ] text
 let location text = style [ Code.blue ] text
 let line_number text = style [ Code.blue; Code.dim ] text
 let underline text = style [ Code.red ] text

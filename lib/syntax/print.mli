@@ -59,6 +59,3 @@ val to_string : Sexp.t -> string
     - [to_string (Int (42, _))] = ["42"]
     - [to_string (List ([Symbol ("quote", _); Symbol ("x", _)], _))] = ["'x"]
     - [to_string (Vector ([Int (1, _); Int (2, _)], _))] = ["#(1 2)"] *)
-
-val to_strings : Sexp.t list -> string list
-(** Print multiple S-expressions to a string list. *)

@@ -1073,38 +1073,6 @@ let of_kind_error span (err : Kind_infer.kind_error) : t =
         help = [];
       }
 
-(** Create a missing type class instance diagnostic.
-
-    Used when a function with type class constraints is called but no instance
-    exists for the required constraint.
-
-    Note: Type classes are not yet fully implemented. Error code will be
-    assigned when type class support is added to the type system.
-
-    Output format follows R8 from spec 21:
-    {v
-      Error: No instance of `Eq buffer` found
-        Required by: (elem current buffers)
-        At: file.el:42:3
-    v} *)
-let missing_instance ~span ~class_name ~typ () =
-  {
-    severity = Error;
-    code = None;
-    span;
-    message =
-      Printf.sprintf "no instance of `%s %s` found" class_name
-        (Types.to_string typ);
-    expected = None;
-    actual = None;
-    related = [];
-    help =
-      [
-        Printf.sprintf "add an instance declaration: (instance (%s %s) ...)"
-          class_name (Types.to_string typ);
-      ];
-  }
-
 (** Serialize a source location to JSON. *)
 let location_to_json (span : Loc.span) : Yojson.Safe.t =
   `Assoc
