@@ -74,6 +74,10 @@
 ;; Subtypes: alist, plist, hash-table all unify with map
 (type map [r] (%tart-intrinsic%Map r))
 
+;; Function - an arbitrary function.
+;; Input and output types can inferred, and can often be omitted.
+(type fn [a b] (a -> b))
+
 ;; -----------------------------------------------------------------------------
 ;; Derived types (built on intrinsics)
 ;; -----------------------------------------------------------------------------
