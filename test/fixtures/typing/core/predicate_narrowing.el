@@ -48,3 +48,18 @@
   (when (stringp x)
     (message "got a string")
     (string-to-char x)))
+
+;; R3: Cumulative narrowing in cond - second clause sees string subtracted
+(defun cond-cumulative (x)
+  (declare (tart ((string | int | symbol)) -> int))
+  (cond
+   ((stringp x) (string-to-char x))
+   ((symbolp x) (string-to-char (symbol-name x)))
+   (t (+ x 1))))
+
+;; R3: Cumulative narrowing - each clause narrows body correctly
+(defun cond-narrowing-body (x)
+  (declare (tart ((string | int)) -> int))
+  (cond
+   ((stringp x) (string-to-char x))
+   ((integerp x) (+ x 1))))

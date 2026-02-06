@@ -628,17 +628,36 @@ and infer_setq env pairs span =
 
 (** Infer the type of a cond expression.
 
-    Each clause is (test body...). Result unifies all clause bodies. *)
+    Each clause is (test body...). Result unifies all clause bodies.
+
+    Cumulative narrowing (Spec 52 R3): each clause's body sees the narrowing
+    from its own test, and subsequent clauses see the accumulated subtractions
+    from earlier predicate tests. *)
 and infer_cond env clauses span =
   let open Syntax.Sexp in
   let result_ty = fresh_tvar (Env.current_level env) in
 
-  let rec process_clauses clauses constraints undefineds =
+  let rec process_clauses acc_env clauses constraints undefineds =
     match clauses with
     | [] -> (constraints, undefineds)
     | List (test :: body, _) :: rest ->
-        let test_result = infer env test in
-        let body_result = infer_progn env body span in
+        let test_result = infer acc_env test in
+        (* Analyze test condition for predicate narrowing.
+           Body sees narrowed type; subsequent clauses see subtracted type. *)
+        let body_env, next_env =
+          match Narrow.analyze_condition test acc_env with
+          | Narrow.Predicate { var_name; narrowed_type } -> (
+              match Env.lookup var_name acc_env with
+              | Some scheme ->
+                  let original_ty = Env.instantiate scheme acc_env in
+                  let then_ty = Narrow.narrow_type original_ty narrowed_type in
+                  let else_ty = subtract_type original_ty narrowed_type in
+                  ( Env.with_narrowed_var var_name then_ty acc_env,
+                    Env.with_narrowed_var var_name else_ty acc_env )
+              | None -> (acc_env, acc_env))
+          | Narrow.NoPredicate -> (acc_env, acc_env)
+        in
+        let body_result = infer_progn body_env body span in
         let body_constraint = C.equal result_ty body_result.ty span in
         let all =
           C.combine test_result.constraints
@@ -648,11 +667,13 @@ and infer_cond env clauses span =
         let all_undefineds =
           undefineds @ test_result.undefineds @ body_result.undefineds
         in
-        process_clauses rest all all_undefineds
-    | _ :: rest -> process_clauses rest constraints undefineds
+        process_clauses next_env rest all all_undefineds
+    | _ :: rest -> process_clauses acc_env rest constraints undefineds
   in
 
-  let all_constraints, all_undefineds = process_clauses clauses C.empty [] in
+  let all_constraints, all_undefineds =
+    process_clauses env clauses C.empty []
+  in
   { ty = result_ty; constraints = all_constraints; undefineds = all_undefineds }
 
 (** Infer the type of an and expression.
