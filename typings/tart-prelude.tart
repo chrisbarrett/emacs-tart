@@ -67,7 +67,7 @@
 ;; Plist - property list (flat key-value sequence)
 ;; Plists are stored as flat lists: (:key1 val1 :key2 val2 ...)
 ;; For homogeneous plists: (plist keyword string)
-(type plist [k v] (list (k | v)))
+(type plist [k v] (%tart-intrinsic%Plist k v))
 
 ;; Map - generic map supertype (alist, plist, or hash-table)
 ;; For row-typed maps: (map {name string & r})

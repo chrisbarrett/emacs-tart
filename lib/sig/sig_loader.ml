@@ -444,11 +444,13 @@ let canonicalize_type_name (name : string) : string =
     | "Vector" -> Types.intrinsic "Vector"
     | "Pair" -> Types.intrinsic "Pair"
     | "HashTable" -> Types.intrinsic "HashTable"
+    | "Plist" -> Types.intrinsic "Plist"
     (* Lowercase container names also map to intrinsics *)
     | "list" -> Types.intrinsic "List"
     | "vector" -> Types.intrinsic "Vector"
     | "cons" -> Types.intrinsic "Pair"
     | "hash-table" -> Types.intrinsic "HashTable"
+    | "plist" -> Types.intrinsic "Plist"
     | "tuple" ->
         "Tuple" (* Tuple doesn't need intrinsic prefix - it's structural *)
     (* Variant tags stay as-is *)
@@ -687,9 +689,7 @@ let rec sig_type_to_typ_with_ctx ?(scope_tvars : (string * Types.typ) list = [])
                 | "alist" ->
                     Some
                       (Types.list_of (Types.pair_of Types.Prim.symbol arg_typ))
-                | "plist" ->
-                    Some
-                      (Types.list_of (TUnion [ Types.Prim.keyword; arg_typ ]))
+                | "plist" -> Some (Types.plist_of Types.Prim.keyword arg_typ)
                 | "hash-table" ->
                     Some (Types.hash_table_of Types.Prim.symbol arg_typ)
                 | "map" -> Some (Types.map_of arg_typ)

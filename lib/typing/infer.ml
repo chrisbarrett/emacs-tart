@@ -1671,11 +1671,21 @@ and infer_alist_get_row env key_name alist_expr rest_args _span =
 
   { ty = result_ty; constraints = all_constraints; undefineds = all_undefineds }
 
-(** Try to extract a row type from a plist type: [(list (keyword | TRow))].
+(** Try to extract a row type from a plist type.
+
+    Recognises:
+    - [(Plist k TRow)] — the intrinsic form
+    - [(list (keyword | TRow))] — legacy expanded form
 
     Returns [Some row] if the type is a row-typed plist, [None] otherwise. *)
 and extract_plist_row ty =
+  let plist_name = intrinsic "Plist" in
   match repr ty with
+  (* Intrinsic form: (Plist k v) where v is a row *)
+  | TApp (plist_con, [ _key_ty; value_ty ])
+    when equal (repr plist_con) (TCon plist_name) -> (
+      match repr value_ty with TRow row -> Some row | _ -> None)
+  (* Legacy form: (list (keyword | TRow)) *)
   | TApp (list_con, [ union_ty ])
     when equal (repr list_con) (TCon (intrinsic "List")) -> (
       match repr union_ty with
@@ -1740,9 +1750,7 @@ and infer_plist_get_row env key_name plist_expr rest_args _span =
                 let field_ty = fresh_tvar (Env.current_level env) in
                 let row_var = fresh_tvar (Env.current_level env) in
                 let expected_row = open_row [ (key_name, field_ty) ] row_var in
-                let expected_plist_ty =
-                  list_of (TUnion [ Prim.keyword; expected_row ])
-                in
+                let expected_plist_ty = plist_of Prim.keyword expected_row in
                 let c =
                   C.equal expected_plist_ty plist_result.ty
                     (Syntax.Sexp.span_of plist_expr)
@@ -1756,9 +1764,7 @@ and infer_plist_get_row env key_name plist_expr rest_args _span =
         let field_ty = fresh_tvar (Env.current_level env) in
         let row_var = fresh_tvar (Env.current_level env) in
         let expected_row = open_row [ (key_name, field_ty) ] row_var in
-        let expected_plist_ty =
-          list_of (TUnion [ Prim.keyword; expected_row ])
-        in
+        let expected_plist_ty = plist_of Prim.keyword expected_row in
         let c =
           C.equal expected_plist_ty plist_result.ty
             (Syntax.Sexp.span_of plist_expr)

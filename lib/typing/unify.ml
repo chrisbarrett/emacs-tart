@@ -137,20 +137,26 @@ let extract_map_row_arg ty =
 
     Recognises expanded alist, plist, and hash-table structures:
     - alist: [(list (cons symbol TRow))] → [TRow]
-    - plist: [(list (keyword | TRow))] → [TRow]
+    - plist: [(Plist keyword TRow)] → [TRow] (intrinsic form)
+    - plist: [(list (keyword | TRow))] → [TRow] (legacy form)
     - hash-table: [(HashTable symbol TRow)] → [TRow] *)
 let extract_concrete_map_row ty =
   let list_name = intrinsic "List" in
   let pair_name = intrinsic "Pair" in
   let keyword_name = intrinsic "Keyword" in
   let hash_name = intrinsic "HashTable" in
+  let plist_name = intrinsic "Plist" in
   match repr ty with
   (* alist: (list (cons symbol TRow)) *)
   | TApp (list_con, [ TApp (pair_con, [ _key_ty; value_ty ]) ])
     when (match repr list_con with TCon n -> n = list_name | _ -> false)
          && match repr pair_con with TCon n -> n = pair_name | _ -> false -> (
       match repr value_ty with TRow _ -> Some value_ty | _ -> None)
-  (* plist: (list (keyword | TRow)) *)
+  (* plist intrinsic: (Plist keyword TRow) *)
+  | TApp (plist_con, [ _key_ty; value_ty ])
+    when match repr plist_con with TCon n -> n = plist_name | _ -> false -> (
+      match repr value_ty with TRow _ -> Some value_ty | _ -> None)
+  (* plist legacy: (list (keyword | TRow)) *)
   | TApp (list_con, [ union_ty ])
     when match repr list_con with TCon n -> n = list_name | _ -> false -> (
       match repr union_ty with
