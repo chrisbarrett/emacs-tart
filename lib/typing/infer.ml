@@ -1462,14 +1462,9 @@ and infer_alist_get_row env key_name alist_expr rest_args _span =
                 (* Cases 3–4: key absent from closed row → return nil or default *)
                 let result_ty =
                   match rest_args with
-                  | default_expr :: _ ->
-                      (* Case 4: DEFAULT provided → return default's type *)
-                      let default_result =
-                        List.hd (List.map (infer env) [ default_expr ])
-                      in
-                      ignore default_result;
-                      (* The default was already inferred in rest_results above,
-                         so use the type from the first rest_result *)
+                  | _default_expr :: _ ->
+                      (* Case 4: DEFAULT provided → return default's type.
+                         The default was already inferred in rest_results above. *)
                       (List.hd rest_results).ty
                   | [] ->
                       (* Case 3: no default → return nil *)
