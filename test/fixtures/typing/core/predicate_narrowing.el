@@ -29,3 +29,22 @@
   (if (symbolp x)
       (symbol-name x)
     x))
+
+;; when narrows predicate in body (Spec 52 R1)
+(defun when-stringp (x)
+  (declare (tart ((string | int)) -> int))
+  (when (stringp x)
+    (string-to-char x)))
+
+;; unless narrows via subtraction in body (Spec 52 R2)
+(defun unless-stringp (x)
+  (declare (tart ((string | int)) -> int))
+  (unless (stringp x)
+    (+ x 1)))
+
+;; when with multi-expression body (implicit progn)
+(defun when-progn-body (x)
+  (declare (tart ((string | int)) -> int))
+  (when (stringp x)
+    (message "got a string")
+    (string-to-char x)))

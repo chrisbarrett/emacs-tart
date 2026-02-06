@@ -200,6 +200,11 @@ let rec infer (env : Env.t) (sexp : Syntax.Sexp.t) : result =
   (* === eq/eql with disjointness checking (Spec 11 R14) === *)
   | List ([ Symbol ((("eq" | "eql") as fn_name), _); arg1; arg2 ], span) ->
       infer_eq_with_disjointness env fn_name arg1 arg2 span
+  (* === When/Unless with predicate narrowing (Spec 52) === *)
+  | List (Symbol ("when", _) :: cond :: body, span) ->
+      infer_when env cond body span
+  | List (Symbol ("unless", _) :: cond :: body, span) ->
+      infer_unless env cond body span
   (* === Function application (catch-all for lists) === *)
   | List (fn :: args, span) -> infer_application env fn args span
   | List ([], _span) ->
@@ -395,6 +400,75 @@ and infer_if_no_else env cond then_branch span =
 
   (* The result type should really be (Or then_type Nil),
      but for now we just use the then type. *)
+  { ty = result_ty; constraints = all_constraints; undefineds = all_undefineds }
+
+(** Infer the type of a when expression with predicate narrowing.
+
+    (when COND BODY...) evaluates BODY as a progn when COND is truthy. If COND
+    is a predicate call like (stringp x), narrow x in the body. Result type is
+    the body type (nil when condition is false is ignored for the same reason as
+    infer_if_no_else). *)
+and infer_when env cond body span =
+  let cond_result = infer env cond in
+
+  (* Analyze condition for predicate narrowing (Spec 52). *)
+  let body_env =
+    match Narrow.analyze_condition cond env with
+    | Narrow.Predicate { var_name; narrowed_type } -> (
+        match Env.lookup var_name env with
+        | Some scheme ->
+            let original_ty = Env.instantiate scheme env in
+            let then_ty = Narrow.narrow_type original_ty narrowed_type in
+            Env.with_narrowed_var var_name then_ty env
+        | None -> env)
+    | Narrow.NoPredicate -> env
+  in
+
+  let body_result = infer_progn body_env body span in
+
+  let result_ty = fresh_tvar (Env.current_level env) in
+  let body_constraint = C.equal result_ty body_result.ty span in
+
+  let all_constraints =
+    C.combine cond_result.constraints
+      (C.combine body_result.constraints (C.add body_constraint C.empty))
+  in
+  let all_undefineds = combine_undefineds [ cond_result; body_result ] in
+  { ty = result_ty; constraints = all_constraints; undefineds = all_undefineds }
+
+(** Infer the type of an unless expression with predicate narrowing.
+
+    (unless COND BODY...) evaluates BODY as a progn when COND is falsy. If COND
+    is a predicate call like (stringp x), subtract string from x in the body
+    (the body executes when the predicate is false). *)
+and infer_unless env cond body span =
+  let cond_result = infer env cond in
+
+  (* Analyze condition for predicate narrowing (Spec 52).
+     Unless is the inverse of when: body runs when condition is false,
+     so we subtract the narrowed type. *)
+  let body_env =
+    match Narrow.analyze_condition cond env with
+    | Narrow.Predicate { var_name; narrowed_type } -> (
+        match Env.lookup var_name env with
+        | Some scheme ->
+            let original_ty = Env.instantiate scheme env in
+            let else_ty = subtract_type original_ty narrowed_type in
+            Env.with_narrowed_var var_name else_ty env
+        | None -> env)
+    | Narrow.NoPredicate -> env
+  in
+
+  let body_result = infer_progn body_env body span in
+
+  let result_ty = fresh_tvar (Env.current_level env) in
+  let body_constraint = C.equal result_ty body_result.ty span in
+
+  let all_constraints =
+    C.combine cond_result.constraints
+      (C.combine body_result.constraints (C.add body_constraint C.empty))
+  in
+  let all_undefineds = combine_undefineds [ cond_result; body_result ] in
   { ty = result_ty; constraints = all_constraints; undefineds = all_undefineds }
 
 (** Infer the type of a let expression with generalization.
