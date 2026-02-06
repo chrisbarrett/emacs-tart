@@ -41,27 +41,6 @@ let narrow_type (original : typ) (target : typ) : typ =
   ignore original;
   target
 
-(** Subtract a type from another type.
-
-    Given [original - subtracted], returns the remaining type.
-
-    For unions: [Or(a, b, c) - b = Or(a, c)] For non-unions with the same type:
-    returns [nothing] (empty type) Otherwise: returns the original
-    (conservative) *)
-let subtract_type (original : typ) (subtracted : typ) : typ =
-  match original with
-  | TUnion members -> (
-      (* Remove members that match the subtracted type *)
-      let remaining = List.filter (fun m -> not (equal m subtracted)) members in
-      match remaining with
-      | [] ->
-          (* All members removed - this shouldn't happen in practice *)
-          original
-      | [ single ] -> single
-      | _ -> TUnion remaining)
-  | _ ->
-      (* For non-union types, we can't easily subtract.
-         In practice, if (stringp x) is false and x was any,
-         x is still any (minus string, which we can't represent easily).
-         We could use TUnion with negation, but for now just return original. *)
-      original
+(** Subtract a type from another type. Delegates to [Core.Types.subtract_type].
+*)
+let subtract_type = Core.Types.subtract_type

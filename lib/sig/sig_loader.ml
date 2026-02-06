@@ -540,33 +540,8 @@ let satisfies_bound (arg_typ : Types.typ) (bound_typ : Types.typ) : bool =
       (* For other bounds, check structural equality *)
       Types.equal arg_typ bound_typ
 
-(** Subtract a type from another type.
-
-    For union types, removes all occurrences of the subtrahend from the union.
-    For non-union types, returns the minuend unchanged if it's not equal to the
-    subtrahend, otherwise returns an empty union (TUnion []).
-
-    Examples:
-    - (int | string) - int => string
-    - (truthy | nil) - nil => truthy
-    - (cons a (list a)) | nil) - nil => (cons a (list a)) *)
-let subtract_type (minuend : Types.typ) (subtrahend : Types.typ) : Types.typ =
-  let minuend = Types.repr minuend in
-  let subtrahend = Types.repr subtrahend in
-  match minuend with
-  | Types.TUnion members -> (
-      (* Filter out members that match the subtrahend *)
-      let remaining =
-        List.filter (fun m -> not (Types.equal m subtrahend)) members
-      in
-      match remaining with
-      | [] -> Types.TUnion [] (* Empty type - all members removed *)
-      | [ single ] -> single (* Single type - unwrap union *)
-      | _ -> Types.TUnion remaining)
-  | _ ->
-      (* Non-union type - return unchanged if not equal to subtrahend *)
-      if Types.equal minuend subtrahend then Types.TUnion [] (* Empty type *)
-      else minuend
+(** Subtract a type from another type. Delegates to [Types.subtract_type]. *)
+let subtract_type = Types.subtract_type
 
 (** Convert a signature type to a core type. [ctx] is the type context
     containing aliases and opaques. [tvar_names] is the list of bound type

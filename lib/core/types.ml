@@ -424,3 +424,25 @@ let validation_error_to_string = function
   | NonTruthyOptionArg ty ->
       Printf.sprintf "Option argument must be truthy, but got: %s"
         (to_string ty)
+
+(** Subtract a type from another type.
+
+    For union types, removes all occurrences of the subtrahend from the union.
+    For non-union types, returns the minuend unchanged if it's not equal to the
+    subtrahend, otherwise returns an empty union (TUnion []).
+
+    Examples:
+    - (int | string) - int => string
+    - (truthy | nil) - nil => truthy
+    - (cons a (list a)) | nil) - nil => (cons a (list a)) *)
+let subtract_type (minuend : typ) (subtrahend : typ) : typ =
+  let minuend = repr minuend in
+  let subtrahend = repr subtrahend in
+  match minuend with
+  | TUnion members -> (
+      let remaining = List.filter (fun m -> not (equal m subtrahend)) members in
+      match remaining with
+      | [] -> TUnion []
+      | [ single ] -> single
+      | _ -> TUnion remaining)
+  | _ -> if equal minuend subtrahend then TUnion [] else minuend

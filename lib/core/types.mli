@@ -240,3 +240,14 @@ val option_of_checked : typ -> (typ, validation_error) result
 
 val validation_error_to_string : validation_error -> string
 (** Format a validation error as a string. *)
+
+(** {1 Type Subtraction} *)
+
+val subtract_type : typ -> typ -> typ
+(** [subtract_type minuend subtrahend] returns [minuend - subtrahend].
+
+    For unions, removes matching members: [(int | string) - int => string]. For
+    non-union types, returns [TUnion []] (empty/never type) when equal. Returns
+    [minuend] unchanged if types are not equal.
+
+    Uses structural equality after following type variable links. *)
