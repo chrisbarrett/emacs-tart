@@ -55,6 +55,18 @@ let with_span sexp span =
   | Cons (a, b, _) -> Cons (a, b, span)
   | Error (v, _) -> Error (v, span)
 
+(** Split a list of S-expressions at the first [->] symbol.
+
+    Returns [Some (before, after)] where [before] is everything before the arrow
+    and [after] is everything after it, or [None] if no arrow is found. *)
+let find_arrow sexps =
+  let rec go before = function
+    | [] -> None
+    | Symbol ("->", _) :: after -> Some (List.rev before, after)
+    | x :: rest -> go (x :: before) rest
+  in
+  go [] sexps
+
 (** Pretty-print an S-expression (without locations) *)
 let rec to_string = function
   | Int (n, _) -> string_of_int n

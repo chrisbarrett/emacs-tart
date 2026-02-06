@@ -1838,16 +1838,10 @@ and extract_tart_declare (body : Syntax.Sexp.t list) :
             let rev = List.rev type_parts in
             match rev with
             | List (inner, sp) :: prefix -> (
-                (* Split inner at -> *)
-                let rec find_arrow before = function
-                  | [] -> None
-                  | (Symbol ("->", _) as arrow) :: after ->
-                      Some (List.rev before, arrow, after)
-                  | x :: rest -> find_arrow (x :: before) rest
-                in
-                match find_arrow [] inner with
-                | Some (params_before, arrow, return_after) ->
+                match Syntax.Sexp.find_arrow inner with
+                | Some (params_before, return_after) ->
                     (* Rebuild as: prefix... (params_before) -> return_after *)
+                    let arrow = Symbol ("->", Loc.dummy_span) in
                     let params_list = List (params_before, sp) in
                     List
                       ( List.rev_append prefix

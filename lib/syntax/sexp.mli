@@ -41,6 +41,12 @@ val span_of : t -> Location.span
 val with_span : t -> Location.span -> t
 (** [with_span sexp span] returns [sexp] with its span replaced. *)
 
+(** {1 List Utilities} *)
+
+val find_arrow : t list -> (t list * t list) option
+(** [find_arrow sexps] splits [sexps] at the first [->] symbol. Returns
+    [Some (before, after)] or [None] if no arrow is found. *)
+
 (** {1 Serialization} *)
 
 val to_string : t -> string

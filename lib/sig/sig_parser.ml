@@ -45,13 +45,7 @@ let rec parse_kind (sexp : Sexp.t) : Sig_ast.sig_kind result =
 (** Parse an arrow kind: (* -> *) or (* -> * -> *) etc. *)
 and parse_kind_arrow (contents : Sexp.t list) (span : Loc.span) :
     Sig_ast.sig_kind result =
-  (* Find the -> and split *)
-  let rec find_arrow before = function
-    | [] -> None
-    | Sexp.Symbol ("->", _) :: after -> Some (List.rev before, after)
-    | x :: rest -> find_arrow (x :: before) rest
-  in
-  match find_arrow [] contents with
+  match Sexp.find_arrow contents with
   | None -> error "Expected -> in kind expression" span
   | Some ([ left ], right) -> (
       match parse_kind left with
@@ -360,13 +354,7 @@ and parse_row_type (contents : Sexp.t list) (span : Loc.span) : sig_type result
 (** Parse an arrow type: (params) -> return or [vars] (params) -> return *)
 and parse_arrow_type (contents : Sexp.t list) (span : Loc.span) :
     sig_type result =
-  (* Find the -> and split *)
-  let rec find_arrow before = function
-    | [] -> None
-    | Sexp.Symbol ("->", _) :: after -> Some (List.rev before, after)
-    | x :: rest -> find_arrow (x :: before) rest
-  in
-  match find_arrow [] contents with
+  match Sexp.find_arrow contents with
   | None -> error "Expected -> in function type" span
   | Some (before, [ return_sexp ]) -> (
       (* Parse return type *)
@@ -496,13 +484,7 @@ let parse_defun (contents : Sexp.t list) (span : Loc.span) : decl result =
             | Error _ -> ([], rest) (* Fall through to parse error below *))
         | _ -> ([], rest)
       in
-      (* Find -> and parse params/return *)
-      let rec find_arrow before = function
-        | [] -> None
-        | Sexp.Symbol ("->", _) :: after -> Some (List.rev before, after)
-        | x :: rest' -> find_arrow (x :: before) rest'
-      in
-      match find_arrow [] params_and_return with
+      match Sexp.find_arrow params_and_return with
       | None -> error "Expected -> in defun signature" span
       | Some (params_sexp, [ return_sexp ]) -> (
           match parse_params_list params_sexp span with
