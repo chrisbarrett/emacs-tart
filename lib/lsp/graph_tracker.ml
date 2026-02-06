@@ -87,10 +87,10 @@ let update_document (graph : Dep_graph.t) ~(uri : string) ~(text : string) :
     Per spec R4: "didClose: Keep in graph (file exists on disk)" We don't remove
     the module from the graph because the file still exists and other modules
     may depend on it. *)
-let close_document (_graph : Dep_graph.t) ~(uri : string) : unit =
+let close_document (_graph : Dep_graph.t) ~uri:(_uri : string) : unit =
   (* Intentionally do nothing - the graph entry is kept.
      The file still exists on disk and may be opened again later. *)
-  ignore uri
+  ()
 
 (** {1 Invalidation Cascade} *)
 
