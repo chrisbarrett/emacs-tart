@@ -1849,6 +1849,122 @@ let test_shadow_error_has_span () =
         (e.span.start_pos.line > 0);
       Alcotest.(check bool) "span end line > 0" true (e.span.end_pos.line > 0)
 
+(** {1 Local Type Alias (let) Tests (R18)}
+
+    Tests for the 'let' declaration that introduces type aliases scoped to a
+    block of declarations. *)
+
+(** Test simple let alias is usable in body *)
+let test_let_simple_alias () =
+  let sig_src =
+    {|
+    (let ((type int-list (list int)))
+      (defun sum (int-list) -> int)
+      (defun make-list (int) -> int-list))
+  |}
+  in
+  let env = load_sig_str sig_src in
+  (* sum should be loaded *)
+  (match Type_env.lookup "sum" env with
+  | None -> Alcotest.fail "sum not found"
+  | Some scheme ->
+      let scheme_str = Type_env.scheme_to_string scheme in
+      (* The alias 'int-list' should have expanded to (list int) *)
+      Alcotest.(check bool)
+        "scheme contains list" true
+        (try
+           let _ = Str.search_forward (Str.regexp_string "list") scheme_str 0 in
+           true
+         with Not_found -> false));
+  (* make-list should also be loaded *)
+  match Type_env.lookup "make-list" env with
+  | None -> Alcotest.fail "make-list not found"
+  | Some _ -> ()
+
+(** Test let alias with parameterized type *)
+let test_let_parameterized_alias () =
+  let sig_src =
+    {|
+    (let ((type wrapper [a] (list a)))
+      (defun wrap [a] (a) -> (wrapper a))
+      (defun unwrap [a] ((wrapper a)) -> a))
+  |}
+  in
+  let env = load_sig_str sig_src in
+  (* wrap should be loaded with (wrapper a) expanded to (list a) *)
+  match Type_env.lookup "wrap" env with
+  | None -> Alcotest.fail "wrap not found"
+  | Some scheme ->
+      let scheme_str = Type_env.scheme_to_string scheme in
+      (* wrapper should expand to list *)
+      Alcotest.(check bool)
+        "expanded to list" true
+        (try
+           let _ = Str.search_forward (Str.regexp_string "list") scheme_str 0 in
+           true
+         with Not_found -> false)
+
+(** Test that let-bound types are not exported *)
+let test_let_not_exported () =
+  let sig_src =
+    {|
+    (let ((type int-list (list int)))
+      (defun make-list (int) -> int-list))
+    (defun use-list ((list int)) -> nil)
+  |}
+  in
+  let env = load_sig_str sig_src in
+  (* make-list should be in the environment *)
+  (match Type_env.lookup "make-list" env with
+  | None -> Alcotest.fail "make-list not found"
+  | Some _ -> ());
+  (* use-list should also be there *)
+  match Type_env.lookup "use-list" env with
+  | None -> Alcotest.fail "use-list not found"
+  | Some _ -> ()
+
+(** Test let with multiple bindings *)
+let test_let_multiple_bindings () =
+  let sig_src =
+    {|
+    (let ((type int-list (list int))
+          (type str-list (list string)))
+      (defun first-of-ints (int-list) -> int)
+      (defun first-of-strs (str-list) -> string))
+  |}
+  in
+  let env = load_sig_str sig_src in
+  (match Type_env.lookup "first-of-ints" env with
+  | None -> Alcotest.fail "first-of-ints not found"
+  | Some _ -> ());
+  match Type_env.lookup "first-of-strs" env with
+  | None -> Alcotest.fail "first-of-strs not found"
+  | Some _ -> ()
+
+(** Test that let-bound alias works end-to-end with type checker *)
+let test_let_end_to_end () =
+  let sig_src =
+    {|
+    (let ((type int-list (list int)))
+      (defun make-ints () -> int-list))
+  |}
+  in
+  let env = load_sig_str sig_src in
+  let ty, errors = check_expr_str ~env "(make-ints)" in
+  Alcotest.(check int) "no type errors" 0 (List.length errors);
+  (* Result should be (list int) since int-list expands *)
+  Alcotest.(check string) "result is list int" "(list int)" (Types.to_string ty)
+
+(** Test validation catches unbound var in let binding body *)
+let test_let_validation_unbound () =
+  let src =
+    {|
+    (let ((type bad (list b)))
+      (defun foo () -> bad))
+  |}
+  in
+  expect_error_containing "Unbound type variable" src
+
 let () =
   Alcotest.run "sig_loader"
     [
@@ -2062,5 +2178,17 @@ let () =
           Alcotest.test_case "new type allowed" `Quick
             test_shadow_new_type_allowed;
           Alcotest.test_case "error has span" `Quick test_shadow_error_has_span;
+        ] );
+      ( "let-local-aliases",
+        [
+          Alcotest.test_case "simple alias" `Quick test_let_simple_alias;
+          Alcotest.test_case "parameterized alias" `Quick
+            test_let_parameterized_alias;
+          Alcotest.test_case "not exported" `Quick test_let_not_exported;
+          Alcotest.test_case "multiple bindings" `Quick
+            test_let_multiple_bindings;
+          Alcotest.test_case "end-to-end" `Quick test_let_end_to_end;
+          Alcotest.test_case "validation unbound" `Quick
+            test_let_validation_unbound;
         ] );
     ]

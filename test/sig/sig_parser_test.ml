@@ -537,6 +537,62 @@ let test_data_recursive () =
   | Ok _ -> Alcotest.fail "Expected recursive data declaration"
   | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
 
+(** {1 Let Declaration Tests} *)
+
+let test_let_simple () =
+  let src =
+    {|(let ((type int-list (list int)))
+      (defun sum (int-list) -> int))|}
+  in
+  match parse_decl_str src with
+  | Ok (Sig_ast.DLet d) ->
+      Alcotest.(check int) "one binding" 1 (List.length d.let_bindings);
+      Alcotest.(check int) "one body decl" 1 (List.length d.let_body);
+      let binding = List.hd d.let_bindings in
+      Alcotest.(check string) "binding name" "int-list" binding.ltb_name;
+      Alcotest.(check int) "no params" 0 (List.length binding.ltb_params)
+  | Ok _ -> Alcotest.fail "Expected DLet"
+  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
+
+let test_let_parameterized () =
+  let src =
+    {|(let ((type wrapper [a] (list a)))
+      (defun wrap [a] (a) -> (wrapper a)))|}
+  in
+  match parse_decl_str src with
+  | Ok (Sig_ast.DLet d) ->
+      let binding = List.hd d.let_bindings in
+      Alcotest.(check string) "binding name" "wrapper" binding.ltb_name;
+      Alcotest.(check int) "one param" 1 (List.length binding.ltb_params)
+  | Ok _ -> Alcotest.fail "Expected DLet"
+  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
+
+let test_let_multiple_bindings () =
+  let src =
+    {|(let ((type int-list (list int))
+           (type str-list (list string)))
+      (defun sum (int-list) -> int)
+      (defun join (str-list) -> string))|}
+  in
+  match parse_decl_str src with
+  | Ok (Sig_ast.DLet d) ->
+      Alcotest.(check int) "two bindings" 2 (List.length d.let_bindings);
+      Alcotest.(check int) "two body decls" 2 (List.length d.let_body)
+  | Ok _ -> Alcotest.fail "Expected DLet"
+  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
+
+let test_let_error_no_bindings () =
+  let src = {|(let)|} in
+  match parse_decl_str src with
+  | Ok _ -> Alcotest.fail "Expected parse error"
+  | Error _ -> ()
+
+let test_let_error_no_body () =
+  let src = {|(let ((type int-list (list int))))|} in
+  match parse_decl_str src with
+  | Ok _ -> Alcotest.fail "Expected parse error"
+  | Error _ -> ()
+
 (** {1 Signature File Tests} *)
 
 let test_parse_signature () =
@@ -603,6 +659,16 @@ let () =
           Alcotest.test_case "data nullary" `Quick test_data_nullary;
           Alcotest.test_case "data multi-field" `Quick test_data_multi_field;
           Alcotest.test_case "data recursive" `Quick test_data_recursive;
+        ] );
+      ( "let-declarations",
+        [
+          Alcotest.test_case "simple let" `Quick test_let_simple;
+          Alcotest.test_case "parameterized let" `Quick test_let_parameterized;
+          Alcotest.test_case "multiple bindings" `Quick
+            test_let_multiple_bindings;
+          Alcotest.test_case "error no bindings" `Quick
+            test_let_error_no_bindings;
+          Alcotest.test_case "error no body" `Quick test_let_error_no_body;
         ] );
       ( "signature-files",
         [ Alcotest.test_case "parse signature" `Quick test_parse_signature ] );

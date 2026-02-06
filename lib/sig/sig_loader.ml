@@ -216,6 +216,29 @@ let rec validate_decl ctx (decl : decl) : unit result =
           let* () = acc in
           validate_decl scope_ctx inner_decl)
         (Ok ()) d.scope_decls
+  | DLet d ->
+      (* Validate let bindings *)
+      let* () =
+        List.fold_left
+          (fun acc (b : let_type_binding) ->
+            let* () = acc in
+            let var_names = List.map (fun bv -> bv.name) b.ltb_params in
+            let bind_ctx = with_tvars ctx var_names in
+            let* () = validate_binder_bounds ctx b.ltb_params in
+            validate_type bind_ctx b.ltb_body)
+          (Ok ()) d.let_bindings
+      in
+      (* Validate body with let-bound type names in context *)
+      let inner_ctx =
+        List.fold_left
+          (fun c (b : let_type_binding) -> with_type c b.ltb_name)
+          ctx d.let_bindings
+      in
+      List.fold_left
+        (fun acc inner_decl ->
+          let* () = acc in
+          validate_decl inner_ctx inner_decl)
+        (Ok ()) d.let_body
 
 (** {1 Signature Validation} *)
 
@@ -230,6 +253,10 @@ let build_context (sig_file : signature) : tvar_context =
     | DTypeScope d ->
         (* Recursively collect types from scope declarations *)
         List.fold_left add_decl_types ctx d.scope_decls
+    | DLet d ->
+        (* Recursively collect types from body declarations;
+           let-bound names are NOT added (they're local) *)
+        List.fold_left add_decl_types ctx d.let_body
     | _ -> ctx
   in
   List.fold_left add_decl_types empty_context sig_file.sig_decls
@@ -1606,7 +1633,8 @@ and load_decls_into_state ?(from_include = false) (sig_file : signature)
                          s)
                      state d.data_ctors
                  else state)
-          | DTypeScope d -> load_type_scope ~from_include sig_file d state))
+          | DTypeScope d -> load_type_scope ~from_include sig_file d state
+          | DLet d -> load_let ~from_include sig_file d state))
     (Ok state) sig_file.sig_decls
 
 (** Load a type-scope block. Creates fresh type variables for the scope's
@@ -1743,6 +1771,55 @@ and load_scoped_decl ?(from_include = false) (sig_file : signature)
   | DTypeScope nested ->
       (* Handle nested scopes recursively *)
       load_type_scope ~from_include sig_file nested state
+  | DLet d -> load_let ~from_include sig_file d state
+
+(** Load a let block. Extends the type context with local aliases for the
+    duration of the body declarations. The aliases are not exported—only the
+    body's declarations are added to the load state. *)
+and load_let ?(from_include = false) (sig_file : signature) (d : let_decl)
+    (state : load_state) : load_state result =
+  (* Collect the names being bound *)
+  let let_bound_names =
+    List.map (fun (b : let_type_binding) -> b.ltb_name) d.let_bindings
+  in
+  (* Add each let binding as a type alias in the type context *)
+  let state_with_aliases =
+    List.fold_left
+      (fun s (b : let_type_binding) ->
+        let alias =
+          {
+            alias_params = List.map binder_to_alias_param b.ltb_params;
+            alias_body = b.ltb_body;
+          }
+        in
+        add_alias_to_state b.ltb_name alias s)
+      state d.let_bindings
+  in
+  (* Process body declarations with the extended alias context.
+     We use a virtual signature to reuse load_decls_into_state. *)
+  let virtual_sig =
+    {
+      sig_module = sig_file.sig_module;
+      sig_decls = d.let_body;
+      sig_loc = d.let_loc;
+    }
+  in
+  let* final_state =
+    load_decls_into_state ~from_include virtual_sig state_with_aliases
+  in
+  (* Remove only the let-bound aliases from the context, keeping any aliases
+     added by body declarations (e.g., type decls inside the let body). *)
+  let cleaned_aliases =
+    List.filter
+      (fun (name, _) -> not (List.mem name let_bound_names))
+      final_state.ls_type_ctx.tc_aliases
+  in
+  Ok
+    {
+      final_state with
+      ls_type_ctx =
+        { final_state.ls_type_ctx with tc_aliases = cleaned_aliases };
+    }
 
 (** {1 Signature Loading}
 

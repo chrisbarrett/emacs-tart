@@ -83,6 +83,8 @@ let rec extract_edges_from_decl (decl : Sig_ast.decl) : Graph.edge list =
       [ { Graph.target = name; kind = Graph.Include } ]
   | Sig_ast.DTypeScope { scope_decls; _ } ->
       List.concat_map extract_edges_from_decl scope_decls
+  | Sig_ast.DLet { let_body; _ } ->
+      List.concat_map extract_edges_from_decl let_body
   | Sig_ast.DDefun _ | Sig_ast.DDefvar _ | Sig_ast.DType _
   | Sig_ast.DImportStruct _ | Sig_ast.DData _ ->
       []

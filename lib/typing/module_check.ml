@@ -369,6 +369,9 @@ let rec check_decl_kinds_with_scope (scope_env : Kind.env)
       let combined_env = Kind.merge scope_env inner_scope_env in
       (* Recursively check kinds for declarations inside the scope with combined env *)
       List.concat_map (check_decl_kinds_with_scope combined_env) d.scope_decls
+  | Sig.Sig_ast.DLet d ->
+      (* Recursively check kinds for declarations inside the let body *)
+      List.concat_map (check_decl_kinds_with_scope scope_env) d.let_body
   | Sig.Sig_ast.DDefvar _ | Sig.Sig_ast.DOpen _ | Sig.Sig_ast.DInclude _
   | Sig.Sig_ast.DImportStruct _ ->
       (* These declarations don't have type parameters to kind-check *)

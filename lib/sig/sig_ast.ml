@@ -114,6 +114,8 @@ type decl =
   | DData of data_decl  (** [(data name ...)] - algebraic data type *)
   | DTypeScope of type_scope_decl
       (** [(type-scope [vars] ...)] - scoped type variable declarations *)
+  | DLet of let_decl
+      (** [(let [(type name [vars] def)...] decl...)] - local type aliases *)
 
 and defun_clause = {
   clause_params : sig_param list;  (** Parameter types for this clause *)
@@ -207,6 +209,22 @@ and type_scope_decl = {
 
     The type variable [a] is shared across all declarations in the scope. *)
 
+and let_decl = {
+  let_bindings : let_type_binding list;
+      (** Type alias bindings scoped to the body *)
+  let_body : decl list;  (** Declarations within the let scope *)
+  let_loc : span;
+}
+(** Local type alias declaration for scoped abbreviations. *)
+
+and let_type_binding = {
+  ltb_name : string;  (** Type name being bound *)
+  ltb_params : tvar_binder list;  (** Optional type parameters *)
+  ltb_body : sig_type;  (** The alias definition *)
+  ltb_loc : span;
+}
+(** A single type binding within a let expression. *)
+
 (** {1 Signature File} *)
 
 type signature = {
@@ -244,6 +262,7 @@ let decl_loc = function
   | DImportStruct d -> d.struct_loc
   | DData d -> d.data_loc
   | DTypeScope d -> d.scope_loc
+  | DLet d -> d.let_loc
 
 (** {1 Constructors} *)
 
