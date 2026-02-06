@@ -51,6 +51,63 @@ let combine_results results =
 (** Combine undefined variables from results *)
 let combine_undefineds results = List.concat_map (fun r -> r.undefineds) results
 
+(** Apply a single predicate narrowing to an env, returning (then_env,
+    else_env). *)
+let apply_predicate_narrowing (pred : Narrow.predicate_info) (env : Env.t) :
+    Env.t * Env.t =
+  match Env.lookup pred.var_name env with
+  | Some scheme ->
+      let original_ty = Env.instantiate scheme env in
+      let then_ty = Narrow.narrow_type original_ty pred.narrowed_type in
+      let else_ty = subtract_type original_ty pred.narrowed_type in
+      ( Env.with_narrowed_var pred.var_name then_ty env,
+        Env.with_narrowed_var pred.var_name else_ty env )
+  | None -> (env, env)
+
+(** Apply a single predicate narrowing to produce only the then-env. *)
+let apply_predicate_then (pred : Narrow.predicate_info) (env : Env.t) : Env.t =
+  match Env.lookup pred.var_name env with
+  | Some scheme ->
+      let original_ty = Env.instantiate scheme env in
+      let then_ty = Narrow.narrow_type original_ty pred.narrowed_type in
+      Env.with_narrowed_var pred.var_name then_ty env
+  | None -> env
+
+(** Apply a single predicate narrowing to produce only the else-env. *)
+let apply_predicate_else (pred : Narrow.predicate_info) (env : Env.t) : Env.t =
+  match Env.lookup pred.var_name env with
+  | Some scheme ->
+      let original_ty = Env.instantiate scheme env in
+      let else_ty = subtract_type original_ty pred.narrowed_type in
+      Env.with_narrowed_var pred.var_name else_ty env
+  | None -> env
+
+(** Narrow an env for then/else branches based on condition analysis result.
+    Returns [(then_env, else_env)]. *)
+let narrow_env_from_analysis (analysis : Narrow.condition_analysis)
+    (env : Env.t) : Env.t * Env.t =
+  match analysis with
+  | Narrow.Predicate pred -> apply_predicate_narrowing pred env
+  | Narrow.Predicates preds ->
+      let then_env =
+        List.fold_left (fun e p -> apply_predicate_then p e) env preds
+      in
+      let else_env =
+        List.fold_left (fun e p -> apply_predicate_else p e) env preds
+      in
+      (then_env, else_env)
+  | Narrow.NoPredicate -> (env, env)
+
+(** Narrow an env for then-branch only based on condition analysis. *)
+let narrow_then_from_analysis (analysis : Narrow.condition_analysis)
+    (env : Env.t) : Env.t =
+  fst (narrow_env_from_analysis analysis env)
+
+(** Narrow an env for else-branch only based on condition analysis. *)
+let narrow_else_from_analysis (analysis : Narrow.condition_analysis)
+    (env : Env.t) : Env.t =
+  snd (narrow_env_from_analysis analysis env)
+
 (** Infer the type of an S-expression.
 
     This generates constraints but does not solve them. Call [Unify.solve] on
@@ -293,19 +350,10 @@ and infer_if env cond then_branch else_branch _span =
 
   (* Analyze condition for predicate narrowing (Spec 52).
      If condition is e.g. (stringp x), narrow x to string in then-branch
-     and subtract string from x's type in else-branch. *)
+     and subtract string from x's type in else-branch. Also handles
+     (and pred1 pred2 ...) for R4. *)
   let then_env, else_env =
-    match Narrow.analyze_condition cond env with
-    | Narrow.Predicate { var_name; narrowed_type } -> (
-        match Env.lookup var_name env with
-        | Some scheme ->
-            let original_ty = Env.instantiate scheme env in
-            let then_ty = Narrow.narrow_type original_ty narrowed_type in
-            let else_ty = subtract_type original_ty narrowed_type in
-            ( Env.with_narrowed_var var_name then_ty env,
-              Env.with_narrowed_var var_name else_ty env )
-        | None -> (env, env))
-    | Narrow.NoPredicate -> (env, env)
+    narrow_env_from_analysis (Narrow.analyze_condition cond env) env
   in
 
   let then_result = infer then_env then_branch in
@@ -364,18 +412,9 @@ and infer_if env cond then_branch else_branch _span =
 and infer_if_no_else env cond then_branch span =
   let cond_result = infer env cond in
 
-  (* Analyze condition for predicate narrowing (Spec 52).
-     If condition is e.g. (stringp x), narrow x to string in then-branch. *)
+  (* Analyze condition for predicate narrowing (Spec 52). *)
   let then_env =
-    match Narrow.analyze_condition cond env with
-    | Narrow.Predicate { var_name; narrowed_type } -> (
-        match Env.lookup var_name env with
-        | Some scheme ->
-            let original_ty = Env.instantiate scheme env in
-            let then_ty = Narrow.narrow_type original_ty narrowed_type in
-            Env.with_narrowed_var var_name then_ty env
-        | None -> env)
-    | Narrow.NoPredicate -> env
+    narrow_then_from_analysis (Narrow.analyze_condition cond env) env
   in
 
   let then_result = infer then_env then_branch in
@@ -413,15 +452,7 @@ and infer_when env cond body span =
 
   (* Analyze condition for predicate narrowing (Spec 52). *)
   let body_env =
-    match Narrow.analyze_condition cond env with
-    | Narrow.Predicate { var_name; narrowed_type } -> (
-        match Env.lookup var_name env with
-        | Some scheme ->
-            let original_ty = Env.instantiate scheme env in
-            let then_ty = Narrow.narrow_type original_ty narrowed_type in
-            Env.with_narrowed_var var_name then_ty env
-        | None -> env)
-    | Narrow.NoPredicate -> env
+    narrow_then_from_analysis (Narrow.analyze_condition cond env) env
   in
 
   let body_result = infer_progn body_env body span in
@@ -448,15 +479,7 @@ and infer_unless env cond body span =
      Unless is the inverse of when: body runs when condition is false,
      so we subtract the narrowed type. *)
   let body_env =
-    match Narrow.analyze_condition cond env with
-    | Narrow.Predicate { var_name; narrowed_type } -> (
-        match Env.lookup var_name env with
-        | Some scheme ->
-            let original_ty = Env.instantiate scheme env in
-            let else_ty = subtract_type original_ty narrowed_type in
-            Env.with_narrowed_var var_name else_ty env
-        | None -> env)
-    | Narrow.NoPredicate -> env
+    narrow_else_from_analysis (Narrow.analyze_condition cond env) env
   in
 
   let body_result = infer_progn body_env body span in
@@ -645,17 +668,9 @@ and infer_cond env clauses span =
         (* Analyze test condition for predicate narrowing.
            Body sees narrowed type; subsequent clauses see subtracted type. *)
         let body_env, next_env =
-          match Narrow.analyze_condition test acc_env with
-          | Narrow.Predicate { var_name; narrowed_type } -> (
-              match Env.lookup var_name acc_env with
-              | Some scheme ->
-                  let original_ty = Env.instantiate scheme acc_env in
-                  let then_ty = Narrow.narrow_type original_ty narrowed_type in
-                  let else_ty = subtract_type original_ty narrowed_type in
-                  ( Env.with_narrowed_var var_name then_ty acc_env,
-                    Env.with_narrowed_var var_name else_ty acc_env )
-              | None -> (acc_env, acc_env))
-          | Narrow.NoPredicate -> (acc_env, acc_env)
+          narrow_env_from_analysis
+            (Narrow.analyze_condition test acc_env)
+            acc_env
         in
         let body_result = infer_progn body_env body span in
         let body_constraint = C.equal result_ty body_result.ty span in
@@ -676,12 +691,25 @@ and infer_cond env clauses span =
   in
   { ty = result_ty; constraints = all_constraints; undefineds = all_undefineds }
 
-(** Infer the type of an and expression.
+(** Infer the type of an and expression with predicate narrowing (Spec 52 R4).
 
-    Returns the last value if all are truthy, or the first falsy value. Type is
-    the type of the last argument (simplified). *)
+    Processes args sequentially: after each arg, if it is a predicate call like
+    [(stringp x)], subsequent args see x narrowed to [string]. Returns the last
+    value if all are truthy, or the first falsy value. *)
 and infer_and env args _span =
-  let results = List.map (infer env) args in
+  let rec process acc_env acc_results = function
+    | [] -> List.rev acc_results
+    | arg :: rest ->
+        let result = infer acc_env arg in
+        (* Narrow the env for subsequent args if this arg is a predicate call *)
+        let next_env =
+          narrow_then_from_analysis
+            (Narrow.analyze_condition arg acc_env)
+            acc_env
+        in
+        process next_env (result :: acc_results) rest
+  in
+  let results = process env [] args in
   let constraints = combine_results results in
   let undefineds = combine_undefineds results in
   match List.rev results with

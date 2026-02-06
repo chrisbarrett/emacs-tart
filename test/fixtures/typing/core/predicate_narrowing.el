@@ -63,3 +63,16 @@
   (cond
    ((stringp x) (string-to-char x))
    ((integerp x) (+ x 1))))
+
+;; R4: Predicate in and narrows for subsequent args
+(defun and-stringp (x)
+  (declare (tart ((string | int)) -> int))
+  (when (and (stringp x) (> (string-to-char x) 0))
+    42))
+
+;; R4: Multiple predicates in and accumulate narrowing
+(defun and-two-predicates (x)
+  (declare (tart ((string | int | symbol)) -> int))
+  (if (and (stringp x) (> (length x) 0))
+      (string-to-char x)
+    0))

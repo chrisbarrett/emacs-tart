@@ -16,6 +16,7 @@ type predicate_info = {
 (** Result of analyzing a condition for narrowing *)
 type condition_analysis =
   | Predicate of predicate_info  (** A predicate call on a variable *)
+  | Predicates of predicate_info list  (** Multiple predicates from [and] *)
   | NoPredicate  (** No narrowing applicable *)
 
 val narrow_type : typ -> typ -> typ
@@ -35,6 +36,9 @@ val analyze_condition : Syntax.Sexp.t -> Core.Type_env.t -> condition_analysis
     registered predicate in [env] and [arg] is a plain symbol (variable
     reference). Returns [Predicate { var_name; narrowed_type }] when a predicate
     call is found, or [NoPredicate] otherwise.
+
+    Also handles [(and pred1 pred2 ...)] conditions by returning [Predicates]
+    with all detected predicate calls (Spec 52 R4).
 
     Per R12 (inline-only restriction), only direct calls are recognized. Stored
     results do not enable narrowing. *)
