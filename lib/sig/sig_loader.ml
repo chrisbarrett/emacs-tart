@@ -505,29 +505,13 @@ type type_context = { tc_aliases : alias_context; tc_opaques : opaque_context }
 let empty_type_context =
   { tc_aliases = empty_aliases; tc_opaques = empty_opaques }
 
-(** Simple structural type equality for bound checking.
-
-    Compares type constructors by name. Sufficient for checking whether a
-    concrete type is a member of a union bound like eq-safe. *)
-let rec bound_types_equal (t1 : Types.typ) (t2 : Types.typ) : bool =
-  match (t1, t2) with
-  | Types.TCon n1, Types.TCon n2 -> n1 = n2
-  | Types.TApp (con1, args1), Types.TApp (con2, args2) ->
-      bound_types_equal con1 con2
-      && List.length args1 = List.length args2
-      && List.for_all2 bound_types_equal args1 args2
-  | Types.TUnion m1, Types.TUnion m2 ->
-      List.length m1 = List.length m2 && List.for_all2 bound_types_equal m1 m2
-  | _ -> false
-
 (** Check if a type is a member of a union.
 
     A type [t] is a member of a union if it is structurally equal to one of the
     union's members. For example, [symbol] is a member of
     [(symbol | keyword | int | t | nil)]. *)
 let is_union_member (arg_typ : Types.typ) (members : Types.typ list) : bool =
-  let arg = Types.repr arg_typ in
-  List.exists (fun member -> bound_types_equal arg (Types.repr member)) members
+  List.exists (fun member -> Types.equal arg_typ member) members
 
 (** Check if a type satisfies a bound constraint.
 
@@ -554,7 +538,35 @@ let satisfies_bound (arg_typ : Types.typ) (bound_typ : Types.typ) : bool =
       | _ -> is_union_member arg_typ members)
   | _ ->
       (* For other bounds, check structural equality *)
-      bound_types_equal (Types.repr arg_typ) bound_typ
+      Types.equal arg_typ bound_typ
+
+(** Subtract a type from another type.
+
+    For union types, removes all occurrences of the subtrahend from the union.
+    For non-union types, returns the minuend unchanged if it's not equal to the
+    subtrahend, otherwise returns an empty union (TUnion []).
+
+    Examples:
+    - (int | string) - int => string
+    - (truthy | nil) - nil => truthy
+    - (cons a (list a)) | nil) - nil => (cons a (list a)) *)
+let subtract_type (minuend : Types.typ) (subtrahend : Types.typ) : Types.typ =
+  let minuend = Types.repr minuend in
+  let subtrahend = Types.repr subtrahend in
+  match minuend with
+  | Types.TUnion members -> (
+      (* Filter out members that match the subtrahend *)
+      let remaining =
+        List.filter (fun m -> not (Types.equal m subtrahend)) members
+      in
+      match remaining with
+      | [] -> Types.TUnion [] (* Empty type - all members removed *)
+      | [ single ] -> single (* Single type - unwrap union *)
+      | _ -> Types.TUnion remaining)
+  | _ ->
+      (* Non-union type - return unchanged if not equal to subtrahend *)
+      if Types.equal minuend subtrahend then Types.TUnion [] (* Empty type *)
+      else minuend
 
 (** Convert a signature type to a core type. [ctx] is the type context
     containing aliases and opaques. [tvar_names] is the list of bound type
@@ -750,68 +762,6 @@ let rec sig_type_to_typ_with_ctx (ctx : type_context) (tvar_names : string list)
          The predicate information will be tracked separately in the type environment. *)
       let _ = sig_type_to_typ_with_ctx ctx tvar_names narrowed_type in
       Types.Prim.bool
-
-(** Subtract a type from another type.
-
-    For union types, removes all occurrences of the subtrahend from the union.
-    For non-union types, returns the minuend unchanged if it's not equal to the
-    subtrahend, otherwise returns an empty union (TUnion []).
-
-    Examples:
-    - (int | string) - int => string
-    - (truthy | nil) - nil => truthy
-    - (cons a (list a)) | nil) - nil => (cons a (list a)) *)
-and subtract_type (minuend : Types.typ) (subtrahend : Types.typ) : Types.typ =
-  let minuend = Types.repr minuend in
-  let subtrahend = Types.repr subtrahend in
-  match minuend with
-  | Types.TUnion members -> (
-      (* Filter out members that match the subtrahend *)
-      let remaining =
-        List.filter
-          (fun m -> not (types_equal (Types.repr m) subtrahend))
-          members
-      in
-      match remaining with
-      | [] -> Types.TUnion [] (* Empty type - all members removed *)
-      | [ single ] -> single (* Single type - unwrap union *)
-      | _ -> Types.TUnion remaining)
-  | _ ->
-      (* Non-union type - return unchanged if not equal to subtrahend *)
-      if types_equal minuend subtrahend then Types.TUnion [] (* Empty type *)
-      else minuend
-
-(** Check if two types are structurally equal (for subtraction purposes). This
-    is a simple structural equality, not a full unification. *)
-and types_equal (t1 : Types.typ) (t2 : Types.typ) : bool =
-  match (t1, t2) with
-  | Types.TCon n1, Types.TCon n2 -> n1 = n2
-  | Types.TVar tv1, Types.TVar tv2 -> tv1 == tv2 (* Physical equality *)
-  | Types.TApp (con1, args1), Types.TApp (con2, args2) ->
-      types_equal con1 con2
-      && List.length args1 = List.length args2
-      && List.for_all2 types_equal args1 args2
-  | Types.TArrow (params1, ret1), Types.TArrow (params2, ret2) ->
-      List.length params1 = List.length params2
-      && List.for_all2 params_equal params1 params2
-      && types_equal ret1 ret2
-  | Types.TForall (vars1, body1), Types.TForall (vars2, body2) ->
-      vars1 = vars2 && types_equal body1 body2
-  | Types.TUnion members1, Types.TUnion members2 ->
-      List.length members1 = List.length members2
-      && List.for_all2 types_equal members1 members2
-  | Types.TTuple elems1, Types.TTuple elems2 ->
-      List.length elems1 = List.length elems2
-      && List.for_all2 types_equal elems1 elems2
-  | _ -> false
-
-and params_equal (p1 : Types.param) (p2 : Types.param) : bool =
-  match (p1, p2) with
-  | Types.PPositional t1, Types.PPositional t2 -> types_equal t1 t2
-  | Types.POptional t1, Types.POptional t2 -> types_equal t1 t2
-  | Types.PRest t1, Types.PRest t2 -> types_equal t1 t2
-  | Types.PKey (n1, t1), Types.PKey (n2, t2) -> n1 = n2 && types_equal t1 t2
-  | _ -> false
 
 (** Convert a signature parameter to a core parameter with type context *)
 and sig_param_to_param_with_ctx (ctx : type_context) (tvar_names : string list)
