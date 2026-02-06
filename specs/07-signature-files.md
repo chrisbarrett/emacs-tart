@@ -331,9 +331,9 @@ Auxiliary files:
 - [x] [R14] Parse union types with `|` syntax
 - [x] [R15] Implement signature search path
 - [x] [R16] Implement module discovery with search order
-- [ ] [R17] Error on shadowing imported bindings
-- [ ] [R18] Implement `let` for local type aliases
-- [ ] [R19] Support auxiliary .tart files (include-only, de-duplicated)
+- [x] [R17] Error on shadowing imported bindings
+- [x] [R18] Implement `let` for local type aliases
+- [x] [R19] Support auxiliary .tart files (include-only, de-duplicated)
 
 Run review agent after `builtins.tart` covers basic list/string functions before
 proceeding to Spec 08.
