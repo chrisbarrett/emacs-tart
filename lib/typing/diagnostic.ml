@@ -840,12 +840,28 @@ let to_string_human (d : t) : string =
     | Some E0002 ->
         (* Branch mismatch - check if we have related info *)
         Source_excerpt.IfBranch { is_then = true }
-        (* Default *)
     | Some E0006 ->
         (* Return mismatch - try to extract fn_name from message *)
         Source_excerpt.DeclaredReturn { fn_name = "function" }
     | Some E0005 -> Source_excerpt.TartAnnotation
-    | _ -> Source_excerpt.NoContext
+    | Some E0001
+    | Some E0003
+    | Some E0004
+    | Some E0007
+    | Some E0008
+    | Some E0100
+    | Some E0101
+    | Some E0102
+    | Some E0104
+    | Some E0200
+    | Some E0201
+    | Some E0300
+    | Some E0301
+    | Some E0302
+    | Some E0400
+    | Some E0702
+    | None ->
+        Source_excerpt.NoContext
   in
   Buffer.add_string buf (Source_excerpt.intro_prose prose_ctx);
   Buffer.add_string buf "\n\n";
@@ -985,7 +1001,7 @@ let kind_mismatch ~span ~expected ~found ~location () =
         [ "this type variable is used as a type constructor but has kind *" ]
     | Kind.KStar, Kind.KArrow _ ->
         [ "this type constructor is applied to too few arguments" ]
-    | _ -> []
+    | Kind.KStar, Kind.KStar | Kind.KArrow _, Kind.KArrow _ -> []
   in
   {
     severity = Error;
