@@ -214,6 +214,9 @@ let rec infer_sig_type_kind (env : Kind.env) (ty : sig_type) :
         unify_scheme_with_kind kind Kind.KStar "predicate narrowed type"
       in
       Ok (Kind.KConcrete Kind.KStar)
+  | STInfer (_, _) ->
+      (* Infer placeholder is always kind * *)
+      Ok (Kind.KConcrete Kind.KStar)
 
 (** Infer the kind of a function parameter type. *)
 and infer_param_kind (env : Kind.env) (param : sig_param) :
@@ -260,24 +263,27 @@ let infer_defun_kinds (d : defun_decl) : infer_result =
   (* Create kind environment from binders, respecting explicit annotations *)
   let env = env_from_binders d.defun_tvar_binders in
 
-  (* Infer kinds from parameter types *)
+  (* Infer kinds from all clauses' parameter types and return types *)
   let errors =
     List.fold_left
-      (fun errs param ->
-        match infer_param_kind env param with
-        | Ok () -> errs
+      (fun errs (clause : defun_clause) ->
+        let errs =
+          List.fold_left
+            (fun errs param ->
+              match infer_param_kind env param with
+              | Ok () -> errs
+              | Error e -> e :: errs)
+            errs clause.clause_params
+        in
+        match infer_sig_type_kind env clause.clause_return with
+        | Ok kind_scheme -> (
+            match
+              unify_scheme_with_kind kind_scheme Kind.KStar "return type"
+            with
+            | Ok () -> errs
+            | Error e -> e :: errs)
         | Error e -> e :: errs)
-      [] d.defun_params
-  in
-
-  (* Infer kind from return type *)
-  let errors =
-    match infer_sig_type_kind env d.defun_return with
-    | Ok kind_scheme -> (
-        match unify_scheme_with_kind kind_scheme Kind.KStar "return type" with
-        | Ok () -> errors
-        | Error e -> e :: errors)
-    | Error e -> e :: errors
+      [] d.defun_clauses
   in
 
   (* Default all unconstrained kind variables to * *)
@@ -370,24 +376,27 @@ let infer_defun_kinds_with_scope (scope_env : Kind.env) (d : defun_decl) :
       scope_env d.defun_tvar_binders
   in
 
-  (* Infer kinds from parameter types *)
+  (* Infer kinds from all clauses *)
   let errors =
     List.fold_left
-      (fun errs param ->
-        match infer_param_kind env param with
-        | Ok () -> errs
+      (fun errs (clause : defun_clause) ->
+        let errs =
+          List.fold_left
+            (fun errs param ->
+              match infer_param_kind env param with
+              | Ok () -> errs
+              | Error e -> e :: errs)
+            errs clause.clause_params
+        in
+        match infer_sig_type_kind env clause.clause_return with
+        | Ok kind_scheme -> (
+            match
+              unify_scheme_with_kind kind_scheme Kind.KStar "return type"
+            with
+            | Ok () -> errs
+            | Error e -> e :: errs)
         | Error e -> e :: errs)
-      [] d.defun_params
-  in
-
-  (* Infer kind from return type *)
-  let errors =
-    match infer_sig_type_kind env d.defun_return with
-    | Ok kind_scheme -> (
-        match unify_scheme_with_kind kind_scheme Kind.KStar "return type" with
-        | Ok () -> errors
-        | Error e -> e :: errors)
-    | Error e -> e :: errors
+      [] d.defun_clauses
   in
 
   (* Default all unconstrained kind variables to * *)

@@ -69,6 +69,11 @@ and sig_type =
   | STPredicate of string * sig_type * span
       (** Type predicate return (e.g., [(x is string)] means "if truthy, x has
           type string") *)
+  | STInfer of string option * span
+      (** Inferred type placeholder. [_] is [STInfer (None, span)], [_foo] is
+          [STInfer (Some "_foo", span)]. Used in multi-clause signatures to mark
+          positions where the type checker should infer a fresh type variable.
+      *)
 
 (** Function parameter in signature types.
 
@@ -113,20 +118,36 @@ type decl =
   | DTypeScope of type_scope_decl
       (** [(type-scope [vars] ...)] - scoped type variable declarations *)
 
+and defun_clause = {
+  clause_params : sig_param list;  (** Parameter types for this clause *)
+  clause_return : sig_type;  (** Return type for this clause *)
+  clause_loc : span;
+}
+(** A single clause in a multi-clause function signature.
+
+    Each clause maps a parameter pattern to a return type. Multiple clauses
+    express type-level overloading and enable predicate derivation.
+
+    Examples:
+    - [((string) -> t)] - single clause
+    - [((_) -> nil)] - wildcard clause with inferred parameter type *)
+
 and defun_decl = {
   defun_name : string;
   defun_tvar_binders : tvar_binder list;
       (** Type variables with optional bounds *)
-  defun_params : sig_param list;  (** Parameter types *)
-  defun_return : sig_type;  (** Return type *)
+  defun_clauses : defun_clause list;  (** One or more signature clauses *)
   defun_loc : span;
 }
 (** Function signature declaration.
 
-    Examples:
-    - [(defun add (int int) -> int)] - monomorphic
-    - [(defun identity [a] (a) -> a)] - polymorphic
-    - [(defun map [a b] (((a -> b)) (list a)) -> (list b))] - higher-order *)
+    A defun has one or more clauses. A single-clause defun is written with the
+    traditional syntax:
+    - [(defun add (int int) -> int)]
+    - [(defun identity [a] (a) -> a)]
+
+    Multi-clause defuns list clauses without a top-level arrow:
+    - [(defun stringp ((string) -> t) ((_) -> nil))] *)
 
 and defvar_decl = {
   defvar_name : string;
@@ -269,3 +290,7 @@ val st_predicate : string -> sig_type -> span -> sig_type
 (** Create a type predicate return type.
     [st_predicate param_name narrowed_type loc] creates a predicate type meaning
     "if truthy, param_name has type narrowed_type". *)
+
+val st_infer : string option -> span -> sig_type
+(** Create an inferred type placeholder. [st_infer None loc] is [_],
+    [st_infer (Some "_foo") loc] is [_foo]. *)

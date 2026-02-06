@@ -69,6 +69,11 @@ and sig_type =
   | STPredicate of string * sig_type * span
       (** Type predicate return (e.g., [(x is string)] means "if truthy, x has
           type string") *)
+  | STInfer of string option * span
+      (** Inferred type placeholder. [_] is [STInfer (None, span)], [_foo] is
+          [STInfer (Some "_foo", span)]. Used in multi-clause signatures to mark
+          positions where the type checker should infer a fresh type variable.
+      *)
 
 (** Function parameter in signature types.
 
@@ -113,20 +118,21 @@ type decl =
   | DTypeScope of type_scope_decl
       (** [(type-scope [vars] ...)] - scoped type variable declarations *)
 
+and defun_clause = {
+  clause_params : sig_param list;  (** Parameter types for this clause *)
+  clause_return : sig_type;  (** Return type for this clause *)
+  clause_loc : span;
+}
+(** A single clause in a multi-clause function signature. *)
+
 and defun_decl = {
   defun_name : string;
   defun_tvar_binders : tvar_binder list;
       (** Type variables with optional bounds *)
-  defun_params : sig_param list;  (** Parameter types *)
-  defun_return : sig_type;  (** Return type *)
+  defun_clauses : defun_clause list;  (** One or more signature clauses *)
   defun_loc : span;
 }
-(** Function signature declaration.
-
-    Examples:
-    - [(defun add (int int) -> int)] - monomorphic
-    - [(defun identity [a] (a) -> a)] - polymorphic
-    - [(defun map [a b] (((a -> b)) (list a)) -> (list b))] - higher-order *)
+(** Function signature declaration. *)
 
 and defvar_decl = {
   defvar_name : string;
@@ -230,6 +236,7 @@ let sig_type_loc = function
   | STSubtract (_, _, loc) -> loc
   | STRow (_, loc) -> loc
   | STPredicate (_, _, loc) -> loc
+  | STInfer (_, loc) -> loc
 
 (** Get the source location of a declaration *)
 let decl_loc = function
@@ -287,3 +294,6 @@ let st_row fields var_opt loc =
 (** Create a type predicate return type *)
 let st_predicate param_name narrowed_type loc =
   STPredicate (param_name, narrowed_type, loc)
+
+(** Create an inferred type placeholder *)
+let st_infer name loc = STInfer (name, loc)

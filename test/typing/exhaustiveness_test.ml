@@ -232,8 +232,14 @@ let test_build_registry_empty_for_non_data () =
             {
               defun_name = "foo";
               defun_tvar_binders = [];
-              defun_params = [];
-              defun_return = Sig_ast.STCon ("int", Loc.dummy_span);
+              defun_clauses =
+                [
+                  {
+                    clause_params = [];
+                    clause_return = Sig_ast.STCon ("int", Loc.dummy_span);
+                    clause_loc = Loc.dummy_span;
+                  };
+                ];
               defun_loc = Loc.dummy_span;
             };
         ];

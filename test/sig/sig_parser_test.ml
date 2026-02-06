@@ -258,9 +258,16 @@ let test_predicate_in_defun () =
       (Sig_ast.DDefun
          {
            defun_name = "stringp";
-           defun_params = [ Sig_ast.SPPositional (_, Sig_ast.STVar ("x", _)) ];
-           defun_return =
-             Sig_ast.STPredicate ("x", Sig_ast.STCon ("string", _), _);
+           defun_clauses =
+             [
+               {
+                 clause_params =
+                   [ Sig_ast.SPPositional (_, Sig_ast.STVar ("x", _)) ];
+                 clause_return =
+                   Sig_ast.STPredicate ("x", Sig_ast.STCon ("string", _), _);
+                 _;
+               };
+             ];
            _;
          }) ->
       ()
@@ -274,10 +281,16 @@ let test_named_parameter () =
       (Sig_ast.DDefun
          {
            defun_name = "stringp";
-           defun_params =
-             [ Sig_ast.SPPositional (Some "x", Sig_ast.STCon ("any", _)) ];
-           defun_return =
-             Sig_ast.STPredicate ("x", Sig_ast.STCon ("string", _), _);
+           defun_clauses =
+             [
+               {
+                 clause_params =
+                   [ Sig_ast.SPPositional (Some "x", Sig_ast.STCon ("any", _)) ];
+                 clause_return =
+                   Sig_ast.STPredicate ("x", Sig_ast.STCon ("string", _), _);
+                 _;
+               };
+             ];
            _;
          }) ->
       ()
@@ -291,9 +304,15 @@ let test_named_parameter_optional () =
       (Sig_ast.DDefun
          {
            defun_name = "f";
-           defun_params =
-             [ Sig_ast.SPOptional (Some "x", Sig_ast.STCon ("int", _)) ];
-           defun_return = Sig_ast.STCon ("int", _);
+           defun_clauses =
+             [
+               {
+                 clause_params =
+                   [ Sig_ast.SPOptional (Some "x", Sig_ast.STCon ("int", _)) ];
+                 clause_return = Sig_ast.STCon ("int", _);
+                 _;
+               };
+             ];
            _;
          }) ->
       ()
@@ -307,9 +326,15 @@ let test_type_app_not_named_param () =
       (Sig_ast.DDefun
          {
            defun_name = "f";
-           defun_params =
-             [ Sig_ast.SPPositional (None, Sig_ast.STApp ("seq", _, _)) ];
-           defun_return = Sig_ast.STVar ("a", _);
+           defun_clauses =
+             [
+               {
+                 clause_params =
+                   [ Sig_ast.SPPositional (None, Sig_ast.STApp ("seq", _, _)) ];
+                 clause_return = Sig_ast.STVar ("a", _);
+                 _;
+               };
+             ];
            _;
          }) ->
       ()
@@ -326,12 +351,18 @@ let test_defun_simple () =
          {
            defun_name = "add";
            defun_tvar_binders = [];
-           defun_params =
+           defun_clauses =
              [
-               Sig_ast.SPPositional (_, Sig_ast.STCon ("int", _));
-               Sig_ast.SPPositional (_, Sig_ast.STCon ("int", _));
+               {
+                 clause_params =
+                   [
+                     Sig_ast.SPPositional (_, Sig_ast.STCon ("int", _));
+                     Sig_ast.SPPositional (_, Sig_ast.STCon ("int", _));
+                   ];
+                 clause_return = Sig_ast.STCon ("int", _);
+                 _;
+               };
              ];
-           defun_return = Sig_ast.STCon ("int", _);
            _;
          }) ->
       ()
@@ -346,8 +377,15 @@ let test_defun_polymorphic () =
          {
            defun_name = "identity";
            defun_tvar_binders = [ { name = "a"; bound = None; _ } ];
-           defun_params = [ Sig_ast.SPPositional (_, Sig_ast.STVar ("a", _)) ];
-           defun_return = Sig_ast.STVar ("a", _);
+           defun_clauses =
+             [
+               {
+                 clause_params =
+                   [ Sig_ast.SPPositional (_, Sig_ast.STVar ("a", _)) ];
+                 clause_return = Sig_ast.STVar ("a", _);
+                 _;
+               };
+             ];
            _;
          }) ->
       ()

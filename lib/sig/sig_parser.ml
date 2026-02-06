@@ -470,8 +470,8 @@ and parse_params_as_type (contents : Sexp.t list) (span : Loc.span) :
 (** Parse a defun declaration.
 
     Syntax:
-    - (defun name (params) -> return)
-    - (defun name [vars] (params) -> return) *)
+    - (defun name (params) -> return) - single clause
+    - (defun name [vars] (params) -> return) - single clause with quantifiers *)
 let parse_defun (contents : Sexp.t list) (span : Loc.span) : decl result =
   match contents with
   | Sexp.Symbol ("defun", _) :: Sexp.Symbol (name, _) :: rest -> (
@@ -493,13 +493,19 @@ let parse_defun (contents : Sexp.t list) (span : Loc.span) : decl result =
               match parse_sig_type return_sexp with
               | Error e -> Error e
               | Ok return_type ->
+                  let clause =
+                    {
+                      clause_params = params;
+                      clause_return = return_type;
+                      clause_loc = span;
+                    }
+                  in
                   Ok
                     (DDefun
                        {
                          defun_name = name;
                          defun_tvar_binders = binders;
-                         defun_params = params;
-                         defun_return = return_type;
+                         defun_clauses = [ clause ];
                          defun_loc = span;
                        })))
       | Some (_, _) -> error "Expected single return type after ->" span)

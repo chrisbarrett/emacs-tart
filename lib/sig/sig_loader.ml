@@ -102,6 +102,9 @@ let rec validate_type (ctx : tvar_context) (ty : sig_type) : unit result =
   | STPredicate (_, narrowed_type, _) ->
       (* Validate the narrowed type *)
       validate_type ctx narrowed_type
+  | STInfer (_, _) ->
+      (* Infer placeholders are always valid - they become fresh tvars *)
+      Ok ()
 
 and validate_types ctx types =
   List.fold_left
@@ -134,6 +137,11 @@ and ( let* ) = Result.bind
 
 (** {1 Declaration Validation} *)
 
+(** Validate a single defun clause *)
+let validate_clause ctx (c : defun_clause) : unit result =
+  let* () = validate_params ctx c.clause_params in
+  validate_type ctx c.clause_return
+
 (** Validate a defun declaration *)
 let validate_defun ctx (d : defun_decl) : unit result =
   (* Add type parameters to context *)
@@ -141,9 +149,12 @@ let validate_defun ctx (d : defun_decl) : unit result =
   let inner_ctx = with_tvars ctx var_names in
   (* Validate binder bounds in outer context *)
   let* () = validate_binder_bounds ctx d.defun_tvar_binders in
-  (* Validate params and return type *)
-  let* () = validate_params inner_ctx d.defun_params in
-  validate_type inner_ctx d.defun_return
+  (* Validate all clauses *)
+  List.fold_left
+    (fun acc clause ->
+      let* () = acc in
+      validate_clause inner_ctx clause)
+    (Ok ()) d.defun_clauses
 
 (** Validate a defvar declaration *)
 let validate_defvar ctx (d : defvar_decl) : unit result =
@@ -488,6 +499,9 @@ let rec substitute_sig_type (subst : (string * sig_type) list) (ty : sig_type) :
   | STPredicate (param_name, narrowed_type, _) ->
       let narrowed_type' = substitute_sig_type subst narrowed_type in
       STPredicate (param_name, narrowed_type', loc)
+  | STInfer (_, _) ->
+      (* Infer placeholders are not affected by substitution *)
+      ty
 
 and substitute_sig_param subst = function
   | SPPositional (name, ty) -> SPPositional (name, substitute_sig_type subst ty)
@@ -732,6 +746,9 @@ let rec sig_type_to_typ_with_ctx ?(scope_tvars : (string * Types.typ) list = [])
          The predicate information will be tracked separately in the type environment. *)
       let _ = convert tvar_names narrowed_type in
       Types.Prim.bool
+  | STInfer (_, _) ->
+      (* Infer placeholder becomes a fresh type variable *)
+      Types.fresh_tvar 0
 
 (** Convert a signature parameter to a core parameter with type context *)
 and sig_param_to_param_with_ctx ?(scope_tvars : (string * Types.typ) list = [])
@@ -783,48 +800,70 @@ let sig_param_to_param (tvar_names : string list) (p : sig_param) : Types.param
     type.
 
     Returns [Some info] if the return type is [STPredicate], where info contains
-    the parameter index that gets narrowed. Returns [None] otherwise. *)
+    the parameter index that gets narrowed. Returns [None] otherwise.
+
+    Only examines the first clause for backward compatibility with single-clause
+    defuns using STPredicate syntax. Multi-clause predicate derivation is
+    handled separately by derive_predicate_info. *)
 let extract_predicate_info (ctx : type_context) (d : defun_decl) :
     Type_env.predicate_info option =
-  match d.defun_return with
-  | STPredicate (param_name, narrowed_sig_type, _) -> (
-      (* Find the parameter index that matches the predicate's param_name *)
-      let find_param_index () =
-        let rec find_in_params idx = function
-          | [] -> None
-          | SPPositional (Some name, _) :: _ when name = param_name -> Some idx
-          | SPOptional (Some name, _) :: _ when name = param_name -> Some idx
-          | SPKey (name, _) :: _ when name = param_name -> Some idx
-          | _ :: rest -> find_in_params (idx + 1) rest
-        in
-        find_in_params 0 d.defun_params
-      in
-      match find_param_index () with
-      | None ->
-          (* Parameter name not found - validation error would be reported
-              elsewhere *)
-          None
-      | Some param_index ->
-          let tvar_names = List.map (fun b -> b.name) d.defun_tvar_binders in
-          let narrowed_type =
-            sig_type_to_typ_with_ctx ctx tvar_names narrowed_sig_type
+  match d.defun_clauses with
+  | [] -> None
+  | first_clause :: _ -> (
+      match first_clause.clause_return with
+      | STPredicate (param_name, narrowed_sig_type, _) -> (
+          (* Find the parameter index that matches the predicate's param_name *)
+          let find_param_index () =
+            let rec find_in_params idx = function
+              | [] -> None
+              | SPPositional (Some name, _) :: _ when name = param_name ->
+                  Some idx
+              | SPOptional (Some name, _) :: _ when name = param_name ->
+                  Some idx
+              | SPKey (name, _) :: _ when name = param_name -> Some idx
+              | _ :: rest -> find_in_params (idx + 1) rest
+            in
+            find_in_params 0 first_clause.clause_params
           in
-          Some { Type_env.param_index; param_name; narrowed_type })
-  | _ -> None
+          match find_param_index () with
+          | None ->
+              (* Parameter name not found - validation error would be reported
+                  elsewhere *)
+              None
+          | Some param_index ->
+              let tvar_names =
+                List.map (fun b -> b.name) d.defun_tvar_binders
+              in
+              let narrowed_type =
+                sig_type_to_typ_with_ctx ctx tvar_names narrowed_sig_type
+              in
+              Some { Type_env.param_index; param_name; narrowed_type })
+      | _ -> None)
 
 (** Convert a defun declaration to a type scheme with full type context. Returns
     a Poly scheme if the function has type parameters, otherwise a Mono scheme
-    with an arrow type. *)
+    with an arrow type.
+
+    For single-clause defuns, produces the arrow type from that clause. For
+    multi-clause defuns, uses the first clause (multi-clause type computation is
+    handled by compute_defun_type in a later iteration). *)
 let load_defun_with_ctx (ctx : type_context) (d : defun_decl) : Type_env.scheme
     =
   let tvar_names = List.map (fun b -> b.name) d.defun_tvar_binders in
-  let params =
-    List.map (sig_param_to_param_with_ctx ctx tvar_names) d.defun_params
-  in
-  let ret = sig_type_to_typ_with_ctx ctx tvar_names d.defun_return in
-  let arrow = Types.TArrow (params, ret) in
-  if tvar_names = [] then Type_env.Mono arrow
-  else Type_env.Poly (tvar_names, arrow)
+  match d.defun_clauses with
+  | [] -> Type_env.Mono (Types.TArrow ([], Types.Prim.nil))
+  | first_clause :: _ ->
+      let params =
+        List.map
+          (sig_param_to_param_with_ctx ctx tvar_names)
+          first_clause.clause_params
+      in
+      let ret =
+        sig_type_to_typ_with_ctx ctx tvar_names first_clause.clause_return
+      in
+      let arrow = Types.TArrow (params, ret) in
+      if tvar_names = [] then Type_env.Mono arrow
+      else Type_env.Poly (tvar_names, arrow)
 
 (** Convert a defun declaration inside a type-scope to a type scheme. The scope
     type variables are added to the function's quantifier list. Uses the
@@ -839,18 +878,25 @@ let load_defun_with_scope (ctx : type_context)
   let scope_tvar_names = List.map fst scope_tvars in
   (* Combined tvar names: scope vars first, then function's own vars *)
   let all_tvar_names = scope_tvar_names @ fn_tvar_names in
-  (* Build params and return type, recognizing scope tvars as type variables *)
-  let params =
-    List.map
-      (sig_param_to_param_with_ctx ~scope_tvars ctx fn_tvar_names)
-      d.defun_params
-  in
-  let ret =
-    sig_type_to_typ_with_ctx ~scope_tvars ctx fn_tvar_names d.defun_return
-  in
-  let arrow = Types.TArrow (params, ret) in
-  if all_tvar_names = [] then Type_env.Mono arrow
-  else Type_env.Poly (all_tvar_names, arrow)
+  (* Build params and return type from first clause *)
+  match d.defun_clauses with
+  | [] ->
+      let arrow = Types.TArrow ([], Types.Prim.nil) in
+      if all_tvar_names = [] then Type_env.Mono arrow
+      else Type_env.Poly (all_tvar_names, arrow)
+  | first_clause :: _ ->
+      let params =
+        List.map
+          (sig_param_to_param_with_ctx ~scope_tvars ctx fn_tvar_names)
+          first_clause.clause_params
+      in
+      let ret =
+        sig_type_to_typ_with_ctx ~scope_tvars ctx fn_tvar_names
+          first_clause.clause_return
+      in
+      let arrow = Types.TArrow (params, ret) in
+      if all_tvar_names = [] then Type_env.Mono arrow
+      else Type_env.Poly (all_tvar_names, arrow)
 
 (** Convert a defvar declaration to a type scheme with full type context. The
     type may be polymorphic if it contains a forall. *)
