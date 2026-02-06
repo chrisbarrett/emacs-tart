@@ -4,6 +4,8 @@ typechecking Elisp: `Bash(command="./tart check --emacs-version 31.0 $FILE")`
 
 build: `Bash(command="nix develop --command dune build 2>&1")`
 
+test: `Bash(command="nix develop --command dune test --force 2>&1")`
+
 **Validation = Implementation.** "Validating" signatures IS coding:
 
 ## Key files
@@ -20,7 +22,7 @@ bugs; type-checking shows locations to update.
 
 # Testing
 
-Tests under `tests/fixtures/typings/` are pairs of `$name.{el,expected}` files.
+Tests under `test/fixtures/typing/` are pairs of `$name.{el,expected}` files.
 
 ## Type Definitions
 
