@@ -213,14 +213,14 @@ val load_signature_with_resolver :
   resolver:module_resolver ->
   Core.Type_env.t ->
   Sig_ast.signature ->
-  Core.Type_env.t
+  (Core.Type_env.t, load_error) result
 (** Load a validated signature into a type environment with module resolution.
     Applies forall inference per-declaration during loading, using accumulated
     type context so that types from includes/opens are recognized. Adds all
     function and variable declarations to the environment. Type aliases are
     expanded and opaque types are resolved during loading. Open directives
     import types only; include directives re-export values. Returns the extended
-    environment.
+    environment or a load error (e.g., shadowing violation).
 
     @param prelude_ctx
       Optional prelude type context. When provided, prelude type aliases (list,
@@ -233,10 +233,11 @@ val load_signature_with_resolver :
     @param env Base type environment to extend
     @param sig_file The signature to load *)
 
-val load_signature : Core.Type_env.t -> Sig_ast.signature -> Core.Type_env.t
+val load_signature :
+  Core.Type_env.t -> Sig_ast.signature -> (Core.Type_env.t, load_error) result
 (** Load a validated signature into a type environment. This is the simple
     interface without module resolution. Applies forall inference
     per-declaration during loading. Open and include directives will be ignored
     (no resolver provided). Adds all function and variable declarations to the
     environment. Type aliases are expanded during loading. Returns the extended
-    environment. *)
+    environment or a load error. *)

@@ -356,11 +356,12 @@ let load_module ~(search_path : t) ?(el_path : string option)
         let prelude_ctx =
           if with_prelude then Some (Prelude.prelude_type_context ()) else None
         in
-        let new_env =
+        match
           Sig_loader.load_signature_with_resolver ?prelude_ctx ~resolver env
             sig_file
-        in
-        Some new_env
+        with
+        | Ok new_env -> Some new_env
+        | Error _ -> None
       else None
 
 (** Load signatures for a module and also return the signature AST.
@@ -391,11 +392,12 @@ let load_module_with_sig ~(search_path : t) ?(el_path : string option)
         let prelude_ctx =
           if with_prelude then Some (Prelude.prelude_type_context ()) else None
         in
-        let new_env =
+        match
           Sig_loader.load_signature_with_resolver ?prelude_ctx ~resolver env
             sig_file
-        in
-        Some (new_env, sig_file)
+        with
+        | Ok new_env -> Some (new_env, sig_file)
+        | Error _ -> None
       else None
 
 (** List all .tart files in a c-core directory. *)
@@ -446,8 +448,12 @@ let load_c_core_files ~(c_core_dir : string) ?(with_prelude = true)
           if valid then
             (* Use empty resolver since c-core files shouldn't have deps *)
             let resolver _ = None in
-            Sig_loader.load_signature_with_resolver ?prelude_ctx ~resolver
-              acc_env sig_file
+            match
+              Sig_loader.load_signature_with_resolver ?prelude_ctx ~resolver
+                acc_env sig_file
+            with
+            | Ok new_env -> new_env
+            | Error _ -> acc_env
           else acc_env)
     env files
 

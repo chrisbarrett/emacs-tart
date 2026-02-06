@@ -44,13 +44,29 @@ let load_sig_str ?(env = Type_env.empty) s =
   let sig_file = parse_sig_str s in
   let prelude_ctx = Prelude.prelude_type_context () in
   let prelude_type_names = Prelude.prelude_type_names in
-  Sig_loader.load_signature_with_resolver ~prelude_ctx ~prelude_type_names
-    ~resolver:Sig_loader.no_resolver env sig_file
+  match
+    Sig_loader.load_signature_with_resolver ~prelude_ctx ~prelude_type_names
+      ~resolver:Sig_loader.no_resolver env sig_file
+  with
+  | Ok env -> env
+  | Error e -> failwith ("Load error: " ^ e.message)
 
 (** Helper to load a signature with a module resolver. Note: Validation is
     skipped because external types from opened/included modules aren't known at
     parse time. Uses prelude context for primitive types. *)
 let load_sig_str_with_resolver ?(env = Type_env.empty) ~resolver s =
+  let sig_file = parse_sig_str_no_validate s in
+  let prelude_ctx = Prelude.prelude_type_context () in
+  let prelude_type_names = Prelude.prelude_type_names in
+  match
+    Sig_loader.load_signature_with_resolver ~prelude_ctx ~prelude_type_names
+      ~resolver env sig_file
+  with
+  | Ok env -> env
+  | Error e -> failwith ("Load error: " ^ e.message)
+
+(** Helper that returns the result directly, for testing error cases *)
+let load_sig_str_with_resolver_result ?(env = Type_env.empty) ~resolver s =
   let sig_file = parse_sig_str_no_validate s in
   let prelude_ctx = Prelude.prelude_type_context () in
   let prelude_type_names = Prelude.prelude_type_names in
@@ -1732,6 +1748,107 @@ let test_no_predicate_single_clause () =
   | None -> () (* Expected *)
   | Some _ -> Alcotest.fail "single-clause should NOT be a predicate"
 
+(** {1 Shadowing Error Tests} *)
+
+(** Test that redefining a type imported via open produces an error *)
+let test_shadow_open_type () =
+  let seq_sig =
+    parse_sig_str ~module_name:"seq" {|
+    (type seq [a] (list a))
+  |}
+  in
+  let resolver name = if name = "seq" then Some seq_sig else None in
+  match
+    load_sig_str_with_resolver_result ~resolver
+      {|
+    (open 'seq)
+    (type seq int)
+  |}
+  with
+  | Ok _ -> Alcotest.fail "Expected shadowing error for 'seq'"
+  | Error e ->
+      Alcotest.(check bool)
+        "error mentions cannot redefine" true
+        (try
+           let _ =
+             Str.search_forward
+               (Str.regexp_string "cannot redefine imported binding 'seq'")
+               e.message 0
+           in
+           true
+         with Not_found -> false)
+
+(** Test that redefining a function imported via include produces an error *)
+let test_shadow_include_fn () =
+  let utils_sig =
+    parse_sig_str ~module_name:"utils"
+      {|
+    (defun helper (int) -> string)
+  |}
+  in
+  let resolver name = if name = "utils" then Some utils_sig else None in
+  match
+    load_sig_str_with_resolver_result ~resolver
+      {|
+    (include 'utils)
+    (defun helper (string) -> int)
+  |}
+  with
+  | Ok _ -> Alcotest.fail "Expected shadowing error for 'helper'"
+  | Error e ->
+      Alcotest.(check bool)
+        "error mentions cannot redefine" true
+        (try
+           let _ =
+             Str.search_forward
+               (Str.regexp_string "cannot redefine imported binding 'helper'")
+               e.message 0
+           in
+           true
+         with Not_found -> false)
+
+(** Test that defining a new type not from open/include is allowed *)
+let test_shadow_new_type_allowed () =
+  let seq_sig =
+    parse_sig_str ~module_name:"seq" {|
+    (type seq [a] (list a))
+  |}
+  in
+  let resolver name = if name = "seq" then Some seq_sig else None in
+  let _env =
+    load_sig_str_with_resolver ~resolver
+      {|
+    (open 'seq)
+    (type my-type int)
+  |}
+  in
+  (* No error means the test passes *)
+  ()
+
+(** Test that shadowing errors include span information *)
+let test_shadow_error_has_span () =
+  let seq_sig =
+    parse_sig_str ~module_name:"seq" {|
+    (type seq [a] (list a))
+  |}
+  in
+  let resolver name = if name = "seq" then Some seq_sig else None in
+  match
+    load_sig_str_with_resolver_result ~resolver
+      {|
+    (open 'seq)
+    (type seq int)
+  |}
+  with
+  | Ok _ -> Alcotest.fail "Expected shadowing error"
+  | Error e ->
+      (* The span should have valid positions (not dummy_span) *)
+      let open Syntax.Location in
+      Alcotest.(check bool)
+        "span start line > 0" true
+        (e.span.start_pos.line > 0);
+      Alcotest.(check bool) "span end line > 0" true (e.span.end_pos.line > 0)
+
 let () =
   Alcotest.run "sig_loader"
     [
@@ -1935,5 +2052,15 @@ let () =
             test_no_predicate_mixed_returns;
           Alcotest.test_case "no predicate single clause" `Quick
             test_no_predicate_single_clause;
+        ] );
+      ( "shadowing",
+        [
+          Alcotest.test_case "open then redefine type" `Quick
+            test_shadow_open_type;
+          Alcotest.test_case "include then redefine fn" `Quick
+            test_shadow_include_fn;
+          Alcotest.test_case "new type allowed" `Quick
+            test_shadow_new_type_allowed;
+          Alcotest.test_case "error has span" `Quick test_shadow_error_has_span;
         ] );
     ]

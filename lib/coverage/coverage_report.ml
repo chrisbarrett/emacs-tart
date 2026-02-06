@@ -45,7 +45,10 @@ let load_sibling_signatures (el_path : string) (env : Core.Type_env.t) :
   let tart_path = sibling_tart_path el_path in
   if Sys.file_exists tart_path then
     match Sig.Search_path.parse_signature_file tart_path with
-    | Some sig_ast -> Sig.Sig_loader.load_signature env sig_ast
+    | Some sig_ast -> (
+        match Sig.Sig_loader.load_signature env sig_ast with
+        | Ok env -> env
+        | Error _ -> env)
     | None -> env
   else env
 

@@ -224,15 +224,16 @@ let load_sibling_signature ~(config : config) (el_path : string) :
   let tart_path = Filename.concat dir (module_name ^ ".tart") in
   (* Try to parse the signature file - returns None if file doesn't exist *)
   match Search.parse_signature_file tart_path with
-  | Some sig_ast ->
+  | Some sig_ast -> (
       let resolver = Search.make_resolver ~el_path config.search_path in
       let base_env = Builtin_types.initial_env () in
       let prelude_ctx = Sig.Prelude.prelude_type_context () in
-      let env =
+      match
         Loader.load_signature_with_resolver ~prelude_ctx ~resolver base_env
           sig_ast
-      in
-      Some (env, sig_ast)
+      with
+      | Ok env -> Some (env, sig_ast)
+      | Error _ -> None)
   | None -> None
 
 (** {1 Internal Function Detection} *)
