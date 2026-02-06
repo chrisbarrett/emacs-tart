@@ -190,6 +190,13 @@ let rec infer (env : Env.t) (sexp : Syntax.Sexp.t) : result =
         :: rest_args,
         span ) ->
       infer_map_elt_row env key_name map_expr rest_args span
+  (* === gethash with literal symbol key: row-typed inference (Spec 11 R13) === *)
+  | List
+      ( Symbol ("gethash", _)
+        :: List ([ Symbol ("quote", _); Symbol (key_name, _) ], _)
+        :: table_expr :: rest_args,
+        span ) ->
+      infer_gethash_row env key_name table_expr rest_args span
   (* === eq/eql with disjointness checking (Spec 11 R14) === *)
   | List ([ Symbol ((("eq" | "eql") as fn_name), _); arg1; arg2 ], span) ->
       infer_eq_with_disjointness env fn_name arg1 arg2 span
@@ -1710,6 +1717,97 @@ and infer_map_elt_row env key_name map_expr rest_args _span =
   let all_constraints = C.combine map_result.constraints base_constraints in
   let all_undefineds =
     map_result.undefineds @ combine_undefineds rest_results
+  in
+
+  { ty = result_ty; constraints = all_constraints; undefineds = all_undefineds }
+
+(** Try to extract a row type from a hash-table type: [(HashTable symbol TRow)].
+
+    Returns [Some row] if the type is a row-typed hash-table, [None] otherwise.
+*)
+and extract_hash_table_row ty =
+  let ht_name = intrinsic "HashTable" in
+  match repr ty with
+  | TApp (ht_con, [ _key_ty; value_ty ]) when equal (repr ht_con) (TCon ht_name)
+    -> (
+      match repr value_ty with TRow row -> Some row | _ -> None)
+  | _ -> None
+
+(** Infer a row-typed gethash call with a literal symbol key.
+
+    [(gethash 'KEY TABLE &optional DEFAULT)]
+
+    Implements the same decision table as alist-get/plist-get:
+
+    - Cases 1–2: literal key found in row → return [field_type] (no nil)
+    - Cases 3–4: literal key absent from closed row → return [nil] or default
+    - Case 5: literal key absent from open row → return [(α | nil)]
+
+    When the hash-table's type is not yet known (fresh type variable), infers a
+    row type from field access: constrains the table to an open row containing
+    the key and returns [field_ty] directly (the constraint guarantees
+    presence). *)
+and infer_gethash_row env key_name table_expr rest_args _span =
+  let table_result = infer env table_expr in
+  let rest_results = List.map (infer env) rest_args in
+
+  let result_ty, table_constraint =
+    match extract_hash_table_row table_result.ty with
+    | Some row -> (
+        match row_lookup row key_name with
+        | Some field_ty ->
+            (* Cases 1–2: key is in the row → return field_type directly *)
+            (field_ty, None)
+        | None -> (
+            match row.row_var with
+            | None ->
+                (* Cases 3–4: key absent from closed row → return nil or default *)
+                let result_ty =
+                  match rest_args with
+                  | _default_expr :: _ ->
+                      (* Case 4: DEFAULT provided → return default's type *)
+                      (List.hd rest_results).ty
+                  | [] ->
+                      (* Case 3: no default → return nil *)
+                      Prim.nil
+                in
+                (result_ty, None)
+            | Some _ ->
+                (* Case 5: key absent from open row → constrain and return
+                   (α | nil) *)
+                let field_ty = fresh_tvar (Env.current_level env) in
+                let row_var = fresh_tvar (Env.current_level env) in
+                let expected_row = open_row [ (key_name, field_ty) ] row_var in
+                let expected_ht_ty = hash_table_of Prim.symbol expected_row in
+                let c =
+                  C.equal expected_ht_ty table_result.ty
+                    (Syntax.Sexp.span_of table_expr)
+                in
+                (option_of field_ty, Some c)))
+    | None ->
+        (* R8: Type not yet known — infer row from field access.
+           We constrain the hash-table to have an open row containing this key,
+           so the key is provably present. Return field_ty directly. *)
+        let field_ty = fresh_tvar (Env.current_level env) in
+        let row_var = fresh_tvar (Env.current_level env) in
+        let expected_row = open_row [ (key_name, field_ty) ] row_var in
+        let expected_ht_ty = hash_table_of Prim.symbol expected_row in
+        let c =
+          C.equal expected_ht_ty table_result.ty
+            (Syntax.Sexp.span_of table_expr)
+        in
+        (field_ty, Some c)
+  in
+
+  let rest_constraints = combine_results rest_results in
+  let base_constraints =
+    match table_constraint with
+    | Some c -> C.add c rest_constraints
+    | None -> rest_constraints
+  in
+  let all_constraints = C.combine table_result.constraints base_constraints in
+  let all_undefineds =
+    table_result.undefineds @ combine_undefineds rest_results
   in
 
   { ty = result_ty; constraints = all_constraints; undefineds = all_undefineds }

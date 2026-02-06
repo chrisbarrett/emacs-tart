@@ -241,46 +241,46 @@
 ;; ===========================================================================
 
 ;; (make-hash-table &rest ARGS) - create hash table
-(defun make-hash-table (&rest any) -> (hashtable any any))
+(defun make-hash-table (&rest any) -> (hash-table any any))
 
 ;; (hash-table-p OBJ) - test if hash table
 (defun hash-table-p (any) -> bool)
 
 ;; (gethash KEY TABLE &optional DEFAULT) - get value
-(defun gethash [k v] (k (hashtable k v) &optional (v | nil)) -> (v | nil))
+(defun gethash [k v] (k (hash-table k v) &optional (v | nil)) -> (v | nil))
 
 ;; (puthash KEY VALUE TABLE) - put value
-(defun puthash [k v] (k v (hashtable k v)) -> v)
+(defun puthash [k v] (k v (hash-table k v)) -> v)
 
 ;; (remhash KEY TABLE) - remove key
-(defun remhash [k v] (k (hashtable k v)) -> nil)
+(defun remhash [k v] (k (hash-table k v)) -> nil)
 
 ;; (clrhash TABLE) - clear table
-(defun clrhash [k v] ((hashtable k v)) -> (hashtable k v))
+(defun clrhash [k v] ((hash-table k v)) -> (hash-table k v))
 
 ;; (maphash FN TABLE) - iterate over table
-(defun maphash [k v] (any (hashtable k v)) -> nil)
+(defun maphash [k v] (any (hash-table k v)) -> nil)
 
 ;; (copy-hash-table TABLE) - shallow copy
-(defun copy-hash-table [k v] ((hashtable k v)) -> (hashtable k v))
+(defun copy-hash-table [k v] ((hash-table k v)) -> (hash-table k v))
 
 ;; (hash-table-count TABLE) - number of entries
-(defun hash-table-count ((hashtable any any)) -> int)
+(defun hash-table-count ((hash-table any any)) -> int)
 
 ;; (hash-table-size TABLE) - current capacity
-(defun hash-table-size ((hashtable any any)) -> int)
+(defun hash-table-size ((hash-table any any)) -> int)
 
 ;; (hash-table-test TABLE) - test function name
-(defun hash-table-test ((hashtable any any)) -> symbol)
+(defun hash-table-test ((hash-table any any)) -> symbol)
 
 ;; (hash-table-weakness TABLE) - weakness type
-(defun hash-table-weakness ((hashtable any any)) -> (symbol | nil))
+(defun hash-table-weakness ((hash-table any any)) -> (symbol | nil))
 
 ;; (hash-table-rehash-size TABLE) - rehash size
-(defun hash-table-rehash-size ((hashtable any any)) -> float)
+(defun hash-table-rehash-size ((hash-table any any)) -> float)
 
 ;; (hash-table-rehash-threshold TABLE) - rehash threshold
-(defun hash-table-rehash-threshold ((hashtable any any)) -> float)
+(defun hash-table-rehash-threshold ((hash-table any any)) -> float)
 
 ;; (define-hash-table-test NAME TEST HASH) - define custom test
 (defun define-hash-table-test (symbol any any) -> nil)
