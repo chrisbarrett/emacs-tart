@@ -128,6 +128,13 @@ val lookup_predicate : string -> t -> predicate_info option
 val extend_predicate : string -> predicate_info -> t -> t
 (** Register a function as a type predicate. *)
 
+val with_narrowed_var : string -> Types.typ -> t -> t
+(** [with_narrowed_var name ty env] overrides [name]'s type to [ty].
+
+    Used by predicate narrowing to refine a variable's type in conditional
+    branches. Shadows any existing binding for [name] in the variable namespace.
+*)
+
 (** {1 Instantiation} *)
 
 val instantiate : scheme -> t -> Types.typ

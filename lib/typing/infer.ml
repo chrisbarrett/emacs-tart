@@ -285,8 +285,26 @@ and infer_lambda env params body span =
 and infer_if env cond then_branch else_branch _span =
   let open Syntax.Sexp in
   let cond_result = infer env cond in
-  let then_result = infer env then_branch in
-  let else_result = infer env else_branch in
+
+  (* Analyze condition for predicate narrowing (Spec 52).
+     If condition is e.g. (stringp x), narrow x to string in then-branch
+     and subtract string from x's type in else-branch. *)
+  let then_env, else_env =
+    match Narrow.analyze_condition cond env with
+    | Narrow.Predicate { var_name; narrowed_type } -> (
+        match Env.lookup var_name env with
+        | Some scheme ->
+            let original_ty = Env.instantiate scheme env in
+            let then_ty = Narrow.narrow_type original_ty narrowed_type in
+            let else_ty = subtract_type original_ty narrowed_type in
+            ( Env.with_narrowed_var var_name then_ty env,
+              Env.with_narrowed_var var_name else_ty env )
+        | None -> (env, env))
+    | Narrow.NoPredicate -> (env, env)
+  in
+
+  let then_result = infer then_env then_branch in
+  let else_result = infer else_env else_branch in
 
   (* Result type is a fresh variable *)
   let result_ty = fresh_tvar (Env.current_level env) in
@@ -340,7 +358,22 @@ and infer_if env cond then_branch else_branch _span =
     then_type) if then_type is truthy, otherwise Any. *)
 and infer_if_no_else env cond then_branch span =
   let cond_result = infer env cond in
-  let then_result = infer env then_branch in
+
+  (* Analyze condition for predicate narrowing (Spec 52).
+     If condition is e.g. (stringp x), narrow x to string in then-branch. *)
+  let then_env =
+    match Narrow.analyze_condition cond env with
+    | Narrow.Predicate { var_name; narrowed_type } -> (
+        match Env.lookup var_name env with
+        | Some scheme ->
+            let original_ty = Env.instantiate scheme env in
+            let then_ty = Narrow.narrow_type original_ty narrowed_type in
+            Env.with_narrowed_var var_name then_ty env
+        | None -> env)
+    | Narrow.NoPredicate -> env
+  in
+
+  let then_result = infer then_env then_branch in
 
   (* Without else, result is union of then-type and nil.
      We represent this as a fresh variable that must unify with

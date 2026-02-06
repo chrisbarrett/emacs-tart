@@ -109,6 +109,13 @@ let lookup_predicate name env = List.assoc_opt name env.predicates
 let extend_predicate name info env =
   { env with predicates = (name, info) :: env.predicates }
 
+(** Override a variable's type in the variable namespace for narrowing.
+
+    Prepends a new monomorphic binding for [name] with [ty], shadowing any
+    existing binding. Used by predicate narrowing to refine a variable's type in
+    then/else branches. *)
+let with_narrowed_var name ty env = extend_mono name ty env
+
 (** Instantiate a type scheme at the current level.
 
     For monomorphic types, returns the type as-is. For polymorphic types,
