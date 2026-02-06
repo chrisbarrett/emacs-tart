@@ -165,6 +165,9 @@ val pair_of : typ -> typ -> typ
 val hash_table_of : typ -> typ -> typ
 (** [hash_table_of k v] creates [(HashTable k v)]. *)
 
+val plist_of : typ -> typ -> typ
+(** [plist_of k v] creates [(Plist k v)]. *)
+
 val map_of : typ -> typ
 (** [map_of row] creates [(Map row)]. Used as a supertype of alist, plist, and
     hash-table. *)

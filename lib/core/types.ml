@@ -128,6 +128,7 @@ let intrinsic_base_name name =
 let intrinsic_display_name base_name =
   match base_name with
   | "HashTable" -> "hash-table"
+  | "Plist" -> "plist"
   | "Pair" -> "cons"
   | "Map" -> "map"
   | other -> String.lowercase_ascii other
@@ -166,6 +167,7 @@ let vector_of elem = TApp (TCon (intrinsic "Vector"), [ elem ])
 let option_of elem = TUnion [ elem; Prim.nil ]
 let pair_of a b = TApp (TCon (intrinsic "Pair"), [ a; b ])
 let hash_table_of k v = TApp (TCon (intrinsic "HashTable"), [ k; v ])
+let plist_of k v = TApp (TCon (intrinsic "Plist"), [ k; v ])
 let map_of row = TApp (TCon (intrinsic "Map"), [ row ])
 
 (** Check if a type is the "any" type (truthy | nil). Used in unification to
@@ -363,7 +365,8 @@ let rec is_truthy ty =
         let base = intrinsic_base_name name in
         match base with
         | "Int" | "Float" | "Num" | "String" | "Symbol" | "Keyword" | "T"
-        | "Truthy" | "Never" | "List" | "Vector" | "Pair" | "HashTable" ->
+        | "Truthy" | "Never" | "List" | "Vector" | "Pair" | "HashTable"
+        | "Plist" ->
             true
         | _ -> true (* Unknown intrinsics: assume truthy *)
       else
@@ -375,7 +378,7 @@ let rec is_truthy ty =
           (* Intrinsic container types are truthy *)
           let base = intrinsic_base_name name in
           match base with
-          | "List" | "Vector" | "Pair" | "HashTable" -> true
+          | "List" | "Vector" | "Pair" | "HashTable" | "Plist" -> true
           | _ -> true
           (* Unknown intrinsic apps: assume truthy *))
       | TCon _ ->

@@ -1,203 +1,139 @@
-# Spec 54 + Spec 07 R17-R19
+# Spec 55: Plist Intrinsic Type
 
-Replace `(x is T)` / `((name type))` with multi-clause defun. Complete
-Spec 07 R17-R19.
+Make `plist` a compiler intrinsic (like `hash-table`) instead of a type
+alias for `(list (k | v))`.
 
-## Iteration 1: AST changes
+## Iteration 1: Type constructor + display + truthiness (R1, R2)
 
-Add `defun_clause`, `STInfer`; restructure `defun_decl`.
+Add `plist_of` constructor and wire up display/truthiness.
 
-In `lib/sig/sig_ast.mli`:
+In `lib/core/types.mli` after `hash_table_of`:
 
 ```ocaml
-and defun_clause = {
-  clause_params : sig_param list;
-  clause_return : sig_type;
-  clause_loc : span;
-}
+val plist_of : typ -> typ -> typ
+(** [plist_of k v] creates [(Plist k v)]. *)
 ```
 
-- Replace `defun_params`/`defun_return` with `defun_clauses : defun_clause list`
-- Add `| STInfer of string option * span` to `sig_type`
-- Update `sig_ast.ml`: constructors, `sig_type_loc` for `STInfer`
-- Fix exhaustiveness in `sig_loader.ml` for old `defun_decl` destructuring
+In `lib/core/types.ml`:
 
-**Files:** `lib/sig/sig_ast.mli`, `lib/sig/sig_ast.ml`, `lib/sig/sig_loader.ml`
+- Add `let plist_of k v = TApp (TCon (intrinsic "Plist"), [ k; v ])` after
+  `hash_table_of`
+- Add `| "Plist" -> "plist"` to `intrinsic_display_name`
+- Add `"Plist"` to both `is_truthy` match arms (TCon and TApp intrinsic
+  branches)
 
-**Verify:** `Bash(command="nix develop --command dune build 2>&1")`
-
----
-
-## Iteration 2: Parse multi-clause defun + `_` wildcards
-
-Modify `parse_defun` in `lib/sig/sig_parser.ml`:
-
-- Top-level `->` present → single-clause (wrap in one-element list)
-- No top-level `->` → parse remaining forms as `((params) -> ret)` clauses
-
-Parse `_`-prefixed symbols as `STInfer`:
-- `_` → `STInfer (None, span)`
-- `_foo` → `STInfer (Some "_foo", span)`
-
-Delete old syntax:
-- Named param `((name type))` arm (line 425-439)
-- `parse_predicate_type` and `(x is T)` match in `parse_list_type`
-
-**Files:** `lib/sig/sig_parser.ml`
+**Files:** `lib/core/types.mli`, `lib/core/types.ml`
 
 **Verify:** `Bash(command="nix develop --command dune build 2>&1")`
 
 ---
 
-## Iteration 3: Remove STPredicate
+## Iteration 2: Prelude + canonicalization + row expansion (R3, R4, R5)
 
-Delete from `sig_ast.mli`/`.ml`:
-- `STPredicate` variant, `st_predicate` constructor
+Update prelude definition and sig_loader canonicalization.
 
-Delete from `sig_loader.ml`:
-- `STPredicate` arms in `validate_type`, `sig_type_to_typ_with_ctx`, `substitute_sig_type`
-- `extract_predicate_info` (old `STPredicate`-based)
+In `typings/tart-prelude.tart`:
 
-Add `STInfer` handling in `sig_loader.ml`:
-- `validate_type`: always Ok
-- `sig_type_to_typ_with_ctx`: → `Types.fresh_tvar` at current level
-- `substitute_sig_type`: pass through
+- Change `(type plist [k v] (list (k | v)))` to
+  `(type plist [k v] (%tart-intrinsic%Plist k v))`
 
-**Files:** `lib/sig/sig_ast.mli`, `lib/sig/sig_ast.ml`, `lib/sig/sig_loader.ml`
+In `lib/sig/sig_loader.ml`:
 
-**Verify:** `Bash(command="nix develop --command dune build 2>&1")`
+- Add `| "Plist" -> Types.intrinsic "Plist"` and
+  `| "plist" -> Types.intrinsic "Plist"` to `canonicalize_type_name`
+- Update `expand_map_row`: change `"plist"` case from
+  `Types.list_of (TUnion [ Types.Prim.keyword; arg_typ ])` to
+  `Types.plist_of Types.Prim.keyword arg_typ`
 
----
-
-## Iteration 4: Overall type + predicate derivation from clauses
-
-New functions in `lib/sig/sig_loader.ml`:
-
-**`compute_defun_type`:** Convert clauses to single arrow type.
-- `param[i] = union(clause params at i)`, `return = union(clause returns)`
-- Wrap in `TForall` if binders present
-
-**`derive_predicate_info`:** Analyze clause structure.
-- Partition clauses: truthy-returning (`t`/`truthy`) vs falsy (`nil`)
-- Not clean partition → `None`
-- Truthy has concrete param[0] → `narrowed = union(truthy params)`
-- Truthy has `STInfer` param[0] → `narrowed = any - union(falsy params)` (inverted, e.g. `atom`)
-
-Replace `load_defun_with_ctx` and `load_defun_with_scope` to use these.
-Replace `extract_predicate_info` call sites with `derive_predicate_info`.
-
-**Files:** `lib/sig/sig_loader.ml`
+**Files:** `typings/tart-prelude.tart`, `lib/sig/sig_loader.ml`
 
 **Verify:** `Bash(command="nix develop --command dune build 2>&1 && nix develop --command dune test --force 2>&1")`
 
 ---
 
-## Iteration 5: Migrate .tart predicates
+## Iteration 3: Extract plist row + concrete map row (R6, R7)
 
-Convert all 21 predicates from `(((x any))) -> (x is T)` to multi-clause:
+Update row extraction in infer.ml and unify.ml to recognize the new
+`(Plist k TRow)` form alongside the legacy `(list (keyword | TRow))`.
 
-| File | Function | New signature |
-|:-----|:---------|:--------------|
-| `data.tart` | `null` | `((nil) -> t) ((_) -> nil)` |
-| `data.tart` | `symbolp` | `((symbol) -> t) ((_) -> nil)` |
-| `data.tart` | `keywordp` | `((keyword) -> t) ((_) -> nil)` |
-| `data.tart` | `integerp` | `((int) -> t) ((_) -> nil)` |
-| `data.tart` | `floatp` | `((float) -> t) ((_) -> nil)` |
-| `data.tart` | `numberp` | `((num) -> t) ((_) -> nil)` |
-| `data.tart` | `number-or-marker-p` | `((num) -> t) ((marker) -> t) ((_) -> nil)` |
-| `data.tart` | `consp` | `(((cons any any)) -> t) ((_) -> nil)` |
-| `data.tart` | `atom` | `(((cons any any)) -> nil) ((_) -> t)` |
-| `data.tart` | `listp` | `(((list any)) -> t) ((_) -> nil)` |
-| `data.tart` | `vectorp` | `(((vector any)) -> t) ((_) -> nil)` |
-| `data.tart` | `stringp` | `((string) -> t) ((_) -> nil)` |
-| `data.tart` | `sequencep` | `(((list any)) -> t) (((vector any)) -> t) ((string) -> t) ((_) -> nil)` |
-| `data.tart` | `bufferp` | `((buffer) -> t) ((_) -> nil)` |
-| `data.tart` | `markerp` | `((marker) -> t) ((_) -> nil)` |
-| `fns.tart` | `hash-table-p` | `(((hash-table any any)) -> t) ((_) -> nil)` |
-| `frame.tart` | `framep` | `((frame) -> t) ((_) -> nil)` |
-| `window.tart` | `windowp` | `((window) -> t) ((_) -> nil)` |
-| `process.tart` | `processp` | `((process) -> t) ((_) -> nil)` |
-| `buffer.tart` | `overlayp` | `((overlay) -> t) ((_) -> nil)` |
-| `eval.tart` | `functionp` | `(((-> (&rest any) any)) -> t) ((_) -> nil)` |
+In `lib/typing/infer.ml` `extract_plist_row`:
 
-**Files:** `typings/emacs/31.0/c-core/{data,fns,frame,window,process,buffer,eval}.tart`
+- Add a new match arm **before** the existing one:
+  `| TApp (plist_con, [ _key_ty; value_ty ]) when equal (repr plist_con) (TCon (intrinsic "Plist"))` → extract TRow from value_ty
+- Keep existing `(list (keyword | TRow))` arm as legacy fallback
+
+In `lib/typing/unify.ml` `extract_concrete_map_row`:
+
+- Add a new match arm for `(Plist keyword TRow)` after the hash-table arm
+- Keep existing `(list (keyword | TRow))` arm
+
+Also update `infer_plist_get_row` (and similar) where it constructs
+expected plist types: use `Types.plist_of` instead of
+`Types.list_of (TUnion [...])`.
+
+**Files:** `lib/typing/infer.ml`, `lib/typing/unify.ml`
 
 **Verify:** `Bash(command="nix develop --command dune test --force 2>&1")`
 
 ---
 
-## Iteration 6: Multi-clause test fixtures
+## Iteration 4: Plist-to-list subsumption (R8)
 
-Fix any regressions in existing `predicate_narrowing.el` / `predicates.el`.
+Add unification rule: `(Plist k v)` widens to `(list (k | v))`.
 
-Add `test/fixtures/typing/core/multi_clause.{el,expected}`:
-- Single-clause backward compat
-- Multi-clause predicate narrowing (`stringp`, `atom`, `sequencep`)
-- Polymorphic multi-clause (`car` on cons)
+In `lib/typing/unify.ml` `unify`, add a new match arm in the
+`TApp, TApp` section (before the normal arity/constructor check):
 
-Update `validate_defun` for clause-list validation if needed.
+- If one side is `(Plist k v)` and the other is `(List elem)`:
+  unify `(k | v)` with `elem`
+- The reverse (list → plist) should NOT match—it falls through to the
+  normal TApp mismatch
 
-**Verify:** `Bash(command="nix develop --command dune test --force 2>&1")`
+Helper: add `is_plist` and `is_list_app` predicate functions.
 
----
-
-## Iteration 7: Shadowing errors (Spec 07 R17)
-
-`check_type_not_shadowing`/`check_value_not_shadowing` use `failwith`.
-Convert to `Error { message; span }` and thread through
-`load_decls_into_state` / `load_scoped_decl` fold.
-
-Add `test/fixtures/typing/errors/shadowing/` fixtures:
-- `.tart` opens module then redefines its type
-- Expected: "cannot redefine imported binding 'name'"
-
-**Files:** `lib/sig/sig_loader.ml`, test fixtures
+**Files:** `lib/typing/unify.ml`
 
 **Verify:** `Bash(command="nix develop --command dune test --force 2>&1")`
 
 ---
 
-## Iteration 8: Local type aliases `let` (Spec 07 R18)
+## Iteration 5: Cons-chain-to-plist structural promotion (R9)
 
-Add `DLet` to `sig_ast.mli`:
+Add unification rule: a cons chain (n-tuple) with alternating k-v
+structure promotes to `(plist k v)`.
 
-```ocaml
-| DLet of let_decl
-and let_decl = {
-  let_bindings : (string * tvar_binder list * sig_type) list;
-  let_body : decl list;
-  let_loc : span;
-}
-```
+In `lib/typing/unify.ml`:
 
-Grammar: `(let [(type name [vars] def)...] decl...)`
+- Add helper `flatten_cons_chain : typ -> (typ list * typ) option` that
+  walks nested `(cons a (cons b ... nil))` into a flat element list
+- Add match arm: when one side is `(Plist k v)` and the other is a cons
+  chain, flatten it, check even length, unify even-position types with
+  `k` and odd-position types with `v`
+- Odd-length or non-cons → falls through to type mismatch
 
-In `sig_loader.ml`: extend alias context for bindings, load body decls,
-restore context. Let-bound types not exported/imported. Shadowing within
-let scope allowed.
-
-**Files:** `lib/sig/sig_ast.mli`, `lib/sig/sig_ast.ml`, `lib/sig/sig_parser.ml`, `lib/sig/sig_loader.ml`, test fixtures
+**Files:** `lib/typing/unify.ml`
 
 **Verify:** `Bash(command="nix develop --command dune test --force 2>&1")`
 
 ---
 
-## Iteration 9: Auxiliary .tart files (Spec 07 R19)
+## Iteration 6: Test fixtures + verify existing tests
 
-In `process_open`: check resolved `.tart` has corresponding `.el`.
-No `.el` + `open` → error: "cannot open auxiliary module 'name' (no .el file); use include"
+Add `test/fixtures/typing/rows/plist_intrinsic.{el,expected}`:
 
-`include` unchanged — works for both. De-duplication via `ls_loaded`
-already handles repeated includes.
+- Plist passes where list expected (subsumption)
+- Bare list fails where plist expected
+- Cons chain with alternating structure promotes to plist
+- Cons chain with wrong alternation rejected
+- Row-typed plist-get still works
+- Existing plist_row_basic, plist_get_precise, etc. still pass
 
-**Files:** `lib/sig/sig_loader.ml`, module resolver, test fixtures
+**Files:** test fixtures
 
 **Verify:** `Bash(command="nix develop --command dune test --force 2>&1")`
 
 ---
 
-## Iteration 10: Docs + spec status
+## Iteration 7: Spec status update
 
-- `docs/reference/tart-format.md`: remove `(x is T)` and `((name type))` references
-- `specs/52-type-predicates.md`: mark superseded by Spec 54
-- `specs/54-multi-clause-signatures.md`: update task checkboxes
+- Update `specs/55-plist-intrinsic.md` task checkboxes
