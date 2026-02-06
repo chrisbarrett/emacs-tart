@@ -99,9 +99,6 @@ let rec validate_type (ctx : tvar_context) (ty : sig_type) : unit result =
   | STRow (row, _) ->
       let field_types = List.map snd row.srow_fields in
       validate_types ctx field_types
-  | STPredicate (_, narrowed_type, _) ->
-      (* Validate the narrowed type *)
-      validate_type ctx narrowed_type
   | STInfer (_, _) ->
       (* Infer placeholders are always valid - they become fresh tvars *)
       Ok ()
@@ -496,9 +493,6 @@ let rec substitute_sig_type (subst : (string * sig_type) list) (ty : sig_type) :
           row.srow_fields
       in
       STRow ({ row with srow_fields = fields' }, loc)
-  | STPredicate (param_name, narrowed_type, _) ->
-      let narrowed_type' = substitute_sig_type subst narrowed_type in
-      STPredicate (param_name, narrowed_type', loc)
   | STInfer (_, _) ->
       (* Infer placeholders are not affected by substitution *)
       ty
@@ -741,11 +735,6 @@ let rec sig_type_to_typ_with_ctx ?(scope_tvars : (string * Types.typ) list = [])
             | None -> Some (Types.TCon var_name))
       in
       Types.TRow { row_fields = fields; row_var }
-  | STPredicate (_, narrowed_type, _) ->
-      (* For now, predicate types are just bool at the type level.
-         The predicate information will be tracked separately in the type environment. *)
-      let _ = convert tvar_names narrowed_type in
-      Types.Prim.bool
   | STInfer (_, _) ->
       (* Infer placeholder becomes a fresh type variable *)
       Types.fresh_tvar 0
@@ -795,50 +784,6 @@ let sig_param_to_param (tvar_names : string list) (p : sig_param) : Types.param
 
     These functions convert signature declarations to type environment entries.
 *)
-
-(** Extract predicate info from a defun declaration if it has a predicate return
-    type.
-
-    Returns [Some info] if the return type is [STPredicate], where info contains
-    the parameter index that gets narrowed. Returns [None] otherwise.
-
-    Only examines the first clause for backward compatibility with single-clause
-    defuns using STPredicate syntax. Multi-clause predicate derivation is
-    handled separately by derive_predicate_info. *)
-let extract_predicate_info (ctx : type_context) (d : defun_decl) :
-    Type_env.predicate_info option =
-  match d.defun_clauses with
-  | [] -> None
-  | first_clause :: _ -> (
-      match first_clause.clause_return with
-      | STPredicate (param_name, narrowed_sig_type, _) -> (
-          (* Find the parameter index that matches the predicate's param_name *)
-          let find_param_index () =
-            let rec find_in_params idx = function
-              | [] -> None
-              | SPPositional (Some name, _) :: _ when name = param_name ->
-                  Some idx
-              | SPOptional (Some name, _) :: _ when name = param_name ->
-                  Some idx
-              | SPKey (name, _) :: _ when name = param_name -> Some idx
-              | _ :: rest -> find_in_params (idx + 1) rest
-            in
-            find_in_params 0 first_clause.clause_params
-          in
-          match find_param_index () with
-          | None ->
-              (* Parameter name not found - validation error would be reported
-                  elsewhere *)
-              None
-          | Some param_index ->
-              let tvar_names =
-                List.map (fun b -> b.name) d.defun_tvar_binders
-              in
-              let narrowed_type =
-                sig_type_to_typ_with_ctx ctx tvar_names narrowed_sig_type
-              in
-              Some { Type_env.param_index; param_name; narrowed_type })
-      | _ -> None)
 
 (** Convert a defun declaration to a type scheme with full type context. Returns
     a Poly scheme if the function has type parameters, otherwise a Mono scheme
@@ -1350,18 +1295,6 @@ and load_decls_into_state ?(from_include = false) (sig_file : signature)
           let scheme = load_defun_with_ctx state.ls_type_ctx d in
           (* Add to function namespace for Lisp-2 semantics *)
           let state = add_fn_to_state d.defun_name scheme state in
-          (* Register predicate info if this is a type predicate *)
-          let state =
-            match extract_predicate_info state.ls_type_ctx d with
-            | Some pred_info ->
-                {
-                  state with
-                  ls_env =
-                    Type_env.extend_predicate d.defun_name pred_info
-                      state.ls_env;
-                }
-            | None -> state
-          in
           (* Mark as imported if from include *)
           if from_include then mark_value_imported d.defun_name state else state
       | DDefvar d ->
@@ -1466,17 +1399,6 @@ and load_scoped_decl ?(from_include = false) (sig_file : signature)
       let scheme = load_defun_with_scope state.ls_type_ctx scope_tvars d in
       (* Add to function namespace for Lisp-2 semantics *)
       let state = add_fn_to_state d.defun_name scheme state in
-      (* Register predicate info if this is a type predicate *)
-      let state =
-        match extract_predicate_info state.ls_type_ctx d with
-        | Some pred_info ->
-            {
-              state with
-              ls_env =
-                Type_env.extend_predicate d.defun_name pred_info state.ls_env;
-            }
-        | None -> state
-      in
       if from_include then mark_value_imported d.defun_name state else state
   | DDefvar d ->
       (* Check shadowing if from current file *)

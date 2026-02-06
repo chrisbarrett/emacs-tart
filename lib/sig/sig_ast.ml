@@ -66,9 +66,6 @@ and sig_type =
       (** Type subtraction (e.g., [(a - nil)], removes nil from union a) *)
   | STRow of sig_row * span
       (** Row type for record-style typing (e.g., [{name string age int}]) *)
-  | STPredicate of string * sig_type * span
-      (** Type predicate return (e.g., [(x is string)] means "if truthy, x has
-          type string") *)
   | STInfer of string option * span
       (** Inferred type placeholder. [_] is [STInfer (None, span)], [_foo] is
           [STInfer (Some "_foo", span)]. Used in multi-clause signatures to mark
@@ -235,7 +232,6 @@ let sig_type_loc = function
   | STTuple (_, loc) -> loc
   | STSubtract (_, _, loc) -> loc
   | STRow (_, loc) -> loc
-  | STPredicate (_, _, loc) -> loc
   | STInfer (_, loc) -> loc
 
 (** Get the source location of a declaration *)
@@ -290,10 +286,6 @@ let st_subtract minuend subtrahend loc = STSubtract (minuend, subtrahend, loc)
 (** Create a row type *)
 let st_row fields var_opt loc =
   STRow ({ srow_fields = fields; srow_var = var_opt }, loc)
-
-(** Create a type predicate return type *)
-let st_predicate param_name narrowed_type loc =
-  STPredicate (param_name, narrowed_type, loc)
 
 (** Create an inferred type placeholder *)
 let st_infer name loc = STInfer (name, loc)
