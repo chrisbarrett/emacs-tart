@@ -1573,25 +1573,18 @@ let test_subtract_from_3_way_union () =
            true
          with Not_found -> false)
 
-(** {1 Predicate Registration Tests (Spec 52)} *)
+(** {1 Multi-Clause Defun Tests (Spec 54)} *)
 
-(** Test that predicates with named parameters are registered. R1: Basic
-    predicate registration *)
-let test_predicate_registration () =
+(** Test that multi-clause defun loads and produces a function type *)
+let test_multi_clause_loads () =
   let sig_src = {|
-    (defun stringp (((x any))) -> (x is string))
+    (defun stringp ((string) -> t) ((_) -> nil))
   |} in
   let env = load_sig_str sig_src in
-  (* stringp should have predicate info registered *)
-  match Type_env.lookup_predicate "stringp" env with
-  | None -> Alcotest.fail "stringp should be registered as a predicate"
-  | Some info ->
-      Alcotest.(check int) "param_index is 0" 0 info.param_index;
-      Alcotest.(check string) "param_name is x" "x" info.param_name;
-      (* narrowed_type should be string *)
-      Alcotest.(check string)
-        "narrowed to string" "string"
-        (Types.to_string info.narrowed_type)
+  (* stringp should be registered as a function *)
+  match Type_env.lookup_fn "stringp" env with
+  | None -> Alcotest.fail "stringp should be loaded"
+  | Some _ -> ()
 
 (** Test that non-predicates don't have predicate info registered *)
 let test_non_predicate_not_registered () =
@@ -1603,31 +1596,17 @@ let test_non_predicate_not_registered () =
   | None -> () (* Expected - no predicate info *)
   | Some _ -> Alcotest.fail "regular-fn should NOT be a predicate"
 
-(** Test predicate with union narrowed type *)
-let test_predicate_union_narrowed_type () =
+(** Test multi-clause with type var binders *)
+let test_multi_clause_with_binders () =
   let sig_src =
     {|
-    (defun number-or-string-p (((x any))) -> (x is (num | string)))
+    (defun car [a b] (((cons a b)) -> a) ((nil) -> nil))
   |}
   in
   let env = load_sig_str sig_src in
-  match Type_env.lookup_predicate "number-or-string-p" env with
-  | None -> Alcotest.fail "number-or-string-p should be registered"
-  | Some info ->
-      (* narrowed_type should be a union *)
-      let ty_str = Types.to_string info.narrowed_type in
-      Alcotest.(check bool)
-        "has num" true
-        (try
-           let _ = Str.search_forward (Str.regexp_string "num") ty_str 0 in
-           true
-         with Not_found -> false);
-      Alcotest.(check bool)
-        "has string" true
-        (try
-           let _ = Str.search_forward (Str.regexp_string "string") ty_str 0 in
-           true
-         with Not_found -> false)
+  match Type_env.lookup_fn "car" env with
+  | None -> Alcotest.fail "car should be loaded"
+  | Some _ -> ()
 
 let () =
   Alcotest.run "sig_loader"
@@ -1813,13 +1792,12 @@ let () =
           Alcotest.test_case "from 3-way union" `Quick
             test_subtract_from_3_way_union;
         ] );
-      ( "predicate-registration",
+      ( "multi-clause-defun",
         [
-          Alcotest.test_case "predicate registration" `Quick
-            test_predicate_registration;
+          Alcotest.test_case "multi-clause loads" `Quick test_multi_clause_loads;
           Alcotest.test_case "non-predicate not registered" `Quick
             test_non_predicate_not_registered;
-          Alcotest.test_case "predicate with union type" `Quick
-            test_predicate_union_narrowed_type;
+          Alcotest.test_case "multi-clause with binders" `Quick
+            test_multi_clause_with_binders;
         ] );
     ]

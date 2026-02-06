@@ -235,92 +235,86 @@ let test_row_types_nested () =
   | Ok _ -> Alcotest.fail "Expected row with nested row field"
   | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
 
-(** {1 Type Predicate Tests} *)
+(** {1 Wildcard Type Tests} *)
 
-let test_predicate_type_simple () =
-  (* (x is string) - type predicate for string *)
-  match parse_type_str "(x is string)" with
-  | Ok (Sig_ast.STPredicate ("x", Sig_ast.STCon ("string", _), _)) -> ()
-  | Ok _ -> Alcotest.fail "Expected predicate type (x is string)"
+let test_wildcard_anonymous () =
+  (* _ → STInfer (None, _) *)
+  match parse_type_str "_" with
+  | Ok (Sig_ast.STInfer (None, _)) -> ()
+  | Ok _ -> Alcotest.fail "Expected STInfer None"
   | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
 
-let test_predicate_type_application () =
-  (* (x is (list any)) - type predicate with type application *)
-  match parse_type_str "(x is (list any))" with
-  | Ok (Sig_ast.STPredicate ("x", Sig_ast.STApp ("list", _, _), _)) -> ()
-  | Ok _ -> Alcotest.fail "Expected predicate type with list app"
+let test_wildcard_named () =
+  (* _foo → STInfer (Some "_foo", _) *)
+  match parse_type_str "_foo" with
+  | Ok (Sig_ast.STInfer (Some "_foo", _)) -> ()
+  | Ok _ -> Alcotest.fail "Expected STInfer Some _foo"
   | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
 
-let test_predicate_in_defun () =
-  (* (defun stringp (x) -> (x is string)) *)
-  match parse_decl_str "(defun stringp (x) -> (x is string))" with
+(** {1 Multi-Clause Tests} *)
+
+let test_multi_clause_predicate () =
+  (* (defun stringp ((string) -> t) ((_) -> nil)) *)
+  match parse_decl_str "(defun stringp ((string) -> t) ((_) -> nil))" with
   | Ok
       (Sig_ast.DDefun
          {
            defun_name = "stringp";
+           defun_tvar_binders = [];
            defun_clauses =
              [
                {
                  clause_params =
-                   [ Sig_ast.SPPositional (_, Sig_ast.STVar ("x", _)) ];
-                 clause_return =
-                   Sig_ast.STPredicate ("x", Sig_ast.STCon ("string", _), _);
+                   [ Sig_ast.SPPositional (_, Sig_ast.STCon ("string", _)) ];
+                 clause_return = Sig_ast.STCon ("t", _);
+                 _;
+               };
+               {
+                 clause_params =
+                   [ Sig_ast.SPPositional (_, Sig_ast.STInfer (None, _)) ];
+                 clause_return = Sig_ast.STCon ("nil", _);
                  _;
                };
              ];
            _;
          }) ->
       ()
-  | Ok _ -> Alcotest.fail "Expected defun with predicate return type"
+  | Ok _ -> Alcotest.fail "Expected multi-clause predicate defun"
   | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
 
-let test_named_parameter () =
-  (* (defun stringp (((x any))) -> (x is string)) - named param for predicates *)
-  match parse_decl_str "(defun stringp (((x any))) -> (x is string))" with
+let test_multi_clause_with_binders () =
+  (* (defun car [a b] (((cons a b)) -> a) ((nil) -> nil)) *)
+  match
+    parse_decl_str "(defun car [a b] (((cons a b)) -> a) ((nil) -> nil))"
+  with
   | Ok
       (Sig_ast.DDefun
          {
-           defun_name = "stringp";
-           defun_clauses =
-             [
-               {
-                 clause_params =
-                   [ Sig_ast.SPPositional (Some "x", Sig_ast.STCon ("any", _)) ];
-                 clause_return =
-                   Sig_ast.STPredicate ("x", Sig_ast.STCon ("string", _), _);
-                 _;
-               };
-             ];
+           defun_name = "car";
+           defun_tvar_binders = [ { name = "a"; _ }; { name = "b"; _ } ];
+           defun_clauses = [ _; _ ];
            _;
          }) ->
       ()
-  | Ok _ -> Alcotest.fail "Expected defun with named param"
+  | Ok _ -> Alcotest.fail "Expected multi-clause defun with binders"
   | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
 
-let test_named_parameter_optional () =
-  (* Named param in optional position *)
-  match parse_decl_str "(defun f (&optional ((x int))) -> int)" with
+let test_multi_clause_three () =
+  (* (defun sequencep ((list any) -> t) (((vector any)) -> t) ((string) -> t) ((_) -> nil)) *)
+  match
+    parse_decl_str
+      "(defun sequencep (((list any)) -> t) (((vector any)) -> t) ((string) -> \
+       t) ((_) -> nil))"
+  with
   | Ok
       (Sig_ast.DDefun
-         {
-           defun_name = "f";
-           defun_clauses =
-             [
-               {
-                 clause_params =
-                   [ Sig_ast.SPOptional (Some "x", Sig_ast.STCon ("int", _)) ];
-                 clause_return = Sig_ast.STCon ("int", _);
-                 _;
-               };
-             ];
-           _;
-         }) ->
+         { defun_name = "sequencep"; defun_clauses = [ _; _; _; _ ]; _ }) ->
       ()
-  | Ok _ -> Alcotest.fail "Expected defun with named optional param"
+  | Ok _ -> Alcotest.fail "Expected 4-clause defun"
   | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
 
-let test_type_app_not_named_param () =
-  (* (seq a) should be type application, not named param *)
+let test_type_app_param () =
+  (* (seq a) should still be type application in params *)
   match parse_decl_str "(defun f [a] ((seq a)) -> a)" with
   | Ok
       (Sig_ast.DDefun
@@ -338,7 +332,7 @@ let test_type_app_not_named_param () =
            _;
          }) ->
       ()
-  | Ok _ -> Alcotest.fail "Expected defun with type app param (not named)"
+  | Ok _ -> Alcotest.fail "Expected defun with type app param"
   | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
 
 (** {1 Declaration Tests} *)
@@ -581,22 +575,19 @@ let () =
           Alcotest.test_case "row types plist" `Quick test_row_types_plist;
           Alcotest.test_case "row types nested" `Quick test_row_types_nested;
         ] );
-      ( "predicate-types",
+      ( "wildcard-types",
         [
-          Alcotest.test_case "simple predicate" `Quick
-            test_predicate_type_simple;
-          Alcotest.test_case "predicate with app" `Quick
-            test_predicate_type_application;
-          Alcotest.test_case "predicate in defun" `Quick test_predicate_in_defun;
+          Alcotest.test_case "anonymous wildcard" `Quick test_wildcard_anonymous;
+          Alcotest.test_case "named wildcard" `Quick test_wildcard_named;
         ] );
-      ( "named-parameters",
+      ( "multi-clause",
         [
-          Alcotest.test_case "named param for predicate" `Quick
-            test_named_parameter;
-          Alcotest.test_case "named optional param" `Quick
-            test_named_parameter_optional;
-          Alcotest.test_case "type app not confused with named param" `Quick
-            test_type_app_not_named_param;
+          Alcotest.test_case "predicate multi-clause" `Quick
+            test_multi_clause_predicate;
+          Alcotest.test_case "multi-clause with binders" `Quick
+            test_multi_clause_with_binders;
+          Alcotest.test_case "three-clause defun" `Quick test_multi_clause_three;
+          Alcotest.test_case "type app in params" `Quick test_type_app_param;
         ] );
       ( "declarations",
         [

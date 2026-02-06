@@ -16,36 +16,36 @@
 (defun eq [a b] (a b) -> bool)
 
 ;; (null OBJ) - test if nil
-(defun null (((x any))) -> (x is nil))
+(defun null (any) -> bool)
 
 ;; ===========================================================================
 ;; Type predicates - return t or nil
 ;; ===========================================================================
 
 ;; Symbol predicates
-(defun symbolp (((x any))) -> (x is symbol))
-(defun keywordp (((x any))) -> (x is keyword))
+(defun symbolp (any) -> bool)
+(defun keywordp (any) -> bool)
 (defun bare-symbol-p (any) -> bool)
 (defun symbol-with-pos-p (any) -> bool)
 
 ;; Numeric predicates
-(defun integerp (((x any))) -> (x is int))
-(defun floatp (((x any))) -> (x is float))
-(defun numberp (((x any))) -> (x is num))
+(defun integerp (any) -> bool)
+(defun floatp (any) -> bool)
+(defun numberp (any) -> bool)
 (defun natnump (any) -> bool)
-(defun number-or-marker-p (((x any))) -> (x is (num | marker)))
+(defun number-or-marker-p (any) -> bool)
 (defun integer-or-marker-p (any) -> bool)
 
 ;; List/cons predicates
-(defun consp (((x any))) -> (x is (cons any any)))
+(defun consp (any) -> bool)
 (defun atom (any) -> bool)
-(defun listp (((x any))) -> (x is (list any)))
+(defun listp (any) -> bool)
 (defun nlistp (any) -> bool)
 
 ;; Sequence predicates
 (defun arrayp (any) -> bool)
-(defun vectorp (((x any))) -> (x is (vector any)))
-(defun stringp (((x any))) -> (x is string))
+(defun vectorp (any) -> bool)
+(defun stringp (any) -> bool)
 (defun multibyte-string-p (any) -> bool)
 (defun char-table-p (any) -> bool)
 (defun vector-or-char-table-p (any) -> bool)
@@ -54,8 +54,8 @@
 (defun recordp (any) -> bool)
 
 ;; Other type predicates
-(defun bufferp (((x any))) -> (x is buffer))
-(defun markerp (((x any))) -> (x is marker))
+(defun bufferp (any) -> bool)
+(defun markerp (any) -> bool)
 (defun user-ptrp (any) -> bool)
 (defun char-or-string-p (any) -> bool)
 (defun subrp (any) -> bool)

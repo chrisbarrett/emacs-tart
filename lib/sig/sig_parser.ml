@@ -157,6 +157,10 @@ and parse_tvar_binders (sexp : Sexp.t) : tvar_binder list result =
       ...) ; tuple type *)
 and parse_sig_type (sexp : Sexp.t) : sig_type result =
   match sexp with
+  (* Inferred type placeholder: _ or _foo *)
+  | Sexp.Symbol ("_", span) -> Ok (STInfer (None, span))
+  | Sexp.Symbol (name, span) when String.length name > 0 && name.[0] = '_' ->
+      Ok (STInfer (Some name, span))
   (* Type variable or type constant (symbol) *)
   | Sexp.Symbol (name, span) ->
       if is_primitive_type name then Ok (STCon (name, span))
@@ -180,9 +184,6 @@ and parse_list_type (contents : Sexp.t list) (span : Loc.span) : sig_type result
   | [] ->
       (* Empty list: nil type *)
       Ok (STCon ("nil", span))
-  (* Check for type predicate: (x is T) where x is a parameter name *)
-  | [ Sexp.Symbol (param_name, _); Sexp.Symbol ("is", _); type_sexp ] ->
-      parse_predicate_type param_name type_sexp span
   (* Check for tuple type *)
   | Sexp.Symbol ("tuple", _) :: args -> parse_tuple_type args span
   (* Check for union type: (type | type | ...) *)
@@ -253,20 +254,6 @@ and parse_union_type (contents : Sexp.t list) (span : Loc.span) :
   | Ok types when List.length types >= 2 -> Ok (STUnion (types, span))
   | Ok _ -> error "Union type requires at least two alternatives" span
   | Error e -> Error e
-
-(** Parse a type predicate: (x is T)
-
-    Type predicates indicate that when the predicate returns truthy, the
-    parameter x has type T. Used for type narrowing in conditionals.
-
-    Examples:
-    - (x is string) - when truthy, x is a string
-    - (x is (list any)) - when truthy, x is a list *)
-and parse_predicate_type (param_name : string) (type_sexp : Sexp.t)
-    (span : Loc.span) : sig_type result =
-  match parse_sig_type type_sexp with
-  | Error e -> Error e
-  | Ok narrowed_type -> Ok (STPredicate (param_name, narrowed_type, span))
 
 (** Parse a type subtraction: (type1 - type2)
 
@@ -401,16 +388,9 @@ and parse_params_list (params_sexp : Sexp.t list) (span : Loc.span) :
 
     Parameters can be:
     - Just a type: [int] → SPPositional (None, int)
-    - Named: [((x int))] → SPPositional (Some "x", int)
-    - Named optional: [&optional ((x int))] → SPOptional (Some "x", int)
-
-    Named parameters use double parens to disambiguate from type applications.
-    For example:
-    - [(seq a)] is a type application (seq applied to a)
-    - [((x int))] is a named parameter x of type int
-
-    Named parameters are useful for predicate return types that reference the
-    parameter name, e.g., [(((x any)) -> (x is string))] *)
+    - Optional: [&optional int] → SPOptional (None, int)
+    - Rest: [&rest any] → SPRest any
+    - Keyword: [&key :name int] → SPKey ("name", int) *)
 and parse_params (params : Sexp.t list) : sig_param list result =
   let rec loop acc mode = function
     | [] -> Ok (List.rev acc)
@@ -420,22 +400,6 @@ and parse_params (params : Sexp.t list) : sig_param list result =
     | Sexp.Keyword (name, _) :: ty_sexp :: rest when mode = `Key -> (
         match parse_sig_type ty_sexp with
         | Ok ty -> loop (SPKey (name, ty) :: acc) `Key rest
-        | Error e -> Error e)
-    (* Named parameter: ((name type)) - extra parens to disambiguate *)
-    | Sexp.List ([ Sexp.List ([ Sexp.Symbol (name, _); ty_sexp ], _) ], _)
-      :: rest
-      when mode <> `Key -> (
-        match parse_sig_type ty_sexp with
-        | Ok ty ->
-            let param =
-              match mode with
-              | `Positional -> SPPositional (Some name, ty)
-              | `Optional -> SPOptional (Some name, ty)
-              | `Rest -> SPRest ty (* Rest can't be named *)
-              | `Key -> SPKey (name, ty)
-              (* Shouldn't happen *)
-            in
-            loop (param :: acc) mode rest
         | Error e -> Error e)
     (* Unnamed parameter: just a type *)
     | ty_sexp :: rest -> (
@@ -467,16 +431,42 @@ and parse_params_as_type (contents : Sexp.t list) (span : Loc.span) :
 
 (** {1 Declaration Parsing} *)
 
+(** Parse a single clause form: ((params) -> return) *)
+let parse_clause (sexp : Sexp.t) (_outer_span : Loc.span) : defun_clause result
+    =
+  match sexp with
+  | Sexp.List (contents, clause_span) -> (
+      match Sexp.find_arrow contents with
+      | None -> error "Expected -> in clause" clause_span
+      | Some (params_sexp, [ return_sexp ]) -> (
+          match parse_params_list params_sexp clause_span with
+          | Error e -> Error e
+          | Ok params -> (
+              match parse_sig_type return_sexp with
+              | Error e -> Error e
+              | Ok return_type ->
+                  Ok
+                    {
+                      clause_params = params;
+                      clause_return = return_type;
+                      clause_loc = clause_span;
+                    }))
+      | Some (_, _) -> error "Expected single return type after ->" clause_span)
+  | _ -> error "Expected clause ((params) -> return)" (Sexp.span_of sexp)
+
 (** Parse a defun declaration.
 
     Syntax:
     - (defun name (params) -> return) - single clause
-    - (defun name [vars] (params) -> return) - single clause with quantifiers *)
+    - (defun name [vars] (params) -> return) - single clause with quantifiers
+    - (defun name ((params) -> ret) ((params) -> ret) ...) - multi-clause
+    - (defun name [vars] ((params) -> ret) ...) - multi-clause with quantifiers
+*)
 let parse_defun (contents : Sexp.t list) (span : Loc.span) : decl result =
   match contents with
   | Sexp.Symbol ("defun", _) :: Sexp.Symbol (name, _) :: rest -> (
       (* Check for quantifiers *)
-      let binders, params_and_return =
+      let binders, after_binders =
         match rest with
         | (Sexp.Vector (_, _) as quant) :: rest' -> (
             match parse_tvar_binders quant with
@@ -484,9 +474,10 @@ let parse_defun (contents : Sexp.t list) (span : Loc.span) : decl result =
             | Error _ -> ([], rest) (* Fall through to parse error below *))
         | _ -> ([], rest)
       in
-      match Sexp.find_arrow params_and_return with
-      | None -> error "Expected -> in defun signature" span
+      (* Detect single-clause vs multi-clause: top-level -> present means single *)
+      match Sexp.find_arrow after_binders with
       | Some (params_sexp, [ return_sexp ]) -> (
+          (* Single-clause: (defun name (params) -> return) *)
           match parse_params_list params_sexp span with
           | Error e -> Error e
           | Ok params -> (
@@ -508,7 +499,30 @@ let parse_defun (contents : Sexp.t list) (span : Loc.span) : decl result =
                          defun_clauses = [ clause ];
                          defun_loc = span;
                        })))
-      | Some (_, _) -> error "Expected single return type after ->" span)
+      | Some (_, _) -> error "Expected single return type after ->" span
+      | None -> (
+          (* Multi-clause: remaining forms are ((params) -> ret) clauses *)
+          match after_binders with
+          | [] -> error "Expected -> or clauses in defun signature" span
+          | clause_sexps -> (
+              let rec parse_clauses acc = function
+                | [] -> Ok (List.rev acc)
+                | sexp :: rest -> (
+                    match parse_clause sexp span with
+                    | Ok clause -> parse_clauses (clause :: acc) rest
+                    | Error e -> Error e)
+              in
+              match parse_clauses [] clause_sexps with
+              | Error e -> Error e
+              | Ok clauses ->
+                  Ok
+                    (DDefun
+                       {
+                         defun_name = name;
+                         defun_tvar_binders = binders;
+                         defun_clauses = clauses;
+                         defun_loc = span;
+                       }))))
   | Sexp.Symbol ("defun", _) :: _ ->
       error "Expected function name after defun" span
   | _ -> error "Invalid defun syntax" span
