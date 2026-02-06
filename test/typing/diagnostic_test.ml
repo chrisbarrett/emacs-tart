@@ -322,7 +322,7 @@ let test_branch_mismatch_diagnostic_creation () =
       (option
          (of_pp (fun fmt c ->
               Format.fprintf fmt "%s" (Diag.error_code_to_string c)))))
-    "code is E0002" (Some Diag.E0002) d.code;
+    "code is E0002" (Some Diag.BranchMismatch) d.code;
   Alcotest.(check bool)
     "message mentions incompatible" true
     (contains_pattern (Str.regexp_case_fold "incompatible") d.message)
@@ -367,7 +367,7 @@ let test_branch_mismatch_with_if_context () =
       (option
          (of_pp (fun fmt c ->
               Format.fprintf fmt "%s" (Diag.error_code_to_string c)))))
-    "code is E0002" (Some Diag.E0002) d.code
+    "code is E0002" (Some Diag.BranchMismatch) d.code
 
 let test_end_to_end_if_branch_mismatch () =
   (* Type-check (if t n "negative") - should get branch mismatch error *)
@@ -377,7 +377,7 @@ let test_end_to_end_if_branch_mismatch () =
   let diagnostics = Diag.of_unify_errors errors in
   (* Find the E0002 error *)
   let branch_errors =
-    List.filter (fun d -> d.Diag.code = Some Diag.E0002) diagnostics
+    List.filter (fun d -> d.Diag.code = Some Diag.BranchMismatch) diagnostics
   in
   Alcotest.(check bool)
     "has branch mismatch error" true
@@ -393,7 +393,7 @@ let test_if_branch_mismatch_shows_both_types () =
   let _, errors = Check.check_expr sexp in
   let diagnostics = Diag.of_unify_errors errors in
   let branch_errors =
-    List.filter (fun d -> d.Diag.code = Some Diag.E0002) diagnostics
+    List.filter (fun d -> d.Diag.code = Some Diag.BranchMismatch) diagnostics
   in
   let d = List.hd branch_errors in
   let str = Diag.to_string d in
@@ -589,7 +589,7 @@ let test_undefined_variable_diagnostic () =
       (option
          (of_pp (fun fmt c ->
               Format.fprintf fmt "%s" (Diag.error_code_to_string c)))))
-    "code is E0100" (Some Diag.E0100) d.code;
+    "code is E0100" (Some Diag.UndefinedVariable) d.code;
   Alcotest.(check bool)
     "message mentions foobar" true
     (contains_pattern (Str.regexp "foobar") d.message)
@@ -712,7 +712,7 @@ let test_arity_mismatch_with_context () =
       (option
          (of_pp (fun fmt c ->
               Format.fprintf fmt "%s" (Diag.error_code_to_string c)))))
-    "code is E0200" (Some Diag.E0200) d.code;
+    "code is E0200" (Some Diag.WrongArity) d.code;
   Alcotest.(check bool) "has related info" true (List.length d.Diag.related > 0)
 
 let test_arity_mismatch_shows_function_name () =
@@ -879,7 +879,7 @@ let test_signature_mismatch_diagnostic () =
       (option
          (of_pp (fun fmt c ->
               Format.fprintf fmt "%s" (Diag.error_code_to_string c)))))
-    "code is E0004" (Some Diag.E0004) d.code
+    "code is E0004" (Some Diag.SignatureMismatch) d.code
 
 let test_signature_mismatch_message () =
   let impl_span = Loc.dummy_span in
@@ -1164,7 +1164,7 @@ let test_explicit_instantiation_has_error_code () =
       (option
          (of_pp (fun fmt c ->
               Format.fprintf fmt "%s" (Diag.error_code_to_string c)))))
-    "code is E0001" (Some Diag.E0001) d.code
+    "code is E0001" (Some Diag.TypeMismatch) d.code
 
 let test_explicit_instantiation_multiple_type_args () =
   (* For (tart [int string] pair 1 "hi") style errors *)

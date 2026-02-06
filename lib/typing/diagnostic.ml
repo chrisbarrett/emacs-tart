@@ -30,59 +30,59 @@ module Loc = Syntax.Location
     are never reassigned. *)
 type error_code =
   (* Type Errors (E0001–E0099) *)
-  | E0001  (** TypeMismatch: Expected one type, found another *)
-  | E0002  (** BranchMismatch: If/cond branches have incompatible types *)
-  | E0003  (** InfiniteType: Occurs check failed (recursive type) *)
-  | E0004
-      (** SignatureMismatch: Implementation doesn't match declared signature *)
-  | E0005  (** AnnotationMismatch: Expression doesn't match tart annotation *)
-  | E0006  (** ReturnMismatch: Function body doesn't match declared return *)
-  | E0007  (** UnificationFailed: Types cannot be unified *)
-  | E0008  (** DisjointEquality: eq/eql args are provably disjoint *)
+  | TypeMismatch  (** E0001: Expected one type, found another *)
+  | BranchMismatch  (** E0002: If/cond branches have incompatible types *)
+  | InfiniteType  (** E0003: Occurs check failed (recursive type) *)
+  | SignatureMismatch
+      (** E0004: Implementation doesn't match declared signature *)
+  | AnnotationMismatch  (** E0005: Expression doesn't match tart annotation *)
+  | ReturnMismatch  (** E0006: Function body doesn't match declared return *)
+  | UnificationFailed  (** E0007: Types cannot be unified *)
+  | DisjointEquality  (** E0008: eq/eql args are provably disjoint *)
   (* Name Errors (E0100–E0199) *)
-  | E0100  (** UndefinedVariable: Variable not in scope *)
-  | E0101  (** UndefinedFunction: Function not in scope *)
-  | E0102  (** UndefinedType: Type not in scope *)
-  | E0104  (** MissingSignature: Function defined but not in .tart file *)
+  | UndefinedVariable  (** E0100: Variable not in scope *)
+  | UndefinedFunction  (** E0101: Function not in scope *)
+  | UndefinedType  (** E0102: Type not in scope *)
+  | MissingSignature  (** E0104: Function defined but not in .tart file *)
   (* Arity Errors (E0200–E0299) *)
-  | E0200  (** WrongArity: Wrong number of arguments to function *)
-  | E0201  (** WrongTypeArity: Wrong number of type arguments *)
+  | WrongArity  (** E0200: Wrong number of arguments to function *)
+  | WrongTypeArity  (** E0201: Wrong number of type arguments *)
   (* Kind Errors (E0300–E0399) *)
-  | E0300  (** KindMismatch: Expected one kind, found another *)
-  | E0301  (** InfiniteKind: Occurs check failed at kind level *)
-  | E0302  (** TypeArityMismatch: Type constructor applied to wrong # of args *)
+  | KindMismatch  (** E0300: Expected one kind, found another *)
+  | InfiniteKind  (** E0301: Occurs check failed at kind level *)
+  | TypeArityMismatch  (** E0302: Type constructor applied to wrong # of args *)
   (* Pattern Errors (E0400–E0499) *)
-  | E0400  (** NonExhaustive: Pattern match doesn't cover all cases *)
+  | NonExhaustive  (** E0400: Pattern match doesn't cover all cases *)
   (* Module Errors (E0700–E0799) *)
-  | E0702  (** SignatureNotFound: No .tart signature file found *)
+  | SignatureNotFound  (** E0702: No .tart signature file found *)
 
 (** Format an error code for display. *)
 let error_code_to_string = function
   (* Type Errors *)
-  | E0001 -> "E0001"
-  | E0002 -> "E0002"
-  | E0003 -> "E0003"
-  | E0004 -> "E0004"
-  | E0005 -> "E0005"
-  | E0006 -> "E0006"
-  | E0007 -> "E0007"
-  | E0008 -> "E0008"
+  | TypeMismatch -> "E0001"
+  | BranchMismatch -> "E0002"
+  | InfiniteType -> "E0003"
+  | SignatureMismatch -> "E0004"
+  | AnnotationMismatch -> "E0005"
+  | ReturnMismatch -> "E0006"
+  | UnificationFailed -> "E0007"
+  | DisjointEquality -> "E0008"
   (* Name Errors *)
-  | E0100 -> "E0100"
-  | E0101 -> "E0101"
-  | E0102 -> "E0102"
-  | E0104 -> "E0104"
+  | UndefinedVariable -> "E0100"
+  | UndefinedFunction -> "E0101"
+  | UndefinedType -> "E0102"
+  | MissingSignature -> "E0104"
   (* Arity Errors *)
-  | E0200 -> "E0200"
-  | E0201 -> "E0201"
+  | WrongArity -> "E0200"
+  | WrongTypeArity -> "E0201"
   (* Kind Errors *)
-  | E0300 -> "E0300"
-  | E0301 -> "E0301"
-  | E0302 -> "E0302"
+  | KindMismatch -> "E0300"
+  | InfiniteKind -> "E0301"
+  | TypeArityMismatch -> "E0302"
   (* Pattern Errors *)
-  | E0400 -> "E0400"
+  | NonExhaustive -> "E0400"
   (* Module Errors *)
-  | E0702 -> "E0702"
+  | SignatureNotFound -> "E0702"
 
 (** Severity level for diagnostics *)
 type severity = Error | Warning | Hint
@@ -171,7 +171,7 @@ let type_mismatch ~span ~expected ~actual ?(related = []) () =
   in
   {
     severity = Error;
-    code = Some E0001;
+    code = Some TypeMismatch;
     span;
     message;
     expected = Some expected;
@@ -188,7 +188,7 @@ let arity_mismatch ~span ~expected ~actual ?(related = []) () =
   in
   {
     severity = Error;
-    code = Some E0200;
+    code = Some WrongArity;
     span;
     message;
     expected = None;
@@ -205,7 +205,7 @@ let occurs_check ~span ~tvar_id ~typ ?(related = []) () =
   in
   {
     severity = Error;
-    code = Some E0003;
+    code = Some InfiniteType;
     span;
     message;
     expected = None;
@@ -222,7 +222,7 @@ let missing_signature ~span ~name () =
   in
   {
     severity = Warning;
-    code = Some E0104;
+    code = Some MissingSignature;
     span;
     message;
     expected = None;
@@ -249,7 +249,7 @@ let signature_mismatch ~name ~impl_span ~impl_type ~sig_span ~sig_type () =
   in
   {
     severity = Error;
-    code = Some E0004;
+    code = Some SignatureMismatch;
     span = impl_span;
     message =
       Printf.sprintf "implementation of `%s` does not match signature" name;
@@ -274,7 +274,7 @@ let undefined_variable ~span ~name ~candidates () =
   in
   {
     severity = Error;
-    code = Some E0100;
+    code = Some UndefinedVariable;
     span;
     message;
     expected = None;
@@ -380,7 +380,7 @@ let arity_mismatch_with_context ~span ~expected ~actual ~context () =
       in
       {
         severity = Error;
-        code = Some E0200;
+        code = Some WrongArity;
         span;
         message;
         expected = None;
@@ -405,7 +405,7 @@ let arity_mismatch_with_context ~span ~expected ~actual ~context () =
       in
       {
         severity = Error;
-        code = Some E0201;
+        code = Some WrongTypeArity;
         span;
         message;
         expected = None;
@@ -483,7 +483,7 @@ let branch_mismatch ~span ~this_type ~other_branch_span ~other_type ~is_then ()
   let help = suggest_branch_fix ~this_type ~other_type in
   {
     severity = Error;
-    code = Some E0002;
+    code = Some BranchMismatch;
     span;
     message = "if branches have incompatible types";
     expected = Some other_type;
@@ -525,7 +525,7 @@ let type_mismatch_with_context ~span ~expected ~actual ~context () =
       let related = fn_related @ nil_note in
       {
         severity = Error;
-        code = Some E0001;
+        code = Some TypeMismatch;
         span;
         message;
         expected = Some expected;
@@ -551,7 +551,7 @@ let type_mismatch_with_context ~span ~expected ~actual ~context () =
       in
       {
         severity = Error;
-        code = Some E0005;
+        code = Some AnnotationMismatch;
         span;
         message;
         expected = Some expected;
@@ -576,7 +576,7 @@ let type_mismatch_with_context ~span ~expected ~actual ~context () =
       in
       {
         severity = Error;
-        code = Some E0006;
+        code = Some ReturnMismatch;
         span;
         message;
         expected = Some expected;
@@ -602,7 +602,7 @@ let type_mismatch_with_context ~span ~expected ~actual ~context () =
       in
       {
         severity = Error;
-        code = Some E0001;
+        code = Some TypeMismatch;
         span;
         message =
           "type mismatch: tart instantiation specifies incompatible type";
@@ -630,7 +630,7 @@ let type_mismatch_with_context ~span ~expected ~actual ~context () =
       in
       {
         severity = Error;
-        code = Some E0201;
+        code = Some WrongTypeArity;
         span;
         message;
         expected = None;
@@ -651,7 +651,7 @@ let type_mismatch_with_context ~span ~expected ~actual ~context () =
       let related = [ { span = Loc.dummy_span; message } ] in
       {
         severity = Error;
-        code = Some E0008;
+        code = Some DisjointEquality;
         span;
         message;
         expected = Some arg1_type;
@@ -669,7 +669,7 @@ let type_mismatch_with_context ~span ~expected ~actual ~context () =
       in
       {
         severity = Error;
-        code = Some E0001;
+        code = Some TypeMismatch;
         span;
         message;
         expected = Some expected;
@@ -780,25 +780,25 @@ let to_string (d : t) : string =
 
 (** Convert error code to error type string for header. *)
 let error_type_of_code = function
-  | Some E0001 -> "TYPE MISMATCH"
-  | Some E0002 -> "BRANCH MISMATCH"
-  | Some E0003 -> "INFINITE TYPE"
-  | Some E0004 -> "SIGNATURE MISMATCH"
-  | Some E0005 -> "ANNOTATION MISMATCH"
-  | Some E0006 -> "RETURN MISMATCH"
-  | Some E0007 -> "UNIFICATION FAILED"
-  | Some E0008 -> "DISJOINT EQUALITY"
-  | Some E0100 -> "UNDEFINED VARIABLE"
-  | Some E0101 -> "UNDEFINED FUNCTION"
-  | Some E0102 -> "UNDEFINED TYPE"
-  | Some E0104 -> "MISSING SIGNATURE"
-  | Some E0200 -> "WRONG ARITY"
-  | Some E0201 -> "WRONG TYPE ARITY"
-  | Some E0300 -> "KIND MISMATCH"
-  | Some E0301 -> "INFINITE KIND"
-  | Some E0302 -> "TYPE ARITY MISMATCH"
-  | Some E0400 -> "NON-EXHAUSTIVE MATCH"
-  | Some E0702 -> "SIGNATURE NOT FOUND"
+  | Some TypeMismatch -> "TYPE MISMATCH"
+  | Some BranchMismatch -> "BRANCH MISMATCH"
+  | Some InfiniteType -> "INFINITE TYPE"
+  | Some SignatureMismatch -> "SIGNATURE MISMATCH"
+  | Some AnnotationMismatch -> "ANNOTATION MISMATCH"
+  | Some ReturnMismatch -> "RETURN MISMATCH"
+  | Some UnificationFailed -> "UNIFICATION FAILED"
+  | Some DisjointEquality -> "DISJOINT EQUALITY"
+  | Some UndefinedVariable -> "UNDEFINED VARIABLE"
+  | Some UndefinedFunction -> "UNDEFINED FUNCTION"
+  | Some UndefinedType -> "UNDEFINED TYPE"
+  | Some MissingSignature -> "MISSING SIGNATURE"
+  | Some WrongArity -> "WRONG ARITY"
+  | Some WrongTypeArity -> "WRONG TYPE ARITY"
+  | Some KindMismatch -> "KIND MISMATCH"
+  | Some InfiniteKind -> "INFINITE KIND"
+  | Some TypeArityMismatch -> "TYPE ARITY MISMATCH"
+  | Some NonExhaustive -> "NON-EXHAUSTIVE MATCH"
+  | Some SignatureNotFound -> "SIGNATURE NOT FOUND"
   | None -> "ERROR"
 
 (** Format a diagnostic in Elm-style human-readable format with source excerpts.
@@ -837,29 +837,29 @@ let to_string_human (d : t) : string =
   let prose_ctx =
     (* Map from our diagnostic type to Source_excerpt prose context *)
     match d.code with
-    | Some E0002 ->
+    | Some BranchMismatch ->
         (* Branch mismatch - check if we have related info *)
         Source_excerpt.IfBranch { is_then = true }
-    | Some E0006 ->
+    | Some ReturnMismatch ->
         (* Return mismatch - try to extract fn_name from message *)
         Source_excerpt.DeclaredReturn { fn_name = "function" }
-    | Some E0005 -> Source_excerpt.TartAnnotation
-    | Some E0001
-    | Some E0003
-    | Some E0004
-    | Some E0007
-    | Some E0008
-    | Some E0100
-    | Some E0101
-    | Some E0102
-    | Some E0104
-    | Some E0200
-    | Some E0201
-    | Some E0300
-    | Some E0301
-    | Some E0302
-    | Some E0400
-    | Some E0702
+    | Some AnnotationMismatch -> Source_excerpt.TartAnnotation
+    | Some TypeMismatch
+    | Some InfiniteType
+    | Some SignatureMismatch
+    | Some UnificationFailed
+    | Some DisjointEquality
+    | Some UndefinedVariable
+    | Some UndefinedFunction
+    | Some UndefinedType
+    | Some MissingSignature
+    | Some WrongArity
+    | Some WrongTypeArity
+    | Some KindMismatch
+    | Some InfiniteKind
+    | Some TypeArityMismatch
+    | Some NonExhaustive
+    | Some SignatureNotFound
     | None ->
         Source_excerpt.NoContext
   in
@@ -971,7 +971,7 @@ let count_errors (ds : t list) : int = List.length (List.filter is_error ds)
 let non_exhaustive_match ~span ~message () =
   {
     severity = Warning;
-    code = Some E0400;
+    code = Some NonExhaustive;
     span;
     message;
     expected = None;
@@ -1005,7 +1005,7 @@ let kind_mismatch ~span ~expected ~found ~location () =
   in
   {
     severity = Error;
-    code = Some E0300;
+    code = Some KindMismatch;
     span;
     message = "kind mismatch";
     expected = None;
@@ -1033,7 +1033,7 @@ let of_kind_error span (err : Kind_infer.kind_error) : t =
   | Kind_infer.OccursCheckFailed { kvar_id; kind } ->
       {
         severity = Error;
-        code = Some E0301;
+        code = Some InfiniteKind;
         span;
         message = "infinite kind";
         expected = None;
@@ -1053,7 +1053,7 @@ let of_kind_error span (err : Kind_infer.kind_error) : t =
       let arg_word n = if n = 1 then "argument" else "arguments" in
       {
         severity = Error;
-        code = Some E0302;
+        code = Some TypeArityMismatch;
         span;
         message =
           Printf.sprintf
