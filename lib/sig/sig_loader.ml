@@ -785,30 +785,248 @@ let sig_param_to_param (tvar_names : string list) (p : sig_param) : Types.param
     These functions convert signature declarations to type environment entries.
 *)
 
+(** {1 Multi-Clause Type Computation}
+
+    For multi-clause defuns, compute the overall function type by taking the
+    union of param types at each position and the union of return types. Also
+    derive predicate information from the clause structure. *)
+
+(** Check if a sig_type is a truthy return type (t or truthy). *)
+let is_truthy_return (ty : sig_type) : bool =
+  match ty with
+  | STCon ("t", _) | STCon ("truthy", _) -> true
+  | STVar ("t", _) | STVar ("truthy", _) -> true
+  | _ -> false
+
+(** Check if a sig_type is a falsy return type (nil). *)
+let is_falsy_return (ty : sig_type) : bool =
+  match ty with STCon ("nil", _) | STVar ("nil", _) -> true | _ -> false
+
+(** Check if a sig_param uses an STInfer (wildcard) type. *)
+let is_infer_param (p : sig_param) : bool =
+  match p with
+  | SPPositional (_, STInfer (_, _)) -> true
+  | SPOptional (_, STInfer (_, _)) -> true
+  | SPRest (STInfer (_, _)) -> true
+  | SPKey (_, STInfer (_, _)) -> true
+  | _ -> false
+
+(** Build a union type from a list of types, deduplicating and flattening. *)
+let union_of_types (types : Types.typ list) : Types.typ =
+  (* Flatten nested unions and deduplicate *)
+  let flat =
+    List.concat_map
+      (fun t ->
+        match Types.repr t with Types.TUnion members -> members | _ -> [ t ])
+      types
+  in
+  (* Deduplicate *)
+  let unique =
+    List.fold_left
+      (fun acc t ->
+        if List.exists (fun u -> Types.equal t u) acc then acc else acc @ [ t ])
+      [] flat
+  in
+  match unique with [ single ] -> single | _ -> Types.TUnion unique
+
+(** Build a union param from params at the same position across clauses. *)
+let union_of_params (params : Types.param list) : Types.param =
+  match params with
+  | [] -> Types.PPositional Types.Prim.any
+  | first :: _ -> (
+      let extract_type = function
+        | Types.PPositional t
+        | Types.POptional t
+        | Types.PRest t
+        | Types.PKey (_, t) ->
+            t
+      in
+      let types = List.map extract_type params in
+      let union_ty = union_of_types types in
+      (* Preserve the param kind from the first occurrence *)
+      match first with
+      | Types.PPositional _ -> Types.PPositional union_ty
+      | Types.POptional _ -> Types.POptional union_ty
+      | Types.PRest _ -> Types.PRest union_ty
+      | Types.PKey (name, _) -> Types.PKey (name, union_ty))
+
+(** Compute the overall function type from multi-clause defun.
+
+    For each parameter position i, the overall type is the union of all clause
+    param types at position i. The overall return type is the union of all
+    clause return types. *)
+let compute_defun_type ?(scope_tvars : (string * Types.typ) list = [])
+    (ctx : type_context) (tvar_names : string list)
+    (clauses : defun_clause list) : Types.typ =
+  match clauses with
+  | [] -> Types.TArrow ([], Types.Prim.nil)
+  | [ single ] ->
+      (* Single clause: direct conversion *)
+      let params =
+        List.map
+          (sig_param_to_param_with_ctx ~scope_tvars ctx tvar_names)
+          single.clause_params
+      in
+      let ret =
+        sig_type_to_typ_with_ctx ~scope_tvars ctx tvar_names
+          single.clause_return
+      in
+      Types.TArrow (params, ret)
+  | _ ->
+      (* Multi-clause: union of param types at each position, union of returns *)
+      let max_params =
+        List.fold_left
+          (fun acc c -> max acc (List.length c.clause_params))
+          0 clauses
+      in
+      (* Convert all clauses to core types *)
+      let converted_clauses =
+        List.map
+          (fun c ->
+            let params =
+              List.map
+                (sig_param_to_param_with_ctx ~scope_tvars ctx tvar_names)
+                c.clause_params
+            in
+            let ret =
+              sig_type_to_typ_with_ctx ~scope_tvars ctx tvar_names
+                c.clause_return
+            in
+            (params, ret))
+          clauses
+      in
+      (* Build union params *)
+      let union_params =
+        List.init max_params (fun i ->
+            let params_at_i =
+              List.filter_map
+                (fun (params, _) -> List.nth_opt params i)
+                converted_clauses
+            in
+            union_of_params params_at_i)
+      in
+      (* Build union return *)
+      let returns = List.map snd converted_clauses in
+      let union_ret = union_of_types returns in
+      Types.TArrow (union_params, union_ret)
+
+(** Derive predicate information from multi-clause structure.
+
+    Analyzes clause structure to determine if this function acts as a type
+    predicate: 1. Partition clauses into truthy-returning (t/truthy) and
+    falsy-returning (nil) 2. If not a clean partition → None 3. Truthy clauses
+    have concrete param\[0\] → narrowed = union(truthy params) 4. Truthy clauses
+    have wildcard param\[0\] → narrowed = any - union(falsy params) (inverted
+    predicate, e.g., atom)
+
+    Returns predicate info for parameter 0 if derivable, None otherwise. *)
+let derive_predicate_info ?(scope_tvars : (string * Types.typ) list = [])
+    (ctx : type_context) (tvar_names : string list)
+    (clauses : defun_clause list) : Type_env.predicate_info option =
+  if List.length clauses < 2 then None
+  else
+    (* Partition into truthy and falsy clauses *)
+    let truthy_clauses =
+      List.filter (fun c -> is_truthy_return c.clause_return) clauses
+    in
+    let falsy_clauses =
+      List.filter (fun c -> is_falsy_return c.clause_return) clauses
+    in
+    (* Must be a clean partition: every clause is either truthy or falsy *)
+    if
+      List.length truthy_clauses + List.length falsy_clauses
+      <> List.length clauses
+    then None
+    else if truthy_clauses = [] || falsy_clauses = [] then None
+    else
+      (* All clauses must have at least one parameter *)
+      let all_have_params =
+        List.for_all (fun c -> List.length c.clause_params > 0) clauses
+      in
+      if not all_have_params then None
+      else
+        (* Check if truthy clauses have concrete (non-wildcard) first params *)
+        let truthy_first_params =
+          List.map (fun c -> List.hd c.clause_params) truthy_clauses
+        in
+        let truthy_are_concrete =
+          List.for_all (fun p -> not (is_infer_param p)) truthy_first_params
+        in
+        if truthy_are_concrete then
+          (* Direct predicate: narrowed = union of truthy first param types *)
+          let truthy_types =
+            List.map
+              (fun c ->
+                let first_param = List.hd c.clause_params in
+                let core_param =
+                  sig_param_to_param_with_ctx ~scope_tvars ctx tvar_names
+                    first_param
+                in
+                match core_param with
+                | Types.PPositional t
+                | Types.POptional t
+                | Types.PRest t
+                | Types.PKey (_, t) ->
+                    t)
+              truthy_clauses
+          in
+          let narrowed = union_of_types truthy_types in
+          Some
+            {
+              Type_env.param_index = 0;
+              param_name = "x";
+              narrowed_type = narrowed;
+            }
+        else
+          (* Check if falsy clauses have concrete first params (inverted
+             predicate like `atom`) *)
+          let falsy_first_params =
+            List.map (fun c -> List.hd c.clause_params) falsy_clauses
+          in
+          let falsy_are_concrete =
+            List.for_all (fun p -> not (is_infer_param p)) falsy_first_params
+          in
+          if falsy_are_concrete then
+            (* Inverted predicate: narrowed = any - union(falsy first params) *)
+            let falsy_types =
+              List.map
+                (fun c ->
+                  let first_param = List.hd c.clause_params in
+                  let core_param =
+                    sig_param_to_param_with_ctx ~scope_tvars ctx tvar_names
+                      first_param
+                  in
+                  match core_param with
+                  | Types.PPositional t
+                  | Types.POptional t
+                  | Types.PRest t
+                  | Types.PKey (_, t) ->
+                      t)
+                falsy_clauses
+            in
+            let falsy_union = union_of_types falsy_types in
+            let narrowed = Types.subtract_type Types.Prim.any falsy_union in
+            Some
+              {
+                Type_env.param_index = 0;
+                param_name = "x";
+                narrowed_type = narrowed;
+              }
+          else (* Neither pattern matches - no predicate *)
+            None
+
 (** Convert a defun declaration to a type scheme with full type context. Returns
     a Poly scheme if the function has type parameters, otherwise a Mono scheme
     with an arrow type.
 
-    For single-clause defuns, produces the arrow type from that clause. For
-    multi-clause defuns, uses the first clause (multi-clause type computation is
-    handled by compute_defun_type in a later iteration). *)
+    Uses compute_defun_type to handle both single-clause and multi-clause
+    defuns. *)
 let load_defun_with_ctx (ctx : type_context) (d : defun_decl) : Type_env.scheme
     =
   let tvar_names = List.map (fun b -> b.name) d.defun_tvar_binders in
-  match d.defun_clauses with
-  | [] -> Type_env.Mono (Types.TArrow ([], Types.Prim.nil))
-  | first_clause :: _ ->
-      let params =
-        List.map
-          (sig_param_to_param_with_ctx ctx tvar_names)
-          first_clause.clause_params
-      in
-      let ret =
-        sig_type_to_typ_with_ctx ctx tvar_names first_clause.clause_return
-      in
-      let arrow = Types.TArrow (params, ret) in
-      if tvar_names = [] then Type_env.Mono arrow
-      else Type_env.Poly (tvar_names, arrow)
+  let arrow = compute_defun_type ctx tvar_names d.defun_clauses in
+  if tvar_names = [] then Type_env.Mono arrow
+  else Type_env.Poly (tvar_names, arrow)
 
 (** Convert a defun declaration inside a type-scope to a type scheme. The scope
     type variables are added to the function's quantifier list. Uses the
@@ -818,30 +1036,15 @@ let load_defun_with_scope (ctx : type_context)
     =
   (* Get function's own type variables *)
   let fn_tvar_names = List.map (fun b -> b.name) d.defun_tvar_binders in
-  (* Scope type variable names that are actually used in this function
-     (we include all scope vars in the quantifier for consistency) *)
+  (* Scope type variable names *)
   let scope_tvar_names = List.map fst scope_tvars in
   (* Combined tvar names: scope vars first, then function's own vars *)
   let all_tvar_names = scope_tvar_names @ fn_tvar_names in
-  (* Build params and return type from first clause *)
-  match d.defun_clauses with
-  | [] ->
-      let arrow = Types.TArrow ([], Types.Prim.nil) in
-      if all_tvar_names = [] then Type_env.Mono arrow
-      else Type_env.Poly (all_tvar_names, arrow)
-  | first_clause :: _ ->
-      let params =
-        List.map
-          (sig_param_to_param_with_ctx ~scope_tvars ctx fn_tvar_names)
-          first_clause.clause_params
-      in
-      let ret =
-        sig_type_to_typ_with_ctx ~scope_tvars ctx fn_tvar_names
-          first_clause.clause_return
-      in
-      let arrow = Types.TArrow (params, ret) in
-      if all_tvar_names = [] then Type_env.Mono arrow
-      else Type_env.Poly (all_tvar_names, arrow)
+  let arrow =
+    compute_defun_type ~scope_tvars ctx fn_tvar_names d.defun_clauses
+  in
+  if all_tvar_names = [] then Type_env.Mono arrow
+  else Type_env.Poly (all_tvar_names, arrow)
 
 (** Convert a defvar declaration to a type scheme with full type context. The
     type may be polymorphic if it contains a forall. *)
@@ -943,6 +1146,10 @@ let add_value_to_state name scheme state =
 (** Add a function binding to the load state (function namespace) *)
 let add_fn_to_state name scheme state =
   { state with ls_env = Type_env.extend_fn name scheme state.ls_env }
+
+(** Add a predicate to the load state *)
+let add_predicate_to_state name info state =
+  { state with ls_env = Type_env.extend_predicate name info state.ls_env }
 
 (** {1 Shadowing Checks}
 
@@ -1292,9 +1499,19 @@ and load_decls_into_state ?(from_include = false) (sig_file : signature)
       | DDefun d ->
           (* Check shadowing if from current file *)
           if not from_include then check_value_not_shadowing d.defun_name state;
+          let tvar_names = List.map (fun b -> b.name) d.defun_tvar_binders in
           let scheme = load_defun_with_ctx state.ls_type_ctx d in
           (* Add to function namespace for Lisp-2 semantics *)
           let state = add_fn_to_state d.defun_name scheme state in
+          (* Derive and register predicate info from clause structure *)
+          let state =
+            match
+              derive_predicate_info state.ls_type_ctx tvar_names d.defun_clauses
+            with
+            | Some pred_info ->
+                add_predicate_to_state d.defun_name pred_info state
+            | None -> state
+          in
           (* Mark as imported if from include *)
           if from_include then mark_value_imported d.defun_name state else state
       | DDefvar d ->
@@ -1395,10 +1612,20 @@ and load_scoped_decl ?(from_include = false) (sig_file : signature)
   | DDefun d ->
       (* Check shadowing if from current file *)
       if not from_include then check_value_not_shadowing d.defun_name state;
+      let fn_tvar_names = List.map (fun b -> b.name) d.defun_tvar_binders in
       (* For defuns in scope, combine scope tvars with function's own tvars *)
       let scheme = load_defun_with_scope state.ls_type_ctx scope_tvars d in
       (* Add to function namespace for Lisp-2 semantics *)
       let state = add_fn_to_state d.defun_name scheme state in
+      (* Derive and register predicate info from clause structure *)
+      let state =
+        match
+          derive_predicate_info ~scope_tvars state.ls_type_ctx fn_tvar_names
+            d.defun_clauses
+        with
+        | Some pred_info -> add_predicate_to_state d.defun_name pred_info state
+        | None -> state
+      in
       if from_include then mark_value_imported d.defun_name state else state
   | DDefvar d ->
       (* Check shadowing if from current file *)

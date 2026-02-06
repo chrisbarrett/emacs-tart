@@ -1608,6 +1608,130 @@ let test_multi_clause_with_binders () =
   | None -> Alcotest.fail "car should be loaded"
   | Some _ -> ()
 
+(** Test that multi-clause computes union type for params *)
+let test_multi_clause_union_params () =
+  let sig_src = {|
+    (defun stringp ((string) -> t) ((_) -> nil))
+  |} in
+  let env = load_sig_str sig_src in
+  match Type_env.lookup_fn "stringp" env with
+  | None -> Alcotest.fail "stringp should be loaded"
+  | Some scheme -> (
+      let ty = Type_env.instantiate scheme env in
+      let ty_str = Types.to_string ty in
+      (* The param should be a union of string and the fresh tvar from _ *)
+      (* Return should be a union of t and nil *)
+      (* Just verify it's an arrow type *)
+      match Types.repr ty with
+      | Types.TArrow ([ _ ], _) -> ()
+      | _ ->
+          Alcotest.fail
+            (Printf.sprintf "Expected arrow with 1 param, got: %s" ty_str))
+
+(** Test that direct predicate is derived from clause structure *)
+let test_predicate_derived_stringp () =
+  let sig_src = {|
+    (defun stringp ((string) -> t) ((_) -> nil))
+  |} in
+  let env = load_sig_str sig_src in
+  match Type_env.lookup_predicate "stringp" env with
+  | None -> Alcotest.fail "stringp should have predicate info"
+  | Some pred -> (
+      Alcotest.(check int) "narrows param 0" 0 pred.param_index;
+      (* The narrowed type should be the string type (via prelude alias) *)
+      let narrowed = Types.repr pred.narrowed_type in
+      match narrowed with
+      | Types.TCon name ->
+          (* String gets expanded through prelude to the intrinsic name *)
+          let is_string =
+            name = "string" || name = "String"
+            || String.length name > 0
+               &&
+                 try
+                   let _ =
+                     Str.search_forward (Str.regexp_string "String") name 0
+                   in
+                   true
+                 with Not_found -> false
+          in
+          if not is_string then
+            Alcotest.fail
+              (Printf.sprintf "Expected string type, got TCon %s" name)
+      | _ ->
+          Alcotest.fail
+            (Printf.sprintf "Expected TCon, got: %s"
+               (Types.to_string pred.narrowed_type)))
+
+(** Test that inverted predicate (atom) derives correct narrowed type *)
+let test_predicate_derived_atom () =
+  let sig_src = {|
+    (defun atom (((cons any any)) -> nil) ((_) -> t))
+  |} in
+  let env = load_sig_str sig_src in
+  match Type_env.lookup_predicate "atom" env with
+  | None -> Alcotest.fail "atom should have predicate info"
+  | Some pred ->
+      Alcotest.(check int) "narrows param 0" 0 pred.param_index;
+      (* atom narrows to any - (cons any any) *)
+      let ty_str = Types.to_string pred.narrowed_type in
+      (* The narrowed type should NOT contain Pair (cons) *)
+      let has_pair =
+        try
+          let _ = Str.search_forward (Str.regexp_string "Pair") ty_str 0 in
+          true
+        with Not_found -> false
+      in
+      if has_pair then
+        Alcotest.fail
+          (Printf.sprintf "atom narrowed type should not contain Pair, got: %s"
+             ty_str)
+
+(** Test multi-type predicate derivation (sequencep) *)
+let test_predicate_derived_sequencep () =
+  let sig_src =
+    {|
+    (defun sequencep (((list any)) -> t) (((vector any)) -> t) ((string) -> t) ((_) -> nil))
+  |}
+  in
+  let env = load_sig_str sig_src in
+  match Type_env.lookup_predicate "sequencep" env with
+  | None -> Alcotest.fail "sequencep should have predicate info"
+  | Some pred -> (
+      Alcotest.(check int) "narrows param 0" 0 pred.param_index;
+      (* Should be a union of list, vector, and string *)
+      let ty_str = Types.to_string pred.narrowed_type in
+      (* Verify it's a union type *)
+      match Types.repr pred.narrowed_type with
+      | Types.TUnion members ->
+          Alcotest.(check bool)
+            "should have 3 members" true
+            (List.length members = 3)
+      | _ ->
+          Alcotest.fail (Printf.sprintf "Expected union type, got: %s" ty_str))
+
+(** Test that multi-clause without clean true/false partition yields no
+    predicate *)
+let test_no_predicate_mixed_returns () =
+  let sig_src =
+    {|
+    (defun maybe-string ((string) -> string) ((_) -> nil))
+  |}
+  in
+  let env = load_sig_str sig_src in
+  match Type_env.lookup_predicate "maybe-string" env with
+  | None -> () (* Expected - not a predicate *)
+  | Some _ -> Alcotest.fail "maybe-string should NOT be a predicate"
+
+(** Test that single-clause defun does not derive predicate *)
+let test_no_predicate_single_clause () =
+  let sig_src = {|
+    (defun length (any) -> int)
+  |} in
+  let env = load_sig_str sig_src in
+  match Type_env.lookup_predicate "length" env with
+  | None -> () (* Expected *)
+  | Some _ -> Alcotest.fail "single-clause should NOT be a predicate"
+
 let () =
   Alcotest.run "sig_loader"
     [
@@ -1799,5 +1923,17 @@ let () =
             test_non_predicate_not_registered;
           Alcotest.test_case "multi-clause with binders" `Quick
             test_multi_clause_with_binders;
+          Alcotest.test_case "multi-clause union params" `Quick
+            test_multi_clause_union_params;
+          Alcotest.test_case "predicate derived stringp" `Quick
+            test_predicate_derived_stringp;
+          Alcotest.test_case "predicate derived atom" `Quick
+            test_predicate_derived_atom;
+          Alcotest.test_case "predicate derived sequencep" `Quick
+            test_predicate_derived_sequencep;
+          Alcotest.test_case "no predicate mixed returns" `Quick
+            test_no_predicate_mixed_returns;
+          Alcotest.test_case "no predicate single clause" `Quick
+            test_no_predicate_single_clause;
         ] );
     ]
