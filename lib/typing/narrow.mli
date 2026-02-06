@@ -27,3 +27,14 @@ val narrow_type : typ -> typ -> typ
     - [any ∩ T] → [T]
 
     For non-union types, returns [original] when it overlaps with [target]. *)
+
+val analyze_condition : Syntax.Sexp.t -> Core.Type_env.t -> condition_analysis
+(** [analyze_condition condition env] examines a condition for predicate calls.
+
+    Detects the pattern [(predicate_fn arg)] where [predicate_fn] has a
+    registered predicate in [env] and [arg] is a plain symbol (variable
+    reference). Returns [Predicate { var_name; narrowed_type }] when a predicate
+    call is found, or [NoPredicate] otherwise.
+
+    Per R12 (inline-only restriction), only direct calls are recognized. Stored
+    results do not enable narrowing. *)

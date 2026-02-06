@@ -16,6 +16,7 @@
     enable narrowing (R12). *)
 
 open Core.Types
+module Env = Core.Type_env
 
 type predicate_info = {
   var_name : string;  (** Name of the variable being tested *)
@@ -57,3 +58,26 @@ let narrow_type (original : typ) (target : typ) : typ =
         (* Non-union original: if not disjoint with target, keep original;
            otherwise return target as conservative fallback *)
         if not (Unify.types_disjoint original target) then original else target
+
+(** Analyze a condition expression for predicate calls.
+
+    Detects the pattern [(predicate_fn arg)] where [predicate_fn] is registered
+    in the type environment's predicates and [arg] is a plain symbol (variable
+    reference). Returns the variable name and narrowed type if found.
+
+    Per R12, only inline calls are recognized. Stored results like
+    [(let ((result (stringp x))) (when result ...))] do not narrow. *)
+let analyze_condition (condition : Syntax.Sexp.t) (env : Env.t) :
+    condition_analysis =
+  match condition with
+  | Syntax.Sexp.List (Syntax.Sexp.Symbol (fn_name, _) :: args, _) -> (
+      match Env.lookup_predicate fn_name env with
+      | Some pred_info -> (
+          (* Get the argument at the predicate's param_index *)
+          let arg = List.nth_opt args pred_info.param_index in
+          match arg with
+          | Some (Syntax.Sexp.Symbol (var_name, _)) ->
+              Predicate { var_name; narrowed_type = pred_info.narrowed_type }
+          | _ -> NoPredicate)
+      | None -> NoPredicate)
+  | _ -> NoPredicate
