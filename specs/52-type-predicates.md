@@ -4,11 +4,18 @@ Declare functions as type predicates that narrow types in conditional branches.
 
 **Deps:** Spec 34, 46, 11
 
+> **Syntax superseded by [Spec 54](54-multi-clause-signatures.md).**
+> The `(x is T)` return syntax and `((name type))` named parameters are
+> replaced by multi-clause function signatures. The narrowing *behavior*
+> (R1-R12 below) is preserved — only the declaration mechanism changes.
+
 ## Goal
 
 Enable `stringp`, `listp`, and user-defined predicates to narrow types in conditionals via signature declarations (not hardcoded).
 
-## Syntax
+## Syntax (superseded)
+
+See [Spec 54](54-multi-clause-signatures.md) for current syntax. Original:
 
 ```lisp
 (defun stringp (x) -> (x is string))
@@ -101,36 +108,33 @@ Stored results don't narrow (same as Spec 49 R17).
 
 ## Standard Library Predicates
 
-Declare in `typings/emacs/*/c-core/data.tart`:
+Declare in `typings/emacs/*/c-core/data.tart` using multi-clause syntax
+(Spec 54):
 
 ```lisp
-;; Type predicates
-(defun stringp (x) -> (x is string))
-(defun symbolp (x) -> (x is symbol))
-(defun integerp (x) -> (x is int))
-(defun floatp (x) -> (x is float))
-(defun numberp (x) -> (x is num))
-(defun consp (x) -> (x is (cons any any)))
-(defun listp (x) -> (x is (list any)))
-(defun vectorp (x) -> (x is (vector any)))
-(defun sequencep (x) -> (x is (list any | vector any | string)))
-(defun functionp (x) -> (x is (-> (&rest any) any)))
-(defun keywordp (x) -> (x is keyword))
-(defun hash-table-p (x) -> (x is (hash-table any any)))
-(defun bufferp (x) -> (x is buffer))
-(defun windowp (x) -> (x is window))
-(defun framep (x) -> (x is frame))
-(defun processp (x) -> (x is process))
-(defun markerp (x) -> (x is marker))
-(defun overlayp (x) -> (x is overlay))
+(defun stringp ((string) -> t) ((_) -> nil))
+(defun symbolp ((symbol) -> t) ((_) -> nil))
+(defun integerp ((int) -> t) ((_) -> nil))
+(defun floatp ((float) -> t) ((_) -> nil))
+(defun numberp ((num) -> t) ((_) -> nil))
+(defun consp (((cons any any)) -> t) ((_) -> nil))
+(defun listp (((list any)) -> t) ((_) -> nil))
+(defun vectorp (((vector any)) -> t) ((_) -> nil))
+(defun keywordp ((keyword) -> t) ((_) -> nil))
+(defun bufferp ((buffer) -> t) ((_) -> nil))
+(defun markerp ((marker) -> t) ((_) -> nil))
+
+;; Multi-type predicates
+(defun sequencep
+  (((list any)) -> t) (((vector any)) -> t) ((string) -> t)
+  ((_) -> nil))
+
+;; Inverted predicate
+(defun atom (((cons any any)) -> nil) ((_) -> t))
 
 ;; Nil/null
-(defun null (x) -> (x is nil))
-(defun booleanp (x) -> (x is bool))
-
-;; Compound
-(defun atom (x) -> (x is (any - (cons any any))))
-(defun number-or-marker-p (x) -> (x is (num | marker)))
+(defun null ((nil) -> t) ((_) -> nil))
+(defun booleanp ((bool) -> t) ((_) -> nil))
 ```
 
 ## Non-Requirements
@@ -144,14 +148,14 @@ Declare in `typings/emacs/*/c-core/data.tart`:
 
 ### Implementation
 
-1. Parse `(x is T)` in `sig_parser.ml`
-2. Add `TPredicate of string * typ` to return type AST
-3. Track predicate info in function schemes
-4. In `infer.ml` for `if`/`cond`/`when`/`unless`:
-   - Detect predicate calls in condition
-   - Apply intersection in then-branch
-   - Apply subtraction in else-branch
-5. Narrowing is lexical scope
+Predicate info is now derived from multi-clause structure (Spec 54 R5)
+instead of `STPredicate` AST nodes.
+
+Narrowing applies in `infer.ml` for `if`/`cond`/`when`/`unless`:
+- Detect predicate calls in condition
+- Apply intersection in then-branch
+- Apply subtraction in else-branch
+- Narrowing is lexical scope
 
 ### Type Operations
 
@@ -168,17 +172,18 @@ Same narrowing infrastructure, different tracking:
 
 ## Tasks
 
-- [x] Parse `(x is T)` return syntax
-- [x] Named parameter syntax for signatures `((name type))`
+- [x] ~~Parse `(x is T)` return syntax~~ → superseded by Spec 54
+- [x] ~~Named parameter syntax `((name type))`~~ → superseded by Spec 54
 - [x] Register predicate info in sig_loader
-- [ ] Predicate narrowing in if/when/unless
-- [ ] Type subtraction for else branches
-- [ ] Cumulative narrowing in cond
-- [ ] Predicates in and/or expressions
-- [ ] User-defined predicates
+- [x] Predicate narrowing in if/when/unless
+- [x] Type subtraction for else branches
+- [x] Cumulative narrowing in cond
+- [x] Predicates in and expressions
+- [ ] Predicates in or expressions (R5)
 - [ ] Union intersection for narrowing
-- [ ] Validate predicate parameter names
 - [ ] Inline-only restriction
-- [ ] Standard library declarations
+- [ ] Standard library declarations (blocked on Spec 54 migration)
 
-**Status:** Parsing infrastructure complete. `STPredicate` AST node added, named parameter syntax `((x type))` parsed, predicate info extracted and registered during signature loading. Remaining: apply narrowing in conditional branches.
+**Status:** Narrowing infrastructure complete (`narrow.ml`, `infer.ml`).
+Declaration syntax superseded by [Spec 54](54-multi-clause-signatures.md)
+multi-clause signatures.

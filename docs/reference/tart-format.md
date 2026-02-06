@@ -44,6 +44,9 @@ declaration  ::= func_decl | var_decl | type_decl | struct_import
 
 func_decl    ::= '(defun' symbol '[' bind* ']' param-group '->' type ')'
                | '(defun' symbol param-group '->' type ')'
+               | '(defun' symbol '[' bind* ']' clause+ ')'
+               | '(defun' symbol clause+ ')'
+clause       ::= '(' param-group '->' type ')'
 var_decl     ::= '(defvar' symbol type ')'
 type_decl    ::= '(type' symbol ')'                          ; opaque
                | '(type' symbol '[' bind* ']' ')'            ; opaque + phantom
@@ -55,6 +58,7 @@ bind         ::= symbol | '(' symbol ':' type ')'
 param-group  ::= '(' param* ')'                              ; always parenthesized
 param        ::= type | '&optional' type | '&rest' type | '&key' keyword type
 type         ::= symbol                                      ; type name or variable
+               | '_'                                         ; inferred type (fresh tvar)
                | '(' symbol type+ ')'                        ; type application
                | '(' type '|' type ('|' type)* ')'           ; union
                | '(' param-group '->' type ')'               ; function value
@@ -261,6 +265,43 @@ Functions declared with `defun` are directly callable as `(name args...)`:
 Note: The first parameter to `my-map` is an arrow type `((a -> b))`, meaning it's
 a function **value** that must be called with `funcall` inside the
 implementation.
+
+#### Multi-Clause Functions
+
+Functions can have multiple `(params -> return)` clauses, tried in order
+(pattern-matching semantics). Used for type predicates and overloaded
+signatures:
+
+```elisp
+;; Type predicate: narrows argument to string in conditionals
+(defun stringp
+  ((string) -> t)
+  ((_) -> nil))
+
+;; Inverted: atom is anything that's not a cons
+(defun atom
+  (((cons any any)) -> nil)
+  ((_) -> t))
+
+;; Polymorphic with multiple clauses
+(defun car [a b]
+  (((cons a b)) -> a)
+  ((nil) -> nil))
+```
+
+#### Inferred Types (`_`)
+
+Any type symbol starting with `_` is an **inferred type variable**--a fresh
+tvar that participates in HM unification, not `any`. Each `_` occurrence is
+independent:
+
+```elisp
+(defun foo
+  ((string int) -> string)
+  ((_ _) -> nil))           ;; two independent fresh tvars
+```
+
+`_foo`, `_bar` etc. are also valid wildcard names.
 
 ### Variable Declarations
 

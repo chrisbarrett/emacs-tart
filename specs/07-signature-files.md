@@ -111,6 +111,14 @@ go at the start of arrow types for values, or after the name in `defun`.
 **When** loaded
 **Then** `foo` is bound as a directly callable function in the module's type environment
 
+Multi-clause defuns are also supported (see [Spec 54](54-multi-clause-signatures.md)):
+
+```elisp
+(defun stringp
+  ((string) -> t)
+  ((_) -> nil))
+```
+
 **Verify:** Signature loaded; type checker uses it for calls to `foo`
 
 ### R6: Variable declarations
