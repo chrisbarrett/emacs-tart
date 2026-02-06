@@ -545,210 +545,214 @@ let subtract_type = Types.subtract_type
 
 (** Convert a signature type to a core type. [ctx] is the type context
     containing aliases and opaques. [tvar_names] is the list of bound type
-    variable names in scope. *)
-let rec sig_type_to_typ_with_ctx (ctx : type_context) (tvar_names : string list)
-    (ty : sig_type) : Types.typ =
+    variable names in scope. [scope_tvars] maps scope type variable names to
+    their pre-created TVars (shared across declarations in a type-scope block);
+    defaults to empty. *)
+let rec sig_type_to_typ_with_ctx ?(scope_tvars : (string * Types.typ) list = [])
+    (ctx : type_context) (tvar_names : string list) (ty : sig_type) : Types.typ
+    =
+  let convert = sig_type_to_typ_with_ctx ~scope_tvars ctx in
+  let convert_param = sig_param_to_param_with_ctx ~scope_tvars ctx in
   match ty with
   | STVar (name, _) -> (
-      if
-        (* Type variable - could be a type variable, alias, or opaque.
-         Check for alias/opaque first if not in tvar_names scope. *)
-        List.mem name tvar_names
-      then
-        (* Definitely a bound type variable - keep as TCon for later substitution *)
-        Types.TCon name
-      else
-        match lookup_alias name ctx.tc_aliases with
-        | Some alias when alias.alias_params = [] ->
-            (* Non-parameterized alias - expand it *)
-            sig_type_to_typ_with_ctx ctx tvar_names alias.alias_body
-        | _ -> (
-            (* Check for opaque type *)
-            match lookup_opaque name ctx.tc_opaques with
-            | Some opaque when opaque.opaque_params = [] ->
-                (* Non-parameterized opaque - use the unique constructor *)
-                Types.TCon opaque.opaque_con
-            | _ ->
-                (* Not an alias/opaque or has parameters - treat as type constant.
-                   Use sig_name_to_prim to handle primitive names and canonicalization
-                   (e.g., "list" -> "List" for HK type arguments). *)
-                sig_name_to_prim name))
+      (* Check scope type variables first *)
+      match List.assoc_opt name scope_tvars with
+      | Some tvar -> tvar
+      | None -> (
+          if
+            (* Type variable - could be a type variable, alias, or opaque.
+           Check for alias/opaque first if not in tvar_names scope. *)
+            List.mem name tvar_names
+          then
+            (* Definitely a bound type variable - keep as TCon for later substitution *)
+            Types.TCon name
+          else
+            match lookup_alias name ctx.tc_aliases with
+            | Some alias when alias.alias_params = [] ->
+                (* Non-parameterized alias - expand it *)
+                convert tvar_names alias.alias_body
+            | _ -> (
+                (* Check for opaque type *)
+                match lookup_opaque name ctx.tc_opaques with
+                | Some opaque when opaque.opaque_params = [] ->
+                    (* Non-parameterized opaque - use the unique constructor *)
+                    Types.TCon opaque.opaque_con
+                | _ ->
+                    (* Not an alias/opaque or has parameters - treat as type constant.
+                     Use sig_name_to_prim to handle primitive names and canonicalization
+                     (e.g., "list" -> "List" for HK type arguments). *)
+                    sig_name_to_prim name)))
   | STCon (name, _) -> (
-      (* Type constant - check for alias first, then opaque, then map primitives *)
-      match lookup_alias name ctx.tc_aliases with
-      | Some alias when alias.alias_params = [] ->
-          (* Non-parameterized alias - expand it *)
-          sig_type_to_typ_with_ctx ctx tvar_names alias.alias_body
-      | _ -> (
-          (* Check for opaque type *)
-          match lookup_opaque name ctx.tc_opaques with
-          | Some opaque when opaque.opaque_params = [] ->
-              (* Non-parameterized opaque - use the unique constructor *)
-              Types.TCon opaque.opaque_con
-          | _ ->
-              (* Not an alias/opaque or has parameters (needs args) *)
-              sig_name_to_prim name))
+      (* Check scope type variables first *)
+      match List.assoc_opt name scope_tvars with
+      | Some tvar -> tvar
+      | None -> (
+          (* Type constant - check for alias first, then opaque, then map primitives *)
+          match lookup_alias name ctx.tc_aliases with
+          | Some alias when alias.alias_params = [] ->
+              (* Non-parameterized alias - expand it *)
+              convert tvar_names alias.alias_body
+          | _ -> (
+              (* Check for opaque type *)
+              match lookup_opaque name ctx.tc_opaques with
+              | Some opaque when opaque.opaque_params = [] ->
+                  (* Non-parameterized opaque - use the unique constructor *)
+                  Types.TCon opaque.opaque_con
+              | _ ->
+                  (* Not an alias/opaque or has parameters (needs args) *)
+                  sig_name_to_prim name)))
   | STApp (name, args, _span) -> (
-      (* Type application - check for alias expansion first *)
-      match lookup_alias name ctx.tc_aliases with
-      | Some alias when List.length alias.alias_params = List.length args ->
-          (* Parameterized alias - check bounds and substitute args into body *)
-          (* First, check bounds for each argument *)
-          List.iter2
-            (fun param arg ->
-              match param.ap_bound with
-              | None -> () (* No bound - any type is acceptable *)
-              | Some bound_sig_type ->
-                  (* Convert the argument to a core type for checking *)
-                  let arg_typ = sig_type_to_typ_with_ctx ctx tvar_names arg in
-                  (* Convert the bound to a core type *)
-                  let bound_typ =
-                    sig_type_to_typ_with_ctx ctx tvar_names bound_sig_type
-                  in
-                  (* Check that arg satisfies the bound (arg <: bound).
+      (* Check if constructor is a scope type variable (higher-kinded) *)
+      match List.assoc_opt name scope_tvars with
+      | Some tvar ->
+          let arg_types = List.map (convert tvar_names) args in
+          Types.TApp (tvar, arg_types)
+      | None -> (
+          (* Type application - check for alias expansion first *)
+          match lookup_alias name ctx.tc_aliases with
+          | Some alias when List.length alias.alias_params = List.length args ->
+              (* Parameterized alias - check bounds and substitute args into body *)
+              (* First, check bounds for each argument *)
+              List.iter2
+                (fun param arg ->
+                  match param.ap_bound with
+                  | None -> () (* No bound - any type is acceptable *)
+                  | Some bound_sig_type ->
+                      (* Convert the argument to a core type for checking *)
+                      let arg_typ = convert tvar_names arg in
+                      (* Convert the bound to a core type *)
+                      let bound_typ = convert tvar_names bound_sig_type in
+                      (* Check that arg satisfies the bound (arg <: bound).
                      For truthy bound, arg must be truthy. *)
-                  if not (satisfies_bound arg_typ bound_typ) then
-                    failwith
-                      (Printf.sprintf
-                         "Bound violation in %s: %s is not a subtype of %s" name
-                         (Types.to_string arg_typ)
-                         (Types.to_string bound_typ)))
-            alias.alias_params args;
-          (* Substitute args into body and expand *)
-          let subst =
-            List.combine (List.map (fun p -> p.ap_name) alias.alias_params) args
-          in
-          let expanded = substitute_sig_type subst alias.alias_body in
-          sig_type_to_typ_with_ctx ctx tvar_names expanded
-      | _ -> (
-          (* Special case: map types with a single row argument (Design B).
+                      if not (satisfies_bound arg_typ bound_typ) then
+                        failwith
+                          (Printf.sprintf
+                             "Bound violation in %s: %s is not a subtype of %s"
+                             name (Types.to_string arg_typ)
+                             (Types.to_string bound_typ)))
+                alias.alias_params args;
+              (* Substitute args into body and expand *)
+              let subst =
+                List.combine
+                  (List.map (fun p -> p.ap_name) alias.alias_params)
+                  args
+              in
+              let expanded = substitute_sig_type subst alias.alias_body in
+              convert tvar_names expanded
+          | _ -> (
+              (* Special case: map types with a single row argument (Design B).
              (alist {name string & r}) expands to (list (cons symbol {name string & r}))
              (plist {:name string & r}) expands to (list (keyword | {name string & r}))
              (hash-table {name string & r}) expands to (HashTable symbol {name string & r})
              (map {name string & r}) expands to (Map {name string & r})
              This preserves field names for static key lookup while maintaining
              structural compatibility with homogeneous map types. *)
-          match (name, args) with
-          | "alist", [ single_arg ] -> (
-              let arg_typ =
-                sig_type_to_typ_with_ctx ctx tvar_names single_arg
-              in
-              match Types.repr arg_typ with
-              | TRow _ ->
-                  Types.list_of (Types.pair_of Types.Prim.symbol arg_typ)
-              | _ ->
-                  Types.TApp
-                    (Types.TCon (canonicalize_type_name name), [ arg_typ ]))
-          | "plist", [ single_arg ] -> (
-              let arg_typ =
-                sig_type_to_typ_with_ctx ctx tvar_names single_arg
-              in
-              match Types.repr arg_typ with
-              | TRow _ -> Types.list_of (TUnion [ Types.Prim.keyword; arg_typ ])
-              | _ ->
-                  Types.TApp
-                    (Types.TCon (canonicalize_type_name name), [ arg_typ ]))
-          | "hash-table", [ single_arg ] -> (
-              let arg_typ =
-                sig_type_to_typ_with_ctx ctx tvar_names single_arg
-              in
-              match Types.repr arg_typ with
-              | TRow _ -> Types.hash_table_of Types.Prim.symbol arg_typ
-              | _ ->
-                  Types.TApp
-                    (Types.TCon (canonicalize_type_name name), [ arg_typ ]))
-          | "map", [ single_arg ] -> (
-              let arg_typ =
-                sig_type_to_typ_with_ctx ctx tvar_names single_arg
-              in
-              match Types.repr arg_typ with
-              | TRow _ -> Types.map_of arg_typ
-              | _ ->
-                  Types.TApp
-                    (Types.TCon (canonicalize_type_name name), [ arg_typ ]))
-          | _ -> (
-              (* Check for opaque type with phantom parameters *)
-              match lookup_opaque name ctx.tc_opaques with
-              | Some opaque
-                when List.length opaque.opaque_params = List.length args ->
-                  (* Parameterized opaque - create TApp with unique constructor and args *)
-                  let arg_types =
-                    List.map (sig_type_to_typ_with_ctx ctx tvar_names) args
-                  in
-                  Types.TApp (Types.TCon opaque.opaque_con, arg_types)
-              | _ ->
-                  (* Not an alias/opaque or arity mismatch - treat as type application.
+              match (name, args) with
+              | "alist", [ single_arg ] -> (
+                  let arg_typ = convert tvar_names single_arg in
+                  match Types.repr arg_typ with
+                  | TRow _ ->
+                      Types.list_of (Types.pair_of Types.Prim.symbol arg_typ)
+                  | _ ->
+                      Types.TApp
+                        (Types.TCon (canonicalize_type_name name), [ arg_typ ]))
+              | "plist", [ single_arg ] -> (
+                  let arg_typ = convert tvar_names single_arg in
+                  match Types.repr arg_typ with
+                  | TRow _ ->
+                      Types.list_of (TUnion [ Types.Prim.keyword; arg_typ ])
+                  | _ ->
+                      Types.TApp
+                        (Types.TCon (canonicalize_type_name name), [ arg_typ ]))
+              | "hash-table", [ single_arg ] -> (
+                  let arg_typ = convert tvar_names single_arg in
+                  match Types.repr arg_typ with
+                  | TRow _ -> Types.hash_table_of Types.Prim.symbol arg_typ
+                  | _ ->
+                      Types.TApp
+                        (Types.TCon (canonicalize_type_name name), [ arg_typ ]))
+              | "map", [ single_arg ] -> (
+                  let arg_typ = convert tvar_names single_arg in
+                  match Types.repr arg_typ with
+                  | TRow _ -> Types.map_of arg_typ
+                  | _ ->
+                      Types.TApp
+                        (Types.TCon (canonicalize_type_name name), [ arg_typ ]))
+              | _ -> (
+                  (* Check for opaque type with phantom parameters *)
+                  match lookup_opaque name ctx.tc_opaques with
+                  | Some opaque
+                    when List.length opaque.opaque_params = List.length args ->
+                      (* Parameterized opaque - create TApp with unique constructor and args *)
+                      let arg_types = List.map (convert tvar_names) args in
+                      Types.TApp (Types.TCon opaque.opaque_con, arg_types)
+                  | _ ->
+                      (* Not an alias/opaque or arity mismatch - treat as type application.
                      If name is a type variable, keep it as TCon for later substitution
                      during instantiation. This enables higher-kinded types. *)
-                  let arg_types =
-                    List.map (sig_type_to_typ_with_ctx ctx tvar_names) args
-                  in
-                  Types.TApp
-                    (Types.TCon (canonicalize_type_name name), arg_types))))
+                      let arg_types = List.map (convert tvar_names) args in
+                      Types.TApp
+                        (Types.TCon (canonicalize_type_name name), arg_types))))
+      )
   | STArrow (params, ret, _) ->
       (* Function type *)
-      let param_types =
-        List.map (sig_param_to_param_with_ctx ctx tvar_names) params
-      in
-      let ret_type = sig_type_to_typ_with_ctx ctx tvar_names ret in
+      let param_types = List.map (convert_param tvar_names) params in
+      let ret_type = convert tvar_names ret in
       Types.TArrow (param_types, ret_type)
   | STForall (binders, body, _) ->
       (* Polymorphic type - add binders to scope *)
       let new_vars = List.map (fun b -> b.name) binders in
       let inner_names = new_vars @ tvar_names in
-      let body_type = sig_type_to_typ_with_ctx ctx inner_names body in
+      let body_type = convert inner_names body in
       Types.TForall (new_vars, body_type)
   | STUnion (types, _) ->
       (* Union type *)
-      let type_list =
-        List.map (sig_type_to_typ_with_ctx ctx tvar_names) types
-      in
+      let type_list = List.map (convert tvar_names) types in
       Types.TUnion type_list
   | STTuple (types, _) ->
       (* Tuple type *)
-      let type_list =
-        List.map (sig_type_to_typ_with_ctx ctx tvar_names) types
-      in
+      let type_list = List.map (convert tvar_names) types in
       Types.TTuple type_list
   | STSubtract (minuend, subtrahend, _) ->
       (* Type subtraction: remove subtrahend from minuend's union.
          E.g., ((int | string) - int) => string
          E.g., ((truthy | nil) - nil) => truthy *)
-      let minuend_type = sig_type_to_typ_with_ctx ctx tvar_names minuend in
-      let subtrahend_type =
-        sig_type_to_typ_with_ctx ctx tvar_names subtrahend
-      in
+      let minuend_type = convert tvar_names minuend in
+      let subtrahend_type = convert tvar_names subtrahend in
       subtract_type minuend_type subtrahend_type
   | STRow (row, _) ->
       (* Convert sig_row to core TRow *)
       let fields =
         List.map
-          (fun (name, ty) -> (name, sig_type_to_typ_with_ctx ctx tvar_names ty))
+          (fun (name, ty) -> (name, convert tvar_names ty))
           row.srow_fields
       in
       let row_var =
         match row.srow_var with
         | None -> None
-        | Some var_name -> Some (Types.TCon var_name)
+        | Some var_name -> (
+            (* Check if the row variable is a scope type variable *)
+            match List.assoc_opt var_name scope_tvars with
+            | Some tvar -> Some tvar
+            | None -> Some (Types.TCon var_name))
       in
       Types.TRow { row_fields = fields; row_var }
   | STPredicate (_, narrowed_type, _) ->
       (* For now, predicate types are just bool at the type level.
          The predicate information will be tracked separately in the type environment. *)
-      let _ = sig_type_to_typ_with_ctx ctx tvar_names narrowed_type in
+      let _ = convert tvar_names narrowed_type in
       Types.Prim.bool
 
 (** Convert a signature parameter to a core parameter with type context *)
-and sig_param_to_param_with_ctx (ctx : type_context) (tvar_names : string list)
-    (p : sig_param) : Types.param =
+and sig_param_to_param_with_ctx ?(scope_tvars : (string * Types.typ) list = [])
+    (ctx : type_context) (tvar_names : string list) (p : sig_param) :
+    Types.param =
+  let convert = sig_type_to_typ_with_ctx ~scope_tvars ctx tvar_names in
   match p with
-  | SPPositional (_, ty) ->
-      Types.PPositional (sig_type_to_typ_with_ctx ctx tvar_names ty)
-  | SPOptional (_, ty) ->
-      Types.POptional (sig_type_to_typ_with_ctx ctx tvar_names ty)
-  | SPRest ty -> Types.PRest (sig_type_to_typ_with_ctx ctx tvar_names ty)
-  | SPKey (name, ty) ->
-      Types.PKey (name, sig_type_to_typ_with_ctx ctx tvar_names ty)
+  | SPPositional (_, ty) -> Types.PPositional (convert ty)
+  | SPOptional (_, ty) -> Types.POptional (convert ty)
+  | SPRest ty -> Types.PRest (convert ty)
+  | SPKey (name, ty) -> Types.PKey (name, convert ty)
 
 (** Convert a signature type to a core type with alias expansion. [aliases] is
     the alias context for expansion. [tvar_names] is the list of bound type
@@ -774,136 +778,11 @@ let sig_param_to_param (tvar_names : string list) (p : sig_param) : Types.param
     =
   sig_param_to_param_with_aliases empty_aliases tvar_names p
 
-(** {1 Scope Type Variable Conversion}
+(** {1 Scope Type Variable Helpers}
 
-    For type-scope blocks, we need to use pre-created TVars for scope type
-    variables so they are shared across all declarations in the scope. *)
-
-(** Convert a signature type to a core type, using pre-created TVars for scope
-    type variables. [scope_tvars] maps scope type var names to their shared
-    TVars. [tvar_names] is the list of function-local type variable names. *)
-let rec sig_type_to_typ_with_scope_ctx (ctx : type_context)
-    (scope_tvars : (string * Types.typ) list) (tvar_names : string list)
-    (ty : sig_type) : Types.typ =
-  match ty with
-  | STVar (name, _) -> (
-      (* First check if it's a scope type variable *)
-      match List.assoc_opt name scope_tvars with
-      | Some tvar -> tvar (* Use the pre-created TVar *)
-      | None ->
-          if List.mem name tvar_names then
-            (* Function-local type variable *)
-            Types.TCon name
-          else
-            (* Fall through to alias/opaque/primitive handling *)
-            sig_type_to_typ_with_ctx ctx
-              (List.map fst scope_tvars @ tvar_names)
-              ty)
-  | STCon (name, _) -> (
-      (* Check scope tvars first (in case someone uses a scope var as a type name) *)
-      match List.assoc_opt name scope_tvars with
-      | Some tvar -> tvar
-      | None ->
-          sig_type_to_typ_with_ctx ctx
-            (List.map fst scope_tvars @ tvar_names)
-            ty)
-  | STApp (name, args, loc) -> (
-      (* Check if the constructor is a scope tvar *)
-      match List.assoc_opt name scope_tvars with
-      | Some tvar ->
-          (* HK scope variable - convert args and create TApp *)
-          let arg_types =
-            List.map
-              (sig_type_to_typ_with_scope_ctx ctx scope_tvars tvar_names)
-              args
-          in
-          Types.TApp (tvar, arg_types)
-      | None ->
-          (* Not a scope tvar - use regular conversion *)
-          let combined_tvars = List.map fst scope_tvars @ tvar_names in
-          sig_type_to_typ_with_ctx ctx combined_tvars (STApp (name, args, loc)))
-  | STArrow (params, ret, _) ->
-      let param_types =
-        List.map
-          (sig_param_to_param_with_scope_ctx ctx scope_tvars tvar_names)
-          params
-      in
-      let ret_type =
-        sig_type_to_typ_with_scope_ctx ctx scope_tvars tvar_names ret
-      in
-      Types.TArrow (param_types, ret_type)
-  | STForall (binders, body, _) ->
-      let new_vars = List.map (fun b -> b.name) binders in
-      let inner_names = new_vars @ tvar_names in
-      let body_type =
-        sig_type_to_typ_with_scope_ctx ctx scope_tvars inner_names body
-      in
-      Types.TForall (new_vars, body_type)
-  | STUnion (types, _) ->
-      let type_list =
-        List.map
-          (sig_type_to_typ_with_scope_ctx ctx scope_tvars tvar_names)
-          types
-      in
-      Types.TUnion type_list
-  | STTuple (types, _) ->
-      let type_list =
-        List.map
-          (sig_type_to_typ_with_scope_ctx ctx scope_tvars tvar_names)
-          types
-      in
-      Types.TTuple type_list
-  | STSubtract (minuend, subtrahend, _) ->
-      let minuend_type =
-        sig_type_to_typ_with_scope_ctx ctx scope_tvars tvar_names minuend
-      in
-      let subtrahend_type =
-        sig_type_to_typ_with_scope_ctx ctx scope_tvars tvar_names subtrahend
-      in
-      subtract_type minuend_type subtrahend_type
-  | STRow (row, _) ->
-      (* Convert sig_row to core TRow with scope type variables *)
-      let fields =
-        List.map
-          (fun (name, ty) ->
-            (name, sig_type_to_typ_with_scope_ctx ctx scope_tvars tvar_names ty))
-          row.srow_fields
-      in
-      let row_var =
-        match row.srow_var with
-        | None -> None
-        | Some var_name -> (
-            (* Check if the row variable is a scope type variable *)
-            match List.assoc_opt var_name scope_tvars with
-            | Some tvar -> Some tvar
-            | None -> Some (Types.TCon var_name))
-      in
-      Types.TRow { row_fields = fields; row_var }
-  | STPredicate (_, narrowed_type, _) ->
-      (* For now, predicate types are just bool at the type level.
-         The predicate information will be tracked separately in the type environment. *)
-      let _ =
-        sig_type_to_typ_with_scope_ctx ctx scope_tvars tvar_names narrowed_type
-      in
-      Types.Prim.bool
-
-(** Convert a signature parameter to a core parameter with scope type variables
-*)
-and sig_param_to_param_with_scope_ctx (ctx : type_context)
-    (scope_tvars : (string * Types.typ) list) (tvar_names : string list)
-    (p : sig_param) : Types.param =
-  match p with
-  | SPPositional (_, ty) ->
-      Types.PPositional
-        (sig_type_to_typ_with_scope_ctx ctx scope_tvars tvar_names ty)
-  | SPOptional (_, ty) ->
-      Types.POptional
-        (sig_type_to_typ_with_scope_ctx ctx scope_tvars tvar_names ty)
-  | SPRest ty ->
-      Types.PRest (sig_type_to_typ_with_scope_ctx ctx scope_tvars tvar_names ty)
-  | SPKey (name, ty) ->
-      Types.PKey
-        (name, sig_type_to_typ_with_scope_ctx ctx scope_tvars tvar_names ty)
+    For type-scope blocks, scope type variables are shared across all
+    declarations in the scope via the [~scope_tvars] parameter of
+    {!sig_type_to_typ_with_ctx}. *)
 
 (** {1 Declaration Loading}
 
@@ -973,11 +852,11 @@ let load_defun_with_scope (ctx : type_context)
   (* Build params and return type, recognizing scope tvars as type variables *)
   let params =
     List.map
-      (sig_param_to_param_with_scope_ctx ctx scope_tvars fn_tvar_names)
+      (sig_param_to_param_with_ctx ~scope_tvars ctx fn_tvar_names)
       d.defun_params
   in
   let ret =
-    sig_type_to_typ_with_scope_ctx ctx scope_tvars fn_tvar_names d.defun_return
+    sig_type_to_typ_with_ctx ~scope_tvars ctx fn_tvar_names d.defun_return
   in
   let arrow = Types.TArrow (params, ret) in
   if all_tvar_names = [] then Type_env.Mono arrow
