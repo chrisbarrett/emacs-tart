@@ -647,34 +647,24 @@ let rec sig_type_to_typ_with_ctx ?(scope_tvars : (string * Types.typ) list = [])
              (map {name string & r}) expands to (Map {name string & r})
              This preserves field names for static key lookup while maintaining
              structural compatibility with homogeneous map types. *)
+              let expand_map_row name arg_typ =
+                match name with
+                | "alist" ->
+                    Some
+                      (Types.list_of (Types.pair_of Types.Prim.symbol arg_typ))
+                | "plist" ->
+                    Some
+                      (Types.list_of (TUnion [ Types.Prim.keyword; arg_typ ]))
+                | "hash-table" ->
+                    Some (Types.hash_table_of Types.Prim.symbol arg_typ)
+                | "map" -> Some (Types.map_of arg_typ)
+                | _ -> None
+              in
               match (name, args) with
-              | "alist", [ single_arg ] -> (
+              | ("alist" | "plist" | "hash-table" | "map"), [ single_arg ] -> (
                   let arg_typ = convert tvar_names single_arg in
-                  match Types.repr arg_typ with
-                  | TRow _ ->
-                      Types.list_of (Types.pair_of Types.Prim.symbol arg_typ)
-                  | _ ->
-                      Types.TApp
-                        (Types.TCon (canonicalize_type_name name), [ arg_typ ]))
-              | "plist", [ single_arg ] -> (
-                  let arg_typ = convert tvar_names single_arg in
-                  match Types.repr arg_typ with
-                  | TRow _ ->
-                      Types.list_of (TUnion [ Types.Prim.keyword; arg_typ ])
-                  | _ ->
-                      Types.TApp
-                        (Types.TCon (canonicalize_type_name name), [ arg_typ ]))
-              | "hash-table", [ single_arg ] -> (
-                  let arg_typ = convert tvar_names single_arg in
-                  match Types.repr arg_typ with
-                  | TRow _ -> Types.hash_table_of Types.Prim.symbol arg_typ
-                  | _ ->
-                      Types.TApp
-                        (Types.TCon (canonicalize_type_name name), [ arg_typ ]))
-              | "map", [ single_arg ] -> (
-                  let arg_typ = convert tvar_names single_arg in
-                  match Types.repr arg_typ with
-                  | TRow _ -> Types.map_of arg_typ
+                  match (Types.repr arg_typ, expand_map_row name arg_typ) with
+                  | TRow _, Some expanded -> expanded
                   | _ ->
                       Types.TApp
                         (Types.TCon (canonicalize_type_name name), [ arg_typ ]))
