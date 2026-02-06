@@ -177,6 +177,14 @@ let rec infer (env : Env.t) (sexp : Syntax.Sexp.t) : result =
         :: rest_args,
         span ) ->
       infer_plist_get_row env (":" ^ key_name) plist_expr rest_args span
+  (* === map-elt with literal symbol key: row-typed inference (Spec 11 R12) === *)
+  | List
+      ( Symbol ("map-elt", _)
+        :: map_expr
+        :: List ([ Symbol ("quote", _); Symbol (key_name, _) ], _)
+        :: rest_args,
+        span ) ->
+      infer_map_elt_row env key_name map_expr rest_args span
   (* === eq/eql with disjointness checking (Spec 11 R14) === *)
   | List ([ Symbol ((("eq" | "eql") as fn_name), _); arg1; arg2 ], span) ->
       infer_eq_with_disjointness env fn_name arg1 arg2 span
@@ -1472,6 +1480,98 @@ and infer_plist_get_row env key_name plist_expr rest_args _span =
 
   { ty = result_ty; constraints = all_constraints; undefineds = all_undefineds }
 
+(** Try to extract a row type from a map supertype: [(Map TRow)].
+
+    Returns [Some row] if the type is a row-typed map, [None] otherwise. *)
+and extract_map_row ty =
+  let map_name = intrinsic "Map" in
+  match repr ty with
+  | TApp (map_con, [ value_ty ]) when equal (repr map_con) (TCon map_name) -> (
+      match repr value_ty with TRow row -> Some row | _ -> None)
+  | _ -> None
+
+(** Infer a row-typed map-elt call with a literal symbol key.
+
+    [(map-elt MAP 'KEY &optional DEFAULT)]
+
+    Implements the same decision table as alist-get/plist-get:
+
+    - Cases 1–2: literal key found in row → return [field_type] (no nil)
+    - Cases 3–4: literal key absent from closed row → return [nil] or default
+    - Case 5: literal key absent from open row → return [(α | nil)]
+
+    When the map's type is not yet known (fresh type variable), infers a row
+    type from field access: constrains the map to an open row containing the key
+    and returns [field_ty] directly (the constraint guarantees presence). *)
+and infer_map_elt_row env key_name map_expr rest_args _span =
+  (* Infer the map expression *)
+  let map_result = infer env map_expr in
+
+  (* Infer remaining optional args (DEFAULT) *)
+  let rest_results = List.map (infer env) rest_args in
+
+  (* Check if the map already has a known row type (from annotation) *)
+  let result_ty, map_constraint =
+    match extract_map_row map_result.ty with
+    | Some row -> (
+        match row_lookup row key_name with
+        | Some field_ty ->
+            (* Cases 1–2: key is in the row → return field_type directly *)
+            (field_ty, None)
+        | None -> (
+            match row.row_var with
+            | None ->
+                (* Cases 3–4: key absent from closed row → return nil or default *)
+                let result_ty =
+                  match rest_args with
+                  | _default_expr :: _ ->
+                      (* Case 4: DEFAULT provided → return default's type *)
+                      (List.hd rest_results).ty
+                  | [] ->
+                      (* Case 3: no default → return nil *)
+                      Prim.nil
+                in
+                (result_ty, None)
+            | Some _ ->
+                (* Case 5: key absent from open row → constrain and return
+                   (α | nil) *)
+                let field_ty = fresh_tvar (Env.current_level env) in
+                let row_var = fresh_tvar (Env.current_level env) in
+                let expected_row = open_row [ (key_name, field_ty) ] row_var in
+                let expected_map_ty = map_of expected_row in
+                let c =
+                  C.equal expected_map_ty map_result.ty
+                    (Syntax.Sexp.span_of map_expr)
+                in
+                (option_of field_ty, Some c)))
+    | None ->
+        (* Type not yet known — infer row from field access.
+           We constrain the map to have an open row containing this key,
+           so the key is provably present. Return field_ty directly. *)
+        let field_ty = fresh_tvar (Env.current_level env) in
+        let row_var = fresh_tvar (Env.current_level env) in
+        let expected_row = open_row [ (key_name, field_ty) ] row_var in
+        let expected_map_ty = map_of expected_row in
+        let c =
+          C.equal expected_map_ty map_result.ty (Syntax.Sexp.span_of map_expr)
+        in
+        (field_ty, Some c)
+  in
+
+  (* Combine constraints *)
+  let rest_constraints = combine_results rest_results in
+  let base_constraints =
+    match map_constraint with
+    | Some c -> C.add c rest_constraints
+    | None -> rest_constraints
+  in
+  let all_constraints = C.combine map_result.constraints base_constraints in
+  let all_undefineds =
+    map_result.undefineds @ combine_undefineds rest_results
+  in
+
+  { ty = result_ty; constraints = all_constraints; undefineds = all_undefineds }
+
 (** Extract (declare (tart TYPE)) from a defun body.
 
     Returns [(Some type_sexp, remaining_body)] if a tart declaration is found,
@@ -1490,9 +1590,35 @@ and extract_tart_declare (body : Syntax.Sexp.t list) :
       let type_sexp =
         match type_parts with
         | [ single ] -> single
-        | _ ->
-            (* Multiple parts - wrap in a list to form a type expression *)
-            List (type_parts, Loc.dummy_span)
+        | _ -> (
+            (* Multiple parts: typically [vars] (params -> return).
+               The arrow and return type are inside the last list element.
+               We split the arrow out so the parser sees [vars] (params) -> return
+               at the top level. *)
+            let rev = List.rev type_parts in
+            match rev with
+            | List (inner, sp) :: prefix -> (
+                (* Split inner at -> *)
+                let rec find_arrow before = function
+                  | [] -> None
+                  | (Symbol ("->", _) as arrow) :: after ->
+                      Some (List.rev before, arrow, after)
+                  | x :: rest -> find_arrow (x :: before) rest
+                in
+                match find_arrow [] inner with
+                | Some (params_before, arrow, return_after) ->
+                    (* Rebuild as: prefix... (params_before) -> return_after *)
+                    let params_list = List (params_before, sp) in
+                    List
+                      ( List.rev_append prefix
+                          (params_list :: arrow :: return_after),
+                        Loc.dummy_span )
+                | None ->
+                    (* No arrow found — wrap as before *)
+                    List (type_parts, Loc.dummy_span))
+            | _ ->
+                (* Fallback: wrap as before *)
+                List (type_parts, Loc.dummy_span))
       in
       (Some type_sexp, rest)
   | _ -> (None, body)

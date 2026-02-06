@@ -168,6 +168,10 @@ val pair_of : typ -> typ -> typ
 val hash_table_of : typ -> typ -> typ
 (** [hash_table_of k v] creates [(HashTable k v)]. *)
 
+val map_of : typ -> typ
+(** [map_of row] creates [(Map row)]. Used as a supertype of alist, plist, and
+    hash-table. *)
+
 val is_any : typ -> bool
 (** Check if a type is the "any" type (truthy | nil). Used in unification to
     maintain top-type semantics. *)

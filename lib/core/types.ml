@@ -132,6 +132,7 @@ let intrinsic_display_name base_name =
   match base_name with
   | "HashTable" -> "hash-table"
   | "Pair" -> "cons"
+  | "Map" -> "map"
   | other -> String.lowercase_ascii other
 
 (** Primitive type constants.
@@ -168,6 +169,7 @@ let vector_of elem = TApp (TCon (intrinsic "Vector"), [ elem ])
 let option_of elem = TUnion [ elem; Prim.nil ]
 let pair_of a b = TApp (TCon (intrinsic "Pair"), [ a; b ])
 let hash_table_of k v = TApp (TCon (intrinsic "HashTable"), [ k; v ])
+let map_of row = TApp (TCon (intrinsic "Map"), [ row ])
 
 (** Check if a type is the "any" type (truthy | nil). Used in unification to
     maintain top-type semantics. *)

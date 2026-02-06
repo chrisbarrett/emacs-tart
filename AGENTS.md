@@ -1,13 +1,22 @@
 tart: `Bash(command="./tart $args")`
 
+typechecking Elisp: `Bash(command="./tart check --emacs-version 31.0 $FILE")`
+
 build: `Bash(command="nix develop --command dune build 2>&1")`
 
-## Style guidelines
+**Validation = Implementation.** "Validating" signatures IS coding:
+
+## Key files
+
+- `lib/tart.mli` - library interface
+- `lib/core/types.mli` - type checker's typedefs
+
+## OCaml Style
 
 Write `.mli` for every `lib/**/*.ml`. Docstrings ok; no redundant comments.
 
 Write a `match` arm for every constructor of the scrutinee--avoids fallthrough
-bugs; type checking shows where updates are required as data types are modified.
+bugs; type-checking shows locations to update.
 
 # Testing
 
@@ -26,10 +35,6 @@ OCaml layer defines minimal intrinsics; everything else bootstraps in user-land.
 Primitives without special type-checker support → opaque types.
 
 `(include)` de-duplicates across emacs versions.
-
-## Terminology
-
-**Validation = Implementation.** "Validating" signatures IS coding:
 
 1. `./tart check` against `.el` files
 2. Fix `.tart` signatures from errors

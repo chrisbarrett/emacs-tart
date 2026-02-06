@@ -69,6 +69,11 @@
 ;; For homogeneous plists: (plist keyword string)
 (type plist [k v] (list (k | v)))
 
+;; Map - generic map supertype (alist, plist, or hash-table)
+;; For row-typed maps: (map {name string & r})
+;; Subtypes: alist, plist, hash-table all unify with map
+(type map [r] (%tart-intrinsic%Map r))
+
 ;; -----------------------------------------------------------------------------
 ;; Derived types (built on intrinsics)
 ;; -----------------------------------------------------------------------------

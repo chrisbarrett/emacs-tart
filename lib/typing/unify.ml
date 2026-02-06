@@ -114,6 +114,66 @@ type internal_error =
 
 type 'a internal_result = ('a, internal_error) Result.t
 
+let map_con_name = intrinsic "Map"
+
+(** Check if a type is a map supertype: [TApp(Map, [_])]. *)
+let is_map ty =
+  match repr ty with
+  | TApp (con, [ _ ]) -> (
+      match repr con with TCon n -> n = map_con_name | _ -> false)
+  | _ -> false
+
+(** Extract the row argument from a map type: [TApp(Map, [row])] → [Some row].
+*)
+let extract_map_row_arg ty =
+  match repr ty with
+  | TApp (con, [ row_arg ]) -> (
+      match repr con with
+      | TCon n when n = map_con_name -> Some row_arg
+      | _ -> None)
+  | _ -> None
+
+(** Extract the row type from a concrete map form.
+
+    Recognises expanded alist, plist, and hash-table structures:
+    - alist: [(list (cons symbol TRow))] → [TRow]
+    - plist: [(list (keyword | TRow))] → [TRow]
+    - hash-table: [(HashTable symbol TRow)] → [TRow] *)
+let extract_concrete_map_row ty =
+  let list_name = intrinsic "List" in
+  let pair_name = intrinsic "Pair" in
+  let keyword_name = intrinsic "Keyword" in
+  let hash_name = intrinsic "HashTable" in
+  match repr ty with
+  (* alist: (list (cons symbol TRow)) *)
+  | TApp (list_con, [ TApp (pair_con, [ _key_ty; value_ty ]) ])
+    when (match repr list_con with TCon n -> n = list_name | _ -> false)
+         && match repr pair_con with TCon n -> n = pair_name | _ -> false -> (
+      match repr value_ty with TRow _ -> Some value_ty | _ -> None)
+  (* plist: (list (keyword | TRow)) *)
+  | TApp (list_con, [ union_ty ])
+    when match repr list_con with TCon n -> n = list_name | _ -> false -> (
+      match repr union_ty with
+      | TUnion members ->
+          let has_keyword =
+            List.exists
+              (fun m ->
+                match repr m with TCon n -> n = keyword_name | _ -> false)
+              members
+          in
+          let row_member =
+            List.find_map
+              (fun m -> match repr m with TRow _ -> Some m | _ -> None)
+              members
+          in
+          if has_keyword then row_member else None
+      | _ -> None)
+  (* hash-table: (HashTable symbol TRow) *)
+  | TApp (ht_con, [ _key_ty; value_ty ])
+    when match repr ht_con with TCon n -> n = hash_name | _ -> false -> (
+      match repr value_ty with TRow _ -> Some value_ty | _ -> None)
+  | _ -> None
+
 (** Unify two types.
 
     This is the core unification algorithm. It follows links and handles each
@@ -170,9 +230,29 @@ let rec unify ?(invariant = false) t1 t2 loc : unit internal_result =
     (* Type applications: constructor and args must match.
        For HK types, the constructor may be a type variable that unifies
        with a concrete constructor. Arguments are unified with invariant=true
-       to enforce invariance. *)
+       to enforce invariance.
+
+       Map supertype subtyping (Spec 11 R12): when one side is a map type
+       and the other is a concrete map form (alist, plist, hash-table),
+       extract the row from the concrete form and unify with the map's row.
+       This must be checked before normal TApp unification because the
+       constructors differ (Map vs List/HashTable). *)
     | TApp (c1, args1), TApp (c2, args2) ->
-        if List.length args1 <> List.length args2 then
+        if is_map t1 || is_map t2 then
+          let map_ty, other = if is_map t1 then (t1, t2) else (t2, t1) in
+          match
+            (extract_map_row_arg map_ty, extract_concrete_map_row other)
+          with
+          | Some map_r, Some concrete_r -> unify ~invariant map_r concrete_r loc
+          | _ ->
+              (* Not a map subtyping situation — fall through to normal TApp *)
+              if List.length args1 <> List.length args2 then
+                Error
+                  (IArityMismatch (List.length args1, List.length args2, loc))
+              else
+                let* () = unify ~invariant c1 c2 loc in
+                unify_list ~invariant:true args1 args2 loc
+        else if List.length args1 <> List.length args2 then
           Error (IArityMismatch (List.length args1, List.length args2, loc))
         else
           (* Unify constructors first (enables HK instantiation) *)
@@ -247,6 +327,18 @@ let rec unify ?(invariant = false) t1 t2 loc : unit internal_result =
         match r.row_var with
         | None -> Ok ()
         | Some rv -> unify ~invariant t rv loc)
+    (* Map supertype subtyping (Spec 11 R12):
+       (map {row}) is a supertype of alist, plist, and hash-table.
+       When unifying a concrete map form with (Map row), extract the row
+       from the concrete form and unify it with the map's row. *)
+    | _ when is_map t1 || is_map t2 -> (
+        let map_row, other = if is_map t1 then (t1, t2) else (t2, t1) in
+        match extract_map_row_arg map_row with
+        | Some map_r -> (
+            match extract_concrete_map_row other with
+            | Some concrete_r -> unify ~invariant map_r concrete_r loc
+            | None -> Error (ITypeMismatch (t1, t2, loc)))
+        | None -> Error (ITypeMismatch (t1, t2, loc)))
     (* All other combinations are type mismatches *)
     | _ -> Error (ITypeMismatch (t1, t2, loc))
 

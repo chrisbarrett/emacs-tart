@@ -1,0 +1,13 @@
+;; Type signatures for Emacs map.el
+;;
+;; Source: emacs/lisp/emacs-lisp/map.el
+;; Emacs version: 31.0
+;;
+;; Generic map operations for alists, plists, and hash-tables.
+
+;; ===========================================================================
+;; Element access
+;; ===========================================================================
+
+;; (map-elt MAP KEY &optional DEFAULT) - look up KEY in MAP
+(defun map-elt [v] ((map v) any &optional v) -> (v | nil))

@@ -638,6 +638,7 @@ let rec sig_type_to_typ_with_ctx (ctx : type_context) (tvar_names : string list)
              (alist {name string & r}) expands to (list (cons symbol {name string & r}))
              (plist {:name string & r}) expands to (list (keyword | {name string & r}))
              (hash-table {name string & r}) expands to (HashTable symbol {name string & r})
+             (map {name string & r}) expands to (Map {name string & r})
              This preserves field names for static key lookup while maintaining
              structural compatibility with homogeneous map types. *)
           match (name, args) with
@@ -666,6 +667,15 @@ let rec sig_type_to_typ_with_ctx (ctx : type_context) (tvar_names : string list)
               in
               match Types.repr arg_typ with
               | TRow _ -> Types.hash_table_of Types.Prim.symbol arg_typ
+              | _ ->
+                  Types.TApp
+                    (Types.TCon (canonicalize_type_name name), [ arg_typ ]))
+          | "map", [ single_arg ] -> (
+              let arg_typ =
+                sig_type_to_typ_with_ctx ctx tvar_names single_arg
+              in
+              match Types.repr arg_typ with
+              | TRow _ -> Types.map_of arg_typ
               | _ ->
                   Types.TApp
                     (Types.TCon (canonicalize_type_name name), [ arg_typ ]))
