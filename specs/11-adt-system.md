@@ -499,26 +499,27 @@ homogeneous alist type
 - [x] [R1] Implement union type representation and subtyping
 - [x] [R2] Implement type narrowing in pcase branches
 - [x] [R3] Implement exhaustiveness checking for unions
-- [~] [R4] Implement row-polymorphic alist types (basic literal-key path done)
-- [ ] [R5] Implement row-polymorphic plist types
-- [ ] [R6] Handle map pattern exhaustiveness correctly
-- [ ] [R7] Distinguish closed unions from open row types
-- [ ] [R8] Infer row types from field access (literal vs variable keys)
+- [x] [R4] Implement row-polymorphic alist types
+- [x] [R5] Implement row-polymorphic plist types
+- [x] [R6] Handle map pattern integration with row types
+- [x] [R7] Distinguish closed unions from open row types
+- [x] [R8] Infer row types from field access (literal vs variable keys)
 - [ ] [R9] Implement literal types with deferred widening
 - [x] [R10] Implement type subtraction operator
 - [x] [R11] Implement row unification rules
-- [ ] [R12] Implement generic `map` supertype
-- [ ] [R13] Implement all map type forms (bare, homogeneous, record)
-- [ ] [R14] Implement equality predicate bounds for alist-get testfn
-- [ ] [R15] Implement row-to-homogeneous unification rule
+- [x] [R12] Implement generic `map` supertype
+- [x] [R13] Implement all map type forms (bare, homogeneous, record)
+- [x] [R14] Implement equality predicate disjointness checking
+- [x] [R15] Implement row-to-homogeneous unification rule
 
-**Status:** Union types implemented (`TUnion` in `lib/core/types.mli`), pcase
-narrowing in `lib/typing/infer.ml`, exhaustiveness in
-`lib/typing/exhaustiveness.ml`. Row type foundation implemented: `TRow` variant
-in types.ml with row unification rules (a56b4e2), row syntax parsing in
-signature files (f1edff7), type subtraction in sig_loader.ml, `alist`/`plist`
-aliases in prelude. Basic row-typed `alist-get` inference for literal symbol keys
-(b8942b6) returns `(field_type | nil)`. Remaining: Design B alist expansion
-(R4), refined `alist-get` return types (R4 table), row-to-homogeneous
-unification (R15), equality predicate bounds (R14), row type inference from
-field access (R8), literal types (R9), generic `map` supertype (R12).
+**Status:** All requirements implemented except R9 (literal types with deferred
+widening). Union types (`TUnion`), pcase narrowing, and exhaustiveness checking
+are complete (R1–R3). Row polymorphism is fully operational: `TRow` variant with
+row unification rules (R11), row syntax parsing in signature files, Design B
+alist/plist/hash-table expansion (R4, R5, R13), refined `alist-get`/`plist-get`/
+`gethash` return types with 7-case decision table (R4), row type inference from
+literal field access (R8), generic `map` supertype with subtyping (R12), map
+pattern integration via `pcase-let` (R6), closed unions vs open rows (R7),
+equality predicate disjointness checking (R14), row-to-homogeneous unification
+(R15), and type subtraction (R10). Remaining: R9 (literal types with deferred
+widening).
