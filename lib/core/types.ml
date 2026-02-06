@@ -251,6 +251,7 @@ let rec to_string ty =
   | TForall (vars, body) ->
       Printf.sprintf "(forall (%s) %s)" (String.concat " " vars)
         (to_string body)
+  | TUnion [] -> "(Or)"
   | TUnion types ->
       Printf.sprintf "(Or %s)" (String.concat " " (List.map to_string types))
   | TTuple types ->

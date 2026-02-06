@@ -30,16 +30,33 @@ type condition_analysis =
 
 (** Narrow a type by intersecting with a target type.
 
-    For now, we use a simple approach: if the target is more specific than the
-    original, return the target; otherwise return the original.
-
-    Future: Implement proper type intersection. *)
+    Computes the intersection of [original] and [target]:
+    - [any ∩ T] → [T]
+    - [T ∩ T] → [T]
+    - [(A | B | C) ∩ T] → members of the union that overlap with [T]
+    - [T ∩ truthy] → [T] when [T] is truthy (filters out nil)
+    - Fallback → [target] (conservative but sound) *)
 let narrow_type (original : typ) (target : typ) : typ =
-  (* Simple approach: just use the target type.
-     This works when the predicate's narrowed type is a subtype of the original.
-     A proper implementation would compute the intersection. *)
-  ignore original;
-  target
+  let original = repr original in
+  let target = repr target in
+  (* any ∩ T = T *)
+  if is_any original then target (* T ∩ T = T *)
+  else if equal original target then original
+  else
+    match original with
+    | TUnion members -> (
+        (* Filter union members to those that overlap with target *)
+        let overlapping =
+          List.filter (fun m -> not (Unify.types_disjoint m target)) members
+        in
+        match overlapping with
+        | [] -> TUnion []
+        | [ single ] -> single
+        | _ -> TUnion overlapping)
+    | _ ->
+        (* Non-union original: if not disjoint with target, keep original;
+           otherwise return target as conservative fallback *)
+        if not (Unify.types_disjoint original target) then original else target
 
 (** Subtract a type from another type. Delegates to [Core.Types.subtract_type].
 *)

@@ -64,6 +64,7 @@ module Type_env = Core.Type_env
 module Constraint = Typing.Constraint
 module Infer = Typing.Infer
 module Unify = Typing.Unify
+module Narrow = Typing.Narrow
 module Generalize = Typing.Generalize
 module Check = Typing.Check
 module Module_check = Typing.Module_check

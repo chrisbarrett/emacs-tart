@@ -19,8 +19,14 @@ type condition_analysis =
   | NoPredicate  (** No narrowing applicable *)
 
 val narrow_type : typ -> typ -> typ
-(** [narrow_type original target] intersects [original] with [target]. Returns
-    the narrowed type. *)
+(** [narrow_type original target] intersects [original] with [target].
+
+    For unions, filters members to those that overlap with [target]:
+    - [(string | int | nil) ∩ string] → [string]
+    - [(string | nil) ∩ truthy] → [string]
+    - [any ∩ T] → [T]
+
+    For non-union types, returns [original] when it overlaps with [target]. *)
 
 val subtract_type : typ -> typ -> typ
 (** [subtract_type original subtracted] returns [original - subtracted]. For
