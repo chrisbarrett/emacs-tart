@@ -284,12 +284,13 @@ let test_resolver_with_open () =
   with_temp_dirs 1 (fun dirs ->
       match dirs with
       | [ search_dir ] -> (
-          (* Create a base module with a type alias *)
+          (* Create a base module with a type alias and its .el file *)
           write_file
             (Filename.concat search_dir "base-types.tart")
             {|
           (type int-list (list int))
         |};
+          write_file (Filename.concat search_dir "base-types.el") "";
           (* Create a module that opens base-types *)
           write_file
             (Filename.concat search_dir "consumer.tart")

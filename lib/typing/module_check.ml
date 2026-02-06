@@ -226,11 +226,12 @@ let load_sibling_signature ~(config : config) (el_path : string) :
   match Search.parse_signature_file tart_path with
   | Some sig_ast -> (
       let resolver = Search.make_resolver ~el_path config.search_path in
+      let has_el_file = Search.make_has_el_file ~el_path config.search_path in
       let base_env = Builtin_types.initial_env () in
       let prelude_ctx = Sig.Prelude.prelude_type_context () in
       match
-        Loader.load_signature_with_resolver ~prelude_ctx ~resolver base_env
-          sig_ast
+        Loader.load_signature_with_resolver ~prelude_ctx ~has_el_file ~resolver
+          base_env sig_ast
       with
       | Ok env -> Some (env, sig_ast)
       | Error _ -> None)

@@ -1965,6 +1965,131 @@ let test_let_validation_unbound () =
   in
   expect_error_containing "Unbound type variable" src
 
+(** {1 Auxiliary File Tests (R19)}
+
+    Tests for the rule that auxiliary .tart files (no corresponding .el) can be
+    included but not opened. *)
+
+(** Helper that returns the result directly, for testing with has_el_file *)
+let load_sig_str_with_el_check_result ?(env = Type_env.empty) ~resolver
+    ~has_el_file s =
+  let sig_file = parse_sig_str_no_validate s in
+  let prelude_ctx = Prelude.prelude_type_context () in
+  let prelude_type_names = Prelude.prelude_type_names in
+  Sig_loader.load_signature_with_resolver ~prelude_ctx ~prelude_type_names
+    ~has_el_file ~resolver env sig_file
+
+(** Test that opening an auxiliary module (no .el) produces an error *)
+let test_auxiliary_open_error () =
+  let aux_sig =
+    parse_sig_str ~module_name:"my-common-types"
+      {|
+    (type tagged-list [a] (cons symbol (list a)))
+  |}
+  in
+  let resolver name = if name = "my-common-types" then Some aux_sig else None in
+  (* has_el_file returns false for the auxiliary module *)
+  let has_el_file name = name <> "my-common-types" in
+  match
+    load_sig_str_with_el_check_result ~resolver ~has_el_file
+      {|
+    (open 'my-common-types)
+    (defun foo (int) -> int)
+  |}
+  with
+  | Ok _ -> Alcotest.fail "Expected error for opening auxiliary module"
+  | Error e ->
+      Alcotest.(check bool)
+        "error mentions cannot open auxiliary" true
+        (try
+           let _ =
+             Str.search_forward
+               (Str.regexp_string "cannot open auxiliary module")
+               e.message 0
+           in
+           true
+         with Not_found -> false);
+      Alcotest.(check bool)
+        "error mentions use include" true
+        (try
+           let _ =
+             Str.search_forward (Str.regexp_string "use include") e.message 0
+           in
+           true
+         with Not_found -> false)
+
+(** Test that including an auxiliary module (no .el) works fine *)
+let test_auxiliary_include_ok () =
+  let aux_sig =
+    parse_sig_str ~module_name:"my-common-types"
+      {|
+    (type tagged-list [a] (cons symbol (list a)))
+  |}
+  in
+  let resolver name = if name = "my-common-types" then Some aux_sig else None in
+  (* has_el_file returns false for the auxiliary module *)
+  let has_el_file name = name <> "my-common-types" in
+  match
+    load_sig_str_with_el_check_result ~resolver ~has_el_file
+      {|
+    (include 'my-common-types)
+    (defun foo ((tagged-list int)) -> int)
+  |}
+  with
+  | Ok env -> (
+      (* tagged-list should be available via include *)
+      match Type_env.lookup "foo" env with
+      | None -> Alcotest.fail "foo not found after include"
+      | Some _ -> ())
+  | Error e -> Alcotest.fail ("Unexpected error: " ^ e.message)
+
+(** Test that opening a module with .el file works fine *)
+let test_open_with_el_ok () =
+  let seq_sig =
+    parse_sig_str ~module_name:"seq" {|
+    (type seq [a] (list a))
+  |}
+  in
+  let resolver name = if name = "seq" then Some seq_sig else None in
+  (* has_el_file returns true for seq (it has a .el) *)
+  let has_el_file _name = true in
+  match
+    load_sig_str_with_el_check_result ~resolver ~has_el_file
+      {|
+    (open 'seq)
+    (defun foo ((seq int)) -> int)
+  |}
+  with
+  | Ok _env -> () (* No error means it works *)
+  | Error e -> Alcotest.fail ("Unexpected error: " ^ e.message)
+
+(** Test that the error message includes the module name *)
+let test_auxiliary_error_has_module_name () =
+  let aux_sig =
+    parse_sig_str ~module_name:"shared-types"
+      {|
+    (type my-result [a e] (a | e))
+  |}
+  in
+  let resolver name = if name = "shared-types" then Some aux_sig else None in
+  let has_el_file name = name <> "shared-types" in
+  match
+    load_sig_str_with_el_check_result ~resolver ~has_el_file
+      {|
+    (open 'shared-types)
+  |}
+  with
+  | Ok _ -> Alcotest.fail "Expected error for opening auxiliary module"
+  | Error e ->
+      Alcotest.(check bool)
+        "error contains module name 'shared-types'" true
+        (try
+           let _ =
+             Str.search_forward (Str.regexp_string "'shared-types'") e.message 0
+           in
+           true
+         with Not_found -> false)
+
 let () =
   Alcotest.run "sig_loader"
     [
@@ -2190,5 +2315,15 @@ let () =
           Alcotest.test_case "end-to-end" `Quick test_let_end_to_end;
           Alcotest.test_case "validation unbound" `Quick
             test_let_validation_unbound;
+        ] );
+      ( "auxiliary-files",
+        [
+          Alcotest.test_case "open auxiliary errors" `Quick
+            test_auxiliary_open_error;
+          Alcotest.test_case "include auxiliary ok" `Quick
+            test_auxiliary_include_ok;
+          Alcotest.test_case "open with el ok" `Quick test_open_with_el_ok;
+          Alcotest.test_case "error has module name" `Quick
+            test_auxiliary_error_has_module_name;
         ] );
     ]

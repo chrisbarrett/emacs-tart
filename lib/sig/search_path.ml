@@ -311,6 +311,55 @@ let make_resolver ?(el_path : string option) (search_path : t) :
   in
   match tart_path with Some path -> parse_signature_file path | None -> None
 
+(** Create a has_el_file checker from a search path configuration.
+
+    Checks whether a module has a corresponding .el file, used to enforce Spec
+    07 R19: auxiliary .tart files (no .el) can be included but not opened.
+
+    - Sibling .tart files found next to the current .el → has .el (the current
+      file's directory is searched because an .el exists there)
+    - Typings and stdlib .tart files → always considered to have .el (they
+      correspond to Emacs built-in modules)
+    - Search path .tart files → check for a sibling .el file
+
+    @param el_path Optional path to the .el file being type-checked
+    @param search_path The search path configuration
+    @return A function that checks if a module has a corresponding .el file *)
+let make_has_el_file ?(el_path : string option) (search_path : t) :
+    string -> bool =
+ fun module_name ->
+  (* Step 1: Check for sibling .tart file *)
+  let sibling_path =
+    match el_path with
+    | Some path -> find_sibling path module_name
+    | None -> None
+  in
+  match sibling_path with
+  | Some _ ->
+      (* Found as sibling to the current .el file — the .el must exist *)
+      true
+  | None -> (
+      (* Step 2: Check search path directories *)
+      let rec check_search_dirs = function
+        | [] -> None
+        | dir :: rest -> (
+            match find_in_dir module_name dir with
+            | Some tart_path ->
+                (* Found in search dir — check for sibling .el *)
+                let el_path =
+                  Filename.concat
+                    (Filename.dirname tart_path)
+                    (module_name ^ ".el")
+                in
+                Some (file_exists el_path)
+            | None -> check_search_dirs rest)
+      in
+      match check_search_dirs search_path.search_dirs with
+      | Some has_el -> has_el
+      | None ->
+          (* Found in typings/stdlib or not found at all — allow open *)
+          true)
+
 (** {1 Loading Utilities} *)
 
 (** Check if a signature has open or include directives. Signatures with these
@@ -334,6 +383,7 @@ let load_module ~(search_path : t) ?(el_path : string option)
     ?(with_prelude = true) ~(env : Core.Type_env.t) (module_name : string) :
     Core.Type_env.t option =
   let resolver = make_resolver ?el_path search_path in
+  let has_el_file = make_has_el_file ?el_path search_path in
   match resolver module_name with
   | None -> None
   | Some sig_file ->
@@ -357,8 +407,8 @@ let load_module ~(search_path : t) ?(el_path : string option)
           if with_prelude then Some (Prelude.prelude_type_context ()) else None
         in
         match
-          Sig_loader.load_signature_with_resolver ?prelude_ctx ~resolver env
-            sig_file
+          Sig_loader.load_signature_with_resolver ?prelude_ctx ~has_el_file
+            ~resolver env sig_file
         with
         | Ok new_env -> Some new_env
         | Error _ -> None
@@ -375,6 +425,7 @@ let load_module_with_sig ~(search_path : t) ?(el_path : string option)
     ?(with_prelude = true) ~(env : Core.Type_env.t) (module_name : string) :
     (Core.Type_env.t * Sig_ast.signature) option =
   let resolver = make_resolver ?el_path search_path in
+  let has_el_file = make_has_el_file ?el_path search_path in
   match resolver module_name with
   | None -> None
   | Some sig_file ->
@@ -393,8 +444,8 @@ let load_module_with_sig ~(search_path : t) ?(el_path : string option)
           if with_prelude then Some (Prelude.prelude_type_context ()) else None
         in
         match
-          Sig_loader.load_signature_with_resolver ?prelude_ctx ~resolver env
-            sig_file
+          Sig_loader.load_signature_with_resolver ?prelude_ctx ~has_el_file
+            ~resolver env sig_file
         with
         | Ok new_env -> Some (new_env, sig_file)
         | Error _ -> None

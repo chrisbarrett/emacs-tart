@@ -130,6 +130,16 @@ val make_resolver : ?el_path:string -> t -> Sig_loader.module_resolver
     @param search_path The search path configuration
     @return A resolver function suitable for load_signature_with_resolver *)
 
+val make_has_el_file : ?el_path:string -> t -> string -> bool
+(** Create a has_el_file checker from a search path configuration.
+
+    Checks whether a module has a corresponding .el file, used to enforce Spec
+    07 R19: auxiliary .tart files (no .el) can be included but not opened.
+
+    @param el_path Optional path to the .el file being type-checked
+    @param search_path The search path configuration
+    @return A function that checks if a module has a corresponding .el file *)
+
 (** {1 Loading Utilities} *)
 
 val load_module :

@@ -1134,6 +1134,9 @@ type load_state = {
   ls_type_ctx : type_context;  (** Types available for use in signatures *)
   ls_env : Type_env.t;  (** Values exported by this module *)
   ls_resolver : module_resolver;  (** How to find other modules *)
+  ls_has_el_file : string -> bool;
+      (** Check if a module has a corresponding .el file. Used to enforce R19:
+          auxiliary .tart files (no .el) can be included but not opened. *)
   ls_loaded : string list;  (** Modules already loaded (cycle detection) *)
   ls_scope_tvars : (string * Types.typ) list;
       (** Type variables from enclosing type-scope blocks *)
@@ -1144,19 +1147,26 @@ type load_state = {
 }
 (** State accumulated during loading *)
 
+(** Default el_file checker: assumes all modules have .el files (permissive) *)
+let default_has_el_file : string -> bool = fun _ -> true
+
 (** Create initial load state.
 
     @param type_ctx
       Initial type context (prelude or empty). When provided, prelude type
       aliases are available for use in the signature being loaded.
+    @param has_el_file
+      Callback to check if a module has a corresponding .el file. Defaults to
+      allowing all modules.
     @param imported_types
       Initial set of imported type names (e.g., from prelude). *)
-let init_load_state ~type_ctx ~resolver ~base_env ~module_name
-    ?(imported_types = []) ?(imported_values = []) () =
+let init_load_state ~type_ctx ~resolver ?(has_el_file = default_has_el_file)
+    ~base_env ~module_name ?(imported_types = []) ?(imported_values = []) () =
   {
     ls_type_ctx = type_ctx;
     ls_env = base_env;
     ls_resolver = resolver;
+    ls_has_el_file = has_el_file;
     ls_loaded = [ module_name ];
     (* Mark self as loaded to prevent self-import *)
     ls_scope_tvars = [];
@@ -1435,17 +1445,31 @@ let check_value_not_shadowing name span state =
     signature writing.
 
     R12: "seq is available for use in type expressions" "seq is NOT re-exported
-    from my-collection" *)
-let process_open (module_name : string) (state : load_state) : load_state =
+    from my-collection"
+
+    R19: Auxiliary .tart files (no corresponding .el) cannot be opened; they
+    must be included instead. *)
+let process_open (module_name : string) (span : Loc.span) (state : load_state) :
+    load_state result =
   if List.mem module_name state.ls_loaded then
     (* Already loaded - skip to prevent cycles *)
-    state
+    Ok state
   else
+    (* R19: Check if the module has a corresponding .el file *)
+    let* () =
+      if state.ls_has_el_file module_name then Ok ()
+      else
+        error
+          (Printf.sprintf
+             "cannot open auxiliary module '%s' (no .el file); use include"
+             module_name)
+          span
+    in
     match state.ls_resolver module_name with
     | None ->
         (* Module not found - for now, silently skip.
            Later we can add proper error reporting. *)
-        state
+        Ok state
     | Some opened_sig ->
         (* Mark as loaded *)
         let state = { state with ls_loaded = module_name :: state.ls_loaded } in
@@ -1468,7 +1492,7 @@ let process_open (module_name : string) (state : load_state) : load_state =
             state opaques
         in
         (* Note: we do NOT add values to ls_env - open only imports types *)
-        state
+        Ok state
 
 (** Process an 'include' directive. Imports all declarations from another module
     and re-exports them. Both types AND values become part of this module's
@@ -1511,7 +1535,7 @@ and load_decls_into_state ?(from_include = false) (sig_file : signature)
       | Error _ as e -> e
       | Ok state -> (
           match decl with
-          | DOpen (name, _) -> Ok (process_open name state)
+          | DOpen (name, span) -> process_open name span state
           | DInclude (name, _) -> process_include name state
           | DType d ->
               (* Check shadowing if from current file *)
@@ -1667,7 +1691,7 @@ and load_scoped_decl ?(from_include = false) (sig_file : signature)
     (scope_tvars : (string * Types.typ) list) (decl : decl) (state : load_state)
     : load_state result =
   match decl with
-  | DOpen (name, _) -> Ok (process_open name state)
+  | DOpen (name, span) -> process_open name span state
   | DInclude (name, _) -> process_include name state
   | DType d ->
       (* Check shadowing if from current file *)
@@ -1838,13 +1862,13 @@ and load_let ?(from_include = false) (sig_file : signature) (d : let_decl)
     @param env Base type environment to extend
     @param sig_file The signature to load *)
 let load_signature_with_resolver ?prelude_ctx ?(prelude_type_names = [])
-    ~(resolver : module_resolver) (env : Type_env.t) (sig_file : signature) :
-    (Type_env.t, load_error) Result.t =
+    ?has_el_file ~(resolver : module_resolver) (env : Type_env.t)
+    (sig_file : signature) : (Type_env.t, load_error) Result.t =
   let type_ctx =
     match prelude_ctx with Some ctx -> ctx | None -> empty_type_context
   in
   let state =
-    init_load_state ~type_ctx ~resolver ~base_env:env
+    init_load_state ~type_ctx ~resolver ?has_el_file ~base_env:env
       ~module_name:sig_file.sig_module ~imported_types:prelude_type_names ()
   in
   let* final_state = load_decls_into_state sig_file state in

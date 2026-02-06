@@ -210,6 +210,7 @@ val no_resolver : module_resolver
 val load_signature_with_resolver :
   ?prelude_ctx:type_context ->
   ?prelude_type_names:string list ->
+  ?has_el_file:(string -> bool) ->
   resolver:module_resolver ->
   Core.Type_env.t ->
   Sig_ast.signature ->
@@ -229,6 +230,11 @@ val load_signature_with_resolver :
     @param prelude_type_names
       Optional list of prelude type names. When provided, these names cannot be
       redefined by the signature (no-shadowing rule, Spec 07 R17).
+    @param has_el_file
+      Optional callback to check if a module has a corresponding .el file. When
+      provided, {!process_open} will reject auxiliary .tart files (no .el) with
+      an error directing the user to use include instead (Spec 07 R19). Defaults
+      to allowing all modules.
     @param resolver Function to resolve module names to signatures
     @param env Base type environment to extend
     @param sig_file The signature to load *)
