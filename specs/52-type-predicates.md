@@ -182,8 +182,9 @@ Same narrowing infrastructure, different tracking:
 - [ ] Predicates in or expressions (R5)
 - [ ] Union intersection for narrowing
 - [ ] Inline-only restriction
-- [ ] Standard library declarations (blocked on Spec 54 migration)
+- [x] Standard library declarations
 
 **Status:** Narrowing infrastructure complete (`narrow.ml`, `infer.ml`).
 Declaration syntax superseded by [Spec 54](54-multi-clause-signatures.md)
-multi-clause signatures.
+multi-clause signatures. Standard library predicates migrated to
+multi-clause syntax.

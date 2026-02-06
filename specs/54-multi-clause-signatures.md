@@ -161,16 +161,16 @@ Future: at call site `(car x)` where `x : (cons int string)`, try clause 1
 
 ## Tasks
 
-- [ ] [R1] Parse multi-clause defun syntax
-- [ ] [R2] Single-clause backward compatibility
-- [ ] [R3] Parse `_`-prefixed wildcards as STInfer
-- [ ] [R4] Compute overall type from clauses
-- [ ] [R5] Derive predicate_info from clause structure
-- [ ] [R6] Verify existing narrowing tests pass
-- [ ] [R7] Remove named param syntax and STPredicate
-- [ ] [R8] Type variable binders with multi-clause
-- [ ] Migrate .tart predicate signatures
-- [ ] Update docs/reference/tart-format.md
-- [ ] Update Spec 52 status
+- [x] [R1] Parse multi-clause defun syntax
+- [x] [R2] Single-clause backward compatibility
+- [x] [R3] Parse `_`-prefixed wildcards as STInfer
+- [x] [R4] Compute overall type from clauses
+- [x] [R5] Derive predicate_info from clause structure
+- [x] [R6] Verify existing narrowing tests pass
+- [x] [R7] Remove named param syntax and STPredicate
+- [x] [R8] Type variable binders with multi-clause
+- [x] Migrate .tart predicate signatures
+- [x] Update docs/reference/tart-format.md
+- [x] Update Spec 52 status
 
-**Status:** Spec written. Implementation not started.
+**Status:** Complete.
