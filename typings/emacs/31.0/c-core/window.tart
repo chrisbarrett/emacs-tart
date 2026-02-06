@@ -10,7 +10,9 @@
 ;; ===========================================================================
 
 ;; (windowp OBJ) - test if object is a window
-(defun windowp (any) -> bool)
+(defun windowp
+  ((window) -> t)
+  ((_) -> nil))
 
 ;; (window-valid-p OBJ) - test if object is a valid window
 (defun window-valid-p (any) -> bool)

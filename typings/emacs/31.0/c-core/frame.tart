@@ -9,8 +9,10 @@
 ;; Frame predicates
 ;; ===========================================================================
 
-;; (framep OBJ) - test if object is a frame, return frame type
-(defun framep (any) -> (symbol | t | nil))
+;; (framep OBJ) - test if object is a frame
+(defun framep
+  ((frame) -> t)
+  ((_) -> nil))
 
 ;; (frame-live-p FRAME) - test if frame is live
 (defun frame-live-p (any) -> (symbol | t | nil))

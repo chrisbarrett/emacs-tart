@@ -95,7 +95,9 @@
 (defun func-arity (any) -> (cons int (int | symbol)))
 
 ;; (functionp OBJ) - test if callable
-(defun functionp (any) -> bool)
+(defun functionp
+  (((((&rest any) -> any))) -> t)
+  ((_) -> nil))
 
 ;; (commandp FN &optional FOR-CALL-INTERACTIVELY) - test if command
 (defun commandp (any &optional any) -> bool)

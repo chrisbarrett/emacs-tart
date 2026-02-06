@@ -16,46 +16,79 @@
 (defun eq [a b] (a b) -> bool)
 
 ;; (null OBJ) - test if nil
-(defun null (any) -> bool)
+(defun null
+  ((nil) -> t)
+  ((_) -> nil))
 
 ;; ===========================================================================
 ;; Type predicates - return t or nil
 ;; ===========================================================================
 
 ;; Symbol predicates
-(defun symbolp (any) -> bool)
-(defun keywordp (any) -> bool)
+(defun symbolp
+  ((symbol) -> t)
+  ((_) -> nil))
+(defun keywordp
+  ((keyword) -> t)
+  ((_) -> nil))
 (defun bare-symbol-p (any) -> bool)
 (defun symbol-with-pos-p (any) -> bool)
 
 ;; Numeric predicates
-(defun integerp (any) -> bool)
-(defun floatp (any) -> bool)
-(defun numberp (any) -> bool)
+(defun integerp
+  ((int) -> t)
+  ((_) -> nil))
+(defun floatp
+  ((float) -> t)
+  ((_) -> nil))
+(defun numberp
+  ((num) -> t)
+  ((_) -> nil))
 (defun natnump (any) -> bool)
-(defun number-or-marker-p (any) -> bool)
+(defun number-or-marker-p
+  ((num) -> t)
+  ((marker) -> t)
+  ((_) -> nil))
 (defun integer-or-marker-p (any) -> bool)
 
 ;; List/cons predicates
-(defun consp (any) -> bool)
-(defun atom (any) -> bool)
-(defun listp (any) -> bool)
+(defun consp
+  (((cons any any)) -> t)
+  ((_) -> nil))
+(defun atom
+  (((cons any any)) -> nil)
+  ((_) -> t))
+(defun listp
+  (((list any)) -> t)
+  ((_) -> nil))
 (defun nlistp (any) -> bool)
 
 ;; Sequence predicates
 (defun arrayp (any) -> bool)
-(defun vectorp (any) -> bool)
-(defun stringp (any) -> bool)
+(defun vectorp
+  (((vector any)) -> t)
+  ((_) -> nil))
+(defun stringp
+  ((string) -> t)
+  ((_) -> nil))
 (defun multibyte-string-p (any) -> bool)
 (defun char-table-p (any) -> bool)
 (defun vector-or-char-table-p (any) -> bool)
 (defun bool-vector-p (any) -> bool)
-(defun sequencep (any) -> bool)
+(defun sequencep
+  (((list any)) -> t)
+  (((vector any)) -> t)
+  ((string) -> t)
+  ((_) -> nil))
 (defun recordp (any) -> bool)
 
 ;; Other type predicates
-(defun bufferp (any) -> bool)
-(defun markerp (any) -> bool)
+(defun bufferp
+  ((buffer) -> t)
+  ((_) -> nil))
+(defun markerp
+  ((marker) -> t)
+  ((_) -> nil))
 (defun user-ptrp (any) -> bool)
 (defun char-or-string-p (any) -> bool)
 (defun subrp (any) -> bool)

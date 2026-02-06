@@ -736,8 +736,8 @@ let rec sig_type_to_typ_with_ctx ?(scope_tvars : (string * Types.typ) list = [])
       in
       Types.TRow { row_fields = fields; row_var }
   | STInfer (_, _) ->
-      (* Infer placeholder becomes a fresh type variable *)
-      Types.fresh_tvar 0
+      (* Infer placeholder represents "any type" in signatures *)
+      Types.Prim.any
 
 (** Convert a signature parameter to a core parameter with type context *)
 and sig_param_to_param_with_ctx ?(scope_tvars : (string * Types.typ) list = [])
@@ -820,14 +820,22 @@ let union_of_types (types : Types.typ list) : Types.typ =
         match Types.repr t with Types.TUnion members -> members | _ -> [ t ])
       types
   in
-  (* Deduplicate *)
-  let unique =
-    List.fold_left
-      (fun acc t ->
-        if List.exists (fun u -> Types.equal t u) acc then acc else acc @ [ t ])
-      [] flat
+  (* If both truthy and nil are present, the union is any (top type) *)
+  let has_truthy =
+    List.exists (fun t -> Types.equal t Types.Prim.truthy) flat
   in
-  match unique with [ single ] -> single | _ -> Types.TUnion unique
+  let has_nil = List.exists (fun t -> Types.equal t Types.Prim.nil) flat in
+  if has_truthy && has_nil then Types.Prim.any
+  else
+    (* Deduplicate *)
+    let unique =
+      List.fold_left
+        (fun acc t ->
+          if List.exists (fun u -> Types.equal t u) acc then acc
+          else acc @ [ t ])
+        [] flat
+    in
+    match unique with [ single ] -> single | _ -> Types.TUnion unique
 
 (** Build a union param from params at the same position across clauses. *)
 let union_of_params (params : Types.param list) : Types.param =

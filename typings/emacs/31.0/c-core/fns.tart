@@ -244,7 +244,9 @@
 (defun make-hash-table (&rest any) -> (hash-table any any))
 
 ;; (hash-table-p OBJ) - test if hash table
-(defun hash-table-p (any) -> bool)
+(defun hash-table-p
+  (((hash-table any any)) -> t)
+  ((_) -> nil))
 
 ;; (gethash KEY TABLE &optional DEFAULT) - get value
 (defun gethash [k v] (k (hash-table k v) &optional (v | nil)) -> (v | nil))

@@ -10,7 +10,9 @@
 ;; ===========================================================================
 
 ;; (processp OBJ) - test if object is a process
-(defun processp (any) -> bool)
+(defun processp
+  ((process) -> t)
+  ((_) -> nil))
 
 ;; ===========================================================================
 ;; Process lookup

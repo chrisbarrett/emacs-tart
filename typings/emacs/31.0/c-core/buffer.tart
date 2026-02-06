@@ -215,4 +215,6 @@
 (defun overlay-put (overlay symbol any) -> any)
 
 ;; (overlayp OBJ) - test if object is overlay
-(defun overlayp (any) -> bool)
+(defun overlayp
+  ((overlay) -> t)
+  ((_) -> nil))
