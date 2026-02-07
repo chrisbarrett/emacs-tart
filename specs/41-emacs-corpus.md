@@ -149,14 +149,18 @@ git checkout <tag>
 
 ## Tasks
 
-- [ ] [R3-4] XDG path resolution
-- [ ] [R1-2] Shallow clone-if-needed
-- [ ] [R5-6] Shallow tag fetch + checkout
-- [ ] [R7-8] Version auto-detection
-- [ ] [R9] `--emacs-version` option
-- [ ] [R10-11] File listing
-- [ ] [R12-13] Network error handling
-- [ ] [R14] `corpus path`
-- [ ] [R15] `corpus clean`
-- [ ] Wire CLI subcommands
-- [ ] Integration tests
+- [x] [R3-4] XDG path resolution
+- [x] [R1-2] Shallow clone-if-needed
+- [x] [R5-6] Shallow tag fetch + checkout
+- [x] [R7-8] Version auto-detection
+- [x] [R9] `--emacs-version` option
+- [x] [R10-11] File listing
+- [x] [R12-13] Network error handling
+- [x] [R14] `corpus path`
+- [x] [R15] `corpus clean`
+- [x] Wire CLI subcommands
+- [x] Unit tests
+
+## Status
+
+Complete

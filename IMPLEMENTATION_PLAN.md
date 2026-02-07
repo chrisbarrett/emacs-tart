@@ -104,18 +104,18 @@ Wire corpus operations into `tart corpus` command group.
 
 ### Task 3.1: Create test suite
 
-- [ ] Create `test/corpus/dune` and
+- [x] Create `test/corpus/dune` and
       `test/corpus/emacs_corpus_test.ml`
-- [ ] `corpus_dir`: XDG override, fallback
-- [ ] `run_git`: captures stdout/stderr
-- [ ] `detect_tag`: parses version to tag string
-- [ ] `list_el_files`: discovers .el in temp dir
-- [ ] `clean`: removes directory
-- [ ] Error types: all constructors tested
-- [ ] Build + test
+- [x] `corpus_dir`: XDG override, fallback
+- [x] `run_git`: captures stdout/stderr
+- [x] `detect_tag`: parses version to tag string
+- [x] `list_el_files`: discovers .el in temp dir
+- [x] `clean`: removes directory
+- [x] Error types: all constructors tested
+- [x] Build + test
 
 ### Task 3.2: Spec completion
 
-- [ ] Check all task boxes in specs/41-emacs-corpus.md
-- [ ] Add Status section
-- [ ] Build + test
+- [x] Check all task boxes in specs/41-emacs-corpus.md
+- [x] Add Status section
+- [x] Build + test

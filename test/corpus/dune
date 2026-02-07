@@ -1,0 +1,4 @@
+(test
+ (name emacs_corpus_test)
+ (modules emacs_corpus_test)
+ (libraries tart alcotest unix))
