@@ -27,6 +27,8 @@ type context =
   | DeclaredReturn of {
       fn_name : string;  (** Name of the function *)
       declared_type : typ;  (** Declared return type *)
+      declared_span : Syntax.Location.span;
+          (** Span of the return type declaration *)
     }  (** Function body vs declared return type *)
   | ExplicitInstantiation of {
       type_args : typ list;  (** Explicit type arguments from @type *)

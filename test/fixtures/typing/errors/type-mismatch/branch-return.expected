@@ -1,0 +1,7 @@
+FAIL
+RETURN MISMATCH
+`greeting` is declared to return:
+    int
+But the function body returns:
+    string
+`greeting` declared to return int

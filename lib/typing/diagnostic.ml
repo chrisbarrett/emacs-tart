@@ -561,15 +561,18 @@ let type_mismatch_with_context ~span ~expected ~actual ~context () =
         related;
         help = base_help;
       }
-  | Constraint.DeclaredReturn { fn_name; declared_type } ->
-      let base_help = suggest_type_fix ~expected ~actual in
+  | Constraint.DeclaredReturn { fn_name; declared_type; declared_span } ->
+      (* Swap expected/actual: unify puts body as lhs (expected) and declared
+         as rhs (actual), but for diagnostics we want expected=declared,
+         actual=body. *)
+      let base_help = suggest_type_fix ~expected:actual ~actual:expected in
       let message =
-        Printf.sprintf "function body doesn't match declared return type"
+        Printf.sprintf "`%s` body doesn't match declared return type" fn_name
       in
       let related =
         [
           {
-            span = Loc.dummy_span;
+            span = declared_span;
             message =
               Printf.sprintf "`%s` declared to return %s" fn_name
                 (Types.to_string declared_type);
@@ -581,8 +584,8 @@ let type_mismatch_with_context ~span ~expected ~actual ~context () =
         code = Some ReturnMismatch;
         span;
         message;
-        expected = Some expected;
-        actual = Some actual;
+        expected = Some actual;
+        actual = Some expected;
         related;
         help = base_help;
       }
@@ -852,8 +855,15 @@ let to_string_human (d : t) : string =
         (* Branch mismatch - check if we have related info *)
         Source_excerpt.IfBranch { is_then = true }
     | Some ReturnMismatch ->
-        (* Return mismatch - try to extract fn_name from message *)
-        Source_excerpt.DeclaredReturn { fn_name = "function" }
+        (* Extract fn_name from message format: "`name` body doesn't match..." *)
+        let fn_name =
+          try
+            let i = String.index d.message '`' + 1 in
+            let j = String.index_from d.message i '`' in
+            String.sub d.message i (j - i)
+          with _ -> "function"
+        in
+        Source_excerpt.DeclaredReturn { fn_name }
     | Some AnnotationMismatch -> Source_excerpt.TartAnnotation
     | Some TypeMismatch
     | Some InfiniteType

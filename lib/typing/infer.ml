@@ -2325,7 +2325,12 @@ and infer_defun_with_declaration (env : Env.t) (name : string)
 
   (* Add constraint: body type = declared return type *)
   let context =
-    C.DeclaredReturn { fn_name = name; declared_type = declared_return }
+    C.DeclaredReturn
+      {
+        fn_name = name;
+        declared_type = declared_return;
+        declared_span = Sig_ast.sig_type_loc return_sig_type;
+      }
   in
   let return_constraint =
     C.equal ~context body_result.ty declared_return span
