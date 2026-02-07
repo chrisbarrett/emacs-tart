@@ -353,6 +353,13 @@ let rec unify ?(invariant = false) t1 t2 loc : unit internal_result =
         if List.length ts1 <> List.length ts2 then
           Error (IArityMismatch (List.length ts1, List.length ts2, loc))
         else unify_list ~invariant ts1 ts2 loc
+    (* Tuple-to-list subtyping (Spec 34 R9):
+       TTuple [t1; t2; ...; tn] widens to (List elem) when each ti ~ elem.
+       This is one-directional: tuple <: list, but not list <: tuple. *)
+    | TTuple elems, TApp (c, [ elem ]) when is_list_con c ->
+        unify_list_to_single ~invariant elems elem loc
+    | TApp (c, [ elem ]), TTuple elems when is_list_con c ->
+        unify_list_to_single ~invariant elems elem loc
     (* Row types: field-by-field unification with row variable handling *)
     | TRow r1, TRow r2 -> unify_rows ~invariant r1 r2 loc
     (* Row-to-homogeneous unification (Spec 11 R15):
@@ -403,6 +410,17 @@ and unify_list ?(invariant = false) ts1 ts2 loc =
       let* () = acc in
       unify ~invariant t1 t2 loc)
     (Ok ()) ts1 ts2
+
+(** Unify each element of a list of types with a single target type.
+
+    Used for tuple-to-list subtyping: each element of the tuple must unify with
+    the list's element type. *)
+and unify_list_to_single ~invariant elems target loc =
+  List.fold_left
+    (fun acc elem ->
+      let* () = acc in
+      unify ~invariant target elem loc)
+    (Ok ()) elems
 
 (** Unify a flattened cons chain with a plist type [(Plist k v)].
 
