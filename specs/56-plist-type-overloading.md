@@ -289,14 +289,14 @@ derivation. For row-typed overloading, clause matching must:
 2. **Match literal values** (new: `:name` in clause vs `:name` in call)
 3. **Thread row variables through unification** ([Spec 11][] R11 already handles
    this)
-4. **Select first matching clause** (top-to-bottom order, [Spec 54])
+4. **Select first matching clause** (top-to-bottom order, [Spec 54][])
 
 Matching happens during constraint generation (`infer.ml`), not during
 unification. The infer step tries each clause in order until one succeeds.
 
 ### AST and Representation
 
-No AST changes needed. [Spec 54] already supports:
+No AST changes needed. [Spec 54][] already supports:
 
 ```ocaml
 and defun_clause = { clause_params : sig_param list;
