@@ -148,11 +148,15 @@ Detect version once at startup; use for entire session. Log detected version.
 
 ## Tasks
 
-- [ ] Emacs version detection module
-- [ ] `--emacs-version` CLI flag
-- [ ] Version fallback in search_path.ml
-- [ ] Handle missing Emacs gracefully
-- [ ] Create c-core/*.tart for 31.0
-- [ ] Multi-file c-core loading
-- [ ] Wire LSP to version detection
+- [x] Emacs version detection module
+- [x] `--emacs-version` CLI flag
+- [x] Version fallback in search_path.ml
+- [x] Handle missing Emacs gracefully
+- [x] Create c-core/*.tart for 31.0
+- [x] Multi-file c-core loading
+- [x] Wire LSP to version detection
 - [ ] Backfill 29.1, 30.1 typings
+
+## Status
+
+Complete (except backfill of older version typings)

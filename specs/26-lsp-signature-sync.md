@@ -89,10 +89,14 @@ Use Spec 27 dependency graph for:
 
 ## Tasks
 
-- [ ] Create signature_tracker module
-- [ ] Handle `.tart` in didOpen
-- [ ] Handle `.tart` in didChange → trigger dependent re-check
-- [ ] Handle `.tart` in didClose
-- [ ] Modify sig loading to check tracker first
-- [ ] Wire up form cache invalidation
-- [ ] Test: edit .tart, verify .el diagnostics update
+- [x] Create signature_tracker module
+- [x] Handle `.tart` in didOpen
+- [x] Handle `.tart` in didChange → trigger dependent re-check
+- [x] Handle `.tart` in didClose
+- [x] Modify sig loading to check tracker first
+- [x] Wire up form cache invalidation
+- [x] Test: edit .tart, verify .el diagnostics update
+
+## Status
+
+Complete

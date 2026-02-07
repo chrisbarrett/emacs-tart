@@ -173,11 +173,15 @@ let verbose_log enabled fmt =
 
 ## Tasks
 
-- [ ] Add --verbose/-v flag to emacs-coverage CLI parsing
-- [ ] Add --verbose/-v flag to coverage CLI parsing
-- [ ] Implement path resolution logging
-- [ ] Implement version detection logging
-- [ ] Implement typings loading logging
-- [ ] Implement C scanning progress logging
-- [ ] Implement match sample logging
-- [ ] Update help text for both commands
+- [x] Add --verbose/-v flag to emacs-coverage CLI parsing
+- [x] Add --verbose/-v flag to coverage CLI parsing
+- [x] Implement path resolution logging
+- [x] Implement version detection logging
+- [x] Implement typings loading logging
+- [x] Implement C scanning progress logging
+- [x] Implement match sample logging
+- [x] Update help text for both commands
+
+## Status
+
+Complete

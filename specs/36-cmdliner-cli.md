@@ -269,16 +269,20 @@ given, so `tart file.el` works as `tart check file.el`.
 
 ## Tasks
 
-- [ ] [R1] Add cmdliner dependency to bin/dune
-- [ ] [R2] Implement check subcommand with Cmdliner
-- [ ] [R3] Implement eval subcommand
-- [ ] [R4] Implement expand subcommand
-- [ ] [R5] Implement repl subcommand
-- [ ] [R6] Implement lsp subcommand
-- [ ] [R7] Implement coverage subcommand
-- [ ] [R8] Implement emacs-coverage subcommand
-- [ ] [R9-R12, R16-R18] Implement validation with structured errors
-- [ ] [R13-R14] Verify auto-generated help and version
-- [ ] [R15] Verify exit codes match current behavior
-- [ ] Remove manual argument parsing code
-- [ ] Update main.mli
+- [x] [R1] Add cmdliner dependency to bin/dune
+- [x] [R2] Implement check subcommand with Cmdliner
+- [x] [R3] Implement eval subcommand
+- [x] [R4] Implement expand subcommand
+- [x] [R5] Implement repl subcommand
+- [x] [R6] Implement lsp subcommand
+- [x] [R7] Implement coverage subcommand
+- [x] [R8] Implement emacs-coverage subcommand
+- [x] [R9-R12, R16-R18] Implement validation with structured errors
+- [x] [R13-R14] Verify auto-generated help and version
+- [x] [R15] Verify exit codes match current behavior
+- [x] Remove manual argument parsing code
+- [x] Update main.mli
+
+## Status
+
+Complete

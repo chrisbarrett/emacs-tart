@@ -234,3 +234,7 @@ include an error code from that spec.
 - [x] [R7] Map to LSP diagnostic format
 
 Run review agent after R1-R3 work (basic error formatting) before implementing R4-R6.
+
+## Status
+
+Complete (except R2: branch-specific error messages pointing to offending branch and declaration)

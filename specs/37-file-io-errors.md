@@ -210,16 +210,20 @@ has a consistent error code
 
 ## Tasks
 
-- [ ] [R9] Create `lib/errors/file_error.ml` with structured error type
-- [ ] [R10] Implement error code mapping and formatting
-- [ ] [R7] Add Levenshtein-based filename suggestions (reuse from Spec 13 if
+- [x] [R9] Create `lib/errors/file_error.ml` with structured error type
+- [x] [R10] Implement error code mapping and formatting
+- [x] [R7] Add Levenshtein-based filename suggestions (reuse from Spec 13 if
       available)
-- [ ] [R1, R8] Implement file not found with suggestions
-- [ ] [R2] Implement permission denied handling
-- [ ] [R3] Implement directory detection
-- [ ] [R6] Implement read error wrapping
-- [ ] [R4] Update `Search_path` to return structured errors for missing
+- [x] [R1, R8] Implement file not found with suggestions
+- [x] [R2] Implement permission denied handling
+- [x] [R3] Implement directory detection
+- [x] [R6] Implement read error wrapping
+- [x] [R4] Update `Search_path` to return structured errors for missing
       signatures
-- [ ] [R5] Update `bin/main.ml` expand command to use file errors
-- [ ] Update `lib/syntax/read.ml` to wrap I/O exceptions
-- [ ] Add tests for all error scenarios
+- [x] [R5] Update `bin/main.ml` expand command to use file errors
+- [x] Update `lib/syntax/read.ml` to wrap I/O exceptions
+- [x] Add tests for all error scenarios
+
+## Status
+
+Complete

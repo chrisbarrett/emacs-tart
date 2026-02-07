@@ -112,7 +112,11 @@ itself.
 
 ## Tasks
 
-- [ ] [R1-R8] Create `./tart` script at repo root
-- [ ] Make script executable
-- [ ] Test from various directories
-- [ ] Test inside and outside nix shell
+- [x] [R1-R8] Create `./tart` script at repo root
+- [x] Make script executable
+- [x] Test from various directories
+- [x] Test inside and outside nix shell
+
+## Status
+
+Complete

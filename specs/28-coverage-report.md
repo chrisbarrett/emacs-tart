@@ -269,15 +269,19 @@ Private identifiers excluded (36):
 
 ## Tasks
 
-- [ ] [R4-R8] Definition extractor for all Elisp forms
-- [ ] [R9] Private identifier detection
-- [ ] [R1,R2] Directory/file scanning
-- [ ] [R3] CLI command with alias
-- [ ] [R10] Signature matching logic
-- [ ] [R11-R13] Human-readable report format
-- [ ] [R14] Exit codes
-- [ ] [R15] JSON output format
-- [ ] [R16] Threshold flag
-- [ ] [R17] Exclude patterns
-- [ ] [R18] Verbose mode
-- [ ] Integration tests
+- [x] [R4-R8] Definition extractor for all Elisp forms
+- [x] [R9] Private identifier detection
+- [x] [R1,R2] Directory/file scanning
+- [x] [R3] CLI command with alias
+- [x] [R10] Signature matching logic
+- [x] [R11-R13] Human-readable report format
+- [x] [R14] Exit codes
+- [x] [R15] JSON output format
+- [x] [R16] Threshold flag
+- [x] [R17] Exclude patterns
+- [x] [R18] Verbose mode
+- [x] Integration tests
+
+## Status
+
+Complete

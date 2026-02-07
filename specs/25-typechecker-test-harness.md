@@ -157,9 +157,13 @@ Fixtures run in parallel for speed. No shared state between fixtures.
 
 ## Tasks
 
-- [ ] Implement `.expected` file parser
-- [ ] Implement acceptance harness
-- [ ] Create core typings fixtures (arithmetic, lists, strings, etc.)
-- [ ] Add version-specific fixtures
-- [ ] Wire into `dune test`
-- [ ] Add CI integration
+- [x] Implement `.expected` file parser
+- [x] Implement acceptance harness
+- [x] Create core typings fixtures (arithmetic, lists, strings, etc.)
+- [x] Add version-specific fixtures
+- [x] Wire into `dune test`
+- [x] Add CI integration
+
+## Status
+
+Complete

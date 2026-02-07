@@ -81,11 +81,15 @@ Report cycles as errors (`.tart`) or warnings (`.el`).
 
 ## Tasks
 
-- [ ] Graph data structures
-- [ ] Dependency extraction (.el)
-- [ ] Dependency extraction (.tart)
-- [ ] Reverse index for dependents
-- [ ] LSP integration (didOpen/didChange)
-- [ ] Invalidation cascade
-- [ ] Core typings as pseudo-module
-- [ ] Cycle detection
+- [x] Graph data structures
+- [x] Dependency extraction (.el)
+- [x] Dependency extraction (.tart)
+- [x] Reverse index for dependents
+- [x] LSP integration (didOpen/didChange)
+- [x] Invalidation cascade
+- [x] Core typings as pseudo-module
+- [x] Cycle detection
+
+## Status
+
+Complete

@@ -195,13 +195,17 @@ bin/main.ml             ; (modify) Add emacs-coverage subcommand
 
 ## Tasks
 
-- [ ] Emacs source discovery module
-- [ ] C scanner for DEFUN extraction
-- [ ] C scanner for DEFVAR extraction
-- [ ] C scanner for DEFSYM extraction
-- [ ] Private identifier filtering
-- [ ] Typings comparison logic
-- [ ] Elisp layer delegation
-- [ ] Report formatting
-- [ ] CLI subcommand wiring
-- [ ] Integration tests
+- [x] Emacs source discovery module
+- [x] C scanner for DEFUN extraction
+- [x] C scanner for DEFVAR extraction
+- [x] C scanner for DEFSYM extraction
+- [x] Private identifier filtering
+- [x] Typings comparison logic
+- [x] Elisp layer delegation
+- [x] Report formatting
+- [x] CLI subcommand wiring
+- [x] Integration tests
+
+## Status
+
+Complete

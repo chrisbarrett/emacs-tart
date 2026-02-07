@@ -246,18 +246,19 @@ my-file.el:10:1: error: function body doesn't match declared return type
 
 ## Tasks
 
-- [ ] [R8] Implement `tart` macro in tart.el (expand to form)
-- [ ] [R8] Implement `tart-type` macro in tart.el (expand to nil)
-- [ ] [R8] Implement `tart-declare` macro in tart.el (expand to nil)
-- [ ] [R1] Recognize `(declare (tart ...))` in function definitions
-- [ ] [R2] Add expression annotation recognition to checker
-- [ ] [R3,R4] Track variable types from annotations
-- [ ] [R3] Check setq/setf against declared variable types
-- [ ] [R5,R6] Implement file-local type alias scope
-- [ ] [R7] Enforce invariance for parameterized types
-- [ ] [R9] Format error messages for annotation mismatches
-- [ ] [R10] Verify inline annotations match .tart declarations
-- [ ] [R8] Write ERT tests for macro expansion
+- [x] [R8] Implement `tart` macro in tart.el (expand to form)
+- [x] [R8] Implement `tart-type` macro in tart.el (expand to nil)
+- [x] [R8] Implement `tart-declare` macro in tart.el (expand to nil)
+- [x] [R1] Recognize `(declare (tart ...))` in function definitions
+- [x] [R2] Add expression annotation recognition to checker
+- [x] [R3,R4] Track variable types from annotations
+- [x] [R3] Check setq/setf against declared variable types
+- [x] [R5,R6] Implement file-local type alias scope
+- [x] [R7] Enforce invariance for parameterized types
+- [x] [R9] Format error messages for annotation mismatches
+- [x] [R10] Verify inline annotations match .tart declarations
+- [x] [R8] Write ERT tests for macro expansion
 
-Run review agent after R1-R2 work (function signatures and expression annotations)
-before implementing R3-R4 (variable tracking).
+## Status
+
+Complete

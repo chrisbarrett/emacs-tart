@@ -241,13 +241,17 @@ ast1 = ast2  (structurally, ignoring spans)
 
 ## Tasks
 
-- [ ] [R17] Create `print.ml`/`print.mli`
-- [ ] [R1-2] Integer/float printing
-- [ ] [R3-5] String printing with escapes
-- [ ] [R6-7] Symbol/keyword printing
-- [ ] [R8-10] Character literals with modifiers
-- [ ] [R11-12] List printing with reader macro sugar
-- [ ] [R13] Vector printing
-- [ ] [R14-15] Cons/dotted pair printing
-- [ ] [R16] Error node printing
-- [ ] [R18] Round-trip tests with Emacs validation
+- [x] [R17] Create `print.ml`/`print.mli`
+- [x] [R1-2] Integer/float printing
+- [x] [R3-5] String printing with escapes
+- [x] [R6-7] Symbol/keyword printing
+- [x] [R8-10] Character literals with modifiers
+- [x] [R11-12] List printing with reader macro sugar
+- [x] [R13] Vector printing
+- [x] [R14-15] Cons/dotted pair printing
+- [x] [R16] Error node printing
+- [x] [R18] Round-trip tests with Emacs validation
+
+## Status
+
+Complete
