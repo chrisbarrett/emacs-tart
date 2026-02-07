@@ -468,13 +468,61 @@ symbol constituents for `|' (union operator), `&' (`&optional',
        (1 font-lock-variable-name-face))))
   "Font-lock keywords for `tart-signature-mode'.")
 
+(defvar tart-signature-mode--indent-overrides
+  '((defun   . defun)
+    (defvar  . defun)
+    (type    . defun)
+    (open    . defun)
+    (include . defun))
+  "Alist of tart indentation overrides.
+Each entry is (SYMBOL . METHOD) where METHOD is either `defun'
+for 2-space body indentation, or an integer for `lisp-indent-specform'.")
+
+(defun tart-signature-indent-function (indent-point state)
+  "Indent function for `tart-signature-mode'.
+Looks up `tart-signature-mode--indent-overrides' first, then
+falls back to `lisp-indent-function' symbol properties."
+  (let ((normal-indent (current-column)))
+    (goto-char (1+ (elt state 1)))
+    (parse-partial-sexp (point) calculate-lisp-indent-last-sexp 0 t)
+    (if (and (elt state 2)
+             (not (looking-at "\\sw\\|\\s_")))
+        ;; Car of form is not a symbol; use default alignment.
+        (progn
+          (if (not (> (save-excursion (forward-line 1) (point))
+                      calculate-lisp-indent-last-sexp))
+              (progn (goto-char calculate-lisp-indent-last-sexp)
+                     (beginning-of-line)
+                     (parse-partial-sexp (point)
+                                         calculate-lisp-indent-last-sexp
+                                         0 t)))
+          (backward-prefix-chars)
+          (current-column))
+      (let* ((function (buffer-substring (point)
+                                         (progn (forward-sexp 1) (point))))
+             (sym (intern-soft function))
+             (method (or (cdr (assq sym tart-signature-mode--indent-overrides))
+                         (and sym (function-get sym 'lisp-indent-function))
+                         (and sym (get sym 'lisp-indent-hook)))))
+        (cond ((or (eq method 'defun)
+                   (and (null method)
+                        (> (length function) 3)
+                        (string-match "\\`def" function)))
+               (lisp-indent-defform state indent-point))
+              ((integerp method)
+               (lisp-indent-specform method state
+                                     indent-point normal-indent))
+              (method
+               (funcall method indent-point state)))))))
+
 ;;;###autoload
 (define-derived-mode tart-signature-mode lisp-mode "Tart"
   "Major mode for editing Tart type signature files."
   :syntax-table tart-signature-mode-syntax-table
   (setq-local font-lock-defaults
               '(tart-signature-mode-font-lock-keywords
-                nil nil nil nil)))
+                nil nil nil nil))
+  (setq-local lisp-indent-function #'tart-signature-indent-function))
 
 ;;;###autoload
 (add-to-list 'auto-mode-alist `(,(rx ".tart" eos) . tart-signature-mode))

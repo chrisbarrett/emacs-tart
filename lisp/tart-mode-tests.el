@@ -167,5 +167,51 @@
   (let ((tart-executable "/nonexistent/path/to/tart"))
     (should-not (tart--binary-available-p))))
 
+;;; Indentation Tests (Spec 60)
+
+(defun tart-mode-test--indent (input expected)
+  "Insert INPUT into a `tart-signature-mode' buffer, indent, compare to EXPECTED."
+  (with-temp-buffer
+    (tart-signature-mode)
+    (insert input)
+    (indent-region (point-min) (point-max))
+    (should (equal (buffer-string) expected))))
+
+(ert-deftest tart-mode-indent-multi-clause-defun ()
+  "Multi-clause defun indents body at 2-space offset."
+  (tart-mode-test--indent
+   "(defun overlayp\n((overlay) -> t)\n((_) -> nil))"
+   "(defun overlayp\n  ((overlay) -> t)\n  ((_) -> nil))"))
+
+(ert-deftest tart-mode-indent-single-line-defun ()
+  "Single-line defun is unchanged."
+  (tart-mode-test--indent
+   "(defun buffer-live-p (any) -> bool)"
+   "(defun buffer-live-p (any) -> bool)"))
+
+(ert-deftest tart-mode-indent-multi-line-type ()
+  "Multi-line type indents body at 2-space offset."
+  (tart-mode-test--indent
+   "(type eq-safe\n(symbol | keyword | int | t | nil))"
+   "(type eq-safe\n  (symbol | keyword | int | t | nil))"))
+
+(ert-deftest tart-mode-indent-defvar ()
+  "Defvar indents body at 2-space offset."
+  (tart-mode-test--indent
+   "(defvar buffer-alist\n(list any))"
+   "(defvar buffer-alist\n  (list any))"))
+
+(ert-deftest tart-mode-indent-open ()
+  "Open form indents with special-form style."
+  (tart-mode-test--indent
+   "(open\nsome-module)"
+   "(open\n  some-module)"))
+
+(ert-deftest tart-mode-indent-include ()
+  "Include form indents with special-form style."
+  (tart-mode-test--indent
+   "(include\nother-module)"
+   "(include\n  other-module)"))
+
 (provide 'tart-mode-tests)
 ;;; tart-mode-tests.el ends here
