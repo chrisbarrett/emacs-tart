@@ -23,6 +23,14 @@ let is_error = function
   | Type d -> Diagnostic.is_error d
   | Parse _ | Eval _ | Io _ | File _ | Cli _ -> true
 
+let is_warning = function
+  | Type d -> d.Diagnostic.severity = Diagnostic.Warning
+  | Parse _ | Eval _ | Io _ | File _ | Cli _ -> false
+
+let is_hint = function
+  | Type d -> d.Diagnostic.severity = Diagnostic.Hint
+  | Parse _ | Eval _ | Io _ | File _ | Cli _ -> false
+
 let location = function
   | Type d -> Some (Diagnostic.span d)
   | Parse { span; _ } -> Some span
@@ -166,11 +174,32 @@ end
       Found 2 errors
     v} *)
 let report (errors : t list) : unit =
-  let count = List.length errors in
+  let error_count = List.length (List.filter is_error errors) in
+  let warning_count = List.length (List.filter is_warning errors) in
+  let hint_count = List.length (List.filter is_hint errors) in
   List.iter (fun err -> prerr_endline (to_string err)) errors;
-  if count > 0 then
-    let plural = if count = 1 then "error" else "errors" in
-    prerr_endline (Printf.sprintf "\nFound %d %s" count plural)
+  if error_count > 0 || warning_count > 0 || hint_count > 0 then
+    let parts = [] in
+    let parts =
+      if error_count > 0 then
+        let plural = if error_count = 1 then "error" else "errors" in
+        Printf.sprintf "%d %s" error_count plural :: parts
+      else parts
+    in
+    let parts =
+      if warning_count > 0 then
+        let plural = if warning_count = 1 then "warning" else "warnings" in
+        Printf.sprintf "%d %s" warning_count plural :: parts
+      else parts
+    in
+    let parts =
+      if hint_count > 0 then
+        let plural = if hint_count = 1 then "hint" else "hints" in
+        Printf.sprintf "%d %s" hint_count plural :: parts
+      else parts
+    in
+    prerr_endline
+      (Printf.sprintf "\nFound %s" (String.concat ", " (List.rev parts)))
 
 (** Report errors to stderr in Elm-style human format with source excerpts.
 
@@ -200,9 +229,10 @@ let report (errors : t list) : unit =
     v} *)
 let report_human (errors : t list) : unit =
   let error_count = List.length (List.filter is_error errors) in
-  let warning_count = List.length errors - error_count in
+  let warning_count = List.length (List.filter is_warning errors) in
+  let hint_count = List.length (List.filter is_hint errors) in
   List.iter (fun err -> prerr_endline (to_string_human err)) errors;
-  if error_count > 0 || warning_count > 0 then
+  if error_count > 0 || warning_count > 0 || hint_count > 0 then
     let parts = [] in
     let parts =
       if error_count > 0 then
@@ -214,6 +244,12 @@ let report_human (errors : t list) : unit =
       if warning_count > 0 then
         let plural = if warning_count = 1 then "warning" else "warnings" in
         Printf.sprintf "%d %s" warning_count plural :: parts
+      else parts
+    in
+    let parts =
+      if hint_count > 0 then
+        let plural = if hint_count = 1 then "hint" else "hints" in
+        Printf.sprintf "%d %s" hint_count plural :: parts
       else parts
     in
     prerr_endline

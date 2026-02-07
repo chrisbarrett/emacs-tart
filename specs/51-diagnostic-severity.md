@@ -111,11 +111,31 @@ val make : ?severity:Severity.t -> code:error_code -> ... -> t
 - Custom severity levels
 - Localization
 
+## Status
+
+Complete (3-level: Error/Warning/Hint). Info level reserved for future use when
+W/H code prefixes are assigned. No features currently emit Info diagnostics.
+
 ## Tasks
 
-- [ ] [R1-R3] Severity type and default mapping
-- [ ] [R4-R5] Output formatting
-- [ ] [R6-R10] CLI flags
-- [ ] [R11-R12] LSP integration
-- [ ] [R13] Summary counts
-- [ ] [R16] Severity override
+- [x] [R1-R3] Severity type and default mapping
+  - severity type: Error | Warning | Hint (3 levels; Info reserved)
+  - severity_to_int: Error→1, Warning→2, Hint→4 (LSP values)
+  - format_severity: "error", "warning", "hint"
+- [x] [R4-R5] Output formatting
+  - severity_code added to JSON output
+  - Human/compact formats already include severity prefix
+- [x] [R6-R10] CLI flags
+  - --warn-as-error: promotes warnings to errors for exit code
+  - --ignore-warnings: filters out warning diagnostics
+  - --ignore-hints: filters out hint diagnostics
+  - Flags combine correctly
+- [x] [R11-R12] LSP integration
+  - server.ml already maps Error→1, Warning→2, Hint→4 (correct)
+  - Protocol.diagnostic_severity has Information (value 3, unused)
+- [x] [R13] Summary counts
+  - report_human: "Found 2 errors, 1 warning, 3 hints"
+  - report (compact): same split-by-severity summary
+- [x] [R16] Severity override
+  - Diagnostic.t has mutable severity field
+  - Constructors set default severity; callers can override

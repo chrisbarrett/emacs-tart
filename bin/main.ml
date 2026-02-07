@@ -234,8 +234,32 @@ let check_file env filename : Tart.Type_env.t * Tart.Error.t list =
 let validate_file path : (unit, Tart.File_error.t) result =
   Tart.File_error.check_file path
 
+(** Filter and promote diagnostics based on CLI severity flags. *)
+let apply_severity_flags ~warn_as_error ~ignore_warnings ~ignore_hints
+    (errors : Tart.Error.t list) : Tart.Error.t list =
+  let errors =
+    if ignore_hints then
+      List.filter (fun e -> not (Tart.Error.is_hint e)) errors
+    else errors
+  in
+  let errors =
+    if ignore_warnings then
+      List.filter (fun e -> not (Tart.Error.is_warning e)) errors
+    else errors
+  in
+  if warn_as_error then
+    List.map
+      (fun e ->
+        match e with
+        | Tart.Error.Type d when d.severity = Tart.Diagnostic.Warning ->
+            Tart.Error.Type { d with severity = Tart.Diagnostic.Error }
+        | _ -> e)
+      errors
+  else errors
+
 (** Check subcommand: type-check files *)
-let run_check format emacs_version files =
+let run_check format warn_as_error ignore_warnings ignore_hints emacs_version
+    files =
   if files = [] then (
     let err =
       Tart.Error.cli_error ~message:"no input files"
@@ -280,6 +304,10 @@ let run_check format emacs_version files =
       (initial_env, []) valid_files
   in
   let all_errors = file_errors @ type_errors in
+  let all_errors =
+    apply_severity_flags ~warn_as_error ~ignore_warnings ~ignore_hints
+      all_errors
+  in
   (match format with
   | Human -> Tart.Error.report_human all_errors
   | Json -> Tart.Error.report_json all_errors);
@@ -749,6 +777,19 @@ let emacs_version_arg =
     & opt (some (conv emacs_version_conv)) None
     & info [ "emacs-version" ] ~docv:"VER" ~doc)
 
+(* Severity flags *)
+let warn_as_error_arg =
+  let doc = "Treat warnings as errors (exit 1 on warnings)." in
+  Arg.(value & flag & info [ "warn-as-error" ] ~doc)
+
+let ignore_warnings_arg =
+  let doc = "Suppress warning-level diagnostics." in
+  Arg.(value & flag & info [ "ignore-warnings" ] ~doc)
+
+let ignore_hints_arg =
+  let doc = "Suppress hint-level diagnostics." in
+  Arg.(value & flag & info [ "ignore-hints" ] ~doc)
+
 (* Check subcommand *)
 let check_files_arg =
   let doc = "Elisp files to type-check." in
@@ -765,7 +806,9 @@ let check_cmd =
   in
   let info = Cmd.info "check" ~doc ~man in
   Cmd.v info
-    Term.(const run_check $ format_arg $ emacs_version_arg $ check_files_arg)
+    Term.(
+      const run_check $ format_arg $ warn_as_error_arg $ ignore_warnings_arg
+      $ ignore_hints_arg $ emacs_version_arg $ check_files_arg)
 
 (* Eval subcommand *)
 let eval_expr_arg =
@@ -950,7 +993,9 @@ let emacs_coverage_cmd =
    ============================================================================ *)
 
 let default_cmd =
-  Term.(const run_check $ format_arg $ emacs_version_arg $ check_files_arg)
+  Term.(
+    const run_check $ format_arg $ warn_as_error_arg $ ignore_warnings_arg
+    $ ignore_hints_arg $ emacs_version_arg $ check_files_arg)
 
 let main_cmd =
   let doc = "A type checker for Emacs Lisp" in

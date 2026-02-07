@@ -711,6 +711,9 @@ let format_span (span : Loc.span) : string =
       end_pos.line (end_pos.col + 1)
   else Printf.sprintf "%s-%s" (format_pos start) (format_pos end_pos)
 
+(** Map severity to LSP DiagnosticSeverity integer value *)
+let severity_to_int = function Error -> 1 | Warning -> 2 | Hint -> 4
+
 (** Format severity for display *)
 let format_severity = function
   | Error -> "error"
@@ -1109,6 +1112,7 @@ let to_json (d : t) : Yojson.Safe.t =
     [
       ("kind", `String "type");
       ("severity", `String (format_severity d.severity));
+      ("severity_code", `Int (severity_to_int d.severity));
       ("message", `String d.message);
       ("location", location_to_json d.span);
     ]

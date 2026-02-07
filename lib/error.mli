@@ -32,6 +32,12 @@ val is_error : t -> bool
     Returns [true] for Parse, Eval, Io, File, Cli errors. For Type diagnostics,
     returns [true] only for Error severity (not Warning or Hint). *)
 
+val is_warning : t -> bool
+(** [is_warning err] returns [true] for Warning-severity type diagnostics. *)
+
+val is_hint : t -> bool
+(** [is_hint err] returns [true] for Hint-severity type diagnostics. *)
+
 (** {1 Location Access} *)
 
 val location : t -> Syntax.Location.span option

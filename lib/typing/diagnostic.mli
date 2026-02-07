@@ -173,6 +173,11 @@ val format_pos : Syntax.Location.pos -> string
 val format_span : Syntax.Location.span -> string
 (** Format a source span for display. *)
 
+val severity_to_int : severity -> int
+(** Map severity to LSP DiagnosticSeverity integer value.
+
+    Error→1, Warning→2, Hint→4. *)
+
 val format_severity : severity -> string
 (** Format severity for display. *)
 
