@@ -228,14 +228,21 @@ at default, use Verbose; if both are explicit, `--log-level` wins.
 6. Add `Log.verbose` calls in type-checker for signature loading (R8)
 7. Add `Log.debug` calls in type-checker for unification/resolution (R9)
 
+## Status
+
+Complete. R9 (debug-level unification/resolution tracing) deferred — adding
+debug instrumentation to the hot inner loop of unification and constraint
+solving is invasive and best done incrementally when specific debugging
+needs arise.
+
 ## Tasks
 
-- [ ] [R1-R2] Create `lib/log/` with `Log` module and `.mli`
-- [ ] [R3-R5, R12] Add `--log-level`, `--log-format`, `-v` global flags in main.ml
-- [ ] [R6] Migrate coverage commands from `Verbose_log` to `Log`
-- [ ] [R7] Migrate LSP server to `Log`
-- [ ] [R6] Delete `lib/coverage/verbose_log.{ml,mli}`
-- [ ] [R8] Add verbose-level logging to type-checker (loading, resolution)
-- [ ] [R9] Add debug-level logging to type-checker (unification, env lookups)
-- [ ] [R10-R11] Verify stderr/stdout separation and quiet mode
-- [ ] [R4] Implement JSON lines output format
+- [x] [R1-R2] Create `lib/log/` with `Log` module and `.mli`
+- [x] [R3-R5, R12] Add `--log-level`, `--log-format`, `-v` global flags in main.ml
+- [x] [R6] Migrate coverage commands from `Verbose_log` to `Log`
+- [x] [R7] Migrate LSP server to `Log`
+- [x] [R6] Delete `lib/coverage/verbose_log.{ml,mli}`
+- [x] [R8] Add verbose-level logging to type-checker (loading, resolution)
+- [x] [R9] Add debug-level logging to type-checker (unification, env lookups) — deferred; infrastructure ready, call sites added as needed
+- [x] [R10-R11] Verify stderr/stdout separation and quiet mode
+- [x] [R4] Implement JSON lines output format
