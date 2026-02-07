@@ -83,6 +83,10 @@ type t = {
           Only present for multi-clause defuns loaded from .tart files. *)
   predicates : (string * predicate_info) list;
       (** Type predicates: maps function names to their predicate info *)
+  feature_loader : (string -> t -> t) option;
+      (** Optional callback to load a feature's signatures into the env (Spec
+          49). Called with the feature name and current env; returns extended
+          env. Set by module_check.ml before type checking begins. *)
   level : int;  (** Current scope level for generalization *)
 }
 (** Type environment with dual namespaces for Elisp's Lisp-2 semantics.
@@ -179,6 +183,19 @@ val with_narrowed_var : string -> Types.typ -> t -> t
     Used by predicate narrowing to refine a variable's type in conditional
     branches. Shadows any existing binding for [name] in the variable namespace.
 *)
+
+(** {1 Feature Loading (Spec 49)} *)
+
+val set_feature_loader : (string -> t -> t) -> t -> t
+(** [set_feature_loader loader env] installs a callback for loading feature
+    signatures on demand. The loader is called with a feature name and the
+    current env, and returns the env extended with the feature's signatures. *)
+
+val load_feature : string -> t -> t
+(** [load_feature name env] loads a feature's signatures into the env.
+
+    Returns the extended env if a loader is set and the feature is found, or the
+    original env if no loader is set. *)
 
 (** {1 Instantiation} *)
 

@@ -3,6 +3,7 @@
 open Tart.Types
 module Env = Tart.Type_env
 module Check = Tart.Check
+module Infer = Tart.Infer
 
 (** Parse a string to S-expression for testing *)
 let parse str =
@@ -986,6 +987,130 @@ let test_literal_clause_quoted_symbol_match () =
     "quoted symbol match returns string" "string" (to_string ty)
 
 (* =============================================================================
+   Feature Guard Env Extension Tests (Spec 49)
+   ============================================================================= *)
+
+(** Base env with guard builtins so guard functions are not flagged as
+    undefined. In production these come from c-core typings. *)
+let guard_env () =
+  Env.empty
+  |> Env.extend_fn_mono "featurep" (arrow [ Prim.symbol ] Prim.bool)
+  |> Env.extend_fn_mono "fboundp" (arrow [ Prim.symbol ] Prim.bool)
+  |> Env.extend_fn_mono "boundp" (arrow [ Prim.symbol ] Prim.bool)
+  |> Env.extend_fn_mono "bound-and-true-p" (arrow [ Prim.symbol ] Prim.bool)
+  |> Env.extend_fn_mono "upcase" (arrow [ Prim.string ] Prim.string)
+
+(** Test that (when (featurep 'mymod) ...) loads the module's names *)
+let test_guard_featurep_loads_module () =
+  let loader name env =
+    if name = "mymod" then
+      Env.extend_fn_mono "my-fn" (arrow [ Prim.string ] Prim.int) env
+    else env
+  in
+  let env = Env.set_feature_loader loader (guard_env ()) in
+  let sexps = parse_many {|(when (featurep 'mymod) (my-fn "hello"))|} in
+  let result = Check.check_program ~env sexps in
+  Alcotest.(check int) "no errors" 0 (List.length result.errors);
+  Alcotest.(check int) "no undefineds" 0 (List.length result.undefineds)
+
+(** Test that featurep guard does NOT make names available in else branch *)
+let test_guard_featurep_not_in_else () =
+  let loader name env =
+    if name = "mymod" then
+      Env.extend_fn_mono "my-fn" (arrow [ Prim.string ] Prim.int) env
+    else env
+  in
+  let env = Env.set_feature_loader loader (guard_env ()) in
+  let sexps =
+    parse_many {|(if (featurep 'mymod) (my-fn "hello") (my-fn "nope"))|}
+  in
+  let result = Check.check_program ~env sexps in
+  (* Should have 1 undefined: my-fn in else branch *)
+  Alcotest.(check int) "has undefined" 1 (List.length result.undefineds);
+  Alcotest.(check string)
+    "undefined name" "my-fn" (List.hd result.undefineds).Infer.name
+
+(** Test that (fboundp 'my-fn) only exposes that specific function *)
+let test_guard_fboundp_exposes_single_fn () =
+  let loader name env =
+    if name = "my-fn" then
+      env
+      |> Env.extend_fn_mono "my-fn" (arrow [ Prim.string ] Prim.int)
+      |> Env.extend_fn_mono "other-fn" (arrow [ Prim.int ] Prim.string)
+    else env
+  in
+  let env = Env.set_feature_loader loader (guard_env ()) in
+  let sexps = parse_many {|(when (fboundp 'my-fn) (my-fn "hello"))|} in
+  let result = Check.check_program ~env sexps in
+  Alcotest.(check int) "no errors" 0 (List.length result.errors);
+  Alcotest.(check int) "no undefineds" 0 (List.length result.undefineds)
+
+(** Test that fboundp guard does NOT expose other functions from same module *)
+let test_guard_fboundp_no_other_fns () =
+  let loader name env =
+    if name = "my-fn" then
+      env
+      |> Env.extend_fn_mono "my-fn" (arrow [ Prim.string ] Prim.int)
+      |> Env.extend_fn_mono "other-fn" (arrow [ Prim.int ] Prim.string)
+    else env
+  in
+  let env = Env.set_feature_loader loader (guard_env ()) in
+  let sexps = parse_many {|(when (fboundp 'my-fn) (other-fn 42))|} in
+  let result = Check.check_program ~env sexps in
+  (* other-fn should be undefined — fboundp only exposes the named function *)
+  Alcotest.(check int) "has undefined" 1 (List.length result.undefineds);
+  Alcotest.(check string)
+    "undefined name" "other-fn" (List.hd result.undefineds).Infer.name
+
+(** Test that (boundp 'my-var) exposes only that variable *)
+let test_guard_boundp_exposes_var () =
+  let loader name env =
+    if name = "my-var" then Env.extend_mono "my-var" Prim.string env else env
+  in
+  let env = Env.set_feature_loader loader (guard_env ()) in
+  let sexps = parse_many {|(when (boundp 'my-var) (upcase my-var))|} in
+  let result = Check.check_program ~env sexps in
+  Alcotest.(check int) "no undefineds" 0 (List.length result.undefineds)
+
+(** Test that (bound-and-true-p v) gives type t (truthy) *)
+let test_guard_bound_and_true_p () =
+  let env = guard_env () in
+  let sexps =
+    parse_many
+      {|(defun check-var (x)
+          (when (bound-and-true-p my-var) my-var))|}
+  in
+  let result = Check.check_program ~env sexps in
+  Alcotest.(check int) "no errors" 0 (List.length result.errors);
+  Alcotest.(check int) "no undefineds" 0 (List.length result.undefineds)
+
+(** Test that combined guards (and) extend the env with all guard names *)
+let test_guard_and_combined () =
+  let loader name env =
+    if name = "mymod" then
+      env
+      |> Env.extend_fn_mono "fn-a" (arrow [ Prim.string ] Prim.int)
+      |> Env.extend_fn_mono "fn-b" (arrow [ Prim.int ] Prim.string)
+    else env
+  in
+  let env = Env.set_feature_loader loader (guard_env ()) in
+  let sexps =
+    parse_many
+      {|(when (and (featurep 'mymod) (fboundp 'fn-b))
+          (fn-a "hello"))|}
+  in
+  let result = Check.check_program ~env sexps in
+  Alcotest.(check int) "no undefineds" 0 (List.length result.undefineds)
+
+(** Test no loader installed: guards are no-ops *)
+let test_guard_no_loader () =
+  let env = guard_env () in
+  let sexps = parse_many {|(when (featurep 'json) (json-parse-string "{}"))|} in
+  let result = Check.check_program ~env sexps in
+  (* json-parse-string should be undefined since no loader is installed *)
+  Alcotest.(check int) "has undefined" 1 (List.length result.undefineds)
+
+(* =============================================================================
    Test Suite
    ============================================================================= *)
 
@@ -1156,5 +1281,22 @@ let () =
             test_literal_clause_no_match_fallback;
           Alcotest.test_case "quoted symbol match" `Quick
             test_literal_clause_quoted_symbol_match;
+        ] );
+      ( "feature_guard_env",
+        [
+          Alcotest.test_case "featurep loads module" `Quick
+            test_guard_featurep_loads_module;
+          Alcotest.test_case "featurep not in else" `Quick
+            test_guard_featurep_not_in_else;
+          Alcotest.test_case "fboundp single fn" `Quick
+            test_guard_fboundp_exposes_single_fn;
+          Alcotest.test_case "fboundp no other fns" `Quick
+            test_guard_fboundp_no_other_fns;
+          Alcotest.test_case "boundp exposes var" `Quick
+            test_guard_boundp_exposes_var;
+          Alcotest.test_case "bound-and-true-p" `Quick
+            test_guard_bound_and_true_p;
+          Alcotest.test_case "and combined" `Quick test_guard_and_combined;
+          Alcotest.test_case "no loader" `Quick test_guard_no_loader;
         ] );
     ]

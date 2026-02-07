@@ -57,6 +57,10 @@ type t = {
       (** Multi-clause function signatures for overload resolution (Spec 56) *)
   predicates : (string * predicate_info) list;
       (** Type predicates: maps function names to their predicate info *)
+  feature_loader : (string -> t -> t) option;
+      (** Optional callback to load a feature's signatures into the env (Spec
+          49). Called with the feature name and current env; returns extended
+          env. Set by module_check.ml before type checking begins. *)
   level : int;  (** Current scope level for generalization *)
 }
 (** Type environment with dual namespaces for Elisp's Lisp-2 semantics *)
@@ -68,12 +72,20 @@ let empty =
     fn_bindings = [];
     fn_clauses = [];
     predicates = [];
+    feature_loader = None;
     level = 0;
   }
 
 (** Create an environment with initial bindings (in variable namespace) *)
 let of_list bindings =
-  { bindings; fn_bindings = []; fn_clauses = []; predicates = []; level = 0 }
+  {
+    bindings;
+    fn_bindings = [];
+    fn_clauses = [];
+    predicates = [];
+    feature_loader = None;
+    level = 0;
+  }
 
 (** Get the current level *)
 let current_level env = env.level
@@ -204,6 +216,19 @@ let scheme_to_string = function
   | Mono ty -> to_string ty
   | Poly (vars, ty) ->
       Printf.sprintf "(forall (%s) %s)" (String.concat " " vars) (to_string ty)
+
+(** Set the feature loader callback (Spec 49).
+
+    The loader is called with a feature name and the current env, and returns
+    the env extended with the feature's signatures. *)
+let set_feature_loader loader env = { env with feature_loader = Some loader }
+
+(** Load a feature's signatures into the env using the feature loader.
+
+    Returns the extended env if the loader is set and the feature is found, or
+    the original env if no loader is set or the feature is not found. *)
+let load_feature name env =
+  match env.feature_loader with Some loader -> loader name env | None -> env
 
 (** Get all names bound in the variable namespace *)
 let names env = List.map fst env.bindings

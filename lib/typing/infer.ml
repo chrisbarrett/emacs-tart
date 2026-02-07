@@ -49,6 +49,58 @@ let apply_predicate_else (pred : Narrow.predicate_info) (env : Env.t) : Env.t =
       Env.with_narrowed_var pred.var_name else_ty env
   | None -> env
 
+(** Apply a single feature guard to extend the then-env (Spec 49).
+
+    - [FeatureGuard name]: loads all names from [name.tart] via the feature
+      loader
+    - [FboundGuard name]: loads the module for [name] (via prefix search), then
+      exposes only function [name]
+    - [BoundGuard name]: loads the module for [name], then exposes only variable
+      [name]
+    - [BoundTrueGuard name]: adds variable [name] with type [t] (truthy)
+
+    The else-env is always unchanged (guards do not subtract from the env). *)
+let apply_guard (guard : Narrow.guard_info) (env : Env.t) : Env.t =
+  match guard with
+  | Narrow.FeatureGuard name -> Env.load_feature name env
+  | Narrow.FboundGuard name ->
+      (* Load the module for this function, then expose only this function *)
+      let loaded_env = Env.load_feature name env in
+      (match Env.lookup_fn name loaded_env with
+       | Some scheme -> Env.extend_fn name scheme env
+       | None -> env)
+  | Narrow.BoundGuard name ->
+      (* Load the module for this variable, then expose only this variable *)
+      let loaded_env = Env.load_feature name env in
+      (match Env.lookup_var name loaded_env with
+       | Some scheme -> Env.extend name scheme env
+       | None ->
+           (* Also try function namespace for backward compat *)
+           (match Env.lookup_fn name loaded_env with
+            | Some scheme -> Env.extend name scheme env
+            | None -> env))
+  | Narrow.BoundTrueGuard name ->
+      (* Variable is bound and non-nil: type is t (truthy) *)
+      Env.extend_mono name Prim.t env
+
+(** Collect variable names whose binding is being tested by guards.
+
+    These are names that appear in guard conditions like (bound-and-true-p v)
+    or (boundp 'v). The checker should not flag these as undefined in the
+    condition expression, since the whole point of the guard is to test
+    whether they are bound. *)
+let guard_suppressed_names (analysis : Narrow.condition_analysis) : string list =
+  let from_guard = function
+    | Narrow.BoundTrueGuard name -> [ name ]
+    | Narrow.BoundGuard _name -> []
+    | Narrow.FeatureGuard _ | Narrow.FboundGuard _ -> []
+  in
+  match analysis with
+  | Narrow.Guard g -> from_guard g
+  | Narrow.Guards gs -> List.concat_map from_guard gs
+  | Narrow.PredicatesAndGuards (_, gs) -> List.concat_map from_guard gs
+  | Narrow.Predicate _ | Narrow.Predicates _ | Narrow.NoPredicate -> []
+
 (** Narrow an env for then/else branches based on condition analysis result.
     Returns [(then_env, else_env)]. *)
 let narrow_env_from_analysis (analysis : Narrow.condition_analysis)
@@ -63,13 +115,20 @@ let narrow_env_from_analysis (analysis : Narrow.condition_analysis)
         List.fold_left (fun e p -> apply_predicate_else p e) env preds
       in
       (then_env, else_env)
-  | Narrow.Guard _ | Narrow.Guards _ ->
-      (* Guards extend the env with loaded names — wired in Iteration 2 *)
-      (env, env)
-  | Narrow.PredicatesAndGuards (preds, _guards) ->
-      (* Apply predicate narrowing; guard env extension wired in Iteration 2 *)
+  | Narrow.Guard guard ->
+      let then_env = apply_guard guard env in
+      (then_env, env)
+  | Narrow.Guards guards ->
+      let then_env =
+        List.fold_left (fun e g -> apply_guard g e) env guards
+      in
+      (then_env, env)
+  | Narrow.PredicatesAndGuards (preds, guards) ->
       let then_env =
         List.fold_left (fun e p -> apply_predicate_then p e) env preds
+      in
+      let then_env =
+        List.fold_left (fun e g -> apply_guard g e) then_env guards
       in
       let else_env =
         List.fold_left (fun e p -> apply_predicate_else p e) env preds
@@ -310,13 +369,10 @@ and infer_if env cond then_branch else_branch _span =
   let open Syntax.Sexp in
   let cond_result = infer env cond in
 
-  (* Analyze condition for predicate narrowing (Spec 52).
-     If condition is e.g. (stringp x), narrow x to string in then-branch
-     and subtract string from x's type in else-branch. Also handles
-     (and pred1 pred2 ...) for R4. *)
-  let then_env, else_env =
-    narrow_env_from_analysis (Narrow.analyze_condition cond env) env
-  in
+  (* Analyze condition for predicate narrowing (Spec 52) and
+     feature guard env extension (Spec 49). *)
+  let analysis = Narrow.analyze_condition cond env in
+  let then_env, else_env = narrow_env_from_analysis analysis env in
 
   let then_result = infer then_env then_branch in
   let else_result = infer else_env else_branch in
@@ -361,8 +417,15 @@ and infer_if env cond then_branch else_branch _span =
          (C.combine else_result.constraints
             (C.add then_constraint (C.add else_constraint C.empty))))
   in
+  (* Suppress undefineds for names proven by guards (e.g. bound-and-true-p v) *)
+  let suppressed = guard_suppressed_names analysis in
+  let cond_undefineds =
+    List.filter
+      (fun (u : undefined_var) -> not (List.mem u.name suppressed))
+      cond_result.undefineds
+  in
   let all_undefineds =
-    combine_undefineds [ cond_result; then_result; else_result ]
+    cond_undefineds @ then_result.undefineds @ else_result.undefineds
   in
 
   {
@@ -381,10 +444,10 @@ and infer_if env cond then_branch else_branch _span =
 and infer_if_no_else env cond then_branch span =
   let cond_result = infer env cond in
 
-  (* Analyze condition for predicate narrowing (Spec 52). *)
-  let then_env =
-    narrow_then_from_analysis (Narrow.analyze_condition cond env) env
-  in
+  (* Analyze condition for predicate narrowing (Spec 52) and
+     feature guard env extension (Spec 49). *)
+  let analysis = Narrow.analyze_condition cond env in
+  let then_env = narrow_then_from_analysis analysis env in
 
   let then_result = infer then_env then_branch in
 
@@ -404,7 +467,14 @@ and infer_if_no_else env cond then_branch span =
     C.combine cond_result.constraints
       (C.combine then_result.constraints (C.add then_constraint C.empty))
   in
-  let all_undefineds = combine_undefineds [ cond_result; then_result ] in
+  (* Suppress undefineds for names proven by guards (e.g. bound-and-true-p v) *)
+  let suppressed = guard_suppressed_names analysis in
+  let cond_undefineds =
+    List.filter
+      (fun (u : undefined_var) -> not (List.mem u.name suppressed))
+      cond_result.undefineds
+  in
+  let all_undefineds = cond_undefineds @ then_result.undefineds in
 
   (* The result type should really be (Or then_type Nil),
      but for now we just use the then type. *)
@@ -425,10 +495,10 @@ and infer_if_no_else env cond then_branch span =
 and infer_when env cond body span =
   let cond_result = infer env cond in
 
-  (* Analyze condition for predicate narrowing (Spec 52). *)
-  let body_env =
-    narrow_then_from_analysis (Narrow.analyze_condition cond env) env
-  in
+  (* Analyze condition for predicate narrowing (Spec 52) and
+     feature guard env extension (Spec 49). *)
+  let analysis = Narrow.analyze_condition cond env in
+  let body_env = narrow_then_from_analysis analysis env in
 
   let body_result = infer_progn body_env body span in
 
@@ -439,7 +509,16 @@ and infer_when env cond body span =
     C.combine cond_result.constraints
       (C.combine body_result.constraints (C.add body_constraint C.empty))
   in
-  let all_undefineds = combine_undefineds [ cond_result; body_result ] in
+  (* Suppress undefineds for names proven by guards (e.g. bound-and-true-p v) *)
+  let suppressed = guard_suppressed_names analysis in
+  let cond_undefineds =
+    List.filter
+      (fun (u : undefined_var) -> not (List.mem u.name suppressed))
+      cond_result.undefineds
+  in
+  let all_undefineds =
+    cond_undefineds @ body_result.undefineds
+  in
   {
     ty = result_ty;
     constraints = all_constraints;
@@ -456,12 +535,12 @@ and infer_when env cond body span =
 and infer_unless env cond body span =
   let cond_result = infer env cond in
 
-  (* Analyze condition for predicate narrowing (Spec 52).
+  (* Analyze condition for predicate narrowing (Spec 52) and
+     feature guard env extension (Spec 49).
      Unless is the inverse of when: body runs when condition is false,
      so we subtract the narrowed type. *)
-  let body_env =
-    narrow_else_from_analysis (Narrow.analyze_condition cond env) env
-  in
+  let analysis = Narrow.analyze_condition cond env in
+  let body_env = narrow_else_from_analysis analysis env in
 
   let body_result = infer_progn body_env body span in
 
@@ -472,7 +551,14 @@ and infer_unless env cond body span =
     C.combine cond_result.constraints
       (C.combine body_result.constraints (C.add body_constraint C.empty))
   in
-  let all_undefineds = combine_undefineds [ cond_result; body_result ] in
+  (* Suppress undefineds for names proven by guards *)
+  let suppressed = guard_suppressed_names analysis in
+  let cond_undefineds =
+    List.filter
+      (fun (u : undefined_var) -> not (List.mem u.name suppressed))
+      cond_result.undefineds
+  in
+  let all_undefineds = cond_undefineds @ body_result.undefineds in
   {
     ty = result_ty;
     constraints = all_constraints;
@@ -665,13 +751,11 @@ and infer_cond env clauses span =
     | [] -> (constraints, undefineds)
     | List (test :: body, _) :: rest ->
         let test_result = infer acc_env test in
-        (* Analyze test condition for predicate narrowing.
+        (* Analyze test condition for predicate narrowing (Spec 52) and
+           feature guard env extension (Spec 49).
            Body sees narrowed type; subsequent clauses see subtracted type. *)
-        let body_env, next_env =
-          narrow_env_from_analysis
-            (Narrow.analyze_condition test acc_env)
-            acc_env
-        in
+        let analysis = Narrow.analyze_condition test acc_env in
+        let body_env, next_env = narrow_env_from_analysis analysis acc_env in
         let body_result = infer_progn body_env body span in
         let body_constraint = C.equal result_ty body_result.ty span in
         let all =
@@ -679,8 +763,15 @@ and infer_cond env clauses span =
             (C.combine body_result.constraints
                (C.add body_constraint constraints))
         in
+        (* Suppress undefineds for names proven by guards *)
+        let suppressed = guard_suppressed_names analysis in
+        let test_undefineds =
+          List.filter
+            (fun (u : undefined_var) -> not (List.mem u.name suppressed))
+            test_result.undefineds
+        in
         let all_undefineds =
-          undefineds @ test_result.undefineds @ body_result.undefineds
+          undefineds @ test_undefineds @ body_result.undefineds
         in
         process_clauses next_env rest all all_undefineds
     | _ :: rest -> process_clauses acc_env rest constraints undefineds
@@ -706,13 +797,20 @@ and infer_and env args _span =
     | [] -> List.rev acc_results
     | arg :: rest ->
         let result = infer acc_env arg in
-        (* Narrow the env for subsequent args if this arg is a predicate call *)
-        let next_env =
-          narrow_then_from_analysis
-            (Narrow.analyze_condition arg acc_env)
-            acc_env
+        (* Narrow the env for subsequent args if this arg is a predicate call
+           or feature guard (Spec 49). *)
+        let analysis = Narrow.analyze_condition arg acc_env in
+        let next_env = narrow_then_from_analysis analysis acc_env in
+        (* Suppress undefineds for names proven by guards *)
+        let suppressed = guard_suppressed_names analysis in
+        let filtered_result =
+          { result with
+            undefineds =
+              List.filter
+                (fun (u : undefined_var) -> not (List.mem u.name suppressed))
+                result.undefineds }
         in
-        process next_env (result :: acc_results) rest
+        process next_env (filtered_result :: acc_results) rest
   in
   let results = process env [] args in
   let constraints = combine_results results in

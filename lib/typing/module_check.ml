@@ -449,8 +449,75 @@ let check_module ~(config : config) ~(filename : string)
       ~env:env_with_requires ~required_modules sexps
   in
 
+  (* Step 4b: Install feature loader for guard-triggered loading (Spec 49).
+     The loader handles two cases:
+     - Direct feature name (from featurep): load module by name
+     - Function/variable name (from fboundp/boundp): try module prefixes *)
+  let feature_cache : (string, Env.t option) Hashtbl.t = Hashtbl.create 16 in
+  let feature_loader name env =
+    match Hashtbl.find_opt feature_cache name with
+    | Some (Some cached_env) ->
+        (* Re-merge cached env into current env — extend with all bindings *)
+        let env =
+          List.fold_left
+            (fun e (n, s) -> Env.extend_fn n s e)
+            env cached_env.Env.fn_bindings
+        in
+        let env =
+          List.fold_left
+            (fun e (n, s) -> Env.extend n s e)
+            env cached_env.Env.bindings
+        in
+        let env =
+          List.fold_left
+            (fun e (n, cs) -> Env.extend_fn_clauses n cs e)
+            env cached_env.Env.fn_clauses
+        in
+        let env =
+          List.fold_left
+            (fun e (n, p) -> Env.extend_predicate n p e)
+            env cached_env.Env.predicates
+        in
+        env
+    | Some None -> env (* Previously tried and not found *)
+    | None -> (
+        (* Try direct module name first (featurep 'json → json.tart) *)
+        let result =
+          Search.load_module ~search_path:config.search_path ~el_path:filename
+            ~env name
+        in
+        let result =
+          match result with
+          | Some _ -> result
+          | None ->
+              (* Try module prefixes (fboundp 'json-parse-string → json.tart) *)
+              let prefixes = extract_module_prefixes name in
+              let rec try_prefixes = function
+                | [] -> None
+                | prefix :: rest -> (
+                    match
+                      Search.load_module ~search_path:config.search_path
+                        ~el_path:filename ~env prefix
+                    with
+                    | Some env' -> Some env'
+                    | None -> try_prefixes rest)
+              in
+              try_prefixes prefixes
+        in
+        match result with
+        | Some loaded_env ->
+            Hashtbl.replace feature_cache name (Some loaded_env);
+            loaded_env
+        | None ->
+            Hashtbl.replace feature_cache name None;
+            env)
+  in
+  let env_with_loader =
+    Env.set_feature_loader feature_loader env_with_autoloads
+  in
+
   (* Step 5: Type-check the implementation *)
-  let check_result = Check.check_program ~env:env_with_autoloads sexps in
+  let check_result = Check.check_program ~env:env_with_loader sexps in
 
   (* Build a lookup table for defun spans from the parsed sexps *)
   let defun_spans = extract_defun_spans sexps in
