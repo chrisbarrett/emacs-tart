@@ -3,25 +3,20 @@
     This module converts signature AST to the type environment, validating type
     variable scoping and resolving type references.
 
-    Key features:
-    - Implicit forall inference: type variables in signatures without explicit
-      quantifiers are collected in left-to-right order
-    - Type alias expansion during loading
-    - Opaque type resolution
-
-    Key validations:
-    - When explicit quantifiers are provided, type variables must be bound
-    - Bounded quantifiers must reference valid types
-    - Referenced types must be in scope (from opens or type decls) *)
+    Validation is implemented in {!Sig_validation} and re-exported here for
+    backward compatibility. *)
 
 (** {1 Load Errors} *)
 
-type load_error = { message : string; span : Syntax.Location.span }
+type load_error = Sig_validation.validation_error = {
+  message : string;
+  span : Syntax.Location.span;
+}
 (** Error during signature loading *)
 
 (** {1 Type Variable Context} *)
 
-type tvar_context
+type tvar_context = Sig_validation.tvar_context
 (** Context for type variable resolution. Tracks which type variables are in
     scope. *)
 

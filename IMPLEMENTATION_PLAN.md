@@ -85,10 +85,10 @@ Lines 61–298 contain the entire signature validation subsystem:
 `validate_ctor`, `validate_data`, `validate_decl`,
 `build_context`, `validate_signature`, `validate_signature_all`.
 
-- [ ] Create `lib/sig/sig_validation.ml` + `.mli`
-- [ ] Move validation functions (~240 lines)
-- [ ] Wire into `sig_loader.ml`
-- [ ] Build + test
+- [x] Create `lib/sig/sig_validation.ml` + `.mli`
+- [x] Move validation functions (~240 lines)
+- [x] Wire into `sig_loader.ml`
+- [x] Build + test
 
 ### Task 3.2: Extract `sig_convert.ml` from `sig_loader.ml`
 
