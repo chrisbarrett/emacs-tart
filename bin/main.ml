@@ -14,6 +14,21 @@ type output_format = Human | Json
 let output_format_enum = Arg.enum [ ("human", Human); ("json", Json) ]
 
 (* ============================================================================
+   Global Logging Setup
+   ============================================================================ *)
+
+(** Resolve -v / --log-level / --log-format and configure the global Log module.
+    Called before every subcommand. *)
+let setup_logging ~log_level ~log_format ~verbose_flag =
+  let level =
+    match (log_level, verbose_flag) with
+    | Tart.Log.Normal, true -> Tart.Log.Verbose
+    | l, _ -> l
+  in
+  Tart.Log.set_level level;
+  Tart.Log.set_format log_format
+
+(* ============================================================================
    Helper Functions
    ============================================================================ *)
 
@@ -749,15 +764,45 @@ let run_emacs_coverage verbose emacs_source emacs_version_opt =
    Cmdliner Argument Definitions
    ============================================================================ *)
 
+(* Global logging arguments *)
+let log_level_enum =
+  Arg.enum
+    [
+      ("quiet", Tart.Log.Quiet);
+      ("normal", Tart.Log.Normal);
+      ("verbose", Tart.Log.Verbose);
+      ("debug", Tart.Log.Debug);
+    ]
+
+let log_level_arg =
+  let doc =
+    "Set log verbosity. $(docv) is $(b,quiet), $(b,normal) (default), \
+     $(b,verbose), or $(b,debug)."
+  in
+  Arg.(
+    value
+    & opt log_level_enum Tart.Log.Normal
+    & info [ "log-level" ] ~docv:"LEVEL" ~doc)
+
+let log_format_enum =
+  Arg.enum [ ("text", Tart.Log.Text); ("json", Tart.Log.Json) ]
+
+let log_format_arg =
+  let doc = "Log output format. $(docv) is $(b,text) (default) or $(b,json)." in
+  Arg.(
+    value
+    & opt log_format_enum Tart.Log.Text
+    & info [ "log-format" ] ~docv:"FORMAT" ~doc)
+
+let verbose_flag_arg =
+  let doc = "Shorthand for --log-level=verbose." in
+  Arg.(value & flag & info [ "v"; "verbose" ] ~doc)
+
 (* Common arguments *)
 let format_arg =
   let doc = "Output format. $(docv) is either 'human' or 'json'." in
   Arg.(
     value & opt output_format_enum Human & info [ "format" ] ~docv:"FORMAT" ~doc)
-
-let verbose_arg =
-  let doc = "Show diagnostic output." in
-  Arg.(value & flag & info [ "v"; "verbose" ] ~doc)
 
 let emacs_version_conv =
   let parse s =
@@ -805,10 +850,17 @@ let check_cmd =
     ]
   in
   let info = Cmd.info "check" ~doc ~man in
+  let run log_level log_format verbose_flag format warn_as_error ignore_warnings
+      ignore_hints emacs_version files =
+    setup_logging ~log_level ~log_format ~verbose_flag;
+    run_check format warn_as_error ignore_warnings ignore_hints emacs_version
+      files
+  in
   Cmd.v info
     Term.(
-      const run_check $ format_arg $ warn_as_error_arg $ ignore_warnings_arg
-      $ ignore_hints_arg $ emacs_version_arg $ check_files_arg)
+      const run $ log_level_arg $ log_format_arg $ verbose_flag_arg $ format_arg
+      $ warn_as_error_arg $ ignore_warnings_arg $ ignore_hints_arg
+      $ emacs_version_arg $ check_files_arg)
 
 (* Eval subcommand *)
 let eval_expr_arg =
@@ -826,7 +878,14 @@ let eval_cmd =
     ]
   in
   let info = Cmd.info "eval" ~doc ~man in
-  Cmd.v info Term.(const run_eval $ eval_expr_arg)
+  let run log_level log_format verbose_flag expr =
+    setup_logging ~log_level ~log_format ~verbose_flag;
+    run_eval expr
+  in
+  Cmd.v info
+    Term.(
+      const run $ log_level_arg $ log_format_arg $ verbose_flag_arg
+      $ eval_expr_arg)
 
 (* Expand subcommand *)
 let expand_load_arg =
@@ -850,7 +909,14 @@ let expand_cmd =
     ]
   in
   let info = Cmd.info "expand" ~doc ~man in
-  Cmd.v info Term.(const run_expand $ expand_load_arg $ expand_file_arg)
+  let run log_level log_format verbose_flag load_files file =
+    setup_logging ~log_level ~log_format ~verbose_flag;
+    run_expand load_files file
+  in
+  Cmd.v info
+    Term.(
+      const run $ log_level_arg $ log_format_arg $ verbose_flag_arg
+      $ expand_load_arg $ expand_file_arg)
 
 (* Repl subcommand *)
 let repl_cmd =
@@ -864,7 +930,13 @@ let repl_cmd =
     ]
   in
   let info = Cmd.info "repl" ~doc ~man in
-  Cmd.v info Term.(const run_repl $ const ())
+  let run log_level log_format verbose_flag () =
+    setup_logging ~log_level ~log_format ~verbose_flag;
+    run_repl ()
+  in
+  Cmd.v info
+    Term.(
+      const run $ log_level_arg $ log_format_arg $ verbose_flag_arg $ const ())
 
 (* LSP subcommand *)
 let lsp_port_conv =
@@ -884,21 +956,6 @@ let lsp_port_arg =
     & opt (some (conv lsp_port_conv)) None
     & info [ "port" ] ~docv:"PORT" ~doc)
 
-let lsp_log_level_arg =
-  let level_enum =
-    Arg.enum
-      [
-        ("debug", Tart.Server.Debug);
-        ("normal", Tart.Server.Normal);
-        ("quiet", Tart.Server.Quiet);
-      ]
-  in
-  let doc = "Set log level. $(docv) is one of: debug, normal, quiet." in
-  Arg.(
-    value
-    & opt level_enum Tart.Server.Normal
-    & info [ "log-level" ] ~docv:"LEVEL" ~doc)
-
 let lsp_cmd =
   let doc = "Start the LSP server" in
   let man =
@@ -909,7 +966,21 @@ let lsp_cmd =
     ]
   in
   let info = Cmd.info "lsp" ~doc ~man in
-  Cmd.v info Term.(const run_lsp $ lsp_log_level_arg $ lsp_port_arg)
+  let run log_level log_format verbose_flag port =
+    setup_logging ~log_level ~log_format ~verbose_flag;
+    (* Map global log level to server's log_level until LSP migration *)
+    let server_log_level =
+      match Tart.Log.level () with
+      | Tart.Log.Quiet -> Tart.Server.Quiet
+      | Tart.Log.Normal -> Tart.Server.Normal
+      | Tart.Log.Verbose | Tart.Log.Debug -> Tart.Server.Debug
+    in
+    run_lsp server_log_level port
+  in
+  Cmd.v info
+    Term.(
+      const run $ log_level_arg $ log_format_arg $ verbose_flag_arg
+      $ lsp_port_arg)
 
 (* Coverage subcommand *)
 let coverage_format_enum =
@@ -962,10 +1033,21 @@ let coverage_cmd =
     ]
   in
   let info = Cmd.info "coverage" ~doc ~man in
+  let run log_level log_format verbose_flag format fail_under exclude paths =
+    setup_logging ~log_level ~log_format ~verbose_flag;
+    (* Bridge: pass verbose=true when log level >= Verbose *)
+    let verbose =
+      match Tart.Log.level () with
+      | Tart.Log.Verbose | Tart.Log.Debug -> true
+      | _ -> false
+    in
+    run_coverage format verbose fail_under exclude paths
+  in
   Cmd.v info
     Term.(
-      const run_coverage $ coverage_format_arg $ verbose_arg
-      $ coverage_fail_under_arg $ coverage_exclude_arg $ coverage_paths_arg)
+      const run $ log_level_arg $ log_format_arg $ verbose_flag_arg
+      $ coverage_format_arg $ coverage_fail_under_arg $ coverage_exclude_arg
+      $ coverage_paths_arg)
 
 (* Emacs-coverage subcommand *)
 let emacs_source_arg =
@@ -983,19 +1065,36 @@ let emacs_coverage_cmd =
     ]
   in
   let info = Cmd.info "emacs-coverage" ~doc ~man in
+  let run log_level log_format verbose_flag emacs_source emacs_version_opt =
+    setup_logging ~log_level ~log_format ~verbose_flag;
+    (* Bridge: pass verbose=true when log level >= Verbose *)
+    let verbose =
+      match Tart.Log.level () with
+      | Tart.Log.Verbose | Tart.Log.Debug -> true
+      | _ -> false
+    in
+    run_emacs_coverage verbose emacs_source emacs_version_opt
+  in
   Cmd.v info
     Term.(
-      const run_emacs_coverage $ verbose_arg $ emacs_source_arg
-      $ emacs_version_arg)
+      const run $ log_level_arg $ log_format_arg $ verbose_flag_arg
+      $ emacs_source_arg $ emacs_version_arg)
 
 (* ============================================================================
    Main Command
    ============================================================================ *)
 
 let default_cmd =
+  let run log_level log_format verbose_flag format warn_as_error ignore_warnings
+      ignore_hints emacs_version files =
+    setup_logging ~log_level ~log_format ~verbose_flag;
+    run_check format warn_as_error ignore_warnings ignore_hints emacs_version
+      files
+  in
   Term.(
-    const run_check $ format_arg $ warn_as_error_arg $ ignore_warnings_arg
-    $ ignore_hints_arg $ emacs_version_arg $ check_files_arg)
+    const run $ log_level_arg $ log_format_arg $ verbose_flag_arg $ format_arg
+    $ warn_as_error_arg $ ignore_warnings_arg $ ignore_hints_arg
+    $ emacs_version_arg $ check_files_arg)
 
 let main_cmd =
   let doc = "A type checker for Emacs Lisp" in

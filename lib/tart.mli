@@ -107,3 +107,7 @@ module Emacs_source = Coverage.Emacs_source
 module C_scanner = Coverage.C_scanner
 module Emacs_coverage = Coverage.Emacs_coverage
 module Verbose_log = Coverage.Verbose_log
+
+(** {1 Logging} *)
+
+module Log = Tart_log.Log

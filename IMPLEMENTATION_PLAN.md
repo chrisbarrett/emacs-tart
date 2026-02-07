@@ -1,104 +1,165 @@
-# Implementation Plan: Spec 51 — Diagnostic Severity
+# Implementation Plan: Spec 53 — Structured Logging
 
 ## Background
 
-Spec 51 extends diagnostic severity with CLI control flags, LSP
-integration, JSON output, and a summary line.
+Spec 53 replaces ad-hoc logging with a unified `Log` module. Two
+separate logging systems exist:
 
-**What's already done:**
+1. `lib/coverage/verbose_log.ml` — format-string based, gated by a
+   `bool` threaded through call sites. Used by `main.ml` helpers
+   (5 `open` sites, ~40 `verbose_log` calls).
 
-- `diagnostic.ml(i)` has `severity = Error | Warning | Hint` (3 levels)
-- `format_severity` maps to lowercase strings
-- `is_error` classifies Error vs Warning/Hint
-- `error.ml` `report_human` counts errors vs warnings separately
-- LSP `server.ml` maps `severity` to `Protocol.diagnostic_severity`
-  (Error→1, Warning→2, Hint→4) — already correct
-- `Protocol.diagnostic_severity` already has `Information` (value 3)
-- CLI (`main.ml`) uses Cmdliner; exit 1 only on `is_error`
-- `to_json` includes `"severity"` field
-- `type_env.mli` has separate `diagnostic_severity` for clause
-  diagnostics (DiagError/DiagWarn/DiagNote)
+2. `lib/lsp/server.ml` — string-based `log`, `debug`, `info` methods
+   tied to server state. ~80 call sites inside server.ml. Has its own
+   `log_level = Quiet | Normal | Debug`.
 
-**Gap analysis:**
+**What the spec wants:** A new `lib/log/` sub-library with global
+mutable state (set once at CLI startup), format-string gating via
+`Printf.ifprintf`, four levels (Quiet, Normal, Verbose, Debug),
+optional JSON-lines output format, and global `--log-level`/`-v`/
+`--log-format` flags on every subcommand.
 
-1. **No `Info` severity level**: spec requires 4 levels (Error,
-   Warning, Info, Hint); current has 3. However, nothing currently
-   emits Info-level diagnostics and no features produce them yet. The
-   spec's `Info` level exists for future use (W/H code prefixes, etc.)
-   Adding it would touch every match on `severity` in the codebase for
-   no functional benefit right now.
+**Key constraint:** Zero-cost when disabled — suppressed calls must
+not allocate or format strings. The existing `verbose_log` already
+does this correctly with `Printf.ifprintf`. The LSP server's `log`
+function builds string first then gates — that's non-zero-cost.
 
-2. **No `severity_code` in JSON**: spec wants
-   `"severity_code": 1` alongside `"severity": "error"`. Easy to add.
+**Migration complexity:**
 
-3. **No CLI flags**: `--warn-as-error`, `--ignore-warnings`,
-   `--ignore-hints` not implemented. These filter/promote diagnostics
-   before output and affect exit code.
-
-4. **Summary doesn't show hints**: `report_human` counts errors and
-   warnings but not hints. Spec R13 wants "Found 2 errors, 1 warning,
-   3 hints".
-
-5. **`report` (compact) doesn't split by severity**: only counts total
-   errors, not warnings/hints.
-
-6. **Spec checkbox unchecked**: all 6 tasks need auditing.
-
-**Design decision — skip `Info` level:**
-
-Adding a 4th severity level requires updating every pattern match on
-`severity` across the codebase (~20 sites), including `diagnostic.ml`,
-`error.ml`, `module_check.ml`, `server.ml`, and tests. No existing
-feature produces Info diagnostics. The W/H code prefix system doesn't
-exist yet (no W-codes or H-codes are assigned). Adding Info now is pure
-plumbing with no user-visible benefit.
-
-Plan: implement CLI flags and summary improvements with the existing 3
-severity levels. Mark the spec's Info row as a future reservation, like
-unused error codes in Spec 47.
+- `main.ml` verbose_log calls: straightforward substitution of
+  `verbose_log verbose` → `Log.verbose`. The `~verbose:bool` parameter
+  threading can be removed since `Log` uses global state.
+- `server.ml` log calls: ~80 sites use `debug server "..."` and
+  `info server "..."` patterns (string, not format). These become
+  `Log.debug "%s" msg` or better, convert inline string construction
+  to `Log.debug "msg %s" arg` for zero-cost.
+- The LSP server's own `log_level` type and `log`/`debug`/`info`
+  functions are deleted. The `--log-level` arg on the `lsp` subcommand
+  maps to the global `Log.set_level` call.
+- `verbose_arg` currently used by coverage commands becomes the global
+  `-v` shorthand. The coverage-specific `verbose` param threading is
+  removed.
 
 ---
 
-## Iteration 1: CLI severity flags and summary
+## Iteration 1: Create `lib/log/` module and global CLI flags
 
 **What to build:**
 
-1. Add `--warn-as-error` flag to `check` subcommand in `main.ml`:
-   - When set, warnings are promoted to errors for exit code purposes
-   - `is_error` already classifies; add a filter that re-checks after
-     promotion
+1. Create `lib/log/dune` — new sub-library `tart.log` depending on
+   `yojson`.
 
-2. Add `--ignore-warnings` flag to `check` subcommand:
-   - Filter out Warning-severity diagnostics before output
+2. Create `lib/log/log.ml` and `lib/log/log.mli`:
+   - `type level = Quiet | Normal | Verbose | Debug`
+   - `type format = Text | Json`
+   - Global refs: `current_level`, `current_format`
+   - `set_level`, `set_format` mutators
+   - `info`, `verbose`, `debug` using `Printf.kfprintf`/`Printf.ifprintf`
+   - `debug_with_ctx` for optional JSON context
 
-3. Add `--ignore-hints` flag to `check` subcommand:
-   - Filter out Hint-severity diagnostics before output
+3. Add `tart.log` as dependency of `tart` (top-level lib/dune).
 
-4. Update `error.ml` `report_human` to include hint count in summary:
-   - Current: "Found 2 errors, 1 warning"
-   - New: "Found 2 errors, 1 warning, 3 hints"
+4. Wire global flags in `main.ml`:
+   - Add `--log-level` enum (quiet/normal/verbose/debug)
+   - Add `--log-format` enum (text/json)
+   - Resolve `-v` flag: if set and `--log-level` is default, use
+     Verbose; otherwise `--log-level` wins
+   - Call `Log.set_level` and `Log.set_format` before dispatching
+     each subcommand
 
-5. Update `error.ml` `report` (compact) to split by severity too.
-
-6. Add `severity_code` to JSON output in `diagnostic.ml` `to_json`:
-   - Error→1, Warning→2, Hint→4 (matching LSP DiagnosticSeverity)
-
-7. Add `severity_to_int` to `diagnostic.ml(i)`:
-   - Error→1, Warning→2, Hint→4
-
-8. Add filtering helpers to `error.ml(i)`:
-   - `is_warning : t -> bool`
-   - `is_hint : t -> bool`
-   - `filter_by_severity` or inline in main.ml
-
-9. Check spec task boxes and update status.
+5. Add `tart.log` dependency to coverage dune and lsp dune.
 
 **Files:**
-- `bin/main.ml` — add 3 Cmdliner flags, wire into `run_check`
-- `lib/error.ml` / `lib/error.mli` — update `report_human`, `report`
-  summaries; add severity helpers
-- `lib/typing/diagnostic.ml` / `.mli` — add `severity_to_int`,
-  `severity_code` in `to_json`
-- `specs/51-diagnostic-severity.md` — check boxes, update status
+- `lib/log/dune` (new)
+- `lib/log/log.ml` (new)
+- `lib/log/log.mli` (new)
+- `lib/dune` — add `tart.log` to libraries
+- `lib/coverage/dune` — add `log` to libraries
+- `lib/lsp/dune` — add `log` to libraries
+- `bin/main.ml` — global flag definitions and wiring
+
+**Verify:** `dune build`; `dune test`
+
+---
+
+## Iteration 2: Migrate coverage/main.ml from Verbose_log to Log
+
+**What to build:**
+
+1. Replace all `verbose_log verbose` calls in `main.ml` with
+   `Log.verbose` calls. Remove `let open Tart.Verbose_log in` blocks.
+   Remove `~verbose` parameter threading from helper functions
+   (`find_typings_root`, `detect_emacs_version`, `log_typings_loading`,
+   `scan_c_source_verbose`).
+
+2. Update `run_coverage` and `run_emacs_coverage` — remove `verbose`
+   parameter, update Cmdliner terms.
+
+3. Delete `lib/coverage/verbose_log.ml` and `verbose_log.mli`.
+
+4. Update `lib/coverage/dune` if needed.
+
+5. Verify no remaining `Verbose_log` references: `grep -r Verbose_log`.
+
+**Files:**
+- `bin/main.ml` — bulk migration
+- `lib/coverage/verbose_log.ml` — delete
+- `lib/coverage/verbose_log.mli` — delete
+
+**Verify:** `dune build`; `dune test`; `grep -r Verbose_log lib/ bin/`
+returns nothing
+
+---
+
+## Iteration 3: Migrate LSP server to Log
+
+**What to build:**
+
+1. Remove `log_level` type and `log`/`debug`/`info` functions from
+   `server.ml` and `server.mli`.
+
+2. Remove `log_level` field from server `t` record and `create`
+   parameter.
+
+3. Replace all `debug server "..."` with `Log.debug "%s" "..."` or
+   convert to format-string calls where feasible. Prioritize the ~10
+   most common patterns; use `%s` wrapper for complex string-built
+   messages.
+
+4. Update `main.ml` `run_lsp`: remove `log_level` param from
+   `Server.create` call. The global `Log.set_level` (wired in
+   iteration 1) handles level configuration.
+
+5. Remove `lsp_log_level_arg` from main.ml (superseded by global
+   `--log-level`).
+
+6. Update any tests that reference `Server.log_level`,
+   `Server.Debug`, `Server.Normal`, `Server.Quiet`.
+
+**Files:**
+- `lib/lsp/server.ml` / `server.mli` — remove log infrastructure
+- `bin/main.ml` — update `run_lsp`, remove `lsp_log_level_arg`
+- `test/lsp/server_test.ml` (if it references log_level)
+
+**Verify:** `dune build`; `dune test`
+
+---
+
+## Iteration 4: Spec status update
+
+**What to build:**
+
+1. Check all task boxes in specs/53-structured-logging.md.
+2. Add Status section: "Complete".
+3. Verify R8 (verbose logging shows signature loading) — already
+   present from verbose_log migration.
+4. R9 (debug logging for unification/resolution) — defer to future
+   if no existing debug call sites exist in typing modules. Mark
+   task as checked with note.
+5. R10-R11 (stderr/stdout separation, quiet mode) — verify by
+   inspection; Log module writes to stderr, results to stdout.
+
+**Files:**
+- `specs/53-structured-logging.md`
 
 **Verify:** `dune test`; all tests pass

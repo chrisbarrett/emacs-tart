@@ -12,6 +12,7 @@
   tart.lsp
   tart.graph
   tart.coverage
-  tart.errors)
+  tart.errors
+  tart.log)
  (preprocess
   (pps ppx_deriving.show ppx_deriving.eq)))

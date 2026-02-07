@@ -1,0 +1,4 @@
+(library
+ (name tart_log)
+ (public_name tart.log)
+ (libraries yojson))
