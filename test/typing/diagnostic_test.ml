@@ -1234,7 +1234,7 @@ let _exhaustiveness_guard (code : Diag.error_code) =
   | UndefinedVariable | UndefinedFunction | UndefinedType | MissingSignature
   | WrongArity | WrongTypeArity | KindMismatch | InfiniteKind
   | TypeArityMismatch | NonExhaustive | SignatureNotFound | VersionTooLow
-  | VersionTooHigh ->
+  | VersionTooHigh | RedundantGuard ->
       ()
 
 (* =============================================================================

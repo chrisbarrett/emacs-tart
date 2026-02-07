@@ -109,6 +109,7 @@ as the source of truth. Codes are sequential from E0001.
 | E0900 | VersionTooLow       | Feature requires newer Emacs version           |
 | E0901 | VersionTooHigh      | Feature removed in declared Emacs version      |
 | E0902 | VersionParseFailed  | Package-Requires parse error                   |
+| E0903 | RedundantGuard      | Feature guard redundant given min version      |
 
 ## Requirements
 
@@ -144,13 +145,13 @@ as the source of truth. Codes are sequential from E0001.
 
 ## Status
 
-Complete. All implemented codes match this registry. E0008 (DisjointEquality)
-and E0900–E0901 (version constraints) were added after initial spec draft.
-Clause diagnostics intentionally lack error codes — they carry user-authored
-advisory messages from `.tart` signatures, not compiler error conditions.
-Future codes (E0103, E0105, E0202, E0203, E0401, E0402, E0500–E0503,
-E0600–E0602, E0700, E0701, E0800–E0802, E0902) are reservations for features
-not yet implemented.
+Complete. All implemented codes match this registry. E0008 (DisjointEquality),
+E0900–E0901 (version constraints), and E0903 (redundant guard) were added after
+initial spec draft. Clause diagnostics intentionally lack error codes — they
+carry user-authored advisory messages from `.tart` signatures, not compiler
+error conditions. Future codes (E0103, E0105, E0202, E0203, E0401, E0402,
+E0500–E0503, E0600–E0602, E0700, E0701, E0800–E0802, E0902) are reservations
+for features not yet implemented.
 
 ## Tasks
 

@@ -58,6 +58,7 @@ type error_code =
   (* Version Errors (E0900–E0999) *)
   | VersionTooLow  (** E0900: Feature requires newer Emacs version *)
   | VersionTooHigh  (** E0901: Feature removed in declared Emacs version *)
+  | RedundantGuard  (** E0903: Feature guard is redundant given min version *)
 
 (** Format an error code for display. *)
 let error_code_to_string = function
@@ -89,6 +90,7 @@ let error_code_to_string = function
   (* Version Errors *)
   | VersionTooLow -> "E0900"
   | VersionTooHigh -> "E0901"
+  | RedundantGuard -> "E0903"
 
 (** Severity level for diagnostics *)
 type severity = Error | Warning | Hint
@@ -894,4 +896,39 @@ let version_too_high ~span ~name ~removed_after ~declared () =
     actual = None;
     related;
     help = [];
+  }
+
+(** Create a redundant guard diagnostic (E0903).
+
+    Used when a feature guard like [(featurep 'json)] or [(fboundp 'f)] is
+    redundant because the package's minimum Emacs version already guarantees
+    availability. Types still resolve; this is a warning only. *)
+let redundant_guard ~span ~guard_name ~available_since ~declared () =
+  let since_str = Env.version_to_string available_since in
+  let declared_str = Env.version_to_string declared in
+  let message =
+    Printf.sprintf "`%s` is built-in since Emacs %s" guard_name since_str
+  in
+  let related =
+    [
+      {
+        span = Loc.dummy_span;
+        message =
+          Printf.sprintf "package declares minimum Emacs %s" declared_str;
+      };
+    ]
+  in
+  {
+    severity = Warning;
+    code = Some RedundantGuard;
+    span;
+    message;
+    expected = None;
+    actual = None;
+    related;
+    help =
+      [
+        Printf.sprintf "guard is unnecessary — Emacs %s+ always has `%s`"
+          declared_str guard_name;
+      ];
   }

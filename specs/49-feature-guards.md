@@ -153,10 +153,10 @@ Macros expand before checking; expanded guards recognized automatically.
 - [x] [R7-R11] Feature env through control flow
 - [x] [R12] Negated guards
 - [x] [R13] Filename resolution
-- [ ] [R14] Redundant guard lint (deferred — needs [Spec 50](./50-version-constraints.md) version constraints)
+- [x] [R14] Redundant guard lint
 - [x] [R16] Combined guards
 - [x] [R17] Document inline-only limitation
 
 ## Status
 
-Complete (except R14, which requires [Spec 50](./50-version-constraints.md) version constraints).
+Complete.

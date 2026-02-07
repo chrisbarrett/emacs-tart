@@ -227,3 +227,13 @@ val load_lisp_core : search_path:t -> Core.Type_env.t -> Core.Type_env.t
     @param search_path The search path configuration
     @param env Base type environment to extend
     @return Extended type environment with lisp-core signatures *)
+
+(** {1 Feature Version Resolution} *)
+
+val resolve_feature_version :
+  search_path:t -> string -> Core.Type_env.emacs_version option
+(** Resolve a feature/module name to its source Emacs version.
+
+    Looks up the module in the search path and extracts the version from the
+    typings directory path. Returns [None] if the module is not found or is not
+    from versioned typings. Used by redundant guard detection (Spec 49 R14). *)

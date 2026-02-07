@@ -51,6 +51,7 @@ type error_code =
   (* Version Errors (E0900–E0999) *)
   | VersionTooLow  (** E0900: Feature requires newer Emacs version *)
   | VersionTooHigh  (** E0901: Feature removed in declared Emacs version *)
+  | RedundantGuard  (** E0903: Feature guard is redundant given min version *)
 
 val error_code_to_string : error_code -> string
 (** Format an error code for display. *)
@@ -236,3 +237,16 @@ val version_too_high :
 
     Used when code calls a function that was removed after a certain Emacs
     version, but the package declares a higher minimum. *)
+
+val redundant_guard :
+  span:Syntax.Location.span ->
+  guard_name:string ->
+  available_since:Core.Type_env.emacs_version ->
+  declared:Core.Type_env.emacs_version ->
+  unit ->
+  t
+(** Create a redundant guard warning (E0903).
+
+    Used when a feature guard like [(featurep 'json)] or [(fboundp 'f)] is
+    redundant because the package's minimum Emacs version already guarantees
+    availability. Types still resolve; this is a warning only (Spec 49 R14). *)

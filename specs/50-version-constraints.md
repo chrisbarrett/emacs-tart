@@ -136,7 +136,7 @@ On Package-Requires when version could be lower:
 - [x] [R4-R7] Package header parsing
 - [x] [R8-R10] Constraint propagation
 - [x] [R11] Feature guard exemption
-- [ ] [R13-R15] LSP code actions
+- [x] [R13-R15] LSP code actions
 - [x] Add E0900-E0902 to [Spec 47](./47-error-codes.md)
 
-**Status:** Complete (except R13-R15 LSP code actions, deferred)
+**Status:** Complete.

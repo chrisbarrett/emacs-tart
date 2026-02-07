@@ -146,3 +146,15 @@ val check_version_constraints :
 
     Calls inside feature-guarded branches (featurep, fboundp, boundp,
     bound-and-true-p) are exempt from warnings (Spec 50 R11). *)
+
+val check_redundant_guards :
+  config:config ->
+  declared:Core.Type_env.emacs_version ->
+  env:Core.Type_env.t ->
+  Syntax.Sexp.t list ->
+  Diagnostic.t list
+(** Check all guard forms for redundancy (Spec 49 R14).
+
+    Walks the AST, finds all guard patterns, and emits [RedundantGuard] warnings
+    for guards whose targets are already guaranteed available by the declared
+    minimum Emacs version. Each guard name is reported at most once. *)

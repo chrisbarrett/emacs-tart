@@ -996,6 +996,109 @@ let test_guard_unless_not_exempt () =
     "unless body NOT exempt (negated guard)" 1 (List.length diags)
 
 (* =============================================================================
+   Redundant Guard Tests (Spec 49 R14)
+   ============================================================================= *)
+
+(** Helper: build config + env with a function available since a given version
+*)
+let env_with_fn_since name ~major ~minor =
+  let env = Env.empty in
+  let range : Env.version_range =
+    { min_version = Some { major; minor }; max_version = None }
+  in
+  Env.extend_fn_version name range env
+
+let env_with_var_since name ~major ~minor =
+  let env = Env.empty in
+  let range : Env.version_range =
+    { min_version = Some { major; minor }; max_version = None }
+  in
+  Env.extend_var_version name range env
+
+let declared_31_0 : Env.emacs_version = { major = 31; minor = 0 }
+
+let test_redundant_fboundp () =
+  let config = Module_check.default_config () in
+  let env = env_with_fn_since "length" ~major:27 ~minor:1 in
+  let sexps = parse "(when (fboundp 'length) (length \"hi\"))" in
+  let diags =
+    Module_check.check_redundant_guards ~config ~declared:declared_31_0 ~env
+      sexps
+  in
+  Alcotest.(check int) "redundant fboundp warns" 1 (List.length diags);
+  let d = List.hd diags in
+  Alcotest.(check (option Alcotest.string))
+    "has E0903 code" (Some "E0903")
+    (Option.map Diag.error_code_to_string d.code)
+
+let test_non_redundant_fboundp () =
+  let config = Module_check.default_config () in
+  let env = env_with_fn_since "new-fn" ~major:32 ~minor:0 in
+  let sexps = parse "(when (fboundp 'new-fn) (new-fn))" in
+  let diags =
+    Module_check.check_redundant_guards ~config ~declared:declared_31_0 ~env
+      sexps
+  in
+  Alcotest.(check int) "needed fboundp no warning" 0 (List.length diags)
+
+let test_redundant_boundp () =
+  let config = Module_check.default_config () in
+  let env = env_with_var_since "my-var" ~major:27 ~minor:1 in
+  let sexps = parse "(when (boundp 'my-var) my-var)" in
+  let diags =
+    Module_check.check_redundant_guards ~config ~declared:declared_31_0 ~env
+      sexps
+  in
+  Alcotest.(check int) "redundant boundp warns" 1 (List.length diags)
+
+let test_redundant_bound_and_true_p () =
+  let config = Module_check.default_config () in
+  let env = env_with_var_since "my-var" ~major:28 ~minor:1 in
+  let sexps = parse "(when (bound-and-true-p my-var) my-var)" in
+  let diags =
+    Module_check.check_redundant_guards ~config ~declared:declared_31_0 ~env
+      sexps
+  in
+  Alcotest.(check int) "redundant bound-and-true-p warns" 1 (List.length diags)
+
+let test_redundant_guard_dedup () =
+  let config = Module_check.default_config () in
+  let env = env_with_fn_since "length" ~major:27 ~minor:1 in
+  let sexps =
+    parse
+      "(progn (when (fboundp 'length) (length \"a\")) (when (fboundp 'length) \
+       (length \"b\")))"
+  in
+  let diags =
+    Module_check.check_redundant_guards ~config ~declared:declared_31_0 ~env
+      sexps
+  in
+  Alcotest.(check int) "deduplicates per guard" 1 (List.length diags)
+
+let test_redundant_guard_message () =
+  let config = Module_check.default_config () in
+  let env = env_with_fn_since "length" ~major:27 ~minor:1 in
+  let sexps = parse "(when (fboundp 'length) (length \"hi\"))" in
+  let diags =
+    Module_check.check_redundant_guards ~config ~declared:declared_31_0 ~env
+      sexps
+  in
+  let d = List.hd diags in
+  Alcotest.(check bool)
+    "message mentions function" true
+    (String.starts_with ~prefix:"`length`" d.message)
+
+let test_no_redundant_guard_without_version () =
+  let config = Module_check.default_config () in
+  let env = Env.empty in
+  let sexps = parse "(when (fboundp 'unknown-fn) (unknown-fn))" in
+  let diags =
+    Module_check.check_redundant_guards ~config ~declared:declared_31_0 ~env
+      sexps
+  in
+  Alcotest.(check int) "no warning for unknown function" 0 (List.length diags)
+
+(* =============================================================================
    Test Suite
    ============================================================================= *)
 
@@ -1141,5 +1244,22 @@ let () =
             test_unguarded_still_warns;
           Alcotest.test_case "unless not exempt" `Quick
             test_guard_unless_not_exempt;
+        ] );
+      ( "redundant_guard",
+        [
+          Alcotest.test_case "redundant fboundp warns" `Quick
+            test_redundant_fboundp;
+          Alcotest.test_case "needed fboundp no warning" `Quick
+            test_non_redundant_fboundp;
+          Alcotest.test_case "redundant boundp warns" `Quick
+            test_redundant_boundp;
+          Alcotest.test_case "redundant bound-and-true-p warns" `Quick
+            test_redundant_bound_and_true_p;
+          Alcotest.test_case "deduplicates per guard" `Quick
+            test_redundant_guard_dedup;
+          Alcotest.test_case "message mentions function" `Quick
+            test_redundant_guard_message;
+          Alcotest.test_case "no warning for unknown" `Quick
+            test_no_redundant_guard_without_version;
         ] );
     ]

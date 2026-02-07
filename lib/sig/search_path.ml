@@ -565,3 +565,23 @@ let load_lisp_core ~(search_path : t) (env : Core.Type_env.t) : Core.Type_env.t
           else env
       | None -> env)
   | _ -> env
+
+(** Resolve a feature/module name to its source Emacs version.
+
+    Looks up the module in the search path and extracts the version from the
+    typings directory path (e.g., [typings/emacs/27.1/c-core/json.tart] yields
+    [{ major = 27; minor = 1 }]).
+
+    Returns [None] if the module is not found or is not from versioned typings.
+    Used by redundant guard detection (Spec 49 R14). *)
+let resolve_feature_version ~(search_path : t) (module_name : string) :
+    Core.Type_env.emacs_version option =
+  match find_signature search_path module_name with
+  | None -> None
+  | Some path ->
+      (* Extract version from the directory containing the .tart file.
+         Path structure: .../typings/emacs/VER/c-core/module.tart
+         We go up two levels (past c-core) to get the version directory. *)
+      let dir = Filename.dirname path in
+      let parent = Filename.dirname dir in
+      extract_version_from_typings_dir parent

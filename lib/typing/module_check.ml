@@ -365,6 +365,130 @@ let check_version_constraints ~(declared : Env.emacs_version) ~(env : Env.t)
             | None, None -> None)))
     call_spans
 
+(** {1 Redundant Guard Detection (Spec 49 R14)} *)
+
+(** Check whether a guard's target is available in the declared version.
+
+    For [fboundp]/[boundp]/[bound-and-true-p]: looks up the function or variable
+    in the type environment's version tables.
+
+    For [featurep]: resolves the feature name to a typings directory and
+    extracts the source version.
+
+    Returns [Some available_since] when the guard is redundant, [None] if the
+    guard is needed or if version info is unavailable. *)
+let check_guard_redundancy ~(config : config) ~(env : Env.t)
+    ~(declared : Env.emacs_version) (guard : Narrow.guard_info) :
+    (string * Env.emacs_version) option =
+  match guard with
+  | Narrow.FboundGuard fname -> (
+      match Env.lookup_fn_version fname env with
+      | Some { min_version = Some v; _ } when compare_version v declared <= 0 ->
+          Some (fname, v)
+      | _ -> None)
+  | Narrow.BoundGuard vname | Narrow.BoundTrueGuard vname -> (
+      match Env.lookup_var_version vname env with
+      | Some { min_version = Some v; _ } when compare_version v declared <= 0 ->
+          Some (vname, v)
+      | _ -> None)
+  | Narrow.FeatureGuard feature -> (
+      match
+        Search.resolve_feature_version ~search_path:config.search_path feature
+      with
+      | Some v when compare_version v declared <= 0 -> Some (feature, v)
+      | _ -> None)
+
+(** Collect guard forms with their spans from the AST.
+
+    Walks the AST looking for guard-using forms ([when], [if], [unless], [and],
+    [cond], [or]) and extracts guard info with the span of the guard condition.
+    Only reports each guard name once (deduplicates). *)
+let rec collect_guard_spans (sexp : Syntax.Sexp.t) :
+    (Narrow.guard_info * Syntax.Location.span) list =
+  let open Syntax.Sexp in
+  match sexp with
+  (* (when CONDITION BODY...) *)
+  | List (Symbol ("when", _) :: condition :: body, _) ->
+      let from_condition = extract_guards_from_condition condition in
+      let from_body = List.concat_map collect_guard_spans body in
+      from_condition @ from_body
+  (* (unless CONDITION BODY...) *)
+  | List (Symbol ("unless", _) :: condition :: body, _) ->
+      let from_condition = extract_guards_from_condition condition in
+      let from_body = List.concat_map collect_guard_spans body in
+      from_condition @ from_body
+  (* (if CONDITION THEN ELSE...) *)
+  | List (Symbol ("if", _) :: condition :: branches, _) ->
+      let from_condition = extract_guards_from_condition condition in
+      let from_branches = List.concat_map collect_guard_spans branches in
+      from_condition @ from_branches
+  (* (cond (CONDITION BODY...)...) *)
+  | List (Symbol ("cond", _) :: clauses, _) ->
+      List.concat_map
+        (fun clause ->
+          match clause with
+          | List (condition :: body, _) ->
+              let from_cond = extract_guards_from_condition condition in
+              let from_body = List.concat_map collect_guard_spans body in
+              from_cond @ from_body
+          | _ -> collect_guard_spans clause)
+        clauses
+  (* (or GUARD (error ...)) — early-return guard pattern *)
+  | List (Symbol ("or", _) :: args, _) ->
+      let guards = List.concat_map extract_guards_from_condition args in
+      let from_args = List.concat_map collect_guard_spans args in
+      guards @ from_args
+  (* Standard recursive cases *)
+  | List (elems, _) -> List.concat_map collect_guard_spans elems
+  | Vector (elems, _) -> List.concat_map collect_guard_spans elems
+  | Cons (car, cdr, _) -> collect_guard_spans car @ collect_guard_spans cdr
+  | _ -> []
+
+(** Extract guard info from a condition expression.
+
+    Handles bare guard calls and [(and guard1 guard2 ...)] forms. *)
+and extract_guards_from_condition (condition : Syntax.Sexp.t) :
+    (Narrow.guard_info * Syntax.Location.span) list =
+  let open Syntax.Sexp in
+  match condition with
+  | List (Symbol ("and", _) :: conjuncts, _) ->
+      List.concat_map extract_guards_from_condition conjuncts
+  | List (Symbol (fn_name, _) :: args, span) -> (
+      match Narrow.analyze_single_guard fn_name args with
+      | Some guard -> [ (guard, span) ]
+      | None -> [])
+  | _ -> []
+
+(** Check all guard forms for redundancy (Spec 49 R14).
+
+    Walks the AST, finds all guard patterns, and emits [RedundantGuard] warnings
+    for guards whose targets are already guaranteed available by the declared
+    minimum Emacs version. Each guard name is reported at most once. *)
+let check_redundant_guards ~(config : config) ~(declared : Env.emacs_version)
+    ~(env : Env.t) (sexps : Syntax.Sexp.t list) : Diagnostic.t list =
+  let guard_spans = List.concat_map collect_guard_spans sexps in
+  (* Deduplicate by guard name *)
+  let seen = Hashtbl.create 16 in
+  List.filter_map
+    (fun (guard, span) ->
+      let name =
+        match guard with
+        | Narrow.FeatureGuard f -> "featurep:" ^ f
+        | Narrow.FboundGuard f -> "fboundp:" ^ f
+        | Narrow.BoundGuard v -> "boundp:" ^ v
+        | Narrow.BoundTrueGuard v -> "bound-and-true-p:" ^ v
+      in
+      if Hashtbl.mem seen name then None
+      else (
+        Hashtbl.replace seen name ();
+        match check_guard_redundancy ~config ~env ~declared guard with
+        | Some (guard_name, available_since) ->
+            Some
+              (Diagnostic.redundant_guard ~span ~guard_name ~available_since
+                 ~declared ())
+        | None -> None))
+    guard_spans
+
 (** {1 Signature Loading} *)
 
 (** Try to find and load a sibling `.tart` file for an `.el` file *)
@@ -784,6 +908,17 @@ let check_module ~(config : config) ~(filename : string)
         check_version_constraints ~declared ~env:check_result.Check.env sexps
     | None -> []
   in
+
+  (* Step 11: Check redundant guards (Spec 49 R14) *)
+  let redundant_guard_diagnostics =
+    match config.declared_version with
+    | Some declared ->
+        check_redundant_guards ~config ~declared ~env:check_result.Check.env
+          sexps
+    | None -> []
+  in
+
+  let version_diagnostics = version_diagnostics @ redundant_guard_diagnostics in
 
   {
     type_errors = check_result.Check.errors;

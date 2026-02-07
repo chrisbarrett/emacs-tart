@@ -59,6 +59,7 @@ let error_type_of_code = function
   | Some SignatureNotFound -> "SIGNATURE NOT FOUND"
   | Some VersionTooLow -> "VERSION TOO LOW"
   | Some VersionTooHigh -> "VERSION TOO HIGH"
+  | Some RedundantGuard -> "REDUNDANT GUARD"
   | None -> "ERROR"
 
 (** Format a diagnostic as a human-readable string.
@@ -178,6 +179,7 @@ let to_string_human (d : Diagnostic.t) : string =
     | Some SignatureNotFound
     | Some VersionTooLow
     | Some VersionTooHigh
+    | Some RedundantGuard
     | None ->
         Source_excerpt.NoContext
   in
