@@ -182,6 +182,17 @@ let get_row_accessor_config = function
     - If: branches must unify; result is their common type
     - Let: generate constraints for bindings (generalization in R5)
     - Progn: result is type of last expression *)
+
+(** Result of attempting union function dispatch (Spec 34 R11). *)
+type union_fn_result =
+  | UnionNotApplicable
+      (** Function type is not a union of arrows — caller should use standard
+          path *)
+  | UnionMatched of typ  (** All variants accepted args; carries return type *)
+  | UnionFailed of (param list * typ) list
+      (** Function IS a union of arrows, but args don't satisfy all variants.
+          Carries the arrow variants for error constraint generation. *)
+
 let rec infer (env : Env.t) (sexp : Syntax.Sexp.t) : result =
   let open Syntax.Sexp in
   match sexp with
@@ -1526,6 +1537,69 @@ and infer_apply env fn_expr args span =
 
     This provides better type checking than the generic builtin signature
     because we can track the actual function type and argument positions. *)
+(** Try to dispatch a funcall through a union of function types (Spec 34 R11).
+
+    When the function expression has a union type where all members are
+    [TArrow] types, check arguments against every variant speculatively:
+    - All variants must accept the arguments (intersection of param types)
+    - Return type is the union of all variants' return types
+
+    Returns [UnionMatched return_type] if all variants accept the args,
+    [UnionFailed arrows] if the function IS a union of arrows but args don't
+    satisfy all variants (carries the list of arrow variants for error
+    reporting), or [UnionNotApplicable] if the function type is not a union
+    of arrows. *)
+and try_union_fn_dispatch (arg_types : typ list) (fn_ty : typ)
+    (loc : Loc.span) : union_fn_result =
+  match repr fn_ty with
+  | TUnion members ->
+      let arrows =
+        List.filter_map
+          (fun m ->
+            match repr m with TArrow (ps, r) -> Some (ps, r) | _ -> None)
+          members
+      in
+      if List.length arrows <> List.length members || List.length arrows < 2
+      then
+        (* Not all members are arrows, or only one member — skip *)
+        UnionNotApplicable
+      else
+        (* Try to unify args against each arrow variant speculatively *)
+        let try_all_variants () =
+          List.fold_left
+            (fun acc (params, ret) ->
+              match acc with
+              | None -> None (* Already failed *)
+              | Some returns ->
+                  let param_types =
+                    List.map (fun t -> PPositional t) arg_types
+                  in
+                  if
+                    Result.is_ok
+                      (Unify.try_unify_params param_types params loc)
+                  then Some (ret :: returns)
+                  else None)
+            (Some []) arrows
+        in
+        (match try_all_variants () with
+        | Some returns ->
+            let returns = List.rev returns in
+            (* Deduplicate return types: if all are the same, use that type
+               directly instead of a redundant union like (Or int int). *)
+            let deduped =
+              List.fold_left
+                (fun acc r ->
+                  if List.exists (equal r) acc then acc else r :: acc)
+                [] returns
+              |> List.rev
+            in
+            let ret_ty =
+              match deduped with [ t ] -> t | ts -> TUnion ts
+            in
+            UnionMatched ret_ty
+        | None -> UnionFailed arrows)
+  | _ -> UnionNotApplicable
+
 and infer_funcall env fn_expr args span =
   let fn_result = infer_fn_expr env fn_expr in
   let arg_results = List.map (infer env) args in
@@ -1540,79 +1614,156 @@ and infer_funcall env fn_expr args span =
     | _ -> None
   in
 
-  (* Fresh type variable for the result *)
-  let result_ty = fresh_tvar (Env.current_level env) in
+  let arg_types = List.map (fun r -> r.ty) arg_results in
 
-  (* Build expected function type - one constraint per argument for better
-     error messages *)
-  let arg_constraints_with_context =
-    List.mapi
-      (fun i arg_result ->
-        let expected_param_ty = fresh_tvar (Env.current_level env) in
-        let arg_expr = List.nth args i in
-        let arg_expr_source = get_expr_source arg_expr in
-        let context =
-          match fn_name with
-          | Some name ->
-              C.FunctionArg
-                {
-                  fn_name = name;
-                  fn_type = fn_result.ty;
-                  arg_index = i;
-                  arg_expr_source;
-                }
-          | None ->
-              (* For anonymous functions, use "funcall" as context *)
-              C.FunctionArg
-                {
-                  fn_name = "funcall";
-                  fn_type = fn_result.ty;
-                  arg_index = i;
-                  arg_expr_source;
-                }
-        in
-        ( expected_param_ty,
-          C.equal ~context expected_param_ty arg_result.ty
-            (Syntax.Sexp.span_of arg_expr) ))
-      arg_results
+  (* Try union function dispatch first (Spec 34 R11).
+     When the function type is a union of arrows, check args against all
+     variants and return the union of return types. *)
+  let union_dispatch_result =
+    try_union_fn_dispatch arg_types fn_result.ty span
   in
 
-  (* Build the expected function type using the fresh param types *)
-  let param_types =
-    List.map (fun (ty, _) -> PPositional ty) arg_constraints_with_context
-  in
-  let expected_fn_type = TArrow (param_types, result_ty) in
+  match union_dispatch_result with
+  | UnionMatched union_ret_ty ->
+      (* Union dispatch succeeded — use union of return types *)
+      let arg_constraints = combine_results arg_results in
+      let all_constraints = C.combine fn_result.constraints arg_constraints in
+      let all_undefineds =
+        fn_result.undefineds @ combine_undefineds arg_results
+      in
+      let quote_diag =
+        match quote_style_diagnostic fn_expr with
+        | Some d -> [ d ]
+        | None -> []
+      in
+      {
+        ty = union_ret_ty;
+        constraints = all_constraints;
+        undefineds = all_undefineds;
+        clause_diagnostics = quote_diag;
+      }
+  | UnionFailed arrows ->
+      (* Function IS a union of arrows, but args don't satisfy all variants.
+         Emit per-variant constraints: each arrow's params must match the args.
+         The variant(s) that don't match will produce type errors during
+         constraint solving. *)
+      let result_ty = fresh_tvar (Env.current_level env) in
+      let arg_constraints = combine_results arg_results in
+      let variant_constraints =
+        List.fold_left
+          (fun acc (params, ret) ->
+            let param_types = List.map (fun t -> PPositional t) arg_types in
+            let expected_arrow = TArrow (param_types, ret) in
+            let variant_arrow = TArrow (params, ret) in
+            C.add (C.equal variant_arrow expected_arrow span) acc)
+          C.empty arrows
+      in
+      (* Also constrain result to the first return type for error display *)
+      let ret_constraint =
+        match arrows with
+        | (_, ret) :: _ -> C.add (C.equal result_ty ret span) C.empty
+        | [] -> C.empty
+      in
+      let all_constraints =
+        C.combine fn_result.constraints
+          (C.combine arg_constraints
+             (C.combine variant_constraints ret_constraint))
+      in
+      let all_undefineds =
+        fn_result.undefineds @ combine_undefineds arg_results
+      in
+      let quote_diag =
+        match quote_style_diagnostic fn_expr with
+        | Some d -> [ d ]
+        | None -> []
+      in
+      {
+        ty = result_ty;
+        constraints = all_constraints;
+        undefineds = all_undefineds;
+        clause_diagnostics = quote_diag;
+      }
+  | UnionNotApplicable ->
+      (* Standard constraint-based path *)
 
-  (* Constraint: actual function type = expected function type *)
-  let fn_constraint = C.equal fn_result.ty expected_fn_type span in
+      (* Fresh type variable for the result *)
+      let result_ty = fresh_tvar (Env.current_level env) in
 
-  (* Collect all argument constraints *)
-  let arg_type_constraints =
-    List.fold_left
-      (fun acc (_, c) -> C.add c acc)
-      C.empty arg_constraints_with_context
-  in
+      (* Build expected function type - one constraint per argument for better
+         error messages *)
+      let arg_constraints_with_context =
+        List.mapi
+          (fun i arg_result ->
+            let expected_param_ty = fresh_tvar (Env.current_level env) in
+            let arg_expr = List.nth args i in
+            let arg_expr_source = get_expr_source arg_expr in
+            let context =
+              match fn_name with
+              | Some name ->
+                  C.FunctionArg
+                    {
+                      fn_name = name;
+                      fn_type = fn_result.ty;
+                      arg_index = i;
+                      arg_expr_source;
+                    }
+              | None ->
+                  (* For anonymous functions, use "funcall" as context *)
+                  C.FunctionArg
+                    {
+                      fn_name = "funcall";
+                      fn_type = fn_result.ty;
+                      arg_index = i;
+                      arg_expr_source;
+                    }
+            in
+            ( expected_param_ty,
+              C.equal ~context expected_param_ty arg_result.ty
+                (Syntax.Sexp.span_of arg_expr) ))
+          arg_results
+      in
 
-  (* Combine all constraints.
-     Order matters for error context: fn_constraint must come BEFORE
-     arg_type_constraints so that the function signature determines the
-     expected type before we compare with actual argument types. *)
-  let arg_constraints = combine_results arg_results in
-  let all_constraints =
-    C.combine fn_result.constraints
-      (C.combine arg_constraints (C.add fn_constraint arg_type_constraints))
-  in
-  let all_undefineds = fn_result.undefineds @ combine_undefineds arg_results in
+      (* Build the expected function type using the fresh param types *)
+      let param_types =
+        List.map (fun (ty, _) -> PPositional ty) arg_constraints_with_context
+      in
+      let expected_fn_type = TArrow (param_types, result_ty) in
 
-  let quote_diag =
-    match quote_style_diagnostic fn_expr with Some d -> [ d ] | None -> []
-  in
-  {
-    ty = result_ty;
-    constraints = all_constraints;
-    undefineds = all_undefineds;
-    clause_diagnostics = quote_diag;
-  }
+      (* Constraint: actual function type = expected function type *)
+      let fn_constraint = C.equal fn_result.ty expected_fn_type span in
+
+      (* Collect all argument constraints *)
+      let arg_type_constraints =
+        List.fold_left
+          (fun acc (_, c) -> C.add c acc)
+          C.empty arg_constraints_with_context
+      in
+
+      (* Combine all constraints.
+         Order matters for error context: fn_constraint must come BEFORE
+         arg_type_constraints so that the function signature determines the
+         expected type before we compare with actual argument types. *)
+      let arg_constraints = combine_results arg_results in
+      let all_constraints =
+        C.combine fn_result.constraints
+          (C.combine arg_constraints
+             (C.add fn_constraint arg_type_constraints))
+      in
+      let all_undefineds =
+        fn_result.undefineds @ combine_undefineds arg_results
+      in
+
+      let quote_diag =
+        match quote_style_diagnostic fn_expr with
+        | Some d -> [ d ]
+        | None -> []
+      in
+      {
+        ty = result_ty;
+        constraints = all_constraints;
+        undefineds = all_undefineds;
+        clause_diagnostics = quote_diag;
+      }
 
 (** Extract the literal value from a call-site argument expression.
 
