@@ -641,6 +641,182 @@ let test_let_error_no_body () =
   | Ok _ -> Alcotest.fail "Expected parse error"
   | Error _ -> ()
 
+(** {1 Clause Diagnostic Tests} *)
+
+let test_single_clause_warn () =
+  (* Single-clause defun with warn diagnostic *)
+  match
+    parse_decl_str
+      {|(defun old-fn (any) -> nil
+          (warn "old-fn is deprecated; use new-fn"))|}
+  with
+  | Ok
+      (Sig_ast.DDefun
+         {
+           defun_name = "old-fn";
+           defun_clauses =
+             [
+               {
+                 clause_return = Sig_ast.STCon ("nil", _);
+                 clause_diagnostic =
+                   Some
+                     {
+                       diag_severity = Sig_ast.DiagWarn;
+                       diag_message = "old-fn is deprecated; use new-fn";
+                       diag_args = [];
+                       _;
+                     };
+                 _;
+               };
+             ];
+           _;
+         }) ->
+      ()
+  | Ok _ -> Alcotest.fail "Expected single-clause with warn diagnostic"
+  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
+
+let test_multi_clause_warn_fallback () =
+  (* Multi-clause with warn on fallback clause *)
+  match
+    parse_decl_str
+      {|(defun plist-member [k v]
+          (((plist k v) k) -> (plist k v))
+          (((list (k | v)) k) -> (list (k | v))
+            (warn "plist-member on bare list")))|}
+  with
+  | Ok
+      (Sig_ast.DDefun
+         {
+           defun_name = "plist-member";
+           defun_clauses =
+             [
+               { clause_diagnostic = None; _ };
+               { clause_diagnostic = Some { diag_severity = DiagWarn; _ }; _ };
+             ];
+           _;
+         }) ->
+      ()
+  | Ok _ -> Alcotest.fail "Expected multi-clause with warn on second clause"
+  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
+
+let test_diagnostic_with_args () =
+  (* Diagnostic with format args referencing type variables *)
+  match
+    parse_decl_str
+      {|(defun f [k v] ((list (k | v)) k) -> (k | nil)
+          (warn "expected (plist %s %s), got bare list" k v))|}
+  with
+  | Ok
+      (Sig_ast.DDefun
+         {
+           defun_clauses =
+             [
+               {
+                 clause_diagnostic =
+                   Some
+                     {
+                       diag_severity = DiagWarn;
+                       diag_message = "expected (plist %s %s), got bare list";
+                       diag_args = [ "k"; "v" ];
+                       _;
+                     };
+                 _;
+               };
+             ];
+           _;
+         }) ->
+      ()
+  | Ok _ -> Alcotest.fail "Expected diagnostic with format args"
+  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
+
+let test_diagnostic_error_severity () =
+  (* Error severity diagnostic *)
+  match
+    parse_decl_str
+      {|(defun f (any) -> never
+          (error "this function must not be called"))|}
+  with
+  | Ok
+      (Sig_ast.DDefun
+         {
+           defun_clauses =
+             [
+               { clause_diagnostic = Some { diag_severity = DiagError; _ }; _ };
+             ];
+           _;
+         }) ->
+      ()
+  | Ok _ -> Alcotest.fail "Expected error diagnostic"
+  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
+
+let test_diagnostic_note_severity () =
+  (* Note severity diagnostic *)
+  match
+    parse_decl_str
+      {|(defun f (any) -> any
+          (note "consider using g instead"))|}
+  with
+  | Ok
+      (Sig_ast.DDefun
+         {
+           defun_clauses =
+             [ { clause_diagnostic = Some { diag_severity = DiagNote; _ }; _ } ];
+           _;
+         }) ->
+      ()
+  | Ok _ -> Alcotest.fail "Expected note diagnostic"
+  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
+
+let test_diagnostic_error_mismatched_args () =
+  (* Error: %s count doesn't match argument count *)
+  match
+    parse_decl_str
+      {|(defun f [k] (k) -> any
+          (warn "got %s and %s" k))|}
+  with
+  | Error e ->
+      (* Should mention placeholder/argument mismatch *)
+      let has_placeholder =
+        try
+          ignore
+            (Str.search_forward (Str.regexp_string "placeholder") e.message 0);
+          true
+        with Not_found -> false
+      in
+      if not has_placeholder then
+        Alcotest.fail
+          (Printf.sprintf "Expected 'placeholder' in error: %s" e.message)
+  | Ok _ -> Alcotest.fail "Expected error for mismatched %s count"
+
+let test_diagnostic_error_unbound_tvar () =
+  (* Error: argument not a bound type variable *)
+  match
+    parse_decl_str {|(defun f [k] (k) -> any
+          (warn "got %s" z))|}
+  with
+  | Error e ->
+      let has_not_bound =
+        try
+          ignore
+            (Str.search_forward (Str.regexp_string "not a bound") e.message 0);
+          true
+        with Not_found -> false
+      in
+      if not has_not_bound then
+        Alcotest.fail
+          (Printf.sprintf "Expected 'not a bound' in error: %s" e.message)
+  | Ok _ -> Alcotest.fail "Expected error for unbound type variable"
+
+let test_no_diagnostic () =
+  (* Clause without diagnostic still works *)
+  match parse_decl_str {|(defun f (any) -> any)|} with
+  | Ok
+      (Sig_ast.DDefun { defun_clauses = [ { clause_diagnostic = None; _ } ]; _ })
+    ->
+      ()
+  | Ok _ -> Alcotest.fail "Expected clause without diagnostic"
+  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
+
 (** {1 Signature File Tests} *)
 
 let test_parse_signature () =
@@ -721,6 +897,23 @@ let () =
           Alcotest.test_case "error no bindings" `Quick
             test_let_error_no_bindings;
           Alcotest.test_case "error no body" `Quick test_let_error_no_body;
+        ] );
+      ( "clause-diagnostics",
+        [
+          Alcotest.test_case "single-clause warn" `Quick test_single_clause_warn;
+          Alcotest.test_case "multi-clause warn fallback" `Quick
+            test_multi_clause_warn_fallback;
+          Alcotest.test_case "diagnostic with args" `Quick
+            test_diagnostic_with_args;
+          Alcotest.test_case "error severity" `Quick
+            test_diagnostic_error_severity;
+          Alcotest.test_case "note severity" `Quick
+            test_diagnostic_note_severity;
+          Alcotest.test_case "mismatched args error" `Quick
+            test_diagnostic_error_mismatched_args;
+          Alcotest.test_case "unbound tvar error" `Quick
+            test_diagnostic_error_unbound_tvar;
+          Alcotest.test_case "no diagnostic" `Quick test_no_diagnostic;
         ] );
       ( "signature-files",
         [ Alcotest.test_case "parse signature" `Quick test_parse_signature ] );

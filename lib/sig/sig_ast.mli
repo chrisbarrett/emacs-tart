@@ -122,9 +122,28 @@ type decl =
   | DLet of let_decl
       (** [(let [(type name [vars] def)...] decl...)] - local type aliases *)
 
+and diagnostic_severity =
+  | DiagError  (** Error: the usage is incorrect *)
+  | DiagWarn  (** Warning: the usage is risky *)
+  | DiagNote  (** Note: informational message *)
+
+and clause_diagnostic = {
+  diag_severity : diagnostic_severity;
+  diag_message : string;  (** Format string with [%s] placeholders *)
+  diag_args : string list;  (** Type variable names for [%s] substitution *)
+  diag_loc : span;
+}
+(** A diagnostic annotation attached to a clause.
+
+    Emitted when the clause matches at a call site. [%s] placeholders in the
+    message are replaced by the stringified types of the referenced type
+    variables. *)
+
 and defun_clause = {
   clause_params : sig_param list;  (** Parameter types for this clause *)
   clause_return : sig_type;  (** Return type for this clause *)
+  clause_diagnostic : clause_diagnostic option;
+      (** Optional diagnostic emitted when this clause matches *)
   clause_loc : span;
 }
 (** A single clause in a multi-clause function signature.
@@ -134,7 +153,9 @@ and defun_clause = {
 
     Examples:
     - [((string) -> t)] - single clause
-    - [((_) -> nil)] - wildcard clause with inferred parameter type *)
+    - [((_) -> nil)] - wildcard clause with inferred parameter type
+    - [((any) -> nil (warn "deprecated; use new-fn"))] - clause with diagnostic
+*)
 
 and defun_decl = {
   defun_name : string;

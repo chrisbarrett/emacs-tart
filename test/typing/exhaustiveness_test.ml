@@ -237,6 +237,7 @@ let test_build_registry_empty_for_non_data () =
                   {
                     clause_params = [];
                     clause_return = Sig_ast.STCon ("int", Loc.dummy_span);
+                    clause_diagnostic = None;
                     clause_loc = Loc.dummy_span;
                   };
                 ];

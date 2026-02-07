@@ -437,29 +437,144 @@ and parse_params_as_type (contents : Sexp.t list) (span : Loc.span) :
       (* Multiple items without -> is ambiguous *)
       error "Expected type expression" span
 
+(** {1 Diagnostic Parsing} *)
+
+(** Count occurrences of [%s] in a format string. *)
+let count_format_placeholders (s : string) : int =
+  let len = String.length s in
+  let rec loop i count =
+    if i >= len - 1 then count
+    else if s.[i] = '%' && s.[i + 1] = 's' then loop (i + 2) (count + 1)
+    else loop (i + 1) count
+  in
+  loop 0 0
+
+(** Parse a diagnostic severity keyword. *)
+let parse_diagnostic_severity (name : string) : diagnostic_severity option =
+  match name with
+  | "error" -> Some DiagError
+  | "warn" -> Some DiagWarn
+  | "note" -> Some DiagNote
+  | _ -> None
+
+(** Parse a diagnostic form: (warn "msg" args...), (note "msg" args...), or
+    (error "msg" args...).
+
+    Returns the parsed diagnostic or an error. The [tvar_names] parameter is the
+    set of bound type variable names from the enclosing defun scope; each
+    argument must be one of these names. *)
+let parse_diagnostic (sexp : Sexp.t) (tvar_names : string list) :
+    clause_diagnostic result =
+  match sexp with
+  | Sexp.List
+      (Sexp.Symbol (sev_name, _) :: Sexp.String (msg, _) :: arg_sexps, span)
+    -> (
+      match parse_diagnostic_severity sev_name with
+      | None ->
+          error
+            (Printf.sprintf
+               "Unknown diagnostic severity '%s' (expected error, warn, or \
+                note)"
+               sev_name)
+            span
+      | Some severity -> (
+          (* Parse argument names *)
+          let rec parse_args acc = function
+            | [] -> Ok (List.rev acc)
+            | Sexp.Symbol (name, sp) :: rest ->
+                if List.mem name tvar_names then parse_args (name :: acc) rest
+                else
+                  error
+                    (Printf.sprintf
+                       "Diagnostic argument '%s' is not a bound type variable"
+                       name)
+                    sp
+            | other :: _ ->
+                error "Diagnostic argument must be a type variable name"
+                  (Sexp.span_of other)
+          in
+          match parse_args [] arg_sexps with
+          | Error e -> Error e
+          | Ok args ->
+              (* Validate %s count matches argument count *)
+              let placeholder_count = count_format_placeholders msg in
+              let arg_count = List.length args in
+              if placeholder_count <> arg_count then
+                error
+                  (Printf.sprintf
+                     "Diagnostic has %d %%s placeholder(s) but %d argument(s)"
+                     placeholder_count arg_count)
+                  span
+              else
+                Ok
+                  {
+                    diag_severity = severity;
+                    diag_message = msg;
+                    diag_args = args;
+                    diag_loc = span;
+                  }))
+  | Sexp.List (Sexp.Symbol (_, _) :: _, span) ->
+      error "Diagnostic requires a string message: (warn \"message\" args...)"
+        span
+  | _ ->
+      error "Expected diagnostic form (warn \"message\" args...)"
+        (Sexp.span_of sexp)
+
+(** Check if an S-expression is a diagnostic form (starts with error, warn, or
+    note). *)
+let is_diagnostic_form (sexp : Sexp.t) : bool =
+  match sexp with
+  | Sexp.List (Sexp.Symbol (name, _) :: _, _) ->
+      Option.is_some (parse_diagnostic_severity name)
+  | _ -> false
+
+(** Parse the return type and optional diagnostic from the elements after [->].
+
+    Expects either:
+    - [return_sexp] — return type only
+    - [return_sexp; diag_sexp] — return type followed by diagnostic *)
+let parse_return_and_diagnostic (after_arrow : Sexp.t list)
+    (tvar_names : string list) (span : Loc.span) :
+    (sig_type * clause_diagnostic option) result =
+  match after_arrow with
+  | [ return_sexp ] -> (
+      match parse_sig_type return_sexp with
+      | Error e -> Error e
+      | Ok return_type -> Ok (return_type, None))
+  | [ return_sexp; diag_sexp ] when is_diagnostic_form diag_sexp -> (
+      match parse_sig_type return_sexp with
+      | Error e -> Error e
+      | Ok return_type -> (
+          match parse_diagnostic diag_sexp tvar_names with
+          | Error e -> Error e
+          | Ok diag -> Ok (return_type, Some diag)))
+  | _ -> error "Expected return type (and optional diagnostic) after ->" span
+
 (** {1 Declaration Parsing} *)
 
-(** Parse a single clause form: ((params) -> return) *)
-let parse_clause (sexp : Sexp.t) (_outer_span : Loc.span) : defun_clause result
-    =
+(** Parse a single clause form: ((params) -> return [(diagnostic)]) *)
+let parse_clause (sexp : Sexp.t) (_outer_span : Loc.span)
+    (tvar_names : string list) : defun_clause result =
   match sexp with
   | Sexp.List (contents, clause_span) -> (
       match Sexp.find_arrow contents with
       | None -> error "Expected -> in clause" clause_span
-      | Some (params_sexp, [ return_sexp ]) -> (
+      | Some (params_sexp, after_arrow) -> (
           match parse_params_list params_sexp clause_span with
           | Error e -> Error e
           | Ok params -> (
-              match parse_sig_type return_sexp with
+              match
+                parse_return_and_diagnostic after_arrow tvar_names clause_span
+              with
               | Error e -> Error e
-              | Ok return_type ->
+              | Ok (return_type, diagnostic) ->
                   Ok
                     {
                       clause_params = params;
                       clause_return = return_type;
+                      clause_diagnostic = diagnostic;
                       clause_loc = clause_span;
-                    }))
-      | Some (_, _) -> error "Expected single return type after ->" clause_span)
+                    })))
   | _ -> error "Expected clause ((params) -> return)" (Sexp.span_of sexp)
 
 (** Parse a defun declaration.
@@ -482,20 +597,22 @@ let parse_defun (contents : Sexp.t list) (span : Loc.span) : decl result =
             | Error _ -> ([], rest) (* Fall through to parse error below *))
         | _ -> ([], rest)
       in
+      let tvar_names = List.map (fun (b : tvar_binder) -> b.name) binders in
       (* Detect single-clause vs multi-clause: top-level -> present means single *)
       match Sexp.find_arrow after_binders with
-      | Some (params_sexp, [ return_sexp ]) -> (
-          (* Single-clause: (defun name (params) -> return) *)
+      | Some (params_sexp, after_arrow) -> (
+          (* Single-clause: (defun name (params) -> return [(diagnostic)]) *)
           match parse_params_list params_sexp span with
           | Error e -> Error e
           | Ok params -> (
-              match parse_sig_type return_sexp with
+              match parse_return_and_diagnostic after_arrow tvar_names span with
               | Error e -> Error e
-              | Ok return_type ->
+              | Ok (return_type, diagnostic) ->
                   let clause =
                     {
                       clause_params = params;
                       clause_return = return_type;
+                      clause_diagnostic = diagnostic;
                       clause_loc = span;
                     }
                   in
@@ -507,7 +624,6 @@ let parse_defun (contents : Sexp.t list) (span : Loc.span) : decl result =
                          defun_clauses = [ clause ];
                          defun_loc = span;
                        })))
-      | Some (_, _) -> error "Expected single return type after ->" span
       | None -> (
           (* Multi-clause: remaining forms are ((params) -> ret) clauses *)
           match after_binders with
@@ -516,7 +632,7 @@ let parse_defun (contents : Sexp.t list) (span : Loc.span) : decl result =
               let rec parse_clauses acc = function
                 | [] -> Ok (List.rev acc)
                 | sexp :: rest -> (
-                    match parse_clause sexp span with
+                    match parse_clause sexp span tvar_names with
                     | Ok clause -> parse_clauses (clause :: acc) rest
                     | Error e -> Error e)
               in
