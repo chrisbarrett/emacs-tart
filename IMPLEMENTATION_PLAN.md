@@ -1,196 +1,163 @@
-# Implementation Plan: Refactoring Iteration
+# Implementation Plan: Feature Guards (Spec 49)
 
-Gap analysis between codebase structure and emerging domain concepts.
-Focused on modularisation, clarity, and test coverage.
+Flow-sensitive type narrowing for runtime feature detection (`featurep`,
+`fboundp`, `boundp`, `bound-and-true-p`, `require`).
 
-## Analysis Summary
+## Analysis
 
-### Codebase metrics
+### Current Architecture
 
-| Module | Lines | Notes |
-|--------|------:|-------|
-| `typing/infer.ml` | 2264 | Largest; `clause_dispatch` and `row_dispatch` recently extracted |
-| `sig/sig_loader.ml` | 1979 | Signature loading pipeline with ~5 internal subsystems |
-| `lsp/server.ml` | 1737 | `code_action` recently extracted; many handler groups remain |
-| `typing/diagnostic.ml` | 1155 | Error construction + 4 output formatters in one file |
-| `sig/sig_parser.ml` | 1047 | Cohesive recursive-descent parser; low extraction value |
+**Module loading** happens in `module_check.ml` at the top level:
+1. `extract_requires` finds `(require 'X)` forms in the sexp list
+2. `Search.load_module` resolves `X.tart` → loads signatures into env
+3. `Check.check_program` type-checks with that pre-populated env
 
-### Untested modules with high test value
+**Type narrowing** happens in `infer.ml` via `narrow.ml`:
+1. `Narrow.analyze_condition` detects predicate calls in conditions
+2. `narrow_env_from_analysis` produces then/else environments
+3. `infer_if`, `infer_when`, etc. use narrowed envs for branches
 
-| Module | Lines | Why test |
-|--------|------:|---------|
-| `typing/levenshtein.ml` | 89 | Pure algorithm, critical for UX, property-testable |
-| `syntax/print.ml` | 149 | Output correctness, escape edge cases, round-trip verifiable |
-| `typing/clause_dispatch.ml` | 228 | Recently extracted, complex dispatch logic |
-| `typing/row_dispatch.ml` | 240 | Recently extracted, spec decision table |
+Feature guards reuse the narrowing pattern but operate on
+**name availability** rather than type intersection:
+- `(featurep 'json)` → make all json.tart names available in then-branch
+- `(fboundp 'f)` → make function `f` available in then-branch
+- `(boundp 'v)` → make variable `v` available in then-branch
 
-### Dead code
+### Key Design Decisions
 
-- `form_cache.ml:23` — unused `module Exhaustiveness = Typing.Exhaustiveness`
+1. **Guard analysis in narrow.ml** — extend `condition_analysis` with a
+   `FeatureGuard` variant alongside existing `Predicate`/`Predicates`
+2. **Lazy signature loading** — `featurep` guard triggers loading of
+   `X.tart` at inference time (not pre-loaded like `require`)
+3. **Environment extension** — guards add names to the env (vs narrowing
+   which refines existing types)
+4. **No new module files** — the spec suggests `feature_env.ml` and
+   `guards.ml` but the existing `narrow.ml` + `infer.ml` pattern is
+   simpler and more consistent
 
----
+### Scope Deferral
 
-## Iteration 1: Cleanup and quick wins
-
-### Task 1.1: Remove dead import in form_cache.ml
-
-- [x] Delete `module Exhaustiveness = Typing.Exhaustiveness` (line 23)
-- [x] Build to confirm no breakage
-
----
-
-## Iteration 2: Extract modules from `infer.ml`
-
-Continue the pattern established by `clause_dispatch.ml` and
-`row_dispatch.ml`. Target: reduce `infer.ml` from 2264 to ~1600 lines.
-
-### Task 2.1: Extract `pcase_infer.ml` from `infer.ml`
-
-Lines 829–1112 of `infer.ml` contain 8 mutually-recursive functions for
-pcase pattern binding extraction and pcase form inference. They form a
-self-contained subsystem operating on `Sexp.t` patterns.
-
-- [x] Create `lib/typing/pcase_infer.ml` + `.mli`
-- [x] Move: `extract_pattern_bindings`, `extract_backquote_bindings`,
-      `extract_unquote_binding`, `extract_map_pattern_bindings`,
-      `extract_map_pattern_constraints`, `infer_pcase_let`, `infer_pcase`
-- [x] Wire into `infer.ml` via module reference
-- [x] Update `lib/typing/dune` if needed
-- [x] Build + test to confirm no regressions
-
-### Task 2.2: Extract `defun_infer.ml` from `infer.ml`
-
-Lines 1996–2264 contain defun inference: `infer_defun_as_expr`,
-`infer_defun`, `infer_defun_with_declaration`, `infer_defun_inferred`,
-plus the `(declare (tart TYPE))` extraction helper.
-
-- [x] Create `lib/typing/defun_infer.ml` + `.mli`
-- [x] Move the defun inference cluster (~270 lines)
-- [x] Wire into `infer.ml`
-- [x] Build + test
+- R14 (redundant guard warning) requires version constraint propagation
+  (Spec 50) — defer
+- R15 (macro transparency) — already works since macros expand before
+  type checking
 
 ---
 
-## Iteration 3: Extract modules from `sig_loader.ml`
+## Iteration 1: Guard pattern recognition
 
-Target: reduce `sig_loader.ml` from 1979 to ~1350 lines by extracting
-two cohesive subsystems.
+Extend `narrow.ml` to recognize feature guard patterns in conditions.
 
-### Task 3.1: Extract `sig_validation.ml` from `sig_loader.ml`
+### Task 1.1: Add guard types to narrow.ml
 
-Lines 61–298 contain the entire signature validation subsystem:
-`validate_type`, `validate_types`, `validate_params`,
-`validate_binder_bounds`, `validate_clause`, `validate_defun`,
-`validate_defvar`, `validate_type_decl`, `validate_import_struct`,
-`validate_ctor`, `validate_data`, `validate_decl`,
-`build_context`, `validate_signature`, `validate_signature_all`.
+- [ ] Add `guard_info` type: `FeatureGuard of string` | `FboundGuard of string` | `BoundGuard of string` | `BoundTrueGuard of string`
+- [ ] Add `Guard of guard_info` and `Guards of guard_info list` to `condition_analysis`
+- [ ] Add `analyze_guard` function: recognizes `(featurep 'X)`, `(fboundp 'f)`, `(boundp 'v)`, `(bound-and-true-p v)` patterns
+- [ ] Extend `analyze_condition`: try guard analysis when predicate analysis yields NoPredicate
+- [ ] Handle `(and ...)` containing mixed predicates and guards
+- [ ] Update narrow.mli
+- [ ] Build + test
 
-- [x] Create `lib/sig/sig_validation.ml` + `.mli`
-- [x] Move validation functions (~240 lines)
-- [x] Wire into `sig_loader.ml`
-- [x] Build + test
+### Task 1.2: Unit tests for guard recognition
 
-### Task 3.2: Extract `sig_convert.ml` from `sig_loader.ml`
-
-Lines 424–805 contain type conversion: `canonicalize_type_name`,
-`sig_name_to_prim`, `substitute_sig_type`, `substitute_sig_param`,
-`sig_type_to_typ_with_ctx` and the simplified interfaces.
-
-- [x] Create `lib/sig/sig_convert.ml` + `.mli`
-- [x] Move type conversion functions (~380 lines)
-- [x] Wire into `sig_loader.ml`
-- [x] Build + test
+- [ ] Test `analyze_condition` with `(featurep 'json)` → `Guard (FeatureGuard "json")`
+- [ ] Test `(fboundp 'json-parse-string)` → `Guard (FboundGuard "json-parse-string")`
+- [ ] Test `(boundp 'json-null)` → `Guard (BoundGuard "json-null")`
+- [ ] Test `(bound-and-true-p my-var)` → `Guard (BoundTrueGuard "my-var")`
+- [ ] Test `(and (featurep 'json) (stringp x))` → mixed result
+- [ ] Test `(featurep x)` (non-literal) → NoPredicate
+- [ ] Build + test
 
 ---
 
-## Iteration 4: Extract modules from `diagnostic.ml` and `server.ml`
+## Iteration 2: Signature loading for feature guards
 
-### Task 4.1: Extract `diagnostic_format.ml` from `diagnostic.ml`
+Wire guard recognition into the inference engine so that guards
+extend the environment with loaded signatures.
 
-Lines 700–971 contain output formatting that is distinct from diagnostic
-construction: `format_pos`, `format_span`, `to_string`,
-`to_string_human`, `to_string_compact`, `to_string_list`,
-`error_type_of_code`, plus the JSON serializer at lines 1101–1155.
+### Task 2.1: Add module loader callback to infer
 
-- [x] Create `lib/typing/diagnostic_format.ml` + `.mli`
-- [x] Move formatting + JSON serialization (~330 lines)
-- [x] Keep diagnostic construction (types, constructors, context dispatch) in
-      `diagnostic.ml`
-- [x] Wire together; update `diagnostic.mli` re-exports as needed
-- [x] Build + test
+- [ ] Add `load_feature : (string -> Env.t -> Env.t) option` field to a
+      new `infer_config` record (or pass as labeled param)
+- [ ] Thread the loader through `infer` → control flow functions
+- [ ] When a `FeatureGuard "X"` is detected, call `load_feature "X" env`
+      to get an env extended with X.tart signatures
+- [ ] `FboundGuard "f"`: look up f in the loaded module env, extend
+      only function f
+- [ ] `BoundGuard "v"`: look up v in the loaded module env, extend
+      only variable v
+- [ ] `BoundTrueGuard "v"`: extend v with type `t` (truthy)
+- [ ] Build + test
 
-### Task 4.2: Extract LSP `completion.ml` from `server.ml`
+### Task 2.2: Wire loader in module_check.ml
 
-Lines 1182–1389 contain the entire completion subsystem:
-`extract_prefix_at_position`, `collect_local_completions`,
-`collect_env_completions`, `filter_by_prefix`,
-`deduplicate_completions`, `handle_completion`.
-
-- [x] Create `lib/lsp/completion.ml` + `.mli`
-- [x] Move completion functions (~210 lines)
-- [x] Wire into `server.ml` dispatch
-- [x] Build + test
-
-### Task 4.3: Extract LSP `signature_help.ml` from `server.ml`
-
-Lines 1391–1572: `find_call_context`, `param_to_label`,
-`signature_of_function_type`, `handle_signature_help`.
-
-- [x] Create `lib/lsp/signature_help.ml` + `.mli`
-- [x] Move signature help functions (~180 lines)
-- [x] Wire into `server.ml` dispatch
-- [x] Build + test
+- [ ] Create `make_feature_loader` in module_check.ml using
+      `Search.load_module`
+- [ ] Pass loader into `Check.check_program` → `Infer`
+- [ ] Ensure loaded features are cached (avoid re-loading json.tart
+      for every `(featurep 'json)` call)
+- [ ] Build + test
 
 ---
 
-## Iteration 5: Add unit tests for untested modules
+## Iteration 3: Control flow propagation
 
-### Task 5.1: Add unit tests for `levenshtein.ml`
+Extend all control flow inference functions to handle guards.
 
-Pure algorithm with well-defined interface — highest test value.
+### Task 3.1: Guard env application in infer.ml
 
-- [x] Create `test/typing/levenshtein_test.ml`
-- [x] Test `distance`: identity (d(s,s)=0), symmetry, known pairs,
-      empty strings, single edits
-- [x] Test `find_similar_names`: threshold scaling by length,
-      sorting by distance, no matches case
-- [x] Test `suggest_name`: best match selection, None when no match
-- [x] Add to `test/typing/dune`
+- [ ] Add `apply_guard_narrowing`: given guard_info + loader + env,
+      returns (then_env, else_env) where then_env has names,
+      else_env unchanged
+- [ ] Add `narrow_env_from_analysis` handling for `Guard`/`Guards`
+      variants (compose with existing predicate narrowing)
+- [ ] `infer_if`: then-branch gets guarded env, else-branch unchanged
+- [ ] `infer_when`: body gets guarded env
+- [ ] `infer_unless`: body gets **unguarded** env (R12: negated guard)
+- [ ] `infer_cond`: each clause independently guarded
+- [ ] `infer_and`: guards propagate to later operands (R16)
+- [ ] Build + test
 
-### Task 5.2: Add unit tests for `print.ml`
+### Task 3.2: Require as top-level guard
 
-Output correctness is critical; escape sequences and modifiers are subtle.
+- [ ] In `infer` main dispatch, intercept `(require 'X)` as expression
+- [ ] Hard require `(require 'X)`: load X.tart into env, return
+      feature symbol type; env persists for subsequent forms
+- [ ] Soft require `(require 'X nil t)`: return result type but
+      **don't** extend env (needs guard)
+- [ ] Soft require as condition `(when (require 'X nil t) ...)`:
+      treat as FeatureGuard in then-branch
+- [ ] Note: top-level `(require 'X)` already handled by module_check;
+      this handles require inside control flow
+- [ ] Build + test
 
-- [x] Create `test/syntax/print_test.ml`
-- [x] Test `escape_string_char`: all special escapes (\n, \t, \\, \")
-- [x] Test `escape_string`: strings with mixed escaping needs
-- [x] Test `print_char`: plain chars, control chars, modifier combos
-      (Meta, Control, Shift, Hyper, Super, Alt)
-- [x] Test `Modifiers.extract`: round-trip modifier encoding
-- [x] Test `to_string`: quote/backquote/unquote reader macros,
-      cons cells, vectors, keywords, nested lists
-- [x] Test round-trip: `to_string` then `parse_one` yields same AST
-- [x] Add to `test/syntax/dune`
+---
 
-### Task 5.3: Add unit tests for `clause_dispatch.ml`
+## Iteration 4: Test fixtures
 
-Recently extracted; validates Spec 54 multi-clause dispatch.
+### Task 4.1: Feature guard test fixtures
 
-- [x] Create `test/typing/clause_dispatch_test.ml`
-- [x] Test `extract_arg_literal` for keyword and quoted symbol params
-- [x] Test `substitute_tvar_names` with various type shapes
-- [x] Test `try_dispatch` with single-clause, multi-clause,
-      literal-matching, and no-match scenarios
-- [x] Test diagnostic resolution with format string placeholders
-- [x] Add to `test/typing/dune`
+- [ ] `feature_guard_basic.{el,expected}`: featurep in when/if unlocks
+      names (PASS); unguarded call errors (FAIL with UNDEFINED)
+- [ ] `feature_guard_fboundp.{el,expected}`: fboundp unlocks single
+      function; other names from same module still unavailable
+- [ ] `feature_guard_boundp.{el,expected}`: boundp unlocks variable
+- [ ] `feature_guard_negated.{el,expected}`: else-branch of if with
+      featurep does NOT have guarded names (R12)
+- [ ] `feature_guard_and.{el,expected}`: combined guards via and (R16)
+- [ ] `feature_guard_require.{el,expected}`: hard require extends env;
+      soft require needs guard
+- [ ] Build + test
 
-### Task 5.4: Add unit tests for `row_dispatch.ml`
+---
 
-Recently extracted; validates Spec 11 row accessor decision table.
+## Iteration 5: Spec completion
 
-- [x] Create `test/typing/row_dispatch_test.ml`
-- [x] Test `get_config` for known accessors (alist-get, plist-get,
-      gethash, map-elt, etc.) and unknown names
-- [x] Test row extraction functions with constructed types
-- [x] Test dispatch decision paths (Cases 1–5, R4–R8)
-- [x] Add to `test/typing/dune`
+### Task 5.1: Documentation and inline-only
+
+- [ ] R17 is inherent: guards only recognized inline (same as predicates)
+- [ ] Create `feature_guard_no_stored.{el,expected}`: stored featurep
+      result does NOT unlock names
+- [ ] Check all task boxes in specs/49-feature-guards.md
+- [ ] Update status (Complete, except R14 which needs Spec 50)
+- [ ] Build + test
