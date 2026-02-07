@@ -86,17 +86,17 @@ Wire corpus operations into `tart corpus` command group.
 
 ### Task 2.1: Add corpus subcommand group
 
-- [ ] `corpus_checkout_cmd`: `tart corpus checkout [REF]`
+- [x] `corpus_checkout_cmd`: `tart corpus checkout [REF]`
       with optional `--emacs-version` override (R9);
       auto-detects if no ref given (R7)
-- [ ] `corpus_list_cmd`: `tart corpus list` prints `.el` paths
-- [ ] `corpus_path_cmd`: `tart corpus path` prints corpus dir (R14)
-- [ ] `corpus_clean_cmd`: `tart corpus clean` removes corpus (R15)
-- [ ] `corpus_cmd`: `Cmd.group` combining subcommands
-- [ ] Wire `corpus_cmd` into `main_cmd` group
-- [ ] Error handling: network failures → exit 1 with message (R12,
+- [x] `corpus_list_cmd`: `tart corpus list` prints `.el` paths
+- [x] `corpus_path_cmd`: `tart corpus path` prints corpus dir (R14)
+- [x] `corpus_clean_cmd`: `tart corpus clean` removes corpus (R15)
+- [x] `corpus_cmd`: `Cmd.group` combining subcommands
+- [x] Wire `corpus_cmd` into `main_cmd` group
+- [x] Error handling: network failures → exit 1 with message (R12,
       R13); invalid version → exit 2; no Emacs → exit 3
-- [ ] Build + test
+- [x] Build + test
 
 ---
 

@@ -1186,6 +1186,188 @@ let emacs_coverage_cmd =
       $ emacs_source_arg $ emacs_version_arg)
 
 (* ============================================================================
+   Corpus Subcommands
+   ============================================================================ *)
+
+(** Corpus checkout: clone + checkout a ref *)
+let run_corpus_checkout emacs_version ref_arg =
+  (* Determine the tag/ref to check out *)
+  let tag_result =
+    match (ref_arg, emacs_version) with
+    | Some ref_str, _ -> Ok ref_str
+    | None, Some v -> Ok (Tart.Emacs_corpus.version_to_tag v)
+    | None, None -> Tart.Emacs_corpus.detect_tag ()
+  in
+  match tag_result with
+  | Error Tart.Emacs_corpus.No_emacs ->
+      Printf.eprintf
+        "error: Emacs not found; specify a ref or use --emacs-version\n";
+      exit 3
+  | Error (Tart.Emacs_corpus.Invalid_ref msg) ->
+      Printf.eprintf "error: %s\n" msg;
+      exit 2
+  | Error (Tart.Emacs_corpus.Clone_failed msg) ->
+      Printf.eprintf "error: %s\n" msg;
+      exit 1
+  | Error (Tart.Emacs_corpus.Fetch_failed msg) ->
+      Printf.eprintf "error: %s\n" msg;
+      exit 1
+  | Error (Tart.Emacs_corpus.Checkout_failed msg) ->
+      Printf.eprintf "error: %s\n" msg;
+      exit 1
+  | Ok tag -> (
+      (* Ensure the clone exists *)
+      (match Tart.Emacs_corpus.ensure_clone ~tag () with
+      | Ok () -> ()
+      | Error (Tart.Emacs_corpus.Clone_failed msg) ->
+          Printf.eprintf "error: clone failed: %s\n" msg;
+          exit 1
+      | Error err ->
+          Printf.eprintf "error: %s\n"
+            (Tart.Emacs_corpus.corpus_error_to_string err);
+          exit 1);
+      (* Checkout the ref *)
+      match Tart.Emacs_corpus.checkout tag with
+      | Ok () -> Printf.printf "Checked out %s\n" tag
+      | Error (Tart.Emacs_corpus.Fetch_failed msg) ->
+          Printf.eprintf "error: fetch failed: %s\n" msg;
+          exit 1
+      | Error (Tart.Emacs_corpus.Checkout_failed msg) ->
+          Printf.eprintf "error: checkout failed: %s\n" msg;
+          exit 1
+      | Error err ->
+          Printf.eprintf "error: %s\n"
+            (Tart.Emacs_corpus.corpus_error_to_string err);
+          exit 1)
+
+(** Corpus list: print .el file paths *)
+let run_corpus_list () =
+  if not (Tart.Emacs_corpus.is_cloned ()) then (
+    Printf.eprintf
+      "error: corpus not cloned; run 'tart corpus checkout' first\n";
+    exit 1);
+  let files = Tart.Emacs_corpus.list_el_files () in
+  List.iter print_endline files
+
+(** Corpus path: print corpus directory *)
+let run_corpus_path () = print_endline (Tart.Emacs_corpus.corpus_dir ())
+
+(** Corpus clean: remove corpus directory *)
+let run_corpus_clean () =
+  if not (Tart.Emacs_corpus.is_cloned ()) then
+    Printf.printf "Corpus not present; nothing to clean\n"
+  else
+    let bytes = Tart.Emacs_corpus.clean () in
+    if bytes >= 1_048_576 then
+      Printf.printf "Removed corpus (%.1f MB freed)\n"
+        (float_of_int bytes /. 1_048_576.0)
+    else if bytes >= 1024 then
+      Printf.printf "Removed corpus (%d KB freed)\n" (bytes / 1024)
+    else Printf.printf "Removed corpus (%d bytes freed)\n" bytes
+
+(* Corpus CLI definitions *)
+let corpus_ref_arg =
+  let doc =
+    "Git ref to checkout (tag, branch, or SHA). Auto-detects from system Emacs \
+     if omitted."
+  in
+  Arg.(value & pos 0 (some string) None & info [] ~docv:"REF" ~doc)
+
+let corpus_checkout_cmd =
+  let doc = "Clone (if needed) and checkout an Emacs source ref" in
+  let man =
+    [
+      `S Manpage.s_description;
+      `P
+        "Clone the Emacs source repository into the XDG cache directory (if \
+         not already present), then checkout the given ref.";
+      `P
+        "If no ref is given, auto-detects the system Emacs version and checks \
+         out the matching tag.";
+      `S Manpage.s_exit_status;
+      `P
+        "0 on success, 1 on network error, 2 on invalid ref, 3 if Emacs not \
+         found.";
+    ]
+  in
+  let info = Cmd.info "checkout" ~doc ~man in
+  let run log_level log_format verbose_flag emacs_version ref_arg =
+    setup_logging ~log_level ~log_format ~verbose_flag;
+    run_corpus_checkout emacs_version ref_arg
+  in
+  Cmd.v info
+    Term.(
+      const run $ log_level_arg $ log_format_arg $ verbose_flag_arg
+      $ emacs_version_arg $ corpus_ref_arg)
+
+let corpus_list_cmd =
+  let doc = "List .el files in the corpus" in
+  let man =
+    [
+      `S Manpage.s_description;
+      `P "List all .el files in the checked-out Emacs source corpus.";
+    ]
+  in
+  let info = Cmd.info "list" ~doc ~man in
+  let run log_level log_format verbose_flag () =
+    setup_logging ~log_level ~log_format ~verbose_flag;
+    run_corpus_list ()
+  in
+  Cmd.v info
+    Term.(
+      const run $ log_level_arg $ log_format_arg $ verbose_flag_arg $ const ())
+
+let corpus_path_cmd =
+  let doc = "Print corpus directory path" in
+  let man =
+    [
+      `S Manpage.s_description;
+      `P
+        "Print the absolute path where the Emacs source corpus is (or would \
+         be) stored.";
+    ]
+  in
+  let info = Cmd.info "path" ~doc ~man in
+  let run log_level log_format verbose_flag () =
+    setup_logging ~log_level ~log_format ~verbose_flag;
+    run_corpus_path ()
+  in
+  Cmd.v info
+    Term.(
+      const run $ log_level_arg $ log_format_arg $ verbose_flag_arg $ const ())
+
+let corpus_clean_cmd =
+  let doc = "Remove the corpus cache" in
+  let man =
+    [
+      `S Manpage.s_description;
+      `P "Remove the cloned Emacs source repository and report bytes freed.";
+    ]
+  in
+  let info = Cmd.info "clean" ~doc ~man in
+  let run log_level log_format verbose_flag () =
+    setup_logging ~log_level ~log_format ~verbose_flag;
+    run_corpus_clean ()
+  in
+  Cmd.v info
+    Term.(
+      const run $ log_level_arg $ log_format_arg $ verbose_flag_arg $ const ())
+
+let corpus_cmd =
+  let doc = "Manage the Emacs source corpus" in
+  let man =
+    [
+      `S Manpage.s_description;
+      `P
+        "Manage a shallow clone of the Emacs source repository in the XDG \
+         cache directory for testing against real Elisp files.";
+    ]
+  in
+  let info = Cmd.info "corpus" ~doc ~man in
+  Cmd.group info
+    [ corpus_checkout_cmd; corpus_list_cmd; corpus_path_cmd; corpus_clean_cmd ]
+
+(* ============================================================================
    Main Command
    ============================================================================ *)
 
@@ -1226,6 +1408,7 @@ let main_cmd =
       lsp_cmd;
       coverage_cmd;
       emacs_coverage_cmd;
+      corpus_cmd;
     ]
 
 (** Determine if an argument looks like a file path rather than a subcommand. *)
