@@ -1,131 +1,211 @@
-# Implementation Plan: Spec 32 — Emacs Core Typings Audit
+# Implementation Plan: Spec 11 R9 — Literal Types with Deferred Widening
 
 ## Background
 
-The four core `.tart` files (data, fns, eval, alloc) already exist with
-substantial coverage (~300 defuns total). BUGS.md skeleton files exist
-at both package and version levels. The remaining work is:
+Currently all literals infer their base type immediately: `42 → int`,
+`1.0 → float`, `"hello" → string`, `:kw → keyword`. Spec 11 R9
+requires literals to carry their precise literal type and widen only
+when context demands it via subtyping during unification.
 
-- Audit `-> any` return types (19 in data, 2 in fns, 22 in eval, 5 in
-  alloc) and improve where semantics are actually known
-- Populate BUGS.md with genuinely untypeable items (category + reason)
-- Validate files parse and load correctly (already tested in
-  search_path_test.ml bundled-c-core suite)
-- Check all spec task boxes
+The subtyping lattice for literals:
 
-Many `-> any` returns are legitimately dynamic (symbol-value,
-condition-case, eval). The goal is NOT to eliminate all `-> any` but to
-ensure each is justified, and those that can be improved are improved.
+```
+   truthy              nil
+    / | \               |
+ num  ...  (cons a b)  ()
+ / \
+int float
+ |    |
+ 1   1.0   (literal types at bottom)
+```
 
----
+Key properties:
+- Within `let` bindings, literal types are preserved (`x : 42`)
+- At usage sites, type depends on context: `(list num)` → widens,
+  unconstrained → principal type preserved
+- Same-value literals unify; different-value same-base literals don't
+- All truthy literal types are truthy
+- Interaction with existing numeric subtyping: `int <: num`, so
+  `42 <: int <: num`
 
-## Iteration 1: Audit data.tart `-> any` returns
+## Files with exhaustive `typ` pattern matches
 
-**What to do:**
-
-1. Read `typings/emacs/31.0/c-core/data.tart` and evaluate each of the
-   19 `-> any` return types:
-
-   **Can improve:**
-   - `car-safe` → `(any) -> any` is correct (accepts non-cons)
-   - `cdr-safe` → same, correct
-   - `fset` → returns the function object; `(symbol any) -> any` is
-     correct (genuinely dynamic)
-   - `set` → returns value; same pattern as fset
-   - `subr-type` → returns symbol describing subr type
-   - `bool-vector-*` → operate on bool-vectors; tighten params/returns
-
-   **Document as untypeable:**
-   - `symbol-value` → dynamic by nature (returns stored value)
-   - `symbol-function` → returns whatever was fset'd
-   - `default-value` → dynamic
-   - `indirect-function` → dynamic chain resolution
-   - `interactive-form` → returns arbitrary form or nil
-
-2. For each improvable signature, update the .tart file.
-
-3. For each genuinely untypeable case, add entry to
-   `typings/emacs/BUGS.md` using the spec's format.
-
-**Files:**
-- `typings/emacs/31.0/c-core/data.tart` — improve signatures
-- `typings/emacs/BUGS.md` — add untypeable entries
-
-**Verify:** `nix develop --command dune build`; `nix develop --command dune test`
+These files will get compiler errors when `TLiteral` is added, serving
+as a checklist: types.ml, types.mli, type_env.ml, unify.ml,
+generalize.ml, check.ml, narrow.ml, infer.ml, sig_loader.ml.
 
 ---
 
-## Iteration 2: Audit fns.tart + alloc.tart `-> any` returns
+## Iteration 1: Add TLiteral to type representation
 
 **What to do:**
 
-1. **fns.tart** (2 cases): `get` and `put` (symbol plist access).
-   - `get` returns plist value for symbol — genuinely dynamic
-   - `put` stores value in symbol plist — returns value, dynamic
-   - Document in BUGS.md if no improvement possible
+1. Add `literal_value` type and `TLiteral` constructor to `types.mli`
+   and `types.ml`:
+   ```ocaml
+   type literal_value =
+     | LitInt of int
+     | LitFloat of float
+     | LitString of string
+     | LitSymbol of string    (* quoted symbol *)
+     | LitKeyword of string   (* :keyword *)
 
-2. **alloc.tart** (5 cases): `record`, `make-record`,
-   `make-byte-code`, `make-closure`, `make-finalizer`.
-   - Records are opaque; `make-record` returns record type
-   - `make-byte-code` / `make-closure` return compiled function
-   - `make-finalizer` returns finalizer object
-   - Improve where possible (e.g., make-finalizer → truthy)
+   and typ =
+     | ...
+     | TLiteral of literal_value * typ  (* value, base type *)
+   ```
 
-3. Also scan both files for `any` in input positions that could be
-   union types (R10 guideline).
+2. Update `to_string`: display as `42`, `1.0`, `"hello"`, `'foo`,
+   `:kw` (matching Elisp syntax).
+
+3. Update `equal`: two TLiterals are equal when their values are equal
+   (base types are determined by value, so value equality suffices).
+
+4. Update `is_truthy`: `TLiteral (_, base)` delegates to
+   `is_truthy base`.
+
+5. Update `repr`: TLiteral is a ground type (no links to follow),
+   return as-is.
+
+6. Update `subtract_type`: TLiteral equality via structural equal.
+
+7. Add `literal_base_type : literal_value -> typ` helper returning the
+   base Prim type for each literal kind.
+
+8. Add `literal_value_equal` helper.
 
 **Files:**
-- `typings/emacs/31.0/c-core/fns.tart` — improve signatures
-- `typings/emacs/31.0/c-core/alloc.tart` — improve signatures
-- `typings/emacs/BUGS.md` — add entries
+- `lib/core/types.mli` — add types + signatures
+- `lib/core/types.ml` — add implementations
 
-**Verify:** `nix develop --command dune build`; `nix develop --command dune test`
+**Verify:** `nix develop --command dune build 2>&1` — will show
+exhaustive match warnings in downstream files (expected; fixed in
+subsequent iterations).
 
 ---
 
-## Iteration 3: Audit eval.tart `-> any` returns
+## Iteration 2: Fix exhaustive matches across the codebase
 
 **What to do:**
 
-1. **eval.tart** has 22 `-> any` returns — the most of any core file.
-   Many are legitimately dynamic (special forms, evaluation primitives):
+Add `TLiteral` arms to every exhaustive match on `typ` in:
 
-   **Legitimately dynamic (document):**
-   - `eval`, `cond`, `and`, `or`, `setq` — special forms with
-     dynamic return types
-   - `condition-case`, `catch` — exception handling
-   - `macroexpand` — returns expanded form
-   - `run-hook-with-args*` — hook dispatch
-   - `make-interpreted-closure` — closure construction
-   - `backtrace-*` — debugging internals
+1. **generalize.ml**: `collect_generalizable_tvars` — TLiteral has no
+   tvars, return acc unchanged. `replace_tvars_with_names` — return
+   TLiteral unchanged (no tvars inside).
 
-   **Can improve:**
-   - `funcall-with-delayed-message` → same status as funcall
-     (special-cased or legitimately any)
-   - `handler-bind-1` → internal, ok as any
-   - `default-toplevel-value` → returns stored value
-   - `buffer-local-toplevel-value` → returns stored value
+2. **check.ml**: `substitute_tvar_names` — TLiteral has no tvars,
+   return unchanged.
 
-2. Document the legitimately dynamic cases in BUGS.md.
+3. **unify.ml**: `occurs_check` — TLiteral base type has no tvars
+   (it's a TCon), return Ok. `collect_tvar_refs` — no tvars.
+   `restore_tvars` — no tvars.
 
-**Files:**
-- `typings/emacs/31.0/c-core/eval.tart` — improve where possible
-- `typings/emacs/BUGS.md` — add entries
+4. **type_env.ml**: `instantiate_with` — TLiteral has no tvar names
+   to substitute, return unchanged.
 
-**Verify:** `nix develop --command dune build`; `nix develop --command dune test`
+5. **narrow.ml**: any `match` on typ — TLiteral passthrough.
+
+6. **infer.ml**: any structural matches on typ — TLiteral passthrough.
+
+7. **sig_loader.ml**: `sig_type_to_typ_with_ctx` — no sig_ast form
+   produces TLiteral (literals appear only from inference, not
+   signatures), so this shouldn't need changes. Any `match ty` arms
+   need passthrough.
+
+**Files:** All files listed above.
+
+**Verify:** `nix develop --command dune build 2>&1` — zero warnings.
+`nix develop --command dune test --force 2>&1` — all tests pass
+(behavior unchanged since no code produces TLiteral yet).
 
 ---
 
-## Iteration 4: Spec status update
+## Iteration 3: Produce TLiteral from inference + unification rules
 
 **What to do:**
 
-1. Check the [R5,R6] task box — BUGS.md structure already exists
-2. Check [R1-R4] boxes for data.tart, fns.tart, eval.tart, alloc.tart
-3. Check [R7,R8] box — BUGS.md entries use correct format/categories
-4. Add Status section to spec
+1. **infer.ml**: Change literal inference to produce TLiteral:
+   - `Int (n, _)` → `TLiteral (LitInt n, Prim.int)`
+   - `Float (f, _)` → `TLiteral (LitFloat f, Prim.float)`
+   - `String (s, _)` → `TLiteral (LitString s, Prim.string)`
+   - `Keyword (k, _)` → `TLiteral (LitKeyword k, Prim.keyword)`
+   - `Char (_, _)` stays `Prim.int` (chars aren't literal-typed)
+   - `Symbol ("nil", _)` stays `Prim.nil`
+   - `Symbol ("t", _)` stays `Prim.t`
+
+2. **infer_quoted**: Same changes for quoted int/float/string/keyword.
+   Quoted symbols: `Symbol (name, _)` → `TLiteral (LitSymbol name,
+   Prim.symbol)`.
+
+3. **unify.ml**: Add TLiteral unification rules:
+   - `TLiteral(v1, _), TLiteral(v2, _)` when `v1 = v2` → Ok
+   - `TLiteral(_, base), TCon n` → widen: `unify base (TCon n)` (uses
+     existing numeric subtyping: int→num)
+   - `TCon n, TLiteral(_, base)` → symmetric
+   - `TLiteral(_, base), TVar _` → link tvar to the literal (preserve
+     precision)
+   - `TLiteral(v1, _), TLiteral(v2, _)` when `v1 ≠ v2` → type
+     mismatch
+   - `TLiteral(_, base), TApp _` → widen: try `unify base (TApp ...)`
+   - `TLiteral(_, _), TUnion ts` → widen: try matching any union
+     member (through existing union-on-left arm after widening)
+   - `TUnion ts, TLiteral(_, _)` → existing union-on-left handles it
+     since TLiteral will match base type members
+
+   The key insight: TLiteral always widens to its base type when the
+   other side isn't also a TLiteral with the same value. The TVar case
+   preserves the literal (links the tvar to TLiteral), so
+   unconstrained contexts keep precision.
+
+4. **unify.ml**: TLiteral in `occurs_check` — base is always a TCon,
+   no tvars to check.
 
 **Files:**
-- `specs/32-emacs-core-typings.md` — check boxes, update status
+- `lib/typing/infer.ml` — literal inference
+- `lib/typing/unify.ml` — unification rules
 
-**Verify:** All tests pass
+**Verify:** `nix develop --command dune test --force 2>&1` — existing
+tests may need `.expected` file updates where inferred types become
+more precise (e.g., `int` → `42`). Fix any test failures.
+
+---
+
+## Iteration 4: Fix test expectations + test fixtures
+
+**What to do:**
+
+1. Update any failing test expectations (infer_test.ml,
+   generalize_test.ml, check_test.ml, etc.) where literal types now
+   appear in inferred results.
+
+2. Create `test/fixtures/typing/core/literal_types.{el,expected}`:
+   - Integer literal preserves type in let: `(let ((x 42)) x)` → PASS
+   - Float literal preserves: `(let ((x 1.0)) x)` → PASS
+   - Literal widens to base: `(defun f () (declare (tart (-> int))) 42)` → PASS
+   - Literal widens transitively: arithmetic with literal → PASS
+   - Different literals don't unify: type mismatch when expected
+   - String literal: `(let ((s "hello")) (concat s " world"))` → PASS
+   - Keyword literal preserved
+
+3. Verify all 100+ existing fixtures still pass.
+
+**Files:**
+- Test files with updated expectations
+- `test/fixtures/typing/core/literal_types.{el,expected}`
+
+**Verify:** `nix develop --command dune test --force 2>&1` — all pass.
+
+---
+
+## Iteration 5: Spec status update
+
+**What to do:**
+
+1. Check the [R9] task box in `specs/11-adt-system.md`
+2. Update the Status section to reflect completion
+
+**Files:**
+- `specs/11-adt-system.md` — check box, update status
+
+**Verify:** All tests pass.

@@ -201,10 +201,20 @@ Per C source file:
 
 ## Tasks
 
-- [ ] [R5,R6] Create BUGS.md structure
-- [ ] [R1-R4] Complete data.c → data.tart with validation
-- [ ] [R1-R4] Complete fns.c → fns.tart with validation
-- [ ] [R1-R4] Complete eval.c → eval.tart with validation
-- [ ] [R1-R4] Complete alloc.c → alloc.tart with validation
-- [ ] [R7,R8] Document all untypeable items per category
+- [x] [R5,R6] Create BUGS.md structure
+- [x] [R1-R4] Complete data.c → data.tart with validation
+- [x] [R1-R4] Complete fns.c → fns.tart with validation
+- [x] [R1-R4] Complete eval.c → eval.tart with validation
+- [x] [R1-R4] Complete alloc.c → alloc.tart with validation
+- [x] [R7,R8] Document all untypeable items per category
 - [ ] Continue for remaining C source files per Spec 24
+
+## Status
+
+Complete for the four core C source files (data, fns, eval, alloc).
+
+- BUGS.md structure exists at both package and version levels
+- All `-> any` return types audited; improved where possible, documented
+  in BUGS.md where genuinely untypeable
+- 16 entries in package-level BUGS.md (3 type-system-gap, 13 untypeable)
+- Remaining C source files (per Spec 24) are ongoing work beyond this spec
