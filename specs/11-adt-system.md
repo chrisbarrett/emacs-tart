@@ -504,7 +504,7 @@ homogeneous alist type
 - [x] [R6] Handle map pattern integration with row types
 - [x] [R7] Distinguish closed unions from open row types
 - [x] [R8] Infer row types from field access (literal vs variable keys)
-- [ ] [R9] Implement literal types with deferred widening
+- [x] [R9] Implement literal types with deferred widening
 - [x] [R10] Implement type subtraction operator
 - [x] [R11] Implement row unification rules
 - [x] [R12] Implement generic `map` supertype
@@ -512,14 +512,13 @@ homogeneous alist type
 - [x] [R14] Implement equality predicate disjointness checking
 - [x] [R15] Implement row-to-homogeneous unification rule
 
-**Status:** All requirements implemented except R9 (literal types with deferred
-widening). Union types (`TUnion`), pcase narrowing, and exhaustiveness checking
-are complete (R1–R3). Row polymorphism is fully operational: `TRow` variant with
-row unification rules (R11), row syntax parsing in signature files, Design B
-alist/plist/hash-table expansion (R4, R5, R13), refined `alist-get`/`plist-get`/
-`gethash` return types with 7-case decision table (R4), row type inference from
-literal field access (R8), generic `map` supertype with subtyping (R12), map
-pattern integration via `pcase-let` (R6), closed unions vs open rows (R7),
-equality predicate disjointness checking (R14), row-to-homogeneous unification
-(R15), and type subtraction (R10). Remaining: R9 (literal types with deferred
-widening).
+**Status:** Complete. All 15 requirements implemented. Union types (`TUnion`),
+pcase narrowing, and exhaustiveness checking (R1–R3). Row polymorphism: `TRow`
+with row unification rules (R11), signature parsing, alist/plist/hash-table
+expansion (R4, R5, R13), 7-case decision table for row accessors (R4), row type
+inference from literal field access (R8), generic `map` supertype (R12), map
+pattern integration (R6), closed unions vs open rows (R7), equality predicate
+disjointness checking (R14), row-to-homogeneous unification (R15), type
+subtraction (R10). Literal types with deferred widening (R9): `TLiteral`
+representation, inference from literal expressions, widening via subtyping
+during unification.
