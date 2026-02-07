@@ -34,8 +34,8 @@ Focused on modularisation, clarity, and test coverage.
 
 ### Task 1.1: Remove dead import in form_cache.ml
 
-- [ ] Delete `module Exhaustiveness = Typing.Exhaustiveness` (line 23)
-- [ ] Build to confirm no breakage
+- [x] Delete `module Exhaustiveness = Typing.Exhaustiveness` (line 23)
+- [x] Build to confirm no breakage
 
 ---
 

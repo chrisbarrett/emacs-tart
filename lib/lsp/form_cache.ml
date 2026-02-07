@@ -20,7 +20,6 @@ module Check = Typing.Check
 module Diagnostic = Typing.Diagnostic
 module Unify = Typing.Unify
 module Infer = Typing.Infer
-module Exhaustiveness = Typing.Exhaustiveness
 module Module_check = Typing.Module_check
 
 (** {1 Form Identification} *)
