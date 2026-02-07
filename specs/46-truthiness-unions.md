@@ -190,9 +190,9 @@ note: function declared to return Int
 - [x] [R5] and adds nil when any nullable
 - [x] [R5a] and short-circuits on nil
 - [x] [R6] not inverts truthiness
-- [ ] [R7] Branch error points to offending + declaration
+- [x] [R7] Branch error points to offending + declaration
 - [x] [R8] cond unions branches
 - [x] [R9] cond implicit nil
 - [x] [R10] if without else adds nil
 
-**Status:** Core truthiness semantics implemented in `lib/typing/infer.ml` via `infer_if`, `infer_cond`, `infer_and`, `infer_or` and `is_truthy` in `lib/core/types.mli`. Remaining: R7 (branch-specific error messages).
+**Status:** Complete

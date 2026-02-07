@@ -226,7 +226,7 @@ include an error code from that spec.
 ## Tasks
 
 - [x] [R1] Implement type mismatch formatting
-- [ ] [R2] Branch violates return type error (see Spec 46)
+- [x] [R2] Branch violates return type error (see Spec 46)
 - [x] [R3] Implement Option/nil error formatting
 - [x] [R4] Implement typo suggestions (Levenshtein)
 - [x] [R5] Implement arity error formatting
@@ -237,4 +237,4 @@ Run review agent after R1-R3 work (basic error formatting) before implementing R
 
 ## Status
 
-Complete (except R2: branch-specific error messages pointing to offending branch and declaration)
+Complete
