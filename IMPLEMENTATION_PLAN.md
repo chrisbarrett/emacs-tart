@@ -136,10 +136,10 @@ Lines 1182–1389 contain the entire completion subsystem:
 Lines 1391–1572: `find_call_context`, `param_to_label`,
 `signature_of_function_type`, `handle_signature_help`.
 
-- [ ] Create `lib/lsp/signature_help.ml` + `.mli`
-- [ ] Move signature help functions (~180 lines)
-- [ ] Wire into `server.ml` dispatch
-- [ ] Build + test
+- [x] Create `lib/lsp/signature_help.ml` + `.mli`
+- [x] Move signature help functions (~180 lines)
+- [x] Wire into `server.ml` dispatch
+- [x] Build + test
 
 ---
 
@@ -149,13 +149,13 @@ Lines 1391–1572: `find_call_context`, `param_to_label`,
 
 Pure algorithm with well-defined interface — highest test value.
 
-- [ ] Create `test/typing/levenshtein_test.ml`
-- [ ] Test `distance`: identity (d(s,s)=0), symmetry, known pairs,
+- [x] Create `test/typing/levenshtein_test.ml`
+- [x] Test `distance`: identity (d(s,s)=0), symmetry, known pairs,
       empty strings, single edits
-- [ ] Test `find_similar_names`: threshold scaling by length,
+- [x] Test `find_similar_names`: threshold scaling by length,
       sorting by distance, no matches case
-- [ ] Test `suggest_name`: best match selection, None when no match
-- [ ] Add to `test/typing/dune`
+- [x] Test `suggest_name`: best match selection, None when no match
+- [x] Add to `test/typing/dune`
 
 ### Task 5.2: Add unit tests for `print.ml`
 

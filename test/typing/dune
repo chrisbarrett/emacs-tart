@@ -69,3 +69,8 @@
  (name source_excerpt_test)
  (modules source_excerpt_test)
  (libraries tart alcotest str unix))
+
+(test
+ (name levenshtein_test)
+ (modules levenshtein_test)
+ (libraries tart alcotest))
