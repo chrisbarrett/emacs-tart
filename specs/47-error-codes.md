@@ -29,6 +29,7 @@ as the source of truth. Codes are sequential from E0001.
 | E0005 | AnnotationMismatch  | Expression doesn't match tart annotation       |
 | E0006 | ReturnMismatch      | Function body doesn't match declared return    |
 | E0007 | UnificationFailed   | Types cannot be unified                        |
+| E0008 | DisjointEquality    | eq/eql args are provably disjoint              |
 
 ### Name Errors (E0100–E0199)
 
@@ -131,9 +132,18 @@ as the source of truth. Codes are sequential from E0001.
 
 **Verify:** All error output includes bracketed code
 
+## Status
+
+Complete. All implemented codes match this registry. E0008 (DisjointEquality)
+was added after initial spec draft. Clause diagnostics intentionally lack error
+codes — they carry user-authored advisory messages from `.tart` signatures, not
+compiler error conditions. Future codes (E0103, E0105, E0202, E0203, E0401,
+E0402, E0500–E0503, E0600–E0602, E0700, E0701, E0800–E0802) are reservations
+for features not yet implemented.
+
 ## Tasks
 
-- [ ] [R1] Update diagnostic.ml to use new codes
-- [ ] [R2] Ensure 1:1 mapping of conditions to codes
-- [ ] [R3] Add test preventing code reassignment
-- [ ] [R4] Verify all diagnostics include codes
+- [x] [R1] Update diagnostic.ml to use new codes
+- [x] [R2] Ensure 1:1 mapping of conditions to codes
+- [x] [R3] Add test preventing code reassignment
+- [x] [R4] Verify all diagnostics include codes

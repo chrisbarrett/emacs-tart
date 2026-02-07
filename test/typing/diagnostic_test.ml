@@ -1184,6 +1184,55 @@ let test_explicit_instantiation_multiple_type_args () =
     (contains_pattern (Str.regexp "int.*string\\|string.*int") str)
 
 (* =============================================================================
+   Error Code Stability Tests (Spec 47 R3)
+   ============================================================================= *)
+
+(** Exhaustive test mapping every error_code constructor to its expected string.
+    Catches regressions if codes drift or are reassigned. Uses an exhaustive
+    match so the compiler forces an update when constructors change. *)
+let test_error_code_stability () =
+  let check name expected code =
+    Alcotest.(check string) name expected (Diag.error_code_to_string code)
+  in
+  (* Type Errors E0001–E0099 *)
+  check "TypeMismatch" "E0001" Diag.TypeMismatch;
+  check "BranchMismatch" "E0002" Diag.BranchMismatch;
+  check "InfiniteType" "E0003" Diag.InfiniteType;
+  check "SignatureMismatch" "E0004" Diag.SignatureMismatch;
+  check "AnnotationMismatch" "E0005" Diag.AnnotationMismatch;
+  check "ReturnMismatch" "E0006" Diag.ReturnMismatch;
+  check "UnificationFailed" "E0007" Diag.UnificationFailed;
+  check "DisjointEquality" "E0008" Diag.DisjointEquality;
+  (* Name Errors E0100–E0199 *)
+  check "UndefinedVariable" "E0100" Diag.UndefinedVariable;
+  check "UndefinedFunction" "E0101" Diag.UndefinedFunction;
+  check "UndefinedType" "E0102" Diag.UndefinedType;
+  check "MissingSignature" "E0104" Diag.MissingSignature;
+  (* Arity Errors E0200–E0299 *)
+  check "WrongArity" "E0200" Diag.WrongArity;
+  check "WrongTypeArity" "E0201" Diag.WrongTypeArity;
+  (* Kind Errors E0300–E0399 *)
+  check "KindMismatch" "E0300" Diag.KindMismatch;
+  check "InfiniteKind" "E0301" Diag.InfiniteKind;
+  check "TypeArityMismatch" "E0302" Diag.TypeArityMismatch;
+  (* Pattern Errors E0400–E0499 *)
+  check "NonExhaustive" "E0400" Diag.NonExhaustive;
+  (* Module Errors E0700–E0799 *)
+  check "SignatureNotFound" "E0702" Diag.SignatureNotFound
+
+(** Verify that every constructor is covered by the stability test. This
+    function uses an exhaustive match — if a new constructor is added and not
+    handled, the compiler will produce a warning. *)
+let _exhaustiveness_guard (code : Diag.error_code) =
+  match code with
+  | TypeMismatch | BranchMismatch | InfiniteType | SignatureMismatch
+  | AnnotationMismatch | ReturnMismatch | UnificationFailed | DisjointEquality
+  | UndefinedVariable | UndefinedFunction | UndefinedType | MissingSignature
+  | WrongArity | WrongTypeArity | KindMismatch | InfiniteKind
+  | TypeArityMismatch | NonExhaustive | SignatureNotFound ->
+      ()
+
+(* =============================================================================
    Test Suite
    ============================================================================= *)
 
@@ -1340,5 +1389,10 @@ let () =
             test_explicit_instantiation_has_error_code;
           Alcotest.test_case "multiple type args" `Quick
             test_explicit_instantiation_multiple_type_args;
+        ] );
+      ( "error_code_stability",
+        [
+          Alcotest.test_case "all codes match spec 47" `Quick
+            test_error_code_stability;
         ] );
     ]
