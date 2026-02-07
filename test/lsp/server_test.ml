@@ -786,13 +786,13 @@ let test_hover_on_literal () =
       Alcotest.(check bool) "result is not null" true (result <> `Null);
       let contents = result |> member "contents" in
       let value = contents |> member "value" |> to_string in
-      (* Should contain "int" type *)
+      (* Should contain literal "42" type *)
       Alcotest.(check bool)
-        "contains Int type" true
+        "contains literal type" true
         (String.length value > 0
         &&
           try
-            let _ = Str.search_forward (Str.regexp_string "int") value 0 in
+            let _ = Str.search_forward (Str.regexp_string "42") value 0 in
             true
           with Not_found -> false)
 
@@ -1047,12 +1047,24 @@ let test_hover_instantiated_type () =
       Alcotest.(check bool) "result is not null" true (result <> `Null);
       let contents = result |> member "contents" in
       let value = contents |> member "value" |> to_string in
-      (* Should have Int in the type, showing instantiation occurred *)
+      (* Should have resolved types - with literal inference, params show values *)
       Alcotest.(check bool)
-        "contains Int (instantiated)" true
+        "contains resolved type" true
         (try
-           let _ = Str.search_forward (Str.regexp_string "int") value 0 in
-           true
+           (* Check for either int (if list is loaded) or literal 1 *)
+           let has_int =
+             try
+               ignore (Str.search_forward (Str.regexp_string "int") value 0);
+               true
+             with Not_found -> false
+           in
+           let has_literal =
+             try
+               ignore (Str.search_forward (Str.regexp_string "1") value 0);
+               true
+             with Not_found -> false
+           in
+           has_int || has_literal
          with Not_found -> false)
 (* NOTE: Ideally we'd also check that there are no unresolved type
          variables like '_0 in the hover output. However, with c-core signatures
@@ -1123,11 +1135,11 @@ let test_hover_with_errors_elsewhere () =
       Alcotest.(check bool) "result is not null" true (result <> `Null);
       let contents = result |> member "contents" in
       let value = contents |> member "value" |> to_string in
-      (* Should contain "int" type for the literal 42 *)
+      (* Should contain literal "42" type for the literal 42 *)
       Alcotest.(check bool)
-        "contains Int type" true
+        "contains literal type" true
         (try
-           let _ = Str.search_forward (Str.regexp_string "int") value 0 in
+           let _ = Str.search_forward (Str.regexp_string "42") value 0 in
            true
          with Not_found -> false)
 

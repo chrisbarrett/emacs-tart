@@ -29,22 +29,22 @@ let constraint_count ?(env = Env.empty) str =
    ============================================================================= *)
 
 let test_int_literal () =
-  Alcotest.(check string) "int literal" "int" (infer_type "42")
+  Alcotest.(check string) "int literal" "42" (infer_type "42")
 
 let test_negative_int () =
-  Alcotest.(check string) "negative int" "int" (infer_type "-17")
+  Alcotest.(check string) "negative int" "-17" (infer_type "-17")
 
 let test_float_literal () =
-  Alcotest.(check string) "float literal" "float" (infer_type "3.14")
+  Alcotest.(check string) "float literal" "3.14" (infer_type "3.14")
 
 let test_string_literal () =
-  Alcotest.(check string) "string literal" "string" (infer_type "\"hello\"")
+  Alcotest.(check string) "string literal" {|"hello"|} (infer_type "\"hello\"")
 
 let test_empty_string () =
-  Alcotest.(check string) "empty string" "string" (infer_type "\"\"")
+  Alcotest.(check string) "empty string" {|""|} (infer_type "\"\"")
 
 let test_keyword_literal () =
-  Alcotest.(check string) "keyword literal" "keyword" (infer_type ":foo")
+  Alcotest.(check string) "keyword literal" ":foo" (infer_type ":foo")
 
 let test_char_literal () =
   (* Characters are integers in Elisp *)
@@ -83,17 +83,16 @@ let test_poly_var_instantiation () =
    ============================================================================= *)
 
 let test_quoted_symbol () =
-  Alcotest.(check string) "quoted symbol" "symbol" (infer_type "'foo")
+  Alcotest.(check string) "quoted symbol" "'foo" (infer_type "'foo")
 
 let test_quoted_list () =
-  Alcotest.(check string)
-    "quoted list" "(Tuple int int int)" (infer_type "'(1 2 3)")
+  Alcotest.(check string) "quoted list" "(Tuple 1 2 3)" (infer_type "'(1 2 3)")
 
 let test_quoted_int () =
-  Alcotest.(check string) "quoted int" "int" (infer_type "'42")
+  Alcotest.(check string) "quoted int" "42" (infer_type "'42")
 
 let test_quoted_string () =
-  Alcotest.(check string) "quoted string" "string" (infer_type "'\"hello\"")
+  Alcotest.(check string) "quoted string" {|"hello"|} (infer_type "'\"hello\"")
 
 (* =============================================================================
    Lambda Tests
@@ -101,7 +100,7 @@ let test_quoted_string () =
 
 let test_lambda_no_params () =
   let ty = infer_type "(lambda () 42)" in
-  Alcotest.(check string) "nullary lambda" "(-> () int)" ty
+  Alcotest.(check string) "nullary lambda" "(-> () 42)" ty
 
 let test_lambda_one_param () =
   let ty = infer_type "(lambda (x) x)" in
@@ -185,17 +184,17 @@ let test_if_without_else () =
 
 let test_let_simple () =
   let ty = infer_type "(let ((x 42)) x)" in
-  Alcotest.(check string) "simple let" "int" ty
+  Alcotest.(check string) "simple let" "42" ty
 
 let test_let_multiple_bindings () =
   let ty = infer_type "(let ((x 1) (y 2)) y)" in
-  Alcotest.(check string) "let with two bindings" "int" ty
+  Alcotest.(check string) "let with two bindings" "2" ty
 
 let test_let_binding_shadowing () =
   let env = Env.extend_mono "x" Prim.string Env.empty in
   let ty = infer_type ~env "(let ((x 42)) x)" in
   (* Inner x shadows outer x *)
-  Alcotest.(check string) "let shadows outer" "int" ty
+  Alcotest.(check string) "let shadows outer" "42" ty
 
 let test_let_nil_binding () =
   let ty = infer_type "(let ((x)) x)" in
@@ -203,8 +202,8 @@ let test_let_nil_binding () =
 
 let test_let_star_sequential () =
   let ty = infer_type "(let* ((x 1) (y x)) y)" in
-  (* y sees x, should be Int *)
-  Alcotest.(check string) "let* sequential" "int" ty
+  (* y sees x, preserves literal type *)
+  Alcotest.(check string) "let* sequential" "1" ty
 
 (* =============================================================================
    Progn Tests
@@ -216,11 +215,11 @@ let test_progn_empty () =
 
 let test_progn_single () =
   let ty = infer_type "(progn 42)" in
-  Alcotest.(check string) "single progn" "int" ty
+  Alcotest.(check string) "single progn" "42" ty
 
 let test_progn_multiple () =
-  let ty = infer_type "(progn 1 2 \"end\")" in
-  Alcotest.(check string) "multiple progn" "string" ty
+  let ty = infer_type {|(progn 1 2 "end")|} in
+  Alcotest.(check string) "multiple progn" {|"end"|} ty
 
 (* =============================================================================
    Boolean Expression Tests
@@ -239,12 +238,12 @@ let test_not_returns_bool () =
   Alcotest.(check string) "not returns bool" "(Or t nil)" ty
 
 let test_and_last_type () =
-  let ty = infer_type "(and 1 \"str\")" in
-  Alcotest.(check string) "and returns last" "string" ty
+  let ty = infer_type {|(and 1 "str")|} in
+  Alcotest.(check string) "and returns last" {|"str"|} ty
 
 let test_or_last_type () =
-  let ty = infer_type "(or 1 \"str\")" in
-  Alcotest.(check string) "or returns last" "string" ty
+  let ty = infer_type {|(or 1 "str")|} in
+  Alcotest.(check string) "or returns last" {|"str"|} ty
 
 (* =============================================================================
    Vector Tests

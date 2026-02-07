@@ -19,7 +19,7 @@ let parse_many str = Tart.Read.parse_string_exn ~filename:"<test>" str
 let test_check_expr_literal () =
   let sexp = parse "42" in
   let ty, errors = Check.check_expr sexp in
-  Alcotest.(check string) "int type" "int" (to_string ty);
+  Alcotest.(check string) "literal type" "42" (to_string ty);
   Alcotest.(check int) "no errors" 0 (List.length errors)
 
 let test_check_expr_application () =
@@ -62,7 +62,7 @@ let test_check_form_expr () =
   (* Result should be ExprForm *)
   match result with
   | Check.ExprForm { ty } ->
-      Alcotest.(check string) "expr type" "int" (to_string ty)
+      Alcotest.(check string) "expr type" "42" (to_string ty)
   | _ -> Alcotest.fail "expected ExprForm"
 
 (* =============================================================================
@@ -333,7 +333,7 @@ let test_defvar_no_annotation_infers () =
   match result.forms with
   | [ Check.DefvarForm { name; var_type } ] ->
       Alcotest.(check string) "name" "my-num" name;
-      Alcotest.(check string) "type" "int" (to_string var_type)
+      Alcotest.(check string) "type" "42" (to_string var_type)
   | _ -> Alcotest.fail "expected DefvarForm"
 
 (** Test defvar without init uses Any *)

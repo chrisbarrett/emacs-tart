@@ -226,16 +226,24 @@ let rec unify ?(invariant = false) t1 t2 loc : unit internal_result =
     Ok ()
   else
     match (t1, t2) with
-    (* Type variable cases - link the variable to the other type *)
+    (* Type variable cases - link the variable to the other type.
+       When linking to a TLiteral, widen to the base type so that
+       constraint-based contexts (vectors, function params, etc.)
+       see the base type rather than a specific literal value.
+       Direct inference (let bindings, bare expressions) still
+       preserves the literal since no tvar is involved. *)
     | TVar tv, ty | ty, TVar tv -> (
         match !tv with
         | Link _ -> failwith "repr should have followed link"
         | Unbound (id, level) -> (
+            let link_ty =
+              match ty with TLiteral (_, base) -> base | _ -> ty
+            in
             (* Occurs check before linking *)
-            match occurs_check id level ty loc with
+            match occurs_check id level link_ty loc with
             | Error (tv_id, ty, loc) -> Error (IOccursCheck (tv_id, ty, loc))
             | Ok () ->
-                tv := Link ty;
+                tv := Link link_ty;
                 Ok ()))
     (* Any (truthy | nil) is the top type - unifies with anything, EXCEPT in
        invariant contexts (inside type application arguments). This enforces
@@ -390,6 +398,14 @@ let rec unify ?(invariant = false) t1 t2 loc : unit internal_result =
         match r.row_var with
         | None -> Ok ()
         | Some rv -> unify ~invariant t rv loc)
+    (* Literal types: same value → Ok, different value → widen to base types.
+       TLiteral(_, base) widens to base type when the other side demands it.
+       TVar case is handled above (links tvar to base type for proper widening). *)
+    | TLiteral (v1, _), TLiteral (v2, _) when literal_value_equal v1 v2 -> Ok ()
+    | TLiteral (_, base1), TLiteral (_, base2) ->
+        unify ~invariant base1 base2 loc
+    | TLiteral (_, base), other | other, TLiteral (_, base) ->
+        unify ~invariant other base loc
     (* Map supertype subtyping (Spec 11 R12):
        (map {row}) is a supertype of alist, plist, and hash-table.
        When unifying a concrete map form with (Map row), extract the row
@@ -792,6 +808,9 @@ let rec types_disjoint t1 t2 : bool =
             other = intrinsic "Nil"
           else (* Different concrete types with no subtype relationship *)
             true
+    (* Literal types: delegate to base type for disjointness *)
+    | TLiteral (_, base), other | other, TLiteral (_, base) ->
+        types_disjoint base other
     (* Union on either side: disjoint iff ALL members are disjoint *)
     | TUnion ts, t -> List.for_all (fun ti -> types_disjoint ti t) ts
     | t, TUnion ts -> List.for_all (fun ti -> types_disjoint t ti) ts

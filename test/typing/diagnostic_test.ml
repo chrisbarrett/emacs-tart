@@ -397,10 +397,10 @@ let test_if_branch_mismatch_shows_both_types () =
   in
   let d = List.hd branch_errors in
   let str = Diag.to_string d in
-  (* Should show both Int and String types *)
+  (* Should show both branch types - literal 42 and string *)
   Alcotest.(check bool)
-    "shows int" true
-    (contains_pattern (Str.regexp "int") str);
+    "shows literal" true
+    (contains_pattern (Str.regexp "42") str);
   Alcotest.(check bool)
     "shows string" true
     (contains_pattern (Str.regexp "string") str)

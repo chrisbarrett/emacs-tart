@@ -197,11 +197,11 @@ let rec infer (env : Env.t) (sexp : Syntax.Sexp.t) : result =
   let open Syntax.Sexp in
   match sexp with
   (* === Literals === *)
-  | Int (_, _) -> pure Prim.int
-  | Float (_, _) -> pure Prim.float
-  | String (_, _) -> pure Prim.string
+  | Int (n, _) -> pure (TLiteral (LitInt n, Prim.int))
+  | Float (f, _) -> pure (TLiteral (LitFloat f, Prim.float))
+  | String (s, _) -> pure (TLiteral (LitString s, Prim.string))
   | Char (_, _) -> pure Prim.int (* Characters are integers in Elisp *)
-  | Keyword (_, _) -> pure Prim.keyword
+  | Keyword (k, _) -> pure (TLiteral (LitKeyword k, Prim.keyword))
   (* === Special symbols nil and t === *)
   | Symbol ("nil", _) -> pure Prim.nil
   | Symbol ("t", _) -> pure Prim.t
@@ -326,12 +326,12 @@ let rec infer (env : Env.t) (sexp : Syntax.Sexp.t) : result =
 and infer_quoted (sexp : Syntax.Sexp.t) : result =
   let open Syntax.Sexp in
   match sexp with
-  | Int (_, _) -> pure Prim.int
-  | Float (_, _) -> pure Prim.float
-  | String (_, _) -> pure Prim.string
+  | Int (n, _) -> pure (TLiteral (LitInt n, Prim.int))
+  | Float (f, _) -> pure (TLiteral (LitFloat f, Prim.float))
+  | String (s, _) -> pure (TLiteral (LitString s, Prim.string))
   | Char (_, _) -> pure Prim.int
-  | Keyword (_, _) -> pure Prim.keyword
-  | Symbol (_, _) -> pure Prim.symbol
+  | Keyword (k, _) -> pure (TLiteral (LitKeyword k, Prim.keyword))
+  | Symbol (name, _) -> pure (TLiteral (LitSymbol name, Prim.symbol))
   | List (elts, _) ->
       (* Quoted lists infer as tuples with per-element types.
          Tuple-to-list subtyping (R9) ensures backward compatibility. *)
@@ -2658,9 +2658,17 @@ and infer_vector env elems span =
       let first_result = infer env first in
       let rest_results = List.map (infer env) rest in
 
-      (* All elements must unify with the first *)
+      (* Widen the element type: if the first element is a literal,
+         use its base type so that vector types are stable. *)
+      let elem_ty =
+        match first_result.ty with
+        | TLiteral (_, base) -> base
+        | ty -> ty
+      in
+
+      (* All remaining elements must unify with the element type *)
       let elem_constraints =
-        List.map (fun r -> C.equal first_result.ty r.ty span) rest_results
+        List.map (fun r -> C.equal elem_ty r.ty span) rest_results
       in
 
       let all_constraints =
@@ -2676,7 +2684,7 @@ and infer_vector env elems span =
       in
 
       {
-        ty = vector_of first_result.ty;
+        ty = vector_of elem_ty;
         constraints = all_constraints;
         undefineds = all_undefineds;
         clause_diagnostics =
