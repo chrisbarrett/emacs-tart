@@ -1,18 +1,6 @@
 # Spec 44: Timing and Memory Statistics
 
-**Depends:** [Spec 36][] (cmdliner-cli)
-
-## Links
-
-### Deps
-[Spec 36]: ./36-cmdliner-cli.md
-
-| Constraint | Detail |
-|------------|--------|
-| Opt-in | Stats only when flags enabled |
-| Zero-cost | No overhead when disabled |
-| Granular | Per-phase and per-file breakdown |
-| Composable | `--verbose` and `--memory` independent |
+**Depends:** [Spec 36](./36-cmdliner-cli.md) (cmdliner-cli)
 
 ## Output
 

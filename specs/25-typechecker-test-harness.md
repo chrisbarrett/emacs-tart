@@ -2,16 +2,7 @@
 
 Fixture-based acceptance tests for type checker output.
 
-**Deps:** [Spec 09][] (CLI), [Spec 24][] (versioned typings).
-
-## Links
-
-### Deps
-[Spec 09]: ./09-cli-interface.md
-[Spec 24]: ./24-versioned-typings.md
-
-### Blocks
-[Spec 33]: ./33-typing-fixtures.md
+**Deps:** [Spec 09](./09-cli-interface.md) (CLI), [Spec 24](./24-versioned-typings.md) (versioned typings).
 
 ## Goal
 

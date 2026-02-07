@@ -2,18 +2,7 @@
 
 Elisp library providing type annotation macros for inline use in `.el` files.
 
-**Dependencies:** [Spec 07][] signature files (type syntax parsing).
-
-## Links
-
-### Deps
-[Spec 07]: ./07-signature-files.md
-
-### Blocks
-[Spec 21]: ./21-e2e-test-harness.md
-
-### Related
-[Spec 10]: ./10-emacs-integration.md
+**Dependencies:** [Spec 07](./07-signature-files.md) signature files (type syntax parsing).
 
 ## Goal
 
@@ -41,7 +30,7 @@ lisp/
 ```
 
 Note: Development tooling (REPL, eglot integration, minor mode) lives in
-`tart-mode.el` (see [Spec 10][]).
+`tart-mode.el` (see [Spec 10](./10-emacs-integration.md)).
 
 ## Requirements
 

@@ -5,17 +5,6 @@ Language Server Protocol implementation for IDE integration via eglot.
 **Dependencies:** Specs 04-07 complete (parser, interpreter, inference,
 signatures).
 
-## Links
-
-### Deps
-[Spec 07]: ./07-signature-files.md
-
-### Blocks
-[Spec 12]: ./12-module-boundaries.md
-[Spec 13]: ./13-error-reporting.md
-[Spec 26]: ./26-lsp-signature-sync.md
-[Spec 50]: ./50-version-constraints.md
-
 ## Goal
 
 Implement an LSP server that provides type-based IDE features: diagnostics,

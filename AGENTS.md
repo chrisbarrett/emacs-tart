@@ -20,6 +20,10 @@ Write `.mli` for every `lib/**/*.ml`. Docstrings ok; no redundant comments.
 Write a `match` arm for every constructor of the scrutinee--avoids fallthrough
 bugs; type-checking shows locations to update.
 
+## Markdown
+
+References to other files or specs are always hyperlinked.
+
 # Testing
 
 Tests under `test/fixtures/typing/` are pairs of `$name.{el,expected}` files.

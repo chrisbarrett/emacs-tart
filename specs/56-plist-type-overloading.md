@@ -4,16 +4,8 @@ Extend multi-clause function signatures to support row-typed pattern matching,
 enabling precise field-level type overloading for `plist-get`, `alist-get`,
 `gethash`, and `map-elt`.
 
-**Dependencies:** [Spec 54][] (multi-clause signatures), [Spec 55][] (plist intrinsic),
-[Spec 11][] R4-R8 (row polymorphism), [Spec 48][] (prelude)
-
-## Links
-
-### Deps
-[Spec 11]: ./11-adt-system.md
-[Spec 48]: ./48-prelude.md
-[Spec 54]: ./54-multi-clause-signatures.md
-[Spec 55]: ./55-plist-intrinsic.md
+**Dependencies:** [Spec 54](./54-multi-clause-signatures.md) (multi-clause signatures), [Spec 55](./55-plist-intrinsic.md) (plist intrinsic),
+[Spec 11](./11-adt-system.md) R4-R8 (row polymorphism), [Spec 48](./48-prelude.md) (prelude)
 
 ## Goal
 
@@ -23,13 +15,13 @@ signatures that pattern-match on row types and literal keys.
 
 ## Rationale
 
-Currently ([Spec 11][] R4-R8), `plist-get`, `alist-get`, `gethash`, and `map-elt`
+Currently ([Spec 11](./11-adt-system.md) R4-R8), `plist-get`, `alist-get`, `gethash`, and `map-elt`
 have hard-coded row-typed inference in `infer.ml` (lines 227–256,
 1584–1921). This special-case logic bypasses the multi-clause dispatch
-mechanism from [Spec 54][] and cannot be expressed in `.tart` files.
+mechanism from [Spec 54](./54-multi-clause-signatures.md) and cannot be expressed in `.tart` files.
 
-Multi-clause signatures ([Spec 54][]) provide ordered pattern matching on types.
-Row polymorphism ([Spec 11][]) provides field-level precision for map types. This
+Multi-clause signatures ([Spec 54](./54-multi-clause-signatures.md)) provide ordered pattern matching on types.
+Row polymorphism ([Spec 11](./11-adt-system.md)) provides field-level precision for map types. This
 spec bridges them: multi-clause dispatch with row-typed parameters and literal
 value matching.
 
@@ -63,10 +55,10 @@ Multi-clause signatures with row-typed parameters and literal keys:
 ```
 
 Semantics:
-- Clauses are tried top-to-bottom ([Spec 54][] R4)
+- Clauses are tried top-to-bottom ([Spec 54](./54-multi-clause-signatures.md) R4)
 - Each clause matches parameters structurally and by literal values
 - First matching clause determines return type
-- Row unification rules ([Spec 11][] R11) apply during clause matching
+- Row unification rules ([Spec 11](./11-adt-system.md) R11) apply during clause matching
 
 ## Constraints
 
@@ -74,7 +66,7 @@ Semantics:
 | ----------------------- | --------------------------------------------------- |
 | Subsumes R4–R8 builtin  | Replaces hard-coded row inference in `infer.ml`     |
 | Literal matching        | Clause parameters can be literal values (`:name`)   |
-| Row unification         | Clause matching respects row types (Spec 11 R11)    |
+| Row unification         | Clause matching respects row types ([Spec 11](./11-adt-system.md) R11)    |
 | Fallthrough to generic  | Last clause is always the generic homogeneous case  |
 | Backward compatible     | Existing multi-clause signatures unchanged          |
 
@@ -176,7 +168,7 @@ special-case code
 
 ### R6: Preserve existing decision table semantics
 
-**Given** the 7-case decision table from [Spec 11][] R4:
+**Given** the 7-case decision table from [Spec 11](./11-adt-system.md) R4:
 
 | Case | KEY          | Row    | Result                      |
 | ---- | ------------ | ------ | --------------------------- |
@@ -229,7 +221,7 @@ string)`
 
 - **Multi-parameter predicate narrowing**: Not attempting to narrow multiple
   variables based on clause structure
-- **Automatic predicate inference**: Predicate derivation ([Spec 54][] R5) remains
+- **Automatic predicate inference**: Predicate derivation ([Spec 54](./54-multi-clause-signatures.md) R5) remains
   limited to return-type analysis, not parameter patterns
 - **Full dependent types**: We do not introduce type-level functions or type
   families. Row lookup is built into clause matching, not a general mechanism
@@ -241,12 +233,12 @@ string)`
 ### Per-Call Overload Resolution
 
 This spec introduces **call-site overload resolution** for multi-clause
-signatures. [Spec 54][] R4 computes the overall type as the union of all clause
+signatures. [Spec 54](./54-multi-clause-signatures.md) R4 computes the overall type as the union of all clause
 returns. This spec adds a new inference mode: when the type checker has enough
 information at a call site to select a specific clause, it uses that clause's
 return type directly instead of the union.
 
-This is the "Phase 2: Overload resolution" flagged as future work in [Spec 54][].
+This is the "Phase 2: Overload resolution" flagged as future work in [Spec 54](./54-multi-clause-signatures.md).
 It is scoped here to multi-clause functions with row-typed parameters and
 literal key arguments—the combination that makes map accessor inference work.
 
@@ -282,21 +274,21 @@ with specific row fields remain valid for custom accessors with fixed schemas.
 
 ### Clause Matching Algorithm
 
-Current multi-clause matching ([Spec 54][]) only checks return type for predicate
+Current multi-clause matching ([Spec 54](./54-multi-clause-signatures.md)) only checks return type for predicate
 derivation. For row-typed overloading, clause matching must:
 
 1. **Unify parameter types structurally** (already done for single-clause)
 2. **Match literal values** (new: `:name` in clause vs `:name` in call)
-3. **Thread row variables through unification** ([Spec 11][] R11 already handles
+3. **Thread row variables through unification** ([Spec 11](./11-adt-system.md) R11 already handles
    this)
-4. **Select first matching clause** (top-to-bottom order, [Spec 54][])
+4. **Select first matching clause** (top-to-bottom order, [Spec 54](./54-multi-clause-signatures.md))
 
 Matching happens during constraint generation (`infer.ml`), not during
 unification. The infer step tries each clause in order until one succeeds.
 
 ### AST and Representation
 
-No AST changes needed. [Spec 54][] already supports:
+No AST changes needed. [Spec 54](./54-multi-clause-signatures.md) already supports:
 
 ```ocaml
 and defun_clause = { clause_params : sig_param list;

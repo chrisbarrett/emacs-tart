@@ -2,12 +2,7 @@
 
 Clone Emacs source in XDG cache for testing against real Elisp.
 
-**Deps:** [Spec 29][]
-
-## Links
-
-### Deps
-[Spec 29]: ./29-emacs-coverage.md
+**Deps:** [Spec 29](./29-emacs-coverage.md)
 
 ## Constraints
 

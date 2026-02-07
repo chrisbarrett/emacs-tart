@@ -2,17 +2,7 @@
 
 Make `plist` a compiler intrinsic rather than a type alias.
 
-**Dependencies:** [Spec 07][] (signature files), [Spec 11][] (row polymorphism), [Spec 48][] (prelude)
-
-## Links
-
-### Deps
-[Spec 07]: ./07-signature-files.md
-[Spec 11]: ./11-adt-system.md
-[Spec 48]: ./48-prelude.md
-
-### Blocks
-[Spec 56]: ./56-plist-type-overloading.md
+**Dependencies:** [Spec 07](./07-signature-files.md) (signature files), [Spec 11](./11-adt-system.md) (row polymorphism), [Spec 48](./48-prelude.md) (prelude)
 
 ## Goal
 

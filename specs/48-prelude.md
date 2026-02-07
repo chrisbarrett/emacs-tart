@@ -2,24 +2,8 @@
 
 Implicit utility types built on compiler intrinsics.
 
-**Deps:** None (foundational). **Consumers:** [Spec 07][] (sig loading), [Spec 11][]
-(unions), [Spec 24][] (versioned typings), [Spec 32][] (core typings workflow).
-
-## Links
-
-### Blocks
-[Spec 07]: ./07-signature-files.md
-[Spec 11]: ./11-adt-system.md
-[Spec 24]: ./24-versioned-typings.md
-[Spec 32]: ./32-emacs-core-typings.md
-[Spec 46]: ./46-truthiness-unions.md
-[Spec 55]: ./55-plist-intrinsic.md
-[Spec 56]: ./56-plist-type-overloading.md
-
-### Related
-[Spec 34]: ./34-funcall-apply-typing.md
-[Spec 54]: ./54-multi-clause-signatures.md
-[Spec 57]: ./57-clause-diagnostics.md
+**Deps:** None (foundational). **Consumers:** [Spec 07](./07-signature-files.md) (sig loading), [Spec 11](./11-adt-system.md)
+(unions), [Spec 24](./24-versioned-typings.md) (versioned typings), [Spec 32](./32-emacs-core-typings.md) (core typings workflow).
 
 ## Goal
 
@@ -154,7 +138,7 @@ Every use of `any` must be justified—treat it with absolute suspicion.
 **Correct alternatives:**
 
 - For `funcall`/`apply`: special type-checker handling extracts return type
-  from the function argument (see [Spec 34][])
+  from the function argument (see [Spec 34](./34-funcall-apply-typing.md))
 - For `length`: use precise union of accepted types:
   `((list any) | string | (vector any) | bool-vector | char-table) -> int`
 - For dynamic lookups like `symbol-value`: `any` may be legitimate since the
@@ -195,7 +179,7 @@ This catches a common Emacs Lisp bug: `(eq str1 str2)` compares string pointers
 rather than contents, which is almost never correct. With the `eq-safe` bound,
 `string` arguments to `eq` produce a type error.
 
-For `alist-get` ([Spec 11][] R14): the default testfn is `eq`, so the key type must
+For `alist-get` ([Spec 11](./11-adt-system.md) R14): the default testfn is `eq`, so the key type must
 satisfy `eq-safe`. An explicit TESTFN like `#'equal` bypasses this check.
 
 ## Output
@@ -250,7 +234,7 @@ After these, user typings (via `tart-type-path`) and project-local sibling
 
 ### R4: Not user-overridable
 
-Prelude types are subject to the general no-shadowing rule ([Spec 07][] R17):
+Prelude types are subject to the general no-shadowing rule ([Spec 07](./07-signature-files.md) R17):
 redefining any imported binding—including prelude types—is an error.
 
 ```elisp
@@ -311,7 +295,7 @@ with float args succeeds
 ## Non-Goals
 
 - **Emacs primitives:** Functions like `car`, `cdr`, `cons` are defined in
-  versioned typings ([Spec 24][], [Spec 32][]), not the prelude
+  versioned typings ([Spec 24](./24-versioned-typings.md), [Spec 32](./32-emacs-core-typings.md)), not the prelude
 - **Third-party types:** Types for dash.el, s.el, etc. are separate typings
 - **User extensibility:** Users cannot add to the prelude; they create their own
   `.tart` files
@@ -320,7 +304,7 @@ with float args succeeds
 
 - [x] [R1] Create `typings/tart-prelude.tart` with type definitions
 - [x] [R2,R3] Modify sig_loader.ml to load prelude first
-- [x] [R4] Covered by [Spec 07][] R17 (no-shadowing rule)
+- [x] [R4] Covered by [Spec 07](./07-signature-files.md) R17 (no-shadowing rule)
 - [x] [R5] Ensure type aliases expand correctly
 - [x] [R6] Validate bounded quantifier on `option`
 - [x] [R7] Add `eq-safe` and `eql-safe` types; generalize `satisfies_bound`
@@ -328,4 +312,4 @@ with float args succeeds
 **Status:** Complete. All requirements R1–R7 implemented. Prelude at
 `typings/tart-prelude.tart` with management via `lib/sig/prelude.mli`.
 `eq-safe` and `eql-safe` types bound `eq`/`eql` signatures via multi-clause
-dispatch with clause diagnostics ([Spec 54][]/[Spec 57][]).
+dispatch with clause diagnostics ([Spec 54](./54-multi-clause-signatures.md)/[Spec 57](./57-clause-diagnostics.md)).

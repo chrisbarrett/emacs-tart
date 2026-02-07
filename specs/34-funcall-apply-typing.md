@@ -2,20 +2,7 @@
 
 Type `funcall` and `apply` accurately using tracked function types, dual namespaces, and tuple/list subtyping.
 
-**Dependencies:** [Spec 15][] (Explicit Forall), [Spec 17][] (HKT)
-
-## Links
-
-### Deps
-[Spec 15]: ./15-explicit-forall.md
-[Spec 17]: ./17-higher-kinded-types.md
-
-### Blocks
-[Spec 46]: ./46-truthiness-unions.md
-[Spec 52]: ./52-type-predicates.md
-
-### Related
-[Spec 48]: ./48-prelude.md
+**Dependencies:** [Spec 15](./15-explicit-forall.md) (Explicit Forall), [Spec 17](./17-higher-kinded-types.md) (HKT)
 
 ## Context
 
@@ -263,7 +250,7 @@ sharp-quote, but type-check identically.
 
 These forms require special-case handling in the type checker that extracts the
 return type from the function argument. A signature returning `any` defeats the
-purpose of the type system. See [Spec 48][] for general `any` discipline.
+purpose of the type system. See [Spec 48](./48-prelude.md) for general `any` discipline.
 
 ## Tasks
 

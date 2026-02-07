@@ -2,17 +2,7 @@
 
 Central manifest of all tart error codes.
 
-**Dependencies:** [Spec 13][] (error reporting), [Spec 35][] (structured errors)
-
-## Links
-
-### Deps
-[Spec 13]: ./13-error-reporting.md
-[Spec 35]: ./35-structured-errors.md
-
-### Blocks
-[Spec 50]: ./50-version-constraints.md
-[Spec 51]: ./51-diagnostic-severity.md
+**Dependencies:** [Spec 13](./13-error-reporting.md) (error reporting), [Spec 35](./35-structured-errors.md) (structured errors)
 
 ## Goal
 

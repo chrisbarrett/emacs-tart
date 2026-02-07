@@ -2,12 +2,7 @@
 
 Multi-version Emacs testing with blocking/advisory tiers.
 
-**Deps:** [Spec 21][], 22
-
-## Links
-
-### Deps
-[Spec 21]: ./21-e2e-test-harness.md
+**Deps:** [Spec 21](./21-e2e-test-harness.md), 22
 
 ## Constraints
 

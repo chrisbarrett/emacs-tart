@@ -2,15 +2,7 @@
 
 Flow-sensitive type narrowing for runtime feature detection.
 
-**Dependencies:** [Spec 07][], [Spec 24][], [Spec 46][], [Spec 50][]
-
-## Links
-
-### Deps
-[Spec 07]: ./07-signature-files.md
-[Spec 24]: ./24-versioned-typings.md
-[Spec 46]: ./46-truthiness-unions.md
-[Spec 50]: ./50-version-constraints.md
+**Dependencies:** [Spec 07](./07-signature-files.md), [Spec 24](./24-versioned-typings.md), [Spec 46](./46-truthiness-unions.md), [Spec 50](./50-version-constraints.md)
 
 ## Constraints
 
@@ -157,10 +149,10 @@ Macros expand before checking; expanded guards recognized automatically.
 - [x] [R7-R11] Feature env through control flow
 - [x] [R12] Negated guards
 - [x] [R13] Filename resolution
-- [ ] [R14] Redundant guard lint (deferred — needs Spec 50 version constraints)
+- [ ] [R14] Redundant guard lint (deferred — needs [Spec 50](./50-version-constraints.md) version constraints)
 - [x] [R16] Combined guards
 - [x] [R17] Document inline-only limitation
 
 ## Status
 
-Complete (except R14, which requires Spec 50 version constraints).
+Complete (except R14, which requires [Spec 50](./50-version-constraints.md) version constraints).

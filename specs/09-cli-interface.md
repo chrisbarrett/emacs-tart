@@ -2,15 +2,7 @@
 
 Subcommands for type-checking, evaluation, macro expansion, and interactive use.
 
-**Dependencies:** Spec 05 interpreter complete; Spec 06 for type display.
-
-## Links
-
-### Blocks
-[Spec 10]: ./10-emacs-integration.md
-[Spec 24]: ./24-versioned-typings.md
-[Spec 25]: ./25-typechecker-test-harness.md
-[Spec 28]: ./28-coverage-report.md
+**Dependencies:** [Spec 05](./.archive/05-pure-interpreter.md) interpreter complete; [Spec 06](./.archive/06-type-inference.md) for type display.
 
 ## Goal
 

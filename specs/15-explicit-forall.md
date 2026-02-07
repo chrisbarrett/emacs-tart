@@ -2,18 +2,7 @@
 
 Require explicit universal quantifiers in polymorphic signatures.
 
-**Dependencies:** [Spec 07][]
-
-## Links
-
-### Deps
-[Spec 07]: ./07-signature-files.md
-
-### Blocks
-[Spec 17]: ./17-higher-kinded-types.md
-[Spec 18]: ./18-explicit-instantiation.md
-[Spec 19]: ./19-scoped-type-variables.md
-[Spec 34]: ./34-funcall-apply-typing.md
+**Dependencies:** [Spec 07](./07-signature-files.md)
 
 ## Goal
 

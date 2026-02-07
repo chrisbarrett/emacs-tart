@@ -2,23 +2,7 @@
 
 Declare functions as type predicates that narrow types in conditional branches.
 
-**Deps:** [Spec 34][], [Spec 46][], [Spec 11][]
-
-## Links
-
-### Deps
-[Spec 11]: ./11-adt-system.md
-[Spec 34]: ./34-funcall-apply-typing.md
-[Spec 46]: ./46-truthiness-unions.md
-
-### Related
-[Spec 49]: ./49-feature-guards.md
-[Spec 54]: ./54-multi-clause-signatures.md
-
-> **Syntax superseded by [Spec 54][].**
-> The `(x is T)` return syntax and `((name type))` named parameters are
-> replaced by multi-clause function signatures. The narrowing *behavior*
-> (R1-R12 below) is preserved — only the declaration mechanism changes.
+**Deps:** [Spec 34](./34-funcall-apply-typing.md), [Spec 46](./46-truthiness-unions.md), [Spec 11](./11-adt-system.md)
 
 ## Goal
 
@@ -26,7 +10,7 @@ Enable `stringp`, `listp`, and user-defined predicates to narrow types in condit
 
 ## Syntax (superseded)
 
-See [Spec 54][] for current syntax. Original:
+See [Spec 54](./54-multi-clause-signatures.md) for current syntax. Original:
 
 ```lisp
 (defun stringp (x) -> (x is string))
@@ -115,12 +99,12 @@ Input `(string | int | float | marker)` → narrowed `(int | float | marker)`.
   (when result ...))   ; x NOT narrowed
 ```
 
-Stored results don't narrow (same as [Spec 49][] R17).
+Stored results don't narrow (same as [Spec 49](./49-feature-guards.md) R17).
 
 ## Standard Library Predicates
 
 Declare in `typings/emacs/*/c-core/data.tart` using multi-clause syntax
-([Spec 54][]):
+([Spec 54](./54-multi-clause-signatures.md)):
 
 ```lisp
 (defun stringp ((string) -> t) ((_) -> nil))
@@ -159,7 +143,7 @@ Declare in `typings/emacs/*/c-core/data.tart` using multi-clause syntax
 
 ### Implementation
 
-Predicate info is now derived from multi-clause structure ([Spec 54][] R5)
+Predicate info is now derived from multi-clause structure ([Spec 54](./54-multi-clause-signatures.md) R5)
 instead of `STPredicate` AST nodes.
 
 Narrowing applies in `infer.ml` for `if`/`cond`/`when`/`unless`:
@@ -175,7 +159,7 @@ narrow(T, P→S) = T ∩ S
 negate(T, P→S) = T - S
 ```
 
-### Integration with Feature Guards ([Spec 49][])
+### Integration with Feature Guards ([Spec 49](./49-feature-guards.md))
 
 Same narrowing infrastructure, different tracking:
 - Feature guards: `feature_env` → available symbols
@@ -183,8 +167,8 @@ Same narrowing infrastructure, different tracking:
 
 ## Tasks
 
-- [x] ~~Parse `(x is T)` return syntax~~ → superseded by [Spec 54][]
-- [x] ~~Named parameter syntax `((name type))`~~ → superseded by [Spec 54][]
+- [x] ~~Parse `(x is T)` return syntax~~ → superseded by [Spec 54](./54-multi-clause-signatures.md)
+- [x] ~~Named parameter syntax `((name type))`~~ → superseded by [Spec 54](./54-multi-clause-signatures.md)
 - [x] Register predicate info in sig_loader
 - [x] Predicate narrowing in if/when/unless
 - [x] Type subtraction for else branches
@@ -198,7 +182,7 @@ Same narrowing infrastructure, different tracking:
 **Status:** Complete (except R5). Narrowing infrastructure complete
 (`narrow.ml`, `infer.ml`). Inline-only restriction verified (R12). Union
 intersection narrowing for multi-type predicates implemented. Declaration
-syntax superseded by [Spec 54][] multi-clause
+syntax superseded by [Spec 54](./54-multi-clause-signatures.md) multi-clause
 signatures. Standard library predicates migrated to multi-clause syntax.
 R5 (or-expression progn narrowing) requires `never`-return tracking and is
 deferred to a future spec.

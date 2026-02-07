@@ -1,21 +1,9 @@
 # Spec 54: Multi-Clause Function Signatures
 
-Replace `(x is T)` / `((name type))` syntax ([Spec 52][]) with ordered
+Replace `(x is T)` / `((name type))` syntax ([Spec 52](./52-type-predicates.md)) with ordered
 pattern-matching clauses on defun signatures.
 
-**Deps:** [Spec 07][], [Spec 52][] (superseded syntax)
-
-## Links
-
-### Deps
-[Spec 07]: ./07-signature-files.md
-
-### Blocks
-[Spec 56]: ./56-plist-type-overloading.md
-[Spec 57]: ./57-clause-diagnostics.md
-
-### Related
-[Spec 52]: ./52-type-predicates.md
+**Deps:** [Spec 07](./07-signature-files.md), [Spec 52](./52-type-predicates.md) (superseded syntax)
 
 ## Goal
 
@@ -60,7 +48,7 @@ while others remain inferred.
   ((_ _) -> nil))           ;; two independent fresh tvars
 ```
 
-### Migration from [Spec 52][]
+### Migration from [Spec 52](./52-type-predicates.md)
 
 | Old                                                    | New                                                |
 | ------------------------------------------------------ | -------------------------------------------------- |
@@ -117,7 +105,7 @@ Analyze clause structure:
 
 ### R6: Existing narrowing preserved
 
-[Spec 52][] R1-R4, R8-R12 behavior unchanged. `narrow.ml`/`infer.ml`
+[Spec 52](./52-type-predicates.md) R1-R4, R8-R12 behavior unchanged. `narrow.ml`/`infer.ml`
 unaffected — only `predicate_info` source changes.
 
 ### R7: Remove old syntax
@@ -183,6 +171,6 @@ Future: at call site `(car x)` where `x : (cons int string)`, try clause 1
 - [x] [R8] Type variable binders with multi-clause
 - [x] Migrate .tart predicate signatures
 - [x] Update docs/reference/tart-format.md
-- [x] Update [Spec 52][] status
+- [x] Update [Spec 52](./52-type-predicates.md) status
 
 **Status:** Complete.

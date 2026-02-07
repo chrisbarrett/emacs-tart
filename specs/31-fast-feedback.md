@@ -5,12 +5,6 @@ wait time.
 
 **Deps:** None.
 
-## Links
-
-### Blocks
-[Spec 32]: ./32-emacs-core-typings.md
-[Spec 42]: ./42-roundtrip-harness.md
-
 ## Goal
 
 Agents and developers iterating on tart's source code need to run tart against
