@@ -76,3 +76,9 @@ module Emacs_coverage = Coverage.Emacs_coverage
 
 module Log = Tart_log.Log
 (** Re-export structured logging module *)
+
+module Timing = Tart_timing.Timing
+(** Re-export timing module *)
+
+module Memory_stats = Tart_memory_stats.Memory_stats
+(** Re-export memory statistics module *)

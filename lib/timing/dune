@@ -1,0 +1,4 @@
+(library
+ (name tart_timing)
+ (public_name tart.timing)
+ (libraries unix))

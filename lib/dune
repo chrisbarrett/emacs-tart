@@ -13,6 +13,8 @@
   tart.graph
   tart.coverage
   tart.errors
-  tart.log)
+  tart.log
+  tart.timing
+  tart.memory_stats)
  (preprocess
   (pps ppx_deriving.show ppx_deriving.eq)))

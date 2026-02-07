@@ -1,0 +1,3 @@
+(library
+ (name tart_memory_stats)
+ (public_name tart.memory_stats))

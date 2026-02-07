@@ -110,3 +110,8 @@ module Emacs_coverage = Coverage.Emacs_coverage
 (** {1 Logging} *)
 
 module Log = Tart_log.Log
+
+(** {1 Timing & Memory} *)
+
+module Timing = Tart_timing.Timing
+module Memory_stats = Tart_memory_stats.Memory_stats

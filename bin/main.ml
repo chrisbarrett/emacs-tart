@@ -832,6 +832,11 @@ let ignore_hints_arg =
   let doc = "Suppress hint-level diagnostics." in
   Arg.(value & flag & info [ "ignore-hints" ] ~doc)
 
+(* Memory flag *)
+let memory_flag_arg =
+  let doc = "Print GC and memory statistics to stderr." in
+  Arg.(value & flag & info [ "memory" ] ~doc)
+
 (* Check subcommand *)
 let check_files_arg =
   let doc = "Elisp files to type-check." in
@@ -848,7 +853,7 @@ let check_cmd =
   in
   let info = Cmd.info "check" ~doc ~man in
   let run log_level log_format verbose_flag format warn_as_error ignore_warnings
-      ignore_hints emacs_version files =
+      ignore_hints _memory emacs_version files =
     setup_logging ~log_level ~log_format ~verbose_flag;
     run_check format warn_as_error ignore_warnings ignore_hints emacs_version
       files
@@ -857,7 +862,7 @@ let check_cmd =
     Term.(
       const run $ log_level_arg $ log_format_arg $ verbose_flag_arg $ format_arg
       $ warn_as_error_arg $ ignore_warnings_arg $ ignore_hints_arg
-      $ emacs_version_arg $ check_files_arg)
+      $ memory_flag_arg $ emacs_version_arg $ check_files_arg)
 
 (* Eval subcommand *)
 let eval_expr_arg =
@@ -875,14 +880,14 @@ let eval_cmd =
     ]
   in
   let info = Cmd.info "eval" ~doc ~man in
-  let run log_level log_format verbose_flag expr =
+  let run log_level log_format verbose_flag _memory expr =
     setup_logging ~log_level ~log_format ~verbose_flag;
     run_eval expr
   in
   Cmd.v info
     Term.(
       const run $ log_level_arg $ log_format_arg $ verbose_flag_arg
-      $ eval_expr_arg)
+      $ memory_flag_arg $ eval_expr_arg)
 
 (* Expand subcommand *)
 let expand_load_arg =
@@ -906,14 +911,14 @@ let expand_cmd =
     ]
   in
   let info = Cmd.info "expand" ~doc ~man in
-  let run log_level log_format verbose_flag load_files file =
+  let run log_level log_format verbose_flag _memory load_files file =
     setup_logging ~log_level ~log_format ~verbose_flag;
     run_expand load_files file
   in
   Cmd.v info
     Term.(
       const run $ log_level_arg $ log_format_arg $ verbose_flag_arg
-      $ expand_load_arg $ expand_file_arg)
+      $ memory_flag_arg $ expand_load_arg $ expand_file_arg)
 
 (* Repl subcommand *)
 let repl_cmd =
@@ -1064,7 +1069,7 @@ let emacs_coverage_cmd =
 
 let default_cmd =
   let run log_level log_format verbose_flag format warn_as_error ignore_warnings
-      ignore_hints emacs_version files =
+      ignore_hints _memory emacs_version files =
     setup_logging ~log_level ~log_format ~verbose_flag;
     run_check format warn_as_error ignore_warnings ignore_hints emacs_version
       files
@@ -1072,7 +1077,7 @@ let default_cmd =
   Term.(
     const run $ log_level_arg $ log_format_arg $ verbose_flag_arg $ format_arg
     $ warn_as_error_arg $ ignore_warnings_arg $ ignore_hints_arg
-    $ emacs_version_arg $ check_files_arg)
+    $ memory_flag_arg $ emacs_version_arg $ check_files_arg)
 
 let main_cmd =
   let doc = "A type checker for Emacs Lisp" in
