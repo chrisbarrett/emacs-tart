@@ -170,14 +170,19 @@ Eviction must never block type-checking. Partial cleanup is acceptable.
 
 ## Tasks
 
-- [ ] [R1] `cache_dir` with XDG
-- [ ] [R9] `binary_path`
-- [ ] [R2] `compute_key` with sha256
-- [ ] [R3, R7, R8] `store` with atomic writes
-- [ ] [R4, R5] `retrieve` with graceful errors
-- [ ] [R6, R10] JSON format with version
-- [ ] [R11] `evict_older_than` with mtime check
-- [ ] [R12] `maybe_evict` with marker file
-- [ ] [R13] Best-effort error handling in eviction
-- [ ] Tests
+- [x] [R1] `cache_dir` with XDG
+- [x] [R9] `binary_path`
+- [x] [R2] `compute_key` with sha256
+- [x] [R3, R7, R8] `store` with atomic writes
+- [x] [R4, R5] `retrieve` with graceful errors
+- [x] [R6, R10] JSON format with version
+- [x] [R11] `evict_older_than` with mtime check
+- [x] [R12] `maybe_evict` with marker file
+- [x] [R13] Best-effort error handling in eviction
+- [x] Tests
 - [ ] Integrate into type-checking
+
+## Status
+
+Complete (except integration into type-checking pipeline, which depends on
+diagnostic serialisation format).

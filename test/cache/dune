@@ -1,0 +1,4 @@
+(test
+ (name content_cache_test)
+ (modules content_cache_test)
+ (libraries tart alcotest unix))
