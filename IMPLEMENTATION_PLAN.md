@@ -1,225 +1,178 @@
-# Implementation Plan: Emacs Integration — Signature Mode & Minor Mode
+# Implementation Plan: Self-Typing ([Spec 64][s64])
 
-Six specs enhance the Emacs tooling: a proper major mode for `.tart`
-signature files (syntax table, font-lock, indentation, imenu), eglot
-registration for `.tart` buffers, and clean minor-mode lifecycle for
-`tart-mode`.
+Write `.tart` signature files for `tart.el` and `tart-mode.el`,
+dogfooding the type checker on its own tooling.
 
-All work targets `lisp/tart-mode.el`.
+All work targets `lisp/tart.tart`, `lisp/tart-mode.tart`, and
+`BUGS.md`.
 
 ---
 
 ## Dependency Graph
 
 ```
-Task 1 (syntax table) ── Task 2 (font-lock)
-                      ├── Task 3 (indentation)
-                      ├── Task 4 (imenu)
-                      └── Task 5 (eglot registration)
-
-Task 6 (minor-mode lifecycle) — independent
+Task 1 (tart.tart) ─── Task 3 (tart check + iterate)
+Task 2 (tart-mode.tart) ─┘            │
+                                       └── Task 4 (BUGS.md)
 ```
 
-Spec 58 (syntax table) is the foundation — specs 59–62 all depend on it.
-Spec 63 (lifecycle) is independent and can be done in any order.
+Tasks 1 and 2 are independent. Task 3 depends on both. Task 4
+depends on Task 3 (gaps surface during type-checking).
 
 ---
 
-## Task 1 — Signature syntax table ([Spec 58][s58])
+## Task 1 — `lisp/tart.tart` ([Spec 64, R1][s64])
 
-**Problem:** `tart-signature-mode` derives from `lisp-mode`, which treats
-`|` as a string-fence character (Common Lisp `|symbol|` escapes). This
-breaks `check-parens` on 60+ `.tart` files. Square brackets `[]` and curly
-braces `{}` are not paired delimiters.
+**Problem:** `tart.el` has no `.tart` sibling, so running
+`tart check lisp/tart.el` cannot type-check the file.
 
-**Approach:** Define `tart-signature-mode-syntax-table` modelled on the
-existing `inferior-tart-mode-syntax-table` (which already solves these
-problems). Set it via `:syntax-table` in the mode definition.
+**Approach:** Write `lisp/tart.tart` declaring signatures for
+the three public macros. Since the signature parser does not
+support `defmacro`, macros are declared as `defun` (the
+established convention — see `pcase.tart`, `cl-lib.tart`,
+`custom.tart`).
 
-The existing `inferior-tart-mode-syntax-table` defines:
-- `()` as matched parens ✓
-- `[]` as matched brackets ✓
-- `{}` as matched braces ✓
-- `;` as comment-start, `\n` as comment-end ✓
-- `"` as string delimiter, `\` as escape ✓
-- `-_*+/<>=?!` as symbol constituents ✓
+The macros are:
+- `tart` — Two forms: type assertion `(tart TYPE FORM)` and
+  explicit instantiation `(tart [TYPES...] FN ARGS...)`.
+  Both reduce to `any -> any` at the signature level since the
+  type checker handles `tart` forms specially (Spec 14).
+- `tart-type` — `(tart-type NAME DEF)` → nil. Again handled
+  specially by the checker.
+- `tart-declare` — `(tart-declare NAME TYPE)` → nil.
 
-Additionally needed for `.tart` (per R5):
-- `|` as symbol constituent (not string-fence)
-- `&` as symbol constituent (for `&optional`, `&rest`)
-- `:` as symbol constituent (for `(a : truthy)` bounds)
+Since these are compile-time forms recognised by the type checker
+itself, the signatures serve to suppress "unknown function" errors
+and document intent. The type checker's own special-form handling
+takes precedence over the declared signatures.
 
-Files:
-- `lisp/tart-mode.el` — add `tart-signature-mode-syntax-table`; update
-  `tart-signature-mode` definition to use `:syntax-table`
-
-Scope: ~25 lines added.
+**File:** `lisp/tart.tart` — new file, ~20 lines.
 
 ---
 
-## Task 2 — Font-lock keywords ([Spec 59][s59])
+## Task 2 — `lisp/tart-mode.tart` ([Spec 64, R2][s64])
 
-**Problem:** `tart-signature-mode` inherits `lisp-mode` font-lock, which
-highlights Lisp keywords (`defun`, `defvar`, etc.) but not tart-specific
-constructs (`type`, `open`, `include`, `->`, `warn`).
+**Problem:** `tart-mode.el` has no `.tart` sibling and so cannot
+be type-checked.
 
-**Approach:** Define `tart-signature-mode-font-lock-keywords` with matchers
-for:
-- **R1:** Declaration keywords: `defun`, `defvar`, `type`, `open`,
-  `include` → `font-lock-keyword-face`
-- **R2:** Declaration names: the symbol after `defun`/`defvar`/`type` →
-  `font-lock-function-name-face` / `font-lock-variable-name-face` /
-  `font-lock-type-face`
-- **R3:** Arrow operator `->` → `font-lock-keyword-face`
-- **R4:** Type variable quantifier brackets `[a b]` — variables inside →
-  `font-lock-variable-name-face`
-- **R5:** Module names after `open`/`include` →
-  `font-lock-constant-face`
+**Approach:** Write `lisp/tart-mode.tart` declaring signatures
+for public functions and variables. Per the spec constraints,
+only the **public API** is typed — private helpers (`tart--*`)
+may be omitted unless needed.
 
-Set `font-lock-defaults` in the mode definition to use these keywords
-instead of `lisp-mode`'s defaults.
+### Public interactive commands
 
-Files:
-- `lisp/tart-mode.el` — add font-lock keywords variable; update mode
-  definition
+| function              | signature                          |
+| --------------------- | ---------------------------------- |
+| `run-tart`            | `() -> nil`                        |
+| `tart-send-region`    | `(int int) -> nil`                 |
+| `tart-send-defun`     | `() -> nil`                        |
+| `tart-send-last-sexp` | `() -> nil`                        |
+| `tart-send-buffer`    | `() -> nil`                        |
+| `tart-switch-to-repl` | `() -> nil`                        |
+| `tart-type-at-point`  | `() -> nil`                        |
+| `tart-expand-at-point`| `() -> nil`                        |
+| `tart-eglot`          | `() -> nil`                        |
+| `tart-eglot-ensure`   | `() -> nil`                        |
+| `tart-install-binary` | `() -> nil`                        |
 
-Scope: ~40 lines added.
+### Major/minor mode macros (declared as defun)
 
----
+| form                        | signature              |
+| --------------------------- | ---------------------- |
+| `inferior-tart-mode`        | `() -> nil`            |
+| `tart-signature-mode`       | `() -> nil`            |
+| `tart-mode`                 | `(&optional any) -> nil` |
 
-## Task 3 — Indentation ([Spec 60][s60])
+### Customization variables (defvar)
 
-**Problem:** `lisp-mode` indentation works for most forms but needs
-tart-specific `lisp-indent-function` properties for `defun`, `defvar`,
-`type`, `open`, and `include`.
+| variable                      | type                         |
+| ----------------------------- | ---------------------------- |
+| `tart-executable`             | `(symbol \| string)`         |
+| `tart-version`                | `(symbol \| string)`         |
+| `tart-lsp-args`               | `(list string)`              |
+| `tart-repl-args`              | `(list string)`              |
+| `tart-directory-style`        | `symbol`                     |
+| `tart-repl-history-file`      | `(symbol \| string \| nil)`  |
+| `tart-install-directory`      | `(symbol \| string)`         |
+| `tart-setup-find-sibling-rules` | `bool`                    |
+| `tart-setup-eglot`            | `bool`                       |
+| `tart-error-regexp`           | `(list any)`                 |
 
-**Approach:** Register indent properties in the mode body:
-- `defun` → `defun` (2-space body indent, Lisp special-form style)
-- `defvar` → `defun`
-- `type` → `defun`
-- `open` → 1
-- `include` → 1
+### Other public variables/constants
 
-These use `put ... 'lisp-indent-function ...` which is the standard
-mechanism for `lisp-mode`-derived modes. Since `tart-signature-mode`
-inherits `lisp-mode`'s indentation engine, this is sufficient.
+| variable                       | type           |
+| ------------------------------ | -------------- |
+| `inferior-tart-mode-map`       | `any`          |
+| `tart-mode-map`                | `any`          |
 
-Files:
-- `lisp/tart-mode.el` — add `put` forms in mode body
+Keymaps and syntax tables have no precise type in tart's type
+system, so they use `any`.
 
-Scope: ~10 lines added.
-
----
-
-## Task 4 — Imenu integration ([Spec 61][s61])
-
-**Problem:** `tart-signature-mode` has no imenu support, so `M-x imenu`
-doesn't list declarations.
-
-**Approach:** Set `imenu-generic-expression` with three categories:
-- `"Functions"` matching `(defun NAME`
-- `"Variables"` matching `(defvar NAME`
-- `"Types"` matching `(type NAME`
-
-For R4 (flat fallback when only one kind), use a custom
-`imenu-create-index-function` that flattens when all entries fall under a
-single category (most c-core files are all `defun`).
-
-Files:
-- `lisp/tart-mode.el` — add imenu configuration in mode body
-
-Scope: ~25 lines added.
+**File:** `lisp/tart-mode.tart` — new file, ~80 lines.
 
 ---
 
-## Task 5 — Eglot registration for `.tart` buffers ([Spec 62][s62])
+## Task 3 — Type-check and iterate ([Spec 64, R1–R2][s64])
 
-**Problem:** Eglot is registered only for `emacs-lisp-mode`. Opening a
-`.tart` file and running `M-x eglot` doesn't know which server to use.
+**Problem:** The signatures from Tasks 1–2 may contain errors
+or reveal type-checker gaps.
 
-**Approach:** Add `tart-signature-mode` to `eglot-server-programs`
-alongside the existing `emacs-lisp-mode` entry. Both modes share the same
-server command (`tart lsp`).
+**Approach:** Run `./tart check --emacs-version 31.0 lisp/tart.el`
+and `./tart check --emacs-version 31.0 lisp/tart-mode.el`. Fix
+signature errors iteratively. Classify remaining diagnostics as
+either:
+- **Fixable:** adjust the `.tart` signature
+- **Gap:** a genuine type-checker limitation (→ Task 4)
 
-For R3 (shared workspace), eglot groups buffers by project root — if
-both `.el` and `.tart` files are in the same project, they'll share one
-server connection automatically (no code needed beyond registration).
+Expect common issues:
+- `defmacro` not directly supported (use `defun`)
+- `defcustom` forms with `:type` plist may confuse the checker
+- `define-minor-mode` / `define-derived-mode` are macros that
+  expand into multiple definitions
+- `defalias` may not be recognized
+- Backquoted forms / `rx` macros may produce unknown types
+- `url-retrieve` callbacks with closures
 
-Files:
-- `lisp/tart-mode.el` — update the `when tart-setup-eglot` block to
-  register both modes
+Goal: reduce to zero errors or document each remaining error in
+BUGS.md.
 
-Scope: ~5 lines changed.
-
----
-
-## Task 6 — Minor-mode lifecycle ([Spec 63][s63])
-
-**Problem:** `tart-mode`'s `define-minor-mode` body is empty — it only
-sets up a keymap and lighter. As features are added (custom font-lock,
-syntax modifications), the enable/disable lifecycle must properly
-install and remove buffer-local modifications.
-
-**Approach:** Currently `tart-mode` makes no buffer-local modifications
-beyond its keymap (which `define-minor-mode` handles automatically). The
-lifecycle concern is about *future* modifications. Audit the current
-body and add a conditional branch:
-
-```elisp
-(if tart-mode
-    ;; Enable: install buffer-local modifications
-    (progn ...)
-  ;; Disable: remove buffer-local modifications
-  (progn ...))
-```
-
-For now this is a no-op scaffold, but it establishes the pattern for
-future additions (e.g., custom `check-parens` advice, additional
-font-lock rules for `.el` buffers).
-
-Files:
-- `lisp/tart-mode.el` — update `tart-mode` body with lifecycle
-  branching
-
-Scope: ~10 lines added.
+**Files:** `lisp/tart.tart`, `lisp/tart-mode.tart` (iterations).
 
 ---
 
-## Task 7 — ERT tests for new features
+## Task 4 — Gap documentation ([Spec 64, R3][s64])
 
-Add tests for the new functionality to `lisp/tart-mode-tests.el`:
+**Problem:** Some constructs in `tart.el` / `tart-mode.el` may
+be untypeable by the current type checker.
 
-- **Syntax table:** `|` is symbol constituent (not string-fence);
-  `[]` are matched brackets; `{}` are matched braces
-- **Font-lock:** keyword faces applied to `defun`, `type`, `->`;
-  function names get `font-lock-function-name-face`
-- **Imenu:** imenu index contains expected entries from sample content
-- **Indentation:** multi-clause `defun` indents body at 2-space offset
-- **Minor-mode lifecycle:** enable/disable is idempotent
+**Approach:** For each remaining diagnostic after Task 3 that
+cannot be resolved by fixing signatures, add an entry to
+`BUGS.md` under a new "## Self-Typing Gaps" section with:
+- The construct that fails
+- The error or unsound behaviour
+- A minimal reproduction
 
-Files:
-- `lisp/tart-mode-tests.el` — add test cases
-
-Scope: ~60 lines added.
+**File:** `BUGS.md` — append section.
 
 ---
 
 ## Risks
 
-- **`lisp-mode` indentation internals:** The `lisp-indent-function`
-  property may not cover all multi-clause `defun` forms if `lisp-mode`'s
-  indentation engine treats the first argument specially. Test with real
-  `.tart` files.
-- **Font-lock anchored matchers:** Highlighting type variables inside
-  `[...]` brackets requires anchored font-lock matchers, which can be
-  tricky. Simpler approaches (e.g., highlighting the whole bracket form)
-  may be more robust.
-- **Imenu flat fallback:** Custom `imenu-create-index-function` must
-  handle edge cases (empty files, mixed categories) correctly.
+- **Macro expansion opacity:** `define-minor-mode`,
+  `define-derived-mode`, `defcustom`, `defalias` expand into
+  code that may not match simple `defun`/`defvar` patterns the
+  type checker expects. The checker may not see the variables
+  and functions these macros define.
+- **Backquote/splicing:** `tart-mode.el` uses backquote in
+  several places (eglot registration, auto-mode-alist). The
+  checker may not handle these correctly.
+- **Callback-heavy code:** `tart--github-request`,
+  `tart--download-binary`, `url-retrieve` all use closures
+  as callbacks. These are private helpers and not in the public
+  API, so they can be omitted.
+- **`require` dependencies:** `tart-mode.el` requires `eglot`,
+  `comint`, `compile`, `url`, `xdg`, `cl-lib`. If any lack
+  `.tart` signatures, the checker will report unknown functions.
 
-[s58]: ./specs/58-signature-syntax-table.md
-[s59]: ./specs/59-signature-font-lock.md
-[s60]: ./specs/60-signature-indentation.md
-[s61]: ./specs/61-signature-imenu.md
-[s62]: ./specs/62-signature-eglot.md
-[s63]: ./specs/63-tart-minor-mode-lifecycle.md
+[s64]: ./specs/64-self-typing.md

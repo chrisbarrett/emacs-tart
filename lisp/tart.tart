@@ -1,0 +1,15 @@
+;; Type signatures for tart.el
+;;
+;; These macros are recognized specially by the type checker (Spec 14),
+;; so the declared signatures mainly suppress "unknown function" errors.
+;; Macros are declared as defun per project convention.
+
+;; (tart TYPE FORM) - assert FORM has TYPE
+;; (tart [TYPES...] FN ARGS...) - explicitly instantiate polymorphic FN
+(defun tart (any &rest any) -> any)
+
+;; (tart-type NAME DEF) - define a file-local type alias
+(defun tart-type (symbol &rest any) -> nil)
+
+;; (tart-declare NAME TYPE) - declare a variable's type
+(defun tart-declare (symbol any) -> nil)
