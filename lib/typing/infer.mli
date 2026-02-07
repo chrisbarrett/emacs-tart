@@ -18,16 +18,14 @@
 type undefined_var = { name : string; span : Syntax.Location.span }
 (** An undefined variable reference. *)
 
-type resolved_clause_diagnostic = {
+type resolved_clause_diagnostic = Clause_dispatch.resolved_diagnostic = {
   rcd_severity : Core.Type_env.diagnostic_severity;
-  rcd_message : string;  (** Fully resolved message (no remaining %s) *)
-  rcd_span : Syntax.Location.span;  (** Call-site span *)
+  rcd_message : string;
+  rcd_span : Syntax.Location.span;
 }
 (** A clause diagnostic resolved at a call site.
 
-    When multi-clause dispatch selects a clause with a diagnostic annotation,
-    the format string's [%s] placeholders are resolved against the actual types
-    inferred at the call site. *)
+    Re-exported from {!Clause_dispatch} for backward compatibility. *)
 
 type result = {
   ty : Core.Types.typ;

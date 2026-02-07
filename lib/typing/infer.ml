@@ -19,16 +19,14 @@ module Sig_ast = Sig.Sig_ast
 type undefined_var = { name : string; span : Loc.span }
 (** An undefined variable reference *)
 
-type resolved_clause_diagnostic = {
-  rcd_severity : Env.diagnostic_severity;
-  rcd_message : string;  (** Fully resolved message (no remaining %s) *)
-  rcd_span : Loc.span;  (** Call-site span *)
-}
+type resolved_clause_diagnostic = Clause_dispatch.resolved_diagnostic =
+  { rcd_severity : Env.diagnostic_severity;
+    rcd_message : string;
+    rcd_span : Loc.span;
+  }
 (** A clause diagnostic resolved at a call site.
 
-    When multi-clause dispatch selects a clause with a diagnostic annotation,
-    the format string's [%s] placeholders are resolved against the actual types
-    inferred at the call site. *)
+    Re-exported from {!Clause_dispatch} for backward compatibility. *)
 
 type result = {
   ty : typ;
@@ -140,33 +138,6 @@ let narrow_then_from_analysis (analysis : Narrow.condition_analysis)
 let narrow_else_from_analysis (analysis : Narrow.condition_analysis)
     (env : Env.t) : Env.t =
   snd (narrow_env_from_analysis analysis env)
-
-(** Which row-typed accessor is being called. *)
-type accessor_kind = PlistGet | AlistGet | Gethash | MapElt
-
-type row_accessor_config = {
-  rac_kind : accessor_kind;
-  rac_container_arg : int;  (** Index of the container argument (0-based) *)
-  rac_key_arg : int;  (** Index of the key argument (0-based) *)
-}
-(** Configuration for a row-typed accessor function.
-
-    Describes the parameter layout and behavior of each accessor so that virtual
-    clause generation can handle all four accessors uniformly. *)
-
-(** Look up whether a function name is a row-typed accessor.
-
-    Returns the accessor configuration if recognized, [None] otherwise. *)
-let get_row_accessor_config = function
-  | "plist-get" ->
-      Some { rac_kind = PlistGet; rac_container_arg = 0; rac_key_arg = 1 }
-  | "alist-get" ->
-      Some { rac_kind = AlistGet; rac_container_arg = 1; rac_key_arg = 0 }
-  | "gethash" ->
-      Some { rac_kind = Gethash; rac_container_arg = 1; rac_key_arg = 0 }
-  | "map-elt" ->
-      Some { rac_kind = MapElt; rac_container_arg = 0; rac_key_arg = 1 }
-  | _ -> None
 
 (** Infer the type of an S-expression.
 
@@ -1169,7 +1140,7 @@ and infer_tart_annotation env type_sexp form _span =
       let base_ty =
         Sig_loader.sig_type_to_typ_with_aliases prelude tvar_names inner_type
       in
-      let declared_ty = substitute_tvar_names tvar_subst base_ty in
+      let declared_ty = Clause_dispatch.substitute_tvar_names tvar_subst base_ty in
 
       (* Create constraint: form's type = declared type *)
       let context = C.TartAnnotation { declared_type = declared_ty } in
@@ -1268,7 +1239,7 @@ and infer_explicit_instantiation (env : Env.t)
   in
 
   (* Apply substitution to get instantiated function type *)
-  let instantiated_fn_type = substitute_tvar_names tvar_subst fn_body_type in
+  let instantiated_fn_type = Clause_dispatch.substitute_tvar_names tvar_subst fn_body_type in
 
   (* Now type-check the application with the instantiated type *)
   let arg_results = List.map (infer env) args in
@@ -1772,277 +1743,6 @@ and infer_funcall env fn_expr args span =
     - Keywords [:name] produce [Some ":name"]
     - Quoted symbols ['foo] produce [Some "foo"]
     - All other expressions produce [None] *)
-and extract_arg_literal (arg : Syntax.Sexp.t) : string option =
-  let open Syntax.Sexp in
-  match arg with
-  | Keyword (name, _) -> Some (":" ^ name)
-  | List ([ Symbol ("quote", _); Symbol (name, _) ], _) -> Some name
-  | _ -> None
-
-(** Instantiate a loaded clause with fresh type variables.
-
-    The clause's param and return types contain [TCon] names for quantified type
-    variables (from the enclosing [defun]). This creates fresh tvars for each
-    name and substitutes them, producing types ready for unification.
-
-    Returns [(params, return_type, substitution)] where [substitution] maps type
-    variable names to fresh tvars. The substitution is needed to resolve format
-    string arguments in clause diagnostics after matching. *)
-and instantiate_clause (level : int) (tvar_names : string list)
-    (clause : Env.loaded_clause) : param list * typ * (string * typ) list =
-  let subst = List.map (fun v -> (v, fresh_tvar level)) tvar_names in
-  let params =
-    List.map
-      (fun p ->
-        match p with
-        | PPositional t -> PPositional (substitute_tvar_names subst t)
-        | POptional t -> POptional (substitute_tvar_names subst t)
-        | PRest t -> PRest (substitute_tvar_names subst t)
-        | PKey (n, t) -> PKey (n, substitute_tvar_names subst t)
-        | PLiteral _ -> p)
-      clause.lc_params
-  in
-  let ret = substitute_tvar_names subst clause.lc_return in
-  (params, ret, subst)
-
-(** Try to match a single clause against argument types via speculative
-    unification. Returns [Some return_type] if the clause matches, [None] if
-    unification fails (all tvar mutations are rolled back on failure).
-
-    [arg_literals] provides the literal values of call-site arguments (extracted
-    from the AST), used to match against [PLiteral] clause parameters. *)
-and try_clause_match (arg_types : typ list) (arg_literals : string option list)
-    (clause_params : param list) (clause_ret : typ) (loc : Syntax.Location.span)
-    : typ option =
-  (* Check literal parameters first. Walk clause params and arg info together;
-     for PLiteral params, verify the call-site arg is the matching literal.
-     Collect non-literal params and their corresponding arg types for
-     unification. *)
-  let rec check_literals c_params a_types a_lits typed_params typed_args =
-    match (c_params, a_types, a_lits) with
-    | PLiteral expected :: c_rest, _ :: a_types_rest, Some actual :: a_lits_rest
-      ->
-        if expected = actual then
-          check_literals c_rest a_types_rest a_lits_rest typed_params typed_args
-        else None (* Literal mismatch — clause does not match *)
-    | PLiteral _ :: _, _ :: _, None :: _ ->
-        None (* Clause expects literal but arg is not a literal *)
-    | PLiteral _ :: _, _, [] -> None (* Not enough args for literal param *)
-    | param :: c_rest, ty :: a_types_rest, _ :: a_lits_rest ->
-        check_literals c_rest a_types_rest a_lits_rest (param :: typed_params)
-          (ty :: typed_args)
-    | param :: c_rest, ty :: a_types_rest, [] ->
-        (* Fewer literals than args — remaining args have no literal info *)
-        check_literals c_rest a_types_rest [] (param :: typed_params)
-          (ty :: typed_args)
-    | _, _, _ ->
-        (* Remaining clause params (optional/rest) or exhausted args *)
-        let clause_typed = List.rev typed_params @ c_params in
-        let arg_typed =
-          List.rev typed_args @ a_types |> List.map (fun t -> PPositional t)
-        in
-        Some (clause_typed, arg_typed)
-  in
-  match check_literals clause_params arg_types arg_literals [] [] with
-  | None -> None (* Literal check failed *)
-  | Some (clause_typed, arg_typed) -> (
-      match Unify.try_unify_params clause_typed arg_typed loc with
-      | Ok () -> Some clause_ret
-      | Error _ -> None)
-
-(** Resolve a clause diagnostic's format string by substituting [%s]
-    placeholders with the stringified types of referenced type variables.
-
-    The [subst] maps type variable names to the fresh tvars created during
-    clause instantiation. After successful unification, those tvars have been
-    unified with actual types, so [repr] resolves them. *)
-and resolve_clause_diagnostic (subst : (string * typ) list)
-    (diag : Env.loaded_diagnostic) (span : Loc.span) :
-    resolved_clause_diagnostic =
-  (* Resolve %s placeholders by walking the message character-by-character *)
-  let args_resolved =
-    List.map
-      (fun name ->
-        match List.assoc_opt name subst with
-        | Some tv -> to_string (repr tv)
-        | None -> name)
-      diag.ld_args
-  in
-  let message =
-    let buf = Buffer.create (String.length diag.ld_message) in
-    let remaining_args = ref args_resolved in
-    let i = ref 0 in
-    let len = String.length diag.ld_message in
-    while !i < len do
-      if
-        !i + 1 < len
-        && diag.ld_message.[!i] = '%'
-        && diag.ld_message.[!i + 1] = 's'
-      then (
-        (match !remaining_args with
-        | arg :: rest ->
-            Buffer.add_string buf arg;
-            remaining_args := rest
-        | [] -> Buffer.add_string buf "%s");
-        i := !i + 2)
-      else (
-        Buffer.add_char buf diag.ld_message.[!i];
-        i := !i + 1)
-    done;
-    Buffer.contents buf
-  in
-  { rcd_severity = diag.ld_severity; rcd_message = message; rcd_span = span }
-
-(** Try clause-by-clause dispatch for a multi-clause function.
-
-    Tries each clause top-to-bottom. For each clause: 1. Instantiate with fresh
-    type variables 2. Attempt speculative unification of args with clause params
-    3. If all succeed → return clause's return type 4. If any fail → rollback
-    and try next clause
-
-    [arg_literals] provides literal values from call-site argument expressions
-    for matching against [PLiteral] clause parameters.
-
-    Returns [Some (return_type, diagnostic_opt)] if a clause matched, [None] if
-    no clause matched (caller should fall back to union-type constraint path).
-    When the matching clause has a diagnostic annotation, the diagnostic is
-    resolved with the actual types from unification. *)
-and try_clause_dispatch (env : Env.t) (tvar_names : string list)
-    (clauses : Env.loaded_clause list) (arg_types : typ list)
-    (arg_literals : string option list) (loc : Syntax.Location.span) :
-    (typ * resolved_clause_diagnostic option) option =
-  let level = Env.current_level env in
-  let rec try_clauses = function
-    | [] -> None
-    | clause :: rest -> (
-        let clause_params, clause_ret, subst =
-          instantiate_clause level tvar_names clause
-        in
-        match
-          try_clause_match arg_types arg_literals clause_params clause_ret loc
-        with
-        | Some ret_ty ->
-            let diag_opt =
-              Option.map
-                (fun d -> resolve_clause_diagnostic subst d loc)
-                clause.lc_diagnostic
-            in
-            Some (ret_ty, diag_opt)
-        | None -> try_clauses rest)
-  in
-  try_clauses clauses
-
-(** Try row accessor dispatch for a known row-typed accessor function.
-
-    When a call is to a known row accessor ([plist-get], [alist-get], etc.) and
-    the key argument is a literal, this implements the decision table from Spec
-    11 R4–R8:
-
-    - Cases 1–2: literal key found in row → [field_type]
-    - Case 3: literal key absent, closed row, no default → [nil]
-    - Case 4: literal key absent, closed row, with default → default type
-    - Case 5: literal key absent, open row → [(α | nil)]
-    - R8: container type unknown → constrain to open row, return [field_ty]
-
-    Returns [Some (result_ty, container_constraint)] if the call was dispatched,
-    [None] if the function is not a row accessor or the key is not a literal
-    (caller should try clause dispatch or fall back to constraint path). *)
-and try_row_accessor_dispatch (env : Env.t) (config : row_accessor_config)
-    (arg_types : typ list) (arg_literals : string option list)
-    (args : Syntax.Sexp.t list) (rest_results : result list) :
-    (typ * Constraint.t option) option =
-  let kind = config.rac_kind in
-  let key_literal =
-    if config.rac_key_arg < List.length arg_literals then
-      List.nth arg_literals config.rac_key_arg
-    else None
-  in
-  match key_literal with
-  | None -> None (* Non-literal key — fall through to generic dispatch *)
-  | Some key_name -> (
-      let container_ty =
-        if config.rac_container_arg < List.length arg_types then
-          Some (List.nth arg_types config.rac_container_arg)
-        else None
-      in
-      let container_expr =
-        if config.rac_container_arg < List.length args then
-          Some (List.nth args config.rac_container_arg)
-        else None
-      in
-      (* Compute rest args: arguments after both container and key *)
-      let min_idx = min config.rac_container_arg config.rac_key_arg in
-      let max_idx = max config.rac_container_arg config.rac_key_arg in
-      let rest_arg_results =
-        List.filteri (fun i _ -> i <> min_idx && i <> max_idx) rest_results
-      in
-      let rest_args_exprs = List.filteri (fun i _ -> i > max_idx) args in
-      match container_ty with
-      | None -> None
-      | Some cty ->
-          let result_ty, container_constraint =
-            match extract_row_for_accessor kind cty with
-            | Some row -> (
-                match row_lookup row key_name with
-                | Some field_ty ->
-                    (* Cases 1–2: key is in the row → return field_type *)
-                    (field_ty, None)
-                | None -> (
-                    match row.row_var with
-                    | None ->
-                        (* Cases 3–4: key absent from closed row *)
-                        let result_ty =
-                          if accessor_has_default kind then
-                            match rest_args_exprs with
-                            | _ :: _ ->
-                                (* Has default arg — use its type *)
-                                let default_result = List.hd rest_arg_results in
-                                default_result.ty
-                            | [] -> Prim.nil
-                          else Prim.nil
-                        in
-                        (result_ty, None)
-                    | Some _ -> (
-                        match container_expr with
-                        | Some cexpr ->
-                            (* Case 5: key absent from open row →
-                                constrain and return (α | nil) *)
-                            let field_ty = fresh_tvar (Env.current_level env) in
-                            let row_var = fresh_tvar (Env.current_level env) in
-                            let expected_row =
-                              open_row [ (key_name, field_ty) ] row_var
-                            in
-                            let expected_ty =
-                              build_expected_container kind expected_row
-                            in
-                            let c =
-                              C.equal expected_ty cty
-                                (Syntax.Sexp.span_of cexpr)
-                            in
-                            (option_of field_ty, Some c)
-                        | None -> (Prim.nil, None))))
-            | None -> (
-                match container_expr with
-                | Some cexpr ->
-                    (* R8: Type not yet known — infer row from field access *)
-                    let field_ty = fresh_tvar (Env.current_level env) in
-                    let row_var = fresh_tvar (Env.current_level env) in
-                    let expected_row =
-                      open_row [ (key_name, field_ty) ] row_var
-                    in
-                    let expected_ty =
-                      build_expected_container kind expected_row
-                    in
-                    let c =
-                      C.equal expected_ty cty (Syntax.Sexp.span_of cexpr)
-                    in
-                    (field_ty, Some c)
-                | None ->
-                    let field_ty = fresh_tvar (Env.current_level env) in
-                    (field_ty, None))
-          in
-          Some (result_ty, container_constraint))
-
 (** Infer the type of a function application.
 
     Generates constraint: fn_type = (arg_types...) -> result_type.
@@ -2056,7 +1756,7 @@ and infer_application env fn args span =
   let arg_results = List.map (infer env) args in
   let fn_name = get_fn_name fn in
   let arg_types = List.map (fun r -> r.ty) arg_results in
-  let arg_literals = List.map extract_arg_literal args in
+  let arg_literals = List.map Clause_dispatch.extract_arg_literal args in
 
   (* Try clause-by-clause dispatch for multi-clause functions *)
   let clause_result =
@@ -2067,11 +1767,13 @@ and infer_application env fn args span =
             (* Get the tvar names from the function's scheme *)
             match Env.lookup_fn name env with
             | Some (Env.Poly (vars, _)) ->
-                try_clause_dispatch env vars clauses arg_types arg_literals span
+                Clause_dispatch.try_dispatch env ~tvar_names:vars ~clauses
+                  ~arg_types ~arg_literals ~loc:span
             | Some (Env.Mono _) ->
                 (* Monomorphic function with clauses (e.g. single-clause with
                    diagnostic) — dispatch with empty tvar list *)
-                try_clause_dispatch env [] clauses arg_types arg_literals span
+                Clause_dispatch.try_dispatch env ~tvar_names:[] ~clauses
+                  ~arg_types ~arg_literals ~loc:span
             | _ -> None)
         | None -> None)
     | None -> None
@@ -2087,10 +1789,18 @@ and infer_application env fn args span =
     | None -> (
         match fn_name with
         | Some name -> (
-            match get_row_accessor_config name with
+            match Row_dispatch.get_config name with
             | Some config ->
-                try_row_accessor_dispatch env config arg_types arg_literals args
-                  arg_results
+                (* Compute rest arg types: types of args beyond container+key *)
+                let min_idx = min config.container_arg config.key_arg in
+                let max_idx = max config.container_arg config.key_arg in
+                let rest_arg_types =
+                  List.filteri
+                    (fun i _ -> i <> min_idx && i <> max_idx)
+                    arg_types
+                in
+                Row_dispatch.try_dispatch env config ~arg_types ~arg_literals
+                  ~args ~rest_arg_types
             | None -> None)
         | None -> None)
   in
@@ -2118,12 +1828,12 @@ and infer_application env fn args span =
             clause_diags @ fn_result.clause_diagnostics
             @ combine_clause_diagnostics arg_results;
         }
-    | None, Some (row_ret_ty, row_constraint) ->
+    | None, Some { result_ty = row_ret_ty; container_constraint } ->
         (* Row accessor dispatch matched — use the row-derived return type.
          Emit any container constraint plus sub-expression constraints. *)
         let arg_constraints = combine_results arg_results in
         let base_constraints =
-          match row_constraint with
+          match container_constraint with
           | Some c -> C.add c arg_constraints
           | None -> arg_constraints
         in
@@ -2235,104 +1945,6 @@ and infer_application env fn args span =
       else result
   | _ -> result
 
-(** Try to extract a row type from an alist type: [(list (cons symbol TRow))].
-
-    Returns [Some row] if the type is a row-typed alist, [None] otherwise. *)
-and extract_alist_row ty =
-  match repr ty with
-  | TApp (list_con, [ TApp (pair_con, [ _key_ty; value_ty ]) ])
-    when equal (repr list_con) (TCon (intrinsic "List"))
-         && equal (repr pair_con) (TCon (intrinsic "Pair")) -> (
-      match repr value_ty with TRow row -> Some row | _ -> None)
-  | _ -> None
-
-(** Try to extract a row type from a plist type.
-
-    Recognises:
-    - [(Plist k TRow)] — the intrinsic form
-    - [(list (keyword | TRow))] — legacy expanded form
-
-    Returns [Some row] if the type is a row-typed plist, [None] otherwise. *)
-and extract_plist_row ty =
-  let plist_name = intrinsic "Plist" in
-  match repr ty with
-  (* Intrinsic form: (Plist k v) where v is a row *)
-  | TApp (plist_con, [ _key_ty; value_ty ])
-    when equal (repr plist_con) (TCon plist_name) -> (
-      match repr value_ty with TRow row -> Some row | _ -> None)
-  (* Legacy form: (list (keyword | TRow)) *)
-  | TApp (list_con, [ union_ty ])
-    when equal (repr list_con) (TCon (intrinsic "List")) -> (
-      match repr union_ty with
-      | TUnion members -> (
-          (* Look for a (keyword | TRow) union *)
-          let has_keyword =
-            List.exists
-              (fun m ->
-                match repr m with
-                | TCon n -> n = intrinsic "Keyword"
-                | _ -> false)
-              members
-          in
-          let row_member =
-            List.find_map
-              (fun m -> match repr m with TRow row -> Some row | _ -> None)
-              members
-          in
-          match (has_keyword, row_member) with
-          | true, Some row -> Some row
-          | _ -> None)
-      | _ -> None)
-  | _ -> None
-
-(** Try to extract a row type from a map supertype: [(Map TRow)].
-
-    Returns [Some row] if the type is a row-typed map, [None] otherwise. *)
-and extract_map_row ty =
-  let map_name = intrinsic "Map" in
-  match repr ty with
-  | TApp (map_con, [ value_ty ]) when equal (repr map_con) (TCon map_name) -> (
-      match repr value_ty with TRow row -> Some row | _ -> None)
-  | _ -> None
-
-(** Try to extract a row type from a hash-table type: [(HashTable symbol TRow)].
-
-    Returns [Some row] if the type is a row-typed hash-table, [None] otherwise.
-*)
-and extract_hash_table_row ty =
-  let ht_name = intrinsic "HashTable" in
-  match repr ty with
-  | TApp (ht_con, [ _key_ty; value_ty ]) when equal (repr ht_con) (TCon ht_name)
-    -> (
-      match repr value_ty with TRow row -> Some row | _ -> None)
-  | _ -> None
-
-(** Extract a row from a container type, dispatching on accessor kind. *)
-and extract_row_for_accessor kind ty =
-  match kind with
-  | PlistGet -> extract_plist_row ty
-  | AlistGet -> extract_alist_row ty
-  | Gethash -> extract_hash_table_row ty
-  | MapElt -> extract_map_row ty
-
-(** Build the expected container type for a given accessor kind from a row.
-
-    Used for the R8 (unknown container) and Case 5 (open row, absent key) paths,
-    where we constrain the container to have an open row containing the accessed
-    key. *)
-and build_expected_container kind row =
-  match kind with
-  | PlistGet -> plist_of Prim.keyword row
-  | AlistGet -> list_of (pair_of Prim.symbol row)
-  | Gethash -> hash_table_of Prim.symbol row
-  | MapElt -> map_of row
-
-(** Whether an accessor kind supports a DEFAULT argument.
-
-    plist-get has no default (only an optional predicate); the others do. *)
-and accessor_has_default kind =
-  match kind with PlistGet -> false | AlistGet | Gethash | MapElt -> true
-
 (** Extract (declare (tart TYPE)) from a defun body.
 
     Returns [(Some type_sexp, remaining_body)] if a tart declaration is found,
@@ -2433,47 +2045,6 @@ and infer_defun (env : Env.t) (sexp : Syntax.Sexp.t) : defun_result option =
           infer_defun_inferred env name params body span)
   | _ -> None
 
-(** Substitute type variable names (as TCon) with actual TVars in a type. Used
-    to convert signature types to inferable types. *)
-and substitute_tvar_names (subst : (string * typ) list) (ty : typ) : typ =
-  match ty with
-  | TCon name -> (
-      match List.assoc_opt name subst with Some tv -> tv | None -> ty)
-  | TVar { contents = Link t } -> substitute_tvar_names subst t
-  | TVar _ -> ty
-  | TArrow (params, ret) ->
-      let params' =
-        List.map
-          (function
-            | PPositional t -> PPositional (substitute_tvar_names subst t)
-            | POptional t -> POptional (substitute_tvar_names subst t)
-            | PRest t -> PRest (substitute_tvar_names subst t)
-            | PKey (n, t) -> PKey (n, substitute_tvar_names subst t)
-            | PLiteral _ as p -> p)
-          params
-      in
-      TArrow (params', substitute_tvar_names subst ret)
-  | TApp (con, args) ->
-      TApp
-        ( substitute_tvar_names subst con,
-          List.map (substitute_tvar_names subst) args )
-  | TForall (vars, body) ->
-      (* Remove substituted vars from the substitution to avoid capture *)
-      let subst' = List.filter (fun (n, _) -> not (List.mem n vars)) subst in
-      TForall (vars, substitute_tvar_names subst' body)
-  | TUnion types -> TUnion (List.map (substitute_tvar_names subst) types)
-  | TTuple types -> TTuple (List.map (substitute_tvar_names subst) types)
-  | TRow { row_fields; row_var } ->
-      TRow
-        {
-          row_fields =
-            List.map
-              (fun (n, t) -> (n, substitute_tvar_names subst t))
-              row_fields;
-          row_var = Option.map (substitute_tvar_names subst) row_var;
-        }
-  | TLiteral _ -> ty
-
 (** Infer a defun with a type declaration.
 
     Uses the declared type for parameters and checks the body against the
@@ -2515,7 +2086,7 @@ and infer_defun_with_declaration (env : Env.t) (name : string)
     let base_ty =
       Sig_loader.sig_type_to_typ_with_aliases prelude tvar_names sty
     in
-    substitute_tvar_names tvar_subst base_ty
+    Clause_dispatch.substitute_tvar_names tvar_subst base_ty
   in
 
   (* Bind parameters with declared types (with fresh TVars substituted) *)
