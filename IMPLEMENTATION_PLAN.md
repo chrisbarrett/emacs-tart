@@ -1,202 +1,138 @@
-# Implementation Plan: Version Constraints (Spec 50)
+# Implementation Plan: Emacs Reader Oracle (Spec 39)
 
-Track min/max Emacs version from typings and package headers; warn on
-violations.
+Invoke Emacs as gold-standard oracle to verify tart parses correctly.
 
 ## Analysis
 
 ### Current Architecture
 
-**Version detection** exists in `lib/sig/emacs_version.ml`: detects
-installed Emacs version via `emacs --version`, provides `parse_version`,
-`compare_version`, `version_to_dir`.
+**Parser** exists in `lib/syntax/read.ml`: reads Elisp source into
+`Sexp.t` AST. Well-tested with 88+ tests.
 
-**Typings** are stored under `typings/emacs/{version}/c-core/*.tart` and
-`typings/emacs/{version}/lisp-core/*.tart`. Directory path implies
-minimum version (e.g., `31.0/c-core/json.tart` means `json-*` requires
-31.0+). Currently this path info is discarded after loading.
+**Printer** exists in `lib/syntax/print.ml`: prints `Sexp.t` to valid
+Elisp string. 65 unit tests including round-trip tests.
 
-**Module checking** in `module_check.ml` builds a `config` with a
-`search_path`, loads c-core/lisp-core/required modules into `type_env`,
-then type-checks. No version metadata propagates to diagnostics.
+**Emacs detection** exists in `lib/sig/emacs_version.ml`: has
+`detect()` which runs `emacs --version`. Uses `Sys.command` for
+process invocation.
 
-**Type environment** (`type_env.mli`) has `fn_bindings` and `bindings`
-lists of `(string * scheme)`. No version annotation per-name.
+**File errors** exist in `lib/typing/file_error.ml`: structured I/O
+error handling (Spec 37).
 
 ### Key Design Decisions
 
-1. **Version metadata per-name in type_env** — extend `type_env.t` with
-   a `fn_versions` field mapping `string -> version_range`, populated
-   during sig loading from the directory path of the source `.tart` file.
+1. **Separate `emacs_reader.ml` for process invocation** — isolates
+   Emacs subprocess management (PATH lookup, batch mode, timeout,
+   stdout/stderr capture) from comparison logic.
 
-2. **Package header parsing in a new `package_header.ml`** — parse
-   `Package-Requires` from the first few lines of the entry-point `.el`
-   file. Simple regex-style parsing, no full sexp parsing needed.
+2. **`oracle.ml` for comparison** — takes tart parse output and Emacs
+   oracle output, normalises both, produces structured diff.
 
-3. **Constraint propagation via post-check pass** — after type checking
-   completes, scan inferred calls against fn_versions and the declared
-   min version. Emit warnings for version violations.
+3. **Reuse `Print.to_string`** for tart's canonical form — already
+   matches Elisp `prin1-to-string` conventions closely. Any gaps
+   found by oracle testing feed back as printer fixes.
 
-4. **Feature guard exemption** — calls inside a feature guard scope
-   (already tracked by Spec 49) are exempt from version warnings.
+4. **Process timeout via Unix alarm** — `Unix.alarm` + `SIGALRM`
+   handler gives clean timeout without threads.
 
 ### Scope Deferral
 
-- `@max-version` annotation (R3) — defer initially; no current typings
-  use it; can be added later via sig_ast extension
-- R13-R15 (LSP code actions) — implement after core diagnostics work
+- CI integration (Task 11) — deferred until Spec 43 (CI matrix)
+- Caching of Emacs process — not required per spec
 
 ---
 
-## Iteration 1: Version range type + per-name tracking
+## Iteration 1: Emacs process invocation
 
-Add version range metadata to type_env and populate it during sig
-loading.
+Core subprocess management: find Emacs, run batch commands, capture
+output.
 
-### Task 1.1: Add version_range to type_env
+### Task 1.1: Create emacs_reader module
 
-- [ ] Add `version_range` record to `type_env.mli/.ml`:
-      `{ min_version : Emacs_version.version option;
-         max_version : Emacs_version.version option }`
-- [ ] Add `fn_versions : (string * version_range) list` field to
-      `type_env.t`
-- [ ] Add `var_versions : (string * version_range) list` field
-- [ ] Add `extend_fn_version`, `lookup_fn_version`,
-      `extend_var_version`, `lookup_var_version` functions
-- [ ] Update `empty` and `of_list` constructors
+- [ ] Create `lib/oracle/dune` (library `tart_oracle`, deps
+      `tart_syntax`, `unix`)
+- [ ] Create `lib/oracle/emacs_reader.ml` and `emacs_reader.mli`
+- [ ] `emacs_error` type: `ReadError`, `EmacsNotFound`,
+      `EmacsFailed`, `Timeout`
+- [ ] `find_emacs : unit -> string option` — search PATH for `emacs`
+- [ ] `run_batch : ?timeout_ms:int -> string -> (string * string, emacs_error) result`
+      — runs `emacs --batch --quick --eval <expr>`, captures
+      stdout + stderr, handles exit codes
+- [ ] Default timeout: 5000ms
 - [ ] Build + test
 
-### Task 1.2: Populate version from typings path
+### Task 1.2: read_string and read_file
 
-- [ ] In `search_path.ml`: extract version from directory path when
-      loading c-core/lisp-core files. The path pattern is
-      `typings/emacs/{version}/c-core/` or `.../lisp-core/`
-- [ ] Add `?source_version:Emacs_version.version` param to
-      `load_c_core_files`; pass through to sig_loader
-- [ ] In `sig_loader.ml`: add `?source_version` to `load_signature`
-      and `load_signature_with_resolver`; when set, add version_range
-      for every loaded defun and defvar name
-- [ ] In `load_c_core` and `load_lisp_core`: parse the version from
-      the resolved typings directory path and thread it through
-- [ ] Build + test
-
----
-
-## Iteration 2: Package header parsing
-
-Parse `Package-Requires` from `.el` files to determine the package's
-declared minimum Emacs version.
-
-### Task 2.1: Create package_header module
-
-- [ ] Create `lib/sig/package_header.ml` and `package_header.mli`
-- [ ] `parse_package_requires : string -> Emacs_version.version option`
-      — given file content string, scan for
-      `Package-Requires: ((emacs "X.Y") ...)` and extract version
-- [ ] Only scan first ~50 lines (header section)
-- [ ] Handle variations: spaces, multiple deps, emacs-only
-- [ ] `find_package_version : string -> Emacs_version.version option`
-      — given `.el` file path, read header and parse
-- [ ] Add to `lib/sig/dune`
+- [ ] `read_string : ?timeout_ms:int -> string -> (string, emacs_error) result`
+      — wraps input in `(prin1-to-string (read ...))` Elisp, calls
+      `run_batch`
+- [ ] `read_file : ?timeout_ms:int -> string -> (string list, emacs_error) result`
+      — reads file with multi-form loop, `prin1-to-string` each form
 - [ ] Re-export in `tart.ml/tart.mli`
 - [ ] Build + test
 
-### Task 2.2: Unit tests
+---
 
-- [ ] Standard: `;; Package-Requires: ((emacs "29.1"))`
-- [ ] Multiple deps: `((emacs "28.1") (seq "2.24"))`
-- [ ] Missing header → None
-- [ ] Malformed → None
-- [ ] No emacs dep: `((seq "2.24"))` → None
+## Iteration 2: Oracle comparison
+
+Compare tart output against Emacs oracle.
+
+### Task 2.1: Create oracle module
+
+- [ ] Create `lib/oracle/oracle.ml` and `oracle.mli`
+- [ ] `comparison_result` type: `Match`, `Mismatch`, `TartError`,
+      `EmacsError`
+- [ ] `compare_string : ?timeout_ms:int -> string -> comparison_result`
+      — parse with tart, read with Emacs, compare canonical forms
+- [ ] `compare_file : ?timeout_ms:int -> string -> comparison_result list`
+      — per-form comparison for multi-form files
+- [ ] Build + test
+
+### Task 2.2: Canonical form normalisation
+
+- [ ] Verify `Print.to_string` matches Emacs `prin1-to-string` for:
+      integers, floats, strings, symbols, keywords, lists, vectors,
+      cons pairs, quote/backquote/function reader macros
+- [ ] Fix any discrepancies found (feed back into print.ml)
 - [ ] Build + test
 
 ---
 
-## Iteration 3: Version constraint diagnostics
+## Iteration 3: Error handling + timeout
 
-Add new error codes and emit version warnings.
+### Task 3.1: Robust error handling
 
-### Task 3.1: Add error codes
-
-- [ ] Add `VersionTooLow` (E0900), `VersionTooHigh` (E0901),
-      `VersionParseFailed` (E0902) to `error_code` in
-      `diagnostic.ml/.mli`
-- [ ] Add `error_code_to_string` arms
-- [ ] Update `diagnostic_test.ml` error_code_stability test
-- [ ] Add constructor:
-      `version_too_low : span -> name:string ->
-       required:Emacs_version.version -> declared:Emacs_version.version
-       -> unit -> t`
-- [ ] Include help text: "bump to X.Y, or add feature guard"
+- [ ] `Emacs_not_found` when PATH has no emacs
+- [ ] `Emacs_failed` with exit code + stderr for non-read failures
+- [ ] `Read_error` with input + message for malformed Elisp
+- [ ] stderr capture separate from stdout
 - [ ] Build + test
 
-### Task 3.2: Version checking pass in module_check
+### Task 3.2: Timeout
 
-- [ ] Add `declared_version : Emacs_version.version option` to
-      `module_check.config`
-- [ ] Add `with_declared_version` setter to config
-- [ ] Add `check_version_constraints` function: walks check_result's
-      final_env, looks up fn_versions for each called function, compares
-      against declared_version
-- [ ] Needs call-site spans: collect from the sexp AST (function call
-      positions) — reuse `collect_all_call_symbols` approach but return
-      spans too
-- [ ] Add `version_diagnostics` to check_result
-- [ ] Wire into `diagnostics_of_result`
+- [ ] Implement timeout via `Unix.alarm` + `SIGALRM` or
+      `Unix.select` on process pipes
+- [ ] Test with intentional hang: `(while t)` input
 - [ ] Build + test
 
 ---
 
-## Iteration 4: CLI + LSP integration
+## Iteration 4: Unit tests + spec completion
 
-### Task 4.1: CLI integration
+### Task 4.1: Oracle unit tests
 
-- [ ] In `bin/main.ml` `run_check`: call
-      `Package_header.find_package_version` on each file
-- [ ] Pass declared version into module_check config
-- [ ] Fallback: when no Package-Requires, use detected Emacs version
-      (warnings only, not errors)
+- [ ] Create `test/oracle/dune` and `test/oracle/oracle_test.ml`
+- [ ] `read_string` basic forms: int, string, symbol, list, vector
+- [ ] `read_string` special syntax: quote, backquote, function,
+      character literals
+- [ ] `read_file` multi-form: defun + defvar file
+- [ ] `compare_string` match and mismatch cases
+- [ ] Error cases: malformed input, Emacs not found
+- [ ] Comment stripping: comments in input don't affect comparison
 - [ ] Build + test
 
-### Task 4.2: LSP integration
+### Task 4.2: Spec completion
 
-- [ ] In `server.ml`: parse Package-Requires at document open
-- [ ] Cache per-workspace
-- [ ] Pass declared version into module_check config
-- [ ] Build + test
-
----
-
-## Iteration 5: Feature guard exemption + test fixtures
-
-### Task 5.1: Guard exemption
-
-- [ ] Names loaded via feature guards (Spec 49) are inherently exempt:
-      they're only available inside guard scopes, so they won't trigger
-      version warnings in unguarded code
-- [ ] Names loaded via hard `(require 'X)` DO trigger version warnings
-      (the require proves the dependency exists, but if the package
-      declares a lower min version, the require might fail)
-- [ ] Verify this behavior with tests
-- [ ] Build + test
-
-### Task 5.2: Test fixtures
-
-- [ ] `version-constraint.{el,expected}`: function from newer version
-      typings produces VERSION TOO LOW warning
-- [ ] `version-guarded.{el,expected}`: featurep-guarded call produces
-      no version warning
-- [ ] `version-no-header.{el,expected}`: no Package-Requires, no
-      version warnings (uses detected Emacs as baseline)
-- [ ] Build + test
-
----
-
-## Iteration 6: Spec completion
-
-### Task 6.1: Check boxes and status
-
-- [ ] Check task boxes in specs/50-version-constraints.md
-- [ ] Add E0900-E0902 to specs/47-error-codes.md
-- [ ] Update status
+- [ ] Check all task boxes in specs/39-emacs-reader-oracle.md
+- [ ] Add Status section
 - [ ] Build + test
