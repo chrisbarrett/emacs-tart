@@ -2,7 +2,20 @@
 
 Unified error type system across the codebase with rich context and machine-readable output.
 
-**Dependencies:** Spec 13 (error-reporting)
+**Dependencies:** [Spec 13][] (error-reporting)
+
+## Links
+
+### Deps
+[Spec 13]: ./13-error-reporting.md
+
+### Blocks
+[Spec 36]: ./36-cmdliner-cli.md
+[Spec 37]: ./37-file-io-errors.md
+[Spec 39]: ./39-emacs-reader-oracle.md
+[Spec 45]: ./45-source-excerpts.md
+[Spec 47]: ./47-error-codes.md
+[Spec 51]: ./51-diagnostic-severity.md
 
 ## Goal
 

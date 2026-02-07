@@ -4,7 +4,13 @@
 
 Keep type checking in sync when editing `.tart` signature files alongside `.el` files.
 
-**Deps:** Spec 08 (LSP server), Spec 27 (dependency graph).
+**Deps:** [Spec 08][] (LSP server), [Spec 27][] (dependency graph).
+
+## Links
+
+### Deps
+[Spec 08]: ./08-lsp-server.md
+[Spec 27]: ./27-dependency-graph.md
 
 ## Problem
 
@@ -52,7 +58,7 @@ LSP handles `textDocument/didOpen` for `.tart` files:
 
 When `.tart` buffer changes:
 1. Update stored contents
-2. Query dependency graph for dependents (Spec 27)
+2. Query dependency graph for dependents ([Spec 27][])
 3. Re-publish diagnostics for each dependent file
 
 ### R3: Prefer buffer over disk
@@ -73,7 +79,7 @@ When `.tart` changes, invalidate the form cache for dependent `.el` files (exist
 
 ### R6: Integrate with dependency graph
 
-Use Spec 27 dependency graph for:
+Use [Spec 27][] dependency graph for:
 - Finding all dependents of a changed `.tart`
 - Handling transitive dependencies
 - Core typings invalidation (all `.el` depend on active version)

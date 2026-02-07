@@ -2,7 +2,12 @@
 
 Expand fixture coverage for type checker acceptance tests.
 
-**Deps:** Spec 25 (test harness)
+**Deps:** [Spec 25][] (test harness)
+
+## Links
+
+### Deps
+[Spec 25]: ./25-typechecker-test-harness.md
 
 ## Goal
 

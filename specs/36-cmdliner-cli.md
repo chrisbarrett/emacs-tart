@@ -2,7 +2,16 @@
 
 Migrate manual argument parsing to Cmdliner for declarative CLI definition.
 
-**Dependencies:** Spec 35 (structured-errors).
+**Dependencies:** [Spec 35][] (structured-errors).
+
+## Links
+
+### Deps
+[Spec 35]: ./35-structured-errors.md
+
+### Blocks
+[Spec 44]: ./44-timing-stats.md
+[Spec 53]: ./53-structured-logging.md
 
 ## Goal
 
@@ -16,7 +25,7 @@ auto-generated help, argument suggestions, and structured error messages.
 | Drop-in | Existing commands and options work identically |
 | Helpful | Typos suggest correct options; missing args explain what's needed |
 | Documented | `--help` and man pages auto-generated from specs |
-| Structured | Validation errors use structured error system (spec 35) |
+| Structured | Validation errors use structured error system ([Spec 35][]) |
 
 ## Output
 
@@ -132,7 +141,7 @@ Cmdliner provides:
 **Given** `tart lsp --port abc`
 **When** invoked
 **Then** error message explains the issue clearly
-**And** uses structured error type (spec 35)
+**And** uses structured error type ([Spec 35][])
 **And** exit code is 2
 
 **Verify:** `./tart lsp --port abc 2>&1` contains "invalid" and "integer"
@@ -199,7 +208,7 @@ Cmdliner provides:
 
 **Given** argument validation fails
 **When** error is reported
-**Then** error uses structured type from spec 35
+**Then** error uses structured type from [Spec 35][]
 **And** includes error kind, message, and remediation hint
 
 **Verify:** Validation errors are structured, not raw exceptions

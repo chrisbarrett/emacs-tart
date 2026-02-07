@@ -4,7 +4,16 @@
 
 Track module dependencies for incremental re-checking.
 
-**Deps:** Spec 07 (signatures), Spec 12 (modules). **Used by:** Spec 26.
+**Deps:** [Spec 07][] (signatures), [Spec 12][] (modules). **Used by:** [Spec 26][].
+
+## Links
+
+### Deps
+[Spec 07]: ./07-signature-files.md
+[Spec 12]: ./12-module-boundaries.md
+
+### Blocks
+[Spec 26]: ./26-lsp-signature-sync.md
 
 ## Goal
 

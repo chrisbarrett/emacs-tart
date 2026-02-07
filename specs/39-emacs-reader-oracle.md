@@ -2,7 +2,13 @@
 
 Invoke Emacs as gold-standard oracle to verify tart parses correctly.
 
-**Deps:** Spec 35, 37
+**Deps:** [Spec 35][], [Spec 37][]
+
+## Links
+
+### Deps
+[Spec 35]: ./35-structured-errors.md
+[Spec 37]: ./37-file-io-errors.md
 
 ## Constraints
 

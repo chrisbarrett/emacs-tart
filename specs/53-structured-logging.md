@@ -2,8 +2,16 @@
 
 Unified logging facility with verbosity levels and switchable output format.
 
-**Deps:** Spec 36 (cmdliner-cli), Spec 30 (verbose-coverage).
-**Supersedes:** Spec 30 verbose_log module, LSP server ad-hoc logging.
+**Deps:** [Spec 36][] (cmdliner-cli), [Spec 30][] (verbose-coverage).
+**Supersedes:** [Spec 30][] verbose_log module, LSP server ad-hoc logging.
+
+## Links
+
+### Deps
+[Spec 36]: ./36-cmdliner-cli.md
+
+### Related
+[Spec 30]: ./30-verbose-coverage.md
 
 ## Goal
 

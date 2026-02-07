@@ -2,7 +2,12 @@
 
 Parse-print-parse testing for 100% parsing accuracy.
 
-**Deps:** Spec 31
+**Deps:** [Spec 31][]
+
+## Links
+
+### Deps
+[Spec 31]: ./31-fast-feedback.md
 
 ## Goal
 

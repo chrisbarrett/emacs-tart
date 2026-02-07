@@ -2,7 +2,13 @@
 
 Enable explicit instantiation of polymorphic types at call sites.
 
-**Dependencies:** Spec 15 (Explicit Forall); Spec 17 (HKT) for R4 only
+**Dependencies:** [Spec 15][] (Explicit Forall); [Spec 17][] (HKT) for R4 only
+
+## Links
+
+### Deps
+[Spec 15]: ./15-explicit-forall.md
+[Spec 17]: ./17-higher-kinded-types.md
 
 ## Goal
 
@@ -157,7 +163,7 @@ an error or warning.
 
 ### R4: Higher-kinded instantiation (future)
 
-**Given** an HK-polymorphic function (requires Spec 17)
+**Given** an HK-polymorphic function (requires [Spec 17][])
 **When** instantiated with a type constructor
 **Then** the constructor is applied:
 
@@ -167,7 +173,7 @@ an error or warning.
 (tart [(f = list) (a = int) (b = string)] (fmap #'number-to-string my-list))
 ```
 
-**Verify:** `dune test` (after Spec 17 implemented)
+**Verify:** `dune test` (after [Spec 17][] implemented)
 
 ### R5: Unknown parameter error
 

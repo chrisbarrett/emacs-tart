@@ -2,7 +2,17 @@
 
 Enable type constructors as first-class values via kind inference.
 
-**Dependencies:** Spec 15 (Explicit Forall) complete
+**Dependencies:** [Spec 15][] (Explicit Forall) complete
+
+## Links
+
+### Deps
+[Spec 15]: ./15-explicit-forall.md
+
+### Blocks
+[Spec 18]: ./18-explicit-instantiation.md
+[Spec 19]: ./19-scoped-type-variables.md
+[Spec 34]: ./34-funcall-apply-typing.md
 
 ## Goal
 

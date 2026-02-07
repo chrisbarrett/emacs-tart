@@ -3,7 +3,15 @@
 Structured handling of file I/O errors with clear messages and actionable
 suggestions.
 
-**Dependencies:** Spec 35 (structured-errors)
+**Dependencies:** [Spec 35][] (structured-errors)
+
+## Links
+
+### Deps
+[Spec 35]: ./35-structured-errors.md
+
+### Blocks
+[Spec 39]: ./39-emacs-reader-oracle.md
 
 ## Goal
 
@@ -14,7 +22,7 @@ immediately understand what went wrong and how to fix it.
 
 | Constraint | Detail                                                         |
 | ---------- | -------------------------------------------------------------- |
-| Structured | Uses error types from Spec 35, not raw exceptions              |
+| Structured | Uses error types from [Spec 35][], not raw exceptions              |
 | Contextual | Errors include what operation was being attempted              |
 | Actionable | Suggests fixes for common mistakes (typos, missing extensions) |
 | Consistent | Follows error format from Spec 13                              |
@@ -174,7 +182,7 @@ help: did you mean: config.el
 ### R9: Structured error type
 
 **Given** the file error module **When** errors are created **Then** they use a
-structured type integrating with Spec 35
+structured type integrating with [Spec 35][]
 
 ```ocaml
 type file_error =

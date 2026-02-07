@@ -2,8 +2,24 @@
 
 Versioned Emacs core typings with auto-detection.
 
-**Deps:** Spec 07 (search path), Spec 09 (CLI), Spec 48 (prelude). **Testing:**
-Spec 25. **LSP sync:** Spec 26.
+**Deps:** [Spec 07][] (search path), [Spec 09][] (CLI), [Spec 48][] (prelude). **Testing:**
+[Spec 25][]. **LSP sync:** [Spec 26][].
+
+## Links
+
+### Deps
+[Spec 07]: ./07-signature-files.md
+[Spec 09]: ./09-cli-interface.md
+[Spec 48]: ./48-prelude.md
+
+### Blocks
+[Spec 25]: ./25-typechecker-test-harness.md
+[Spec 29]: ./29-emacs-coverage.md
+[Spec 49]: ./49-feature-guards.md
+[Spec 50]: ./50-version-constraints.md
+
+### Related
+[Spec 26]: ./26-lsp-signature-sync.md
 
 ## Goal
 
@@ -129,7 +145,7 @@ Each `c-core/*.tart` covers all DEFUNs from corresponding `.c` file:
 
 ### R6: Implicit prelude
 
-The prelude (Spec 48) loads before versioned typings. It defines utility types
+The prelude ([Spec 48][]) loads before versioned typings. It defines utility types
 (`list`, `option`, `is`, `nonempty`, etc.) in terms of compiler intrinsics.
 Versioned typings and all other `.tart` files can use prelude types without
 explicit import.

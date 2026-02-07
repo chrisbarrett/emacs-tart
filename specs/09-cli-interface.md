@@ -4,6 +4,14 @@ Subcommands for type-checking, evaluation, macro expansion, and interactive use.
 
 **Dependencies:** Spec 05 interpreter complete; Spec 06 for type display.
 
+## Links
+
+### Blocks
+[Spec 10]: ./10-emacs-integration.md
+[Spec 24]: ./24-versioned-typings.md
+[Spec 25]: ./25-typechecker-test-harness.md
+[Spec 28]: ./28-coverage-report.md
+
 ## Goal
 
 Provide a usable CLI that exposes tart's capabilities: type-checking files,

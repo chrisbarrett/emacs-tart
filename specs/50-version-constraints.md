@@ -2,7 +2,21 @@
 
 Track min/max Emacs version from typings and package headers; warn on violations.
 
-**Dependencies:** Spec 24, 08, 13, 47
+**Dependencies:** [Spec 24][], [Spec 08][], [Spec 13][], [Spec 47][]
+
+## Links
+
+### Deps
+[Spec 08]: ./08-lsp-server.md
+[Spec 13]: ./13-error-reporting.md
+[Spec 24]: ./24-versioned-typings.md
+[Spec 47]: ./47-error-codes.md
+
+### Blocks
+[Spec 49]: ./49-feature-guards.md
+
+### Related
+[Spec 51]: ./51-diagnostic-severity.md
 
 ## Constraints
 
@@ -96,7 +110,7 @@ Multiple constraints: effective min = max of all requirements.
   (json-parse-string "{}"))  ; No warning: guarded
 ```
 
-Redundant guard lint: see Spec 51.
+Redundant guard lint: see [Spec 51][].
 
 **Verify:** `dune test`
 
@@ -133,6 +147,6 @@ On Package-Requires when version could be lower:
 - [ ] [R8-R10] Constraint propagation
 - [ ] [R11] Feature guard exemption
 - [ ] [R13-R15] LSP code actions
-- [ ] Add E0900-E0902 to Spec 47
+- [ ] Add E0900-E0902 to [Spec 47][]
 
 **Status:** Version detection implemented in `lib/sig/emacs_version.mli` with `detect()`, `parse_version()`, `version_to_dir()`. Package header parsing and constraint propagation not yet implemented.

@@ -3,7 +3,24 @@
 Parser and loader for `.tart` signature files that declare types for Elisp code.
 
 **Dependencies:** Spec 04 parser (reuse S-exp infrastructure), Spec 06 type
-representation, Spec 48 (prelude).
+representation, [Spec 48][] (prelude).
+
+## Links
+
+### Deps
+[Spec 48]: ./48-prelude.md
+
+### Blocks
+[Spec 08]: ./08-lsp-server.md
+[Spec 11]: ./11-adt-system.md
+[Spec 12]: ./12-module-boundaries.md
+[Spec 14]: ./14-tart-el.md
+[Spec 15]: ./15-explicit-forall.md
+[Spec 24]: ./24-versioned-typings.md
+[Spec 27]: ./27-dependency-graph.md
+[Spec 28]: ./28-coverage-report.md
+[Spec 54]: ./54-multi-clause-signatures.md
+[Spec 55]: ./55-plist-intrinsic.md
 
 ## Goal
 
@@ -111,7 +128,7 @@ go at the start of arrow types for values, or after the name in `defun`.
 **When** loaded
 **Then** `foo` is bound as a directly callable function in the module's type environment
 
-Multi-clause defuns are also supported (see [Spec 54](54-multi-clause-signatures.md)):
+Multi-clause defuns are also supported (see [Spec 54][]):
 
 ```elisp
 (defun stringp
@@ -249,7 +266,7 @@ The first match wins, allowing project-local overrides.
 
 ### R17: No shadowing of imported bindings
 
-**Given** a name brought into scope via `open`, `include`, or the prelude (Spec 48)
+**Given** a name brought into scope via `open`, `include`, or the prelude ([Spec 48][])
 **When** the current file defines a type, function, or variable with that name
 **Then** error: "cannot redefine imported binding 'name'"
 
@@ -336,4 +353,4 @@ Auxiliary files:
 - [x] [R19] Support auxiliary .tart files (include-only, de-duplicated)
 
 Run review agent after `builtins.tart` covers basic list/string functions before
-proceeding to Spec 08.
+proceeding to [Spec 08][].

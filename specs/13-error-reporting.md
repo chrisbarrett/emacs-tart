@@ -2,7 +2,19 @@
 
 Diagnostic message format and user-facing error quality.
 
-**Dependencies:** Spec 08 (LSP delivery), Spec 47 (error code registry)
+**Dependencies:** [Spec 08][] (LSP delivery), [Spec 47][] (error code registry)
+
+## Links
+
+### Deps
+[Spec 08]: ./08-lsp-server.md
+[Spec 47]: ./47-error-codes.md
+
+### Blocks
+[Spec 35]: ./35-structured-errors.md
+[Spec 45]: ./45-source-excerpts.md
+[Spec 46]: ./46-truthiness-unions.md
+[Spec 50]: ./50-version-constraints.md
 
 ## Goal
 
@@ -95,7 +107,7 @@ note: function declared to return Int
    |              ^^^ expected return type
 ```
 
-Note: Branches with different types form a union (see Spec 46). Errors occur
+Note: Branches with different types form a union (see [Spec 46][]). Errors occur
 only when the inferred union violates a constraint like the declared return
 type.
 
@@ -220,13 +232,13 @@ error[E0308]: implementation does not match signature
 
 ## Error Codes
 
-See **Spec 47** for the canonical error code registry. All diagnostics must
+See **[Spec 47][]** for the canonical error code registry. All diagnostics must
 include an error code from that spec.
 
 ## Tasks
 
 - [x] [R1] Implement type mismatch formatting
-- [x] [R2] Branch violates return type error (see Spec 46)
+- [x] [R2] Branch violates return type error (see [Spec 46][])
 - [x] [R3] Implement Option/nil error formatting
 - [x] [R4] Implement typo suggestions (Levenshtein)
 - [x] [R5] Implement arity error formatting

@@ -2,8 +2,19 @@
 
 Systematic creation of complete, verified type signatures for Emacs C core.
 
-**Deps:** Spec 30 (verbose coverage), Spec 31 (fast feedback), Spec 48 (prelude
+**Deps:** [Spec 30][] (verbose coverage), [Spec 31][] (fast feedback), [Spec 48][] (prelude
 types available in signatures).
+
+## Links
+
+### Deps
+[Spec 30]: ./30-verbose-coverage.md
+[Spec 31]: ./31-fast-feedback.md
+[Spec 48]: ./48-prelude.md
+
+### Related
+[Spec 24]: ./24-versioned-typings.md
+[Spec 34]: ./34-funcall-apply-typing.md
 
 ## Goal
 
@@ -17,7 +28,7 @@ Agents systematically create type signatures for all Emacs C primitives, with qu
 | Version-scoped | Typings target the user's current Emacs version |
 | Verified | All signatures validated against Emacs's lisp/ directory |
 | Documented gaps | Untypeable items logged to BUGS.md |
-| Precise types | Avoid `any`; use unions of specific types (see Spec 48) |
+| Precise types | Avoid `any`; use unions of specific types (see [Spec 48][]) |
 
 ## Loading Sequence
 
@@ -45,7 +56,7 @@ typings/emacs/
 │       └── ...
 ```
 
-C source files map 1:1 to `.tart` files per Spec 24.
+C source files map 1:1 to `.tart` files per [Spec 24][].
 
 ## Workflow
 
@@ -176,7 +187,7 @@ is genuinely dynamic (e.g., `symbol-value` returns whatever was stored).
 ### `funcall`
 - **Location:** eval.c:2789
 - **Issue:** Accepts any function and any arguments; return type is dynamic
-- **Resolution:** See Spec 34 for type-safe funcall/apply via dual namespaces
+- **Resolution:** See [Spec 34][] for type-safe funcall/apply via dual namespaces
 
 ## ergonomic
 
@@ -207,7 +218,7 @@ Per C source file:
 - [x] [R1-R4] Complete eval.c → eval.tart with validation
 - [x] [R1-R4] Complete alloc.c → alloc.tart with validation
 - [x] [R7,R8] Document all untypeable items per category
-- [ ] Continue for remaining C source files per Spec 24
+- [ ] Continue for remaining C source files per [Spec 24][]
 
 ## Status
 
@@ -217,4 +228,4 @@ Complete for the four core C source files (data, fns, eval, alloc).
 - All `-> any` return types audited; improved where possible, documented
   in BUGS.md where genuinely untypeable
 - 16 entries in package-level BUGS.md (3 type-system-gap, 13 untypeable)
-- Remaining C source files (per Spec 24) are ongoing work beyond this spec
+- Remaining C source files (per [Spec 24][]) are ongoing work beyond this spec

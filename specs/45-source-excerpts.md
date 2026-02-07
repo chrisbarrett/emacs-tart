@@ -2,7 +2,13 @@
 
 Elm-style friendly errors showing source code at error sites with visual underlines.
 
-**Dependencies:** Spec 13 (error-reporting), Spec 35 (structured-errors)
+**Dependencies:** [Spec 13][] (error-reporting), [Spec 35][] (structured-errors)
+
+## Links
+
+### Deps
+[Spec 13]: ./13-error-reporting.md
+[Spec 35]: ./35-structured-errors.md
 
 ## Goal
 
@@ -31,7 +37,7 @@ The CLI supports three output formats via `--format`:
 
 ### Current State
 
-Spec 13 describes the target format with source excerpts:
+[Spec 13][] describes the target format with source excerpts:
 
 ```
 42 |   (upcase count)

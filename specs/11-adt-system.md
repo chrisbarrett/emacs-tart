@@ -2,8 +2,23 @@
 
 Type-safe structural typing for Elisp's idiomatic alist/plist patterns.
 
-**Dependencies:** Spec 07 (signature files), Spec 46 (truthiness-aware unions),
-Spec 48 (prelude types: `list`, `option`, `is`, `nonempty`)
+**Dependencies:** [Spec 07][] (signature files), [Spec 46][] (truthiness-aware unions),
+[Spec 48][] (prelude types: `list`, `option`, `is`, `nonempty`)
+
+## Links
+
+### Deps
+[Spec 07]: ./07-signature-files.md
+[Spec 46]: ./46-truthiness-unions.md
+[Spec 48]: ./48-prelude.md
+
+### Blocks
+[Spec 52]: ./52-type-predicates.md
+[Spec 55]: ./55-plist-intrinsic.md
+[Spec 56]: ./56-plist-type-overloading.md
+
+### Related
+[Spec 54]: ./54-multi-clause-signatures.md
 
 ## Goal
 
@@ -337,11 +352,11 @@ int float
  1   1.0   (literal types at bottom)
 ```
 
-`truthy` and `nil` are distinct top-types that do not unify. The prelude (Spec
-48) defines `(type any (truthy | nil))`. The type system may not generate
+`truthy` and `nil` are distinct top-types that do not unify. The prelude
+([Spec 48][]) defines `(type any (truthy | nil))`. The type system may not generate
 `(truthy | nil)` as a unification—it is always explicitly annotated.
 
-**List/nil resolution via type subtraction** (prelude types from Spec 48):
+**List/nil resolution via type subtraction** (prelude types from [Spec 48][]):
 
 ```lisp
 (type list [t] ((cons t (list t)) | nil))
@@ -447,7 +462,7 @@ least a `name` field are accepted
 
 `alist-get` uses `eq` by default, which only produces meaningful results for
 types where identity coincides with equality (symbols, keywords, small
-integers). The prelude (Spec 48) defines `eq-safe` and `eql-safe` union types
+integers). The prelude ([Spec 48][]) defines `eq-safe` and `eql-safe` union types
 as bounds for equality predicates.
 
 **Given** an `alist-get` call with no TESTFN (default `eq`):
