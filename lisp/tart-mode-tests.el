@@ -295,5 +295,74 @@
     (should (= (length index) 1))
     (should (assoc "real-fn" index))))
 
+;;; Minor-Mode Lifecycle Tests (Spec 63)
+
+(ert-deftest tart-mode-lifecycle-enable-sets-mode ()
+  "Enabling tart-mode sets the mode variable."
+  (with-temp-buffer
+    (emacs-lisp-mode)
+    (tart-mode 1)
+    (should tart-mode)))
+
+(ert-deftest tart-mode-lifecycle-disable-clears-mode ()
+  "Disabling tart-mode clears the mode variable."
+  (with-temp-buffer
+    (emacs-lisp-mode)
+    (tart-mode 1)
+    (tart-mode -1)
+    (should-not tart-mode)))
+
+(ert-deftest tart-mode-lifecycle-keymap-active-when-enabled ()
+  "Tart keymap is active when mode is enabled."
+  (with-temp-buffer
+    (emacs-lisp-mode)
+    (tart-mode 1)
+    (should (eq (lookup-key tart-mode-map (kbd "C-c C-z"))
+                #'tart-switch-to-repl))))
+
+(ert-deftest tart-mode-lifecycle-keymap-inactive-when-disabled ()
+  "Tart keymap bindings are inactive after mode is disabled."
+  (with-temp-buffer
+    (emacs-lisp-mode)
+    (tart-mode 1)
+    (tart-mode -1)
+    ;; The minor mode keymap should no longer be in effect
+    (should-not (memq tart-mode-map (current-minor-mode-maps)))))
+
+(ert-deftest tart-mode-lifecycle-no-global-side-effects ()
+  "Enabling tart-mode in one buffer does not affect another."
+  (let ((buf-with (generate-new-buffer " *tart-test-with*"))
+        (buf-without (generate-new-buffer " *tart-test-without*")))
+    (unwind-protect
+        (progn
+          (with-current-buffer buf-with
+            (emacs-lisp-mode)
+            (tart-mode 1))
+          (with-current-buffer buf-without
+            (emacs-lisp-mode)
+            (should-not tart-mode)
+            (should-not (memq tart-mode-map (current-minor-mode-maps)))))
+      (kill-buffer buf-with)
+      (kill-buffer buf-without))))
+
+(ert-deftest tart-mode-lifecycle-idempotent-toggle ()
+  "Toggling tart-mode multiple times leaves no accumulated state."
+  (with-temp-buffer
+    (emacs-lisp-mode)
+    ;; Toggle on/off three times
+    (dotimes (_ 3)
+      (tart-mode 1)
+      (tart-mode -1))
+    ;; Should be cleanly disabled
+    (should-not tart-mode)
+    (should-not (memq tart-mode-map (current-minor-mode-maps)))))
+
+(ert-deftest tart-mode-lifecycle-lighter-shown-when-enabled ()
+  "Mode lighter is shown when tart-mode is enabled."
+  (with-temp-buffer
+    (emacs-lisp-mode)
+    (tart-mode 1)
+    (should (assq 'tart-mode minor-mode-alist))))
+
 (provide 'tart-mode-tests)
 ;;; tart-mode-tests.el ends here

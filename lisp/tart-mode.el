@@ -576,11 +576,22 @@ avoiding unnecessary nesting (e.g., most c-core files are all `defun')."
   "Minor mode for Tart type checker integration.
 
 Provides keybindings for REPL interaction and type inspection.
+All buffer-local modifications are installed on enable and
+removed on disable so that toggling the mode is idempotent.
 
 \\{tart-mode-map}"
   :lighter " Tart"
   :keymap tart-mode-map
-  :group 'tart)
+  :group 'tart
+  (if tart-mode
+      (tart-mode--enable)
+    (tart-mode--disable)))
+
+(defun tart-mode--enable ()
+  "Install buffer-local modifications for `tart-mode'.")
+
+(defun tart-mode--disable ()
+  "Remove buffer-local modifications installed by `tart-mode'.")
 
 ;;; Binary Management
 
