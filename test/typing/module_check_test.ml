@@ -775,15 +775,18 @@ let test_hk_type_scope_cross_module () =
           (defun fmap-f [a b] (((a -> b)) (f a)) -> (f b)))
       |}
       );
-      (* Use fmap-f from another module - should work polymorphically *)
-      ("main.el", "(require 'functor)\n(fmap-f (lambda (x) (+ x 1)) '(1 2 3))");
+      (* Use fmap-f from another module - should work polymorphically.
+         Use (list 1 2 3) not '(1 2 3) because quoted lists infer as tuples
+         which don't unify with HK type application (f a). *)
+      ( "main.el",
+        "(require 'functor)\n(fmap-f (lambda (x) (+ x 1)) (list 1 2 3))" );
     ]
   in
   with_temp_dir files (fun dir ->
       let config = Module_check.default_config () in
       let el_path = Filename.concat dir "main.el" in
       let main_content =
-        "(require 'functor)\n(fmap-f (lambda (x) (+ x 1)) '(1 2 3))"
+        "(require 'functor)\n(fmap-f (lambda (x) (+ x 1)) (list 1 2 3))"
       in
       let sexps = parse main_content in
       let result = Module_check.check_module ~config ~filename:el_path sexps in

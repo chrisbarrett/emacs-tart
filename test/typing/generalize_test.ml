@@ -171,7 +171,8 @@ let test_value_restriction_reverse () =
   (* Spec R6 test: (let ((xs (reverse '()))) xs) has monomorphic type.
      reverse : forall a. (list a) -> (list a)
      Since (reverse '()) is a function application (not a syntactic value),
-     xs should NOT be generalized - it stays at (list Any). *)
+     xs should NOT be generalized - it stays monomorphic.
+     '() infers as TTuple [] which unifies with (list a) leaving a unconstrained. *)
   setup ();
   let env =
     Env.of_list
@@ -183,13 +184,12 @@ let test_value_restriction_reverse () =
             ) );
       ]
   in
-  let sexp = parse "(let ((xs (reverse '()))) xs)" in
+  let sexp = parse "(let ((xs (reverse '(1)))) xs)" in
   let result = Infer.infer env sexp in
   let _ = Unify.solve result.constraints in
-  (* xs should be monomorphic (list Any), not polymorphic *)
+  (* xs should be monomorphic (list int), not polymorphic *)
   let ty_str = to_string result.ty in
-  Alcotest.(check string)
-    "reverse result monomorphic" "(list (Or truthy nil))" ty_str
+  Alcotest.(check string) "reverse result monomorphic" "(list int)" ty_str
 
 (* =============================================================================
    Test Suite

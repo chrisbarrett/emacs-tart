@@ -87,7 +87,7 @@ let test_quoted_symbol () =
 
 let test_quoted_list () =
   Alcotest.(check string)
-    "quoted list" "(list (Or truthy nil))" (infer_type "'(1 2 3)")
+    "quoted list" "(Tuple int int int)" (infer_type "'(1 2 3)")
 
 let test_quoted_int () =
   Alcotest.(check string) "quoted int" "int" (infer_type "'42")

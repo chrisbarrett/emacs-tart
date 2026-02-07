@@ -321,7 +321,11 @@ and infer_quoted (sexp : Syntax.Sexp.t) : result =
   | Char (_, _) -> pure Prim.int
   | Keyword (_, _) -> pure Prim.keyword
   | Symbol (_, _) -> pure Prim.symbol
-  | List (_, _) -> pure (list_of Prim.any) (* Quoted lists: (List Any) *)
+  | List (elts, _) ->
+      (* Quoted lists infer as tuples with per-element types.
+         Tuple-to-list subtyping (R9) ensures backward compatibility. *)
+      let elem_types = List.map (fun e -> (infer_quoted e).ty) elts in
+      pure (TTuple elem_types)
   | Vector (_, _) -> pure (vector_of Prim.any)
   | Curly (_, _) -> pure Prim.any (* Curly braces: Any *)
   | Cons (_, _, _) -> pure Prim.any (* Dotted pairs: Any *)
@@ -1446,14 +1450,39 @@ and infer_apply env fn_expr args span =
       fixed_results
   in
 
-  (* NOTE: We don't constrain the list arg type because:
-     - Quoted lists are typed as (List Any)
-     - (List Any) doesn't unify with (List Int) in invariant mode
-     - This would cause false positives for (apply #'+ '(1 2 3))
-     Future enhancement: infer tuple types for quoted lists in apply context
-     to enable proper type checking of list elements. *)
-  let list_constraint_opt = None in
-  let _ = list_arg in
+  (* Constrain the list arg to (List rest_elem_ty).
+     Quoted lists infer as tuples, so tuple-to-list subtyping (R9) handles
+     the unification: TTuple [t1;...;tn] <: (List rest_elem_ty). *)
+  let list_constraint =
+    match list_arg with
+    | Some arg ->
+        let expected_list_ty = list_of rest_elem_ty in
+        let arg_expr_source = get_expr_source arg in
+        let context =
+          match fn_name with
+          | Some name ->
+              C.FunctionArg
+                {
+                  fn_name = name;
+                  fn_type = fn_result.ty;
+                  arg_index = List.length fixed_results;
+                  arg_expr_source;
+                }
+          | None ->
+              C.FunctionArg
+                {
+                  fn_name = "apply";
+                  fn_type = fn_result.ty;
+                  arg_index = List.length fixed_results;
+                  arg_expr_source;
+                }
+        in
+        [
+          C.equal ~context expected_list_ty list_result.ty
+            (Syntax.Sexp.span_of arg);
+        ]
+    | None -> []
+  in
 
   (* Build expected function type: (&rest rest_elem_ty) -> result_ty *)
   let expected_fn_type = TArrow ([ PRest rest_elem_ty ], result_ty) in
@@ -1464,19 +1493,15 @@ and infer_apply env fn_expr args span =
   (* Combine all constraints.
      ORDER MATTERS: fn_constraint must be first so the function type establishes
      what the rest element type should be before we check args against it.
-     The list constraint comes last since (List Any) would otherwise make
-     rest_elem_ty = Any before the function type can constrain it. *)
+     The list constraint comes after fn_constraint but includes the list arg's
+     own constraints so tuple-to-list subtyping can check element types. *)
   let fixed_constraint_set =
     List.fold_left (fun acc c -> C.add c acc) C.empty fixed_constraints
   in
-  let list_constraint_set =
-    match list_constraint_opt with Some c -> [ c ] | None -> []
-  in
   let all_constraints =
-    (* Order: fn_constraint, then fixed args, then list constraint, then sub-results *)
     [ fn_constraint ] @ fn_result.constraints @ fixed_constraint_set
     @ combine_results fixed_results
-    @ list_constraint_set @ list_result.constraints
+    @ list_constraint @ list_result.constraints
   in
   let all_undefineds =
     fn_result.undefineds @ list_result.undefineds

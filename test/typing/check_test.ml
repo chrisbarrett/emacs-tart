@@ -116,16 +116,16 @@ let test_check_program_defun_calls_previous () =
    without loading c-core. The same functionality is tested via fixture tests
    (test/fixtures/typing/core/).
 
-(** Test that car on a quoted list returns Option Any. (car '(1 2 3)) should
-    infer (Option Any) because '(1 2 3) has type (list Any). *)
+(** Test that car on a quoted list returns Option element type. (car '(1 2 3))
+    infers '(1 2 3) as (Tuple int int int), which widens to (list int) via
+    tuple-to-list subtyping, so car returns (int | nil). *)
 let test_builtin_car_returns_option () =
   let sexp = parse "(car '(1 2 3))" in
   let ty, errors = Check.check_expr sexp in
   (* Uses default environment which includes built-in types *)
   Alcotest.(check int) "no errors" 0 (List.length errors);
-  (* car returns (a | nil) where a is inferred from the list; quoted list gives (Or truthy nil) *)
-  Alcotest.(check string)
-    "car returns Option Any" "(Or (Or truthy nil) nil)" (to_string ty)
+  (* car returns (a | nil) where a = int inferred from tuple elements *)
+  Alcotest.(check string) "car returns Option int" "(Or int nil)" (to_string ty)
 
 (** Test that (+ 1 "x") produces a type error. The built-in + expects Int
     arguments, not string. *)
@@ -636,9 +636,9 @@ let test_invariance_hash_table_key () =
   let result = Check.check_program sexps in
   Alcotest.(check bool) "has type error" true (List.length result.errors > 0)
 
-(** Test that polymorphic functions still work with lists. Note: We use (list 1
-    2 3) not '(1 2 3) because quoted lists infer to (list Any) and can't be
-    narrowed to (list int) due to invariance. *)
+(** Test that polymorphic functions still work with lists. We use (list 1 2 3)
+    which directly produces (list int). Quoted lists '(1 2 3) now infer as
+    (Tuple int int int) which also works via tuple-to-list subtyping. *)
 let test_invariance_poly_function_ok () =
   let sexps =
     parse_many
