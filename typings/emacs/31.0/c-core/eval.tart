@@ -166,14 +166,14 @@
 (defun run-hook-with-args-until-failure (symbol &rest any) -> any)
 
 ;; (run-hook-wrapped HOOK WRAP-FN &rest ARGS) - run with wrapper
-(defun run-hook-wrapped (symbol any &rest any) -> any)
+(defun run-hook-wrapped (symbol ((&rest any) -> any) &rest any) -> any)
 
 ;; ===========================================================================
 ;; Closures
 ;; ===========================================================================
 
 ;; (make-interpreted-closure ARGS BODY ENV &optional DOCSTRING IFORM) - create closure
-(defun make-interpreted-closure (any any any &optional any any) -> any)
+(defun make-interpreted-closure (any any any &optional any any) -> truthy)
 
 ;; ===========================================================================
 ;; Debugging
@@ -186,7 +186,8 @@
 (defun backtrace-eval (any int &optional any) -> any)
 
 ;; (mapbacktrace FN &optional BASE) - map over backtrace
-(defun mapbacktrace (any &optional any) -> nil)
+;; FN receives (evalled func args flags)
+(defun mapbacktrace (((any any any any) -> any) &optional any) -> nil)
 
 ;; (backtrace-frames &optional BASE) - collect all frames into a list
 (defun backtrace-frames (&optional any) -> (list any))
@@ -202,7 +203,7 @@
 (defun backtrace--frames-from-thread (any) -> (vector any))
 
 ;; (backtrace--locals NFRAMES &optional BASE) - internal: local bindings
-(defun backtrace--locals (int &optional any) -> any)
+(defun backtrace--locals (int &optional any) -> (list (cons symbol any)))
 
 ;; (backtrace-frame--internal NFRAMES &optional BASE) - internal: frame info
 (defun backtrace-frame--internal (int &optional any) -> any)
@@ -227,7 +228,7 @@
 (defun set-default-toplevel-value (symbol any) -> nil)
 
 ;; (buffer-local-toplevel-value SYM &optional BUFFER) - get buffer toplevel
-(defun buffer-local-toplevel-value (symbol &optional any) -> any)
+(defun buffer-local-toplevel-value (symbol &optional buffer) -> any)
 
 ;; (set-buffer-local-toplevel-value SYM VALUE &optional BUFFER) - set buffer toplevel
-(defun set-buffer-local-toplevel-value (symbol any &optional any) -> nil)
+(defun set-buffer-local-toplevel-value (symbol any &optional buffer) -> nil)

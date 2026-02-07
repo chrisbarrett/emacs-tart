@@ -33,6 +33,13 @@ _Symbols requiring features tart doesn't have (dependent types, row polymorphism
   `-> truthy` (always non-nil)
 - **Suggested feature:** Record type constructor
 
+### `condition-case` / `catch`
+- **Location:** eval.c
+- **Issue:** Return type is the union of the body expression and all
+  handler/thrown values. Would need effect typing or exception type
+  tracking to express the actual return type
+- **Suggested feature:** Exception type tracking
+
 ## untypeable
 
 _Symbols whose behavior can't be captured soundly (dynamic dispatch, eval-based)._
@@ -70,6 +77,39 @@ _Symbols whose behavior can't be captured soundly (dynamic dispatch, eval-based)
 - **Location:** data.c
 - **Issue:** Returns a native-comp-unit object, which is an opaque
   internal type. No user-facing type exists for it; typed as `-> any`
+
+### `eval`
+- **Location:** eval.c
+- **Issue:** Evaluates an arbitrary Emacs Lisp form. Return type is
+  determined entirely at runtime by the form being evaluated
+
+### `macroexpand`
+- **Location:** eval.c
+- **Issue:** Expands a macro form. The result is an arbitrary Emacs Lisp
+  expression whose type depends on the macro definition
+
+### `default-toplevel-value` / `buffer-local-toplevel-value`
+- **Location:** eval.c
+- **Issue:** Return the toplevel or buffer-local value of a symbol.
+  Same dynamic nature as `symbol-value` — the stored type is unknown
+  statically
+
+### `run-hook-with-args` / `run-hook-with-args-until-success` / `run-hook-with-args-until-failure`
+- **Location:** eval.c
+- **Issue:** Run hook functions whose return types are unknown. The
+  overall return is the last/first non-nil/nil result respectively
+
+### `autoload-do-load`
+- **Location:** eval.c
+- **Issue:** Loads an autoloaded function and returns the result. The
+  return type depends on what was loaded — could be a function, macro,
+  keymap, or other object
+
+### `funcall-with-delayed-message`
+- **Location:** eval.c
+- **Issue:** Calls a function after a timeout with a message. The FN
+  argument and return type are both dynamic — same limitation as
+  `funcall` but without special-case type checking
 
 ### `get` (symbol plist)
 - **Location:** fns.c
