@@ -11,66 +11,22 @@ let dummy = Loc.dummy_span
 let to_string = Types.to_string
 
 (* =============================================================================
-   get_config: accessor configuration lookup
-   ============================================================================= *)
-
-let test_config_plist_get () =
-  match RD.get_config "plist-get" with
-  | Some c ->
-      Alcotest.(check int) "container arg" 0 c.container_arg;
-      Alcotest.(check int) "key arg" 1 c.key_arg
-  | None -> Alcotest.fail "expected config for plist-get"
-
-let test_config_alist_get () =
-  match RD.get_config "alist-get" with
-  | Some c ->
-      Alcotest.(check int) "container arg" 1 c.container_arg;
-      Alcotest.(check int) "key arg" 0 c.key_arg
-  | None -> Alcotest.fail "expected config for alist-get"
-
-let test_config_gethash () =
-  match RD.get_config "gethash" with
-  | Some c ->
-      Alcotest.(check int) "container arg" 1 c.container_arg;
-      Alcotest.(check int) "key arg" 0 c.key_arg
-  | None -> Alcotest.fail "expected config for gethash"
-
-let test_config_map_elt () =
-  match RD.get_config "map-elt" with
-  | Some c ->
-      Alcotest.(check int) "container arg" 0 c.container_arg;
-      Alcotest.(check int) "key arg" 1 c.key_arg
-  | None -> Alcotest.fail "expected config for map-elt"
-
-let test_config_unknown () =
-  Alcotest.(check bool)
-    "unknown → None" true
-    (Option.is_none (RD.get_config "car"))
-
-let test_config_unknown_similar () =
-  Alcotest.(check bool)
-    "similar name → None" true
-    (Option.is_none (RD.get_config "plist-put"))
-
-(* =============================================================================
    has_default: default argument support
    ============================================================================= *)
 
-let test_has_default_plist_get () =
+let test_has_default_plist () =
+  Alcotest.(check bool) "plist no default" false (RD.has_default RD.Plist)
+
+let test_has_default_alist () =
+  Alcotest.(check bool) "alist has default" true (RD.has_default RD.Alist)
+
+let test_has_default_hash_table () =
   Alcotest.(check bool)
-    "plist-get no default" false
-    (RD.has_default RD.PlistGet)
+    "hash-table has default" true
+    (RD.has_default RD.HashTable)
 
-let test_has_default_alist_get () =
-  Alcotest.(check bool)
-    "alist-get has default" true
-    (RD.has_default RD.AlistGet)
-
-let test_has_default_gethash () =
-  Alcotest.(check bool) "gethash has default" true (RD.has_default RD.Gethash)
-
-let test_has_default_map_elt () =
-  Alcotest.(check bool) "map-elt has default" true (RD.has_default RD.MapElt)
+let test_has_default_map () =
+  Alcotest.(check bool) "map has default" true (RD.has_default RD.Map)
 
 (* =============================================================================
    extract_*_row: row extraction from container types
@@ -162,52 +118,12 @@ let test_extract_map_row_non_row () =
     (Option.is_none (RD.extract_map_row map_ty))
 
 (* =============================================================================
-   extract_row: dispatches to the appropriate extractor
-   ============================================================================= *)
-
-let test_extract_row_plist () =
-  let row = make_closed_row [ ("k", Prim.int) ] in
-  let ty = Types.plist_of Prim.keyword row in
-  Alcotest.(check bool)
-    "PlistGet dispatches to plist" true
-    (Option.is_some (RD.extract_row RD.PlistGet ty))
-
-let test_extract_row_alist () =
-  let row = make_closed_row [ ("k", Prim.int) ] in
-  let ty = Types.list_of (Types.pair_of Prim.symbol row) in
-  Alcotest.(check bool)
-    "AlistGet dispatches to alist" true
-    (Option.is_some (RD.extract_row RD.AlistGet ty))
-
-let test_extract_row_gethash () =
-  let row = make_closed_row [ ("k", Prim.int) ] in
-  let ty = Types.hash_table_of Prim.symbol row in
-  Alcotest.(check bool)
-    "Gethash dispatches to hash-table" true
-    (Option.is_some (RD.extract_row RD.Gethash ty))
-
-let test_extract_row_map_elt () =
-  let row = make_closed_row [ ("k", Prim.int) ] in
-  let ty = Types.map_of row in
-  Alcotest.(check bool)
-    "MapElt dispatches to map" true
-    (Option.is_some (RD.extract_row RD.MapElt ty))
-
-let test_extract_row_mismatch () =
-  (* plist type won't extract with AlistGet *)
-  let row = make_closed_row [ ("k", Prim.int) ] in
-  let ty = Types.plist_of Prim.keyword row in
-  Alcotest.(check bool)
-    "wrong accessor → None" true
-    (Option.is_none (RD.extract_row RD.AlistGet ty))
-
-(* =============================================================================
    build_expected_container: container type construction from row
    ============================================================================= *)
 
 let test_build_container_plist () =
   let row = Types.fresh_tvar 0 in
-  let result = RD.build_expected_container RD.PlistGet row in
+  let result = RD.build_expected_container RD.Plist row in
   let s = to_string result in
   Alcotest.(check bool)
     "plist container has Plist" true
@@ -215,23 +131,23 @@ let test_build_container_plist () =
 
 let test_build_container_alist () =
   let row = Types.fresh_tvar 0 in
-  let result = RD.build_expected_container RD.AlistGet row in
+  let result = RD.build_expected_container RD.Alist row in
   let s = to_string result in
   Alcotest.(check bool) "alist container is list" true (String.length s > 0)
 
-let test_build_container_gethash () =
+let test_build_container_hash_table () =
   let row = Types.fresh_tvar 0 in
-  let result = RD.build_expected_container RD.Gethash row in
+  let result = RD.build_expected_container RD.HashTable row in
   let s = to_string result in
   Alcotest.(check bool)
-    "gethash container has HashTable" true
+    "hash-table container has HashTable" true
     (String.length s > 0)
 
-let test_build_container_map_elt () =
+let test_build_container_map () =
   let row = Types.fresh_tvar 0 in
-  let result = RD.build_expected_container RD.MapElt row in
+  let result = RD.build_expected_container RD.Map row in
   let s = to_string result in
-  Alcotest.(check bool) "map-elt container has Map" true (String.length s > 0)
+  Alcotest.(check bool) "map container has Map" true (String.length s > 0)
 
 (* =============================================================================
    try_dispatch: Cases 1-2 (literal key found in row)
@@ -239,10 +155,6 @@ let test_build_container_map_elt () =
 
 let make_sexp_keyword name = Sexp.Keyword (name, dummy)
 let make_sexp_symbol name = Sexp.Symbol (name, dummy)
-let plist_config = { RD.kind = RD.PlistGet; container_arg = 0; key_arg = 1 }
-let alist_config = { RD.kind = RD.AlistGet; container_arg = 1; key_arg = 0 }
-let gethash_config = { RD.kind = RD.Gethash; container_arg = 1; key_arg = 0 }
-let map_elt_config = { RD.kind = RD.MapElt; container_arg = 0; key_arg = 1 }
 
 let test_dispatch_plist_found () =
   Types.reset_tvar_counter ();
@@ -252,11 +164,10 @@ let test_dispatch_plist_found () =
   let container_sexp = make_sexp_symbol "my-plist" in
   let key_sexp = make_sexp_keyword "name" in
   let result =
-    RD.try_dispatch env plist_config
+    RD.try_dispatch env
       ~arg_types:[ container_ty; Prim.keyword ]
       ~arg_literals:[ None; Some ":name" ]
       ~args:[ container_sexp; key_sexp ]
-      ~rest_arg_types:[]
   in
   match result with
   | Some r ->
@@ -278,11 +189,10 @@ let test_dispatch_alist_found () =
       ([ Sexp.Symbol ("quote", dummy); Sexp.Symbol ("name", dummy) ], dummy)
   in
   let result =
-    RD.try_dispatch env alist_config
+    RD.try_dispatch env
       ~arg_types:[ Prim.symbol; container_ty ]
       ~arg_literals:[ Some "name"; None ]
       ~args:[ key_sexp; container_sexp ]
-      ~rest_arg_types:[]
   in
   match result with
   | Some r ->
@@ -305,11 +215,10 @@ let test_dispatch_plist_absent_closed () =
   let container_sexp = make_sexp_symbol "my-plist" in
   let key_sexp = make_sexp_keyword "age" in
   let result =
-    RD.try_dispatch env plist_config
+    RD.try_dispatch env
       ~arg_types:[ container_ty; Prim.keyword ]
       ~arg_literals:[ None; Some ":age" ]
       ~args:[ container_sexp; key_sexp ]
-      ~rest_arg_types:[]
   in
   match result with
   | Some r ->
@@ -333,11 +242,10 @@ let test_dispatch_gethash_absent_with_default () =
   in
   let default_sexp = Sexp.Int (0, dummy) in
   let result =
-    RD.try_dispatch env gethash_config
-      ~arg_types:[ Prim.symbol; container_ty ]
-      ~arg_literals:[ Some "age"; None ]
+    RD.try_dispatch env
+      ~arg_types:[ Prim.symbol; container_ty; Prim.int ]
+      ~arg_literals:[ Some "age"; None; None ]
       ~args:[ key_sexp; container_sexp; default_sexp ]
-      ~rest_arg_types:[ Prim.int ]
   in
   match result with
   | Some r ->
@@ -357,11 +265,10 @@ let test_dispatch_plist_absent_open () =
   let container_sexp = make_sexp_symbol "my-plist" in
   let key_sexp = make_sexp_keyword "age" in
   let result =
-    RD.try_dispatch env plist_config
+    RD.try_dispatch env
       ~arg_types:[ container_ty; Prim.keyword ]
       ~arg_literals:[ None; Some ":age" ]
       ~args:[ container_sexp; key_sexp ]
-      ~rest_arg_types:[]
   in
   match result with
   | Some r ->
@@ -372,21 +279,21 @@ let test_dispatch_plist_absent_open () =
   | None -> Alcotest.fail "expected dispatch"
 
 (* =============================================================================
-   try_dispatch: R8 (container type unknown → infer from usage)
+   try_dispatch_infer: R8 (container type unknown → infer from usage)
    ============================================================================= *)
 
-let test_dispatch_plist_unknown_container () =
+let test_dispatch_infer_plist_unknown_container () =
   Types.reset_tvar_counter ();
   let env = Env.empty in
   let container_ty = Types.fresh_tvar 0 in
   let container_sexp = make_sexp_symbol "x" in
   let key_sexp = make_sexp_keyword "name" in
   let result =
-    RD.try_dispatch env plist_config
+    RD.try_dispatch_infer env ~container_kind:RD.Plist ~container_index:0
+      ~key_index:1
       ~arg_types:[ container_ty; Prim.keyword ]
       ~arg_literals:[ None; Some ":name" ]
       ~args:[ container_sexp; key_sexp ]
-      ~rest_arg_types:[]
   in
   match result with
   | Some r ->
@@ -408,11 +315,10 @@ let test_dispatch_non_literal_key () =
   let container_sexp = make_sexp_symbol "my-plist" in
   let key_sexp = make_sexp_symbol "some-var" in
   let result =
-    RD.try_dispatch env plist_config
+    RD.try_dispatch env
       ~arg_types:[ container_ty; Prim.keyword ]
       ~arg_literals:[ None; None ]
       ~args:[ container_sexp; key_sexp ]
-      ~rest_arg_types:[]
   in
   Alcotest.(check bool) "non-literal key → None" true (Option.is_none result)
 
@@ -423,10 +329,7 @@ let test_dispatch_non_literal_key () =
 let test_dispatch_insufficient_args () =
   Types.reset_tvar_counter ();
   let env = Env.empty in
-  let result =
-    RD.try_dispatch env plist_config ~arg_types:[] ~arg_literals:[] ~args:[]
-      ~rest_arg_types:[]
-  in
+  let result = RD.try_dispatch env ~arg_types:[] ~arg_literals:[] ~args:[] in
   Alcotest.(check bool) "empty args → None" true (Option.is_none result)
 
 (* =============================================================================
@@ -441,11 +344,10 @@ let test_dispatch_map_elt_found () =
   let container_sexp = make_sexp_symbol "my-map" in
   let key_sexp = make_sexp_keyword "name" in
   let result =
-    RD.try_dispatch env map_elt_config
+    RD.try_dispatch env
       ~arg_types:[ container_ty; Prim.keyword ]
       ~arg_literals:[ None; Some ":name" ]
       ~args:[ container_sexp; key_sexp ]
-      ~rest_arg_types:[]
   in
   match result with
   | Some r ->
@@ -462,11 +364,10 @@ let test_dispatch_map_elt_absent_default () =
   let key_sexp = make_sexp_keyword "age" in
   let default_sexp = Sexp.Int (0, dummy) in
   let result =
-    RD.try_dispatch env map_elt_config
-      ~arg_types:[ container_ty; Prim.keyword ]
-      ~arg_literals:[ None; Some ":age" ]
+    RD.try_dispatch env
+      ~arg_types:[ container_ty; Prim.keyword; Prim.int ]
+      ~arg_literals:[ None; Some ":age"; None ]
       ~args:[ container_sexp; key_sexp; default_sexp ]
-      ~rest_arg_types:[ Prim.int ]
   in
   match result with
   | Some r ->
@@ -489,11 +390,10 @@ let test_dispatch_gethash_found () =
       ([ Sexp.Symbol ("quote", dummy); Sexp.Symbol ("name", dummy) ], dummy)
   in
   let result =
-    RD.try_dispatch env gethash_config
+    RD.try_dispatch env
       ~arg_types:[ Prim.symbol; container_ty ]
       ~arg_literals:[ Some "name"; None ]
       ~args:[ key_sexp; container_sexp ]
-      ~rest_arg_types:[]
   in
   match result with
   | Some r ->
@@ -502,27 +402,89 @@ let test_dispatch_gethash_found () =
   | None -> Alcotest.fail "expected dispatch"
 
 (* =============================================================================
+   analyze_clause: clause analysis for R8 dispatch
+   ============================================================================= *)
+
+let test_analyze_clause_plist () =
+  let clause : Env.loaded_clause =
+    {
+      lc_params =
+        [
+          Types.PPositional (Types.plist_of (Types.TCon "k") (Types.TCon "v"));
+          Types.PPositional (Types.TCon "k");
+          Types.POptional Prim.any;
+        ];
+      lc_return = Types.TUnion [ Types.TCon "v"; Prim.nil ];
+      lc_diagnostic = None;
+    }
+  in
+  match RD.analyze_clause clause with
+  | Some cc ->
+      Alcotest.(check int) "container at 0" 0 cc.cc_container_index;
+      Alcotest.(check int) "key at 1" 1 cc.cc_key_index
+  | None -> Alcotest.fail "expected clause config for plist"
+
+let test_analyze_clause_alist () =
+  let clause : Env.loaded_clause =
+    {
+      lc_params =
+        [
+          Types.PPositional (Types.TCon "k");
+          Types.PPositional
+            (Types.list_of (Types.pair_of (Types.TCon "k") (Types.TCon "v")));
+          Types.POptional (Types.TCon "v");
+        ];
+      lc_return = Types.TUnion [ Types.TCon "v"; Prim.nil ];
+      lc_diagnostic = None;
+    }
+  in
+  match RD.analyze_clause clause with
+  | Some cc ->
+      Alcotest.(check int) "container at 1" 1 cc.cc_container_index;
+      Alcotest.(check int) "key at 0" 0 cc.cc_key_index
+  | None -> Alcotest.fail "expected clause config for alist"
+
+let test_analyze_clause_no_container () =
+  let clause : Env.loaded_clause =
+    {
+      lc_params = [ Types.PPositional Prim.int; Types.PPositional Prim.string ];
+      lc_return = Prim.int;
+      lc_diagnostic = None;
+    }
+  in
+  Alcotest.(check bool)
+    "no container → None" true
+    (Option.is_none (RD.analyze_clause clause))
+
+let test_analyze_fn_type_plist () =
+  let ty =
+    Types.TArrow
+      ( [
+          Types.PPositional (Types.plist_of (Types.TCon "k") (Types.TCon "v"));
+          Types.PPositional (Types.TCon "k");
+          Types.POptional Prim.any;
+        ],
+        Types.TUnion [ Types.TCon "v"; Prim.nil ] )
+  in
+  match RD.analyze_fn_type ty with
+  | Some cc ->
+      Alcotest.(check int) "container at 0" 0 cc.cc_container_index;
+      Alcotest.(check int) "key at 1" 1 cc.cc_key_index
+  | None -> Alcotest.fail "expected fn type config for plist"
+
+(* =============================================================================
    Test Suite
    ============================================================================= *)
 
 let () =
   Alcotest.run "row_dispatch"
     [
-      ( "get_config",
-        [
-          Alcotest.test_case "plist-get" `Quick test_config_plist_get;
-          Alcotest.test_case "alist-get" `Quick test_config_alist_get;
-          Alcotest.test_case "gethash" `Quick test_config_gethash;
-          Alcotest.test_case "map-elt" `Quick test_config_map_elt;
-          Alcotest.test_case "unknown name" `Quick test_config_unknown;
-          Alcotest.test_case "similar name" `Quick test_config_unknown_similar;
-        ] );
       ( "has_default",
         [
-          Alcotest.test_case "plist-get" `Quick test_has_default_plist_get;
-          Alcotest.test_case "alist-get" `Quick test_has_default_alist_get;
-          Alcotest.test_case "gethash" `Quick test_has_default_gethash;
-          Alcotest.test_case "map-elt" `Quick test_has_default_map_elt;
+          Alcotest.test_case "plist" `Quick test_has_default_plist;
+          Alcotest.test_case "alist" `Quick test_has_default_alist;
+          Alcotest.test_case "hash-table" `Quick test_has_default_hash_table;
+          Alcotest.test_case "map" `Quick test_has_default_map;
         ] );
       ( "extract_alist_row",
         [
@@ -553,20 +515,12 @@ let () =
           Alcotest.test_case "closed row" `Quick test_extract_map_row_closed;
           Alcotest.test_case "non-row value" `Quick test_extract_map_row_non_row;
         ] );
-      ( "extract_row dispatch",
-        [
-          Alcotest.test_case "plist" `Quick test_extract_row_plist;
-          Alcotest.test_case "alist" `Quick test_extract_row_alist;
-          Alcotest.test_case "gethash" `Quick test_extract_row_gethash;
-          Alcotest.test_case "map-elt" `Quick test_extract_row_map_elt;
-          Alcotest.test_case "mismatch" `Quick test_extract_row_mismatch;
-        ] );
       ( "build_expected_container",
         [
           Alcotest.test_case "plist" `Quick test_build_container_plist;
           Alcotest.test_case "alist" `Quick test_build_container_alist;
-          Alcotest.test_case "gethash" `Quick test_build_container_gethash;
-          Alcotest.test_case "map-elt" `Quick test_build_container_map_elt;
+          Alcotest.test_case "hash-table" `Quick test_build_container_hash_table;
+          Alcotest.test_case "map" `Quick test_build_container_map;
         ] );
       ( "dispatch Cases 1-2 (found key)",
         [
@@ -595,7 +549,7 @@ let () =
       ( "dispatch R8 (unknown container)",
         [
           Alcotest.test_case "plist-get unknown" `Quick
-            test_dispatch_plist_unknown_container;
+            test_dispatch_infer_plist_unknown_container;
         ] );
       ( "dispatch fallthrough",
         [
@@ -603,5 +557,13 @@ let () =
             test_dispatch_non_literal_key;
           Alcotest.test_case "insufficient args" `Quick
             test_dispatch_insufficient_args;
+        ] );
+      ( "analyze_clause",
+        [
+          Alcotest.test_case "plist clause" `Quick test_analyze_clause_plist;
+          Alcotest.test_case "alist clause" `Quick test_analyze_clause_alist;
+          Alcotest.test_case "no container" `Quick
+            test_analyze_clause_no_container;
+          Alcotest.test_case "fn type plist" `Quick test_analyze_fn_type_plist;
         ] );
     ]

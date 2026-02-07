@@ -1546,30 +1546,43 @@ and infer_application env fn args span =
     | None -> None
   in
 
-  (* Try row accessor dispatch for known row-typed accessors with literal keys.
-     This implements the decision table from Spec 11 R4–R8 for plist-get,
-     alist-get, gethash, and map-elt. Only attempted when clause dispatch
-     didn't already match. *)
+  (* Try row accessor dispatch for functions with row-typed container arguments
+     and literal keys. This implements the decision table from Spec 11 R4–R8.
+     Detection is signature-driven: any function receiving a row-typed container
+     benefits automatically. Only attempted when clause dispatch didn't match. *)
   let row_accessor_result =
     match clause_result with
     | Some _ -> None (* Clause dispatch already succeeded *)
     | None -> (
-        match fn_name with
-        | Some name -> (
-            match Row_dispatch.get_config name with
-            | Some config ->
-                (* Compute rest arg types: types of args beyond container+key *)
-                let min_idx = min config.container_arg config.key_arg in
-                let max_idx = max config.container_arg config.key_arg in
-                let rest_arg_types =
-                  List.filteri
-                    (fun i _ -> i <> min_idx && i <> max_idx)
-                    arg_types
+        (* First try: detect container from actual argument types (Cases 1-5) *)
+        match
+          Row_dispatch.try_dispatch env ~arg_types ~arg_literals ~args
+        with
+        | Some _ as result -> result
+        | None -> (
+            (* Second try: R8 — container type unknown, use clause/type analysis
+               to determine what kind of container constraint to generate *)
+            match fn_name with
+            | Some name ->
+                let config =
+                  (* Try stored clauses first, fall back to function type *)
+                  match Env.lookup_fn_clauses name env with
+                  | Some clauses ->
+                      List.find_map Row_dispatch.analyze_clause clauses
+                  | None -> (
+                      match Env.lookup_fn name env with
+                      | Some (Env.Poly (_, ty)) -> Row_dispatch.analyze_fn_type ty
+                      | Some (Env.Mono ty) -> Row_dispatch.analyze_fn_type ty
+                      | None -> None)
                 in
-                Row_dispatch.try_dispatch env config ~arg_types ~arg_literals
-                  ~args ~rest_arg_types
-            | None -> None)
-        | None -> None)
+                (match config with
+                | Some cc ->
+                    Row_dispatch.try_dispatch_infer env
+                      ~container_kind:cc.cc_kind
+                      ~container_index:cc.cc_container_index
+                      ~key_index:cc.cc_key_index ~arg_types ~arg_literals ~args
+                | None -> None)
+            | None -> None))
   in
 
   let result =

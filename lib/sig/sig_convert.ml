@@ -263,12 +263,14 @@ let canonicalize_type_name (name : string) : string =
     | "Pair" -> Types.intrinsic "Pair"
     | "HashTable" -> Types.intrinsic "HashTable"
     | "Plist" -> Types.intrinsic "Plist"
+    | "Map" -> Types.intrinsic "Map"
     (* Lowercase container names also map to intrinsics *)
     | "list" -> Types.intrinsic "List"
     | "vector" -> Types.intrinsic "Vector"
     | "cons" -> Types.intrinsic "Pair"
     | "hash-table" -> Types.intrinsic "HashTable"
     | "plist" -> Types.intrinsic "Plist"
+    | "map" -> Types.intrinsic "Map"
     | "tuple" ->
         "Tuple" (* Tuple doesn't need intrinsic prefix - it's structural *)
     (* Variant tags stay as-is *)
