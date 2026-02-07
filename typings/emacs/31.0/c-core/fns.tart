@@ -150,7 +150,12 @@
 (defun plist-put ((list any) any any &optional any) -> (list any))
 
 ;; (plist-member PLIST PROP &optional PREDICATE) - check membership
-(defun plist-member ((list any) any &optional any) -> (list any))
+;; Plist clause: structural traversal is safe.
+;; Bare list clause: works but warns since alternation is not enforced.
+(defun plist-member [k v]
+  (((plist k v) k &optional any) -> (plist k v))
+  (((list (k | v)) k &optional any) -> (list (k | v))
+    (warn "plist-member on bare list; (plist _ _) enforces alternation")))
 
 ;; ===========================================================================
 ;; Mapping functions

@@ -1,0 +1,2 @@
+PASS
+plist-member on bare list; (plist _ _) enforces alternation

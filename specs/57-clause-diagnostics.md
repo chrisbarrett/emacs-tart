@@ -348,8 +348,6 @@ diagnostics.
 - [x] [R5] Wire severity: warn/note non-blocking, error blocks
 - [x] [R6] Map to [Spec 51](./51-diagnostic-severity.md) severity; verify CLI flag interaction
 - [x] [R7] Add test fixtures for clause diagnostics
-- [ ] Write `plist-member` signature using clause diagnostics
+- [x] Write `plist-member` signature using clause diagnostics
 
-**Status:** Complete. `plist-member` deferred: plist→list subsumption means
-the bare-list clause is unreachable (the plist clause always matches via
-widening).
+**Status:** Complete.
