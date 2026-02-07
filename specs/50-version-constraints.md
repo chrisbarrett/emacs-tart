@@ -2,7 +2,11 @@
 
 Track min/max Emacs version from typings and package headers; warn on violations.
 
-**Dependencies:** [Spec 24](./24-versioned-typings.md), [Spec 08](./08-lsp-server.md), [Spec 13](./13-error-reporting.md), [Spec 47](./47-error-codes.md)
+- **Dependencies:**
+  - [Spec 24](./24-versioned-typings.md)
+  - [Spec 08](./08-lsp-server.md)
+  - [Spec 13](./13-error-reporting.md)
+  - [Spec 47](./47-error-codes.md)
 
 ## Constraints
 

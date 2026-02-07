@@ -2,7 +2,9 @@
 
 ERT tests for Emacs integration against live tart processes.
 
-**Dependencies:** [Spec 10](./10-emacs-integration.md), [Spec 14](./14-tart-el.md).
+- **Dependencies:**
+  - [Spec 10](./10-emacs-integration.md)
+  - [Spec 14](./14-tart-el.md)
 
 ## Goal
 

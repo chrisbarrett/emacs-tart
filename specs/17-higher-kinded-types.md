@@ -2,7 +2,8 @@
 
 Enable type constructors as first-class values via kind inference.
 
-**Dependencies:** [Spec 15](./15-explicit-forall.md) (Explicit Forall) complete
+- **Dependencies:**
+  - [Spec 15](./15-explicit-forall.md) (Explicit Forall) complete
 
 ## Goal
 

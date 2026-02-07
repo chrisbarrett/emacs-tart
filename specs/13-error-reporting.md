@@ -2,7 +2,9 @@
 
 Diagnostic message format and user-facing error quality.
 
-**Dependencies:** [Spec 08](./08-lsp-server.md) (LSP delivery), [Spec 47](./47-error-codes.md) (error code registry)
+- **Dependencies:**
+  - [Spec 08](./08-lsp-server.md) (LSP delivery)
+  - [Spec 47](./47-error-codes.md) (error code registry)
 
 ## Goal
 

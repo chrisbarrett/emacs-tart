@@ -2,8 +2,12 @@
 
 Implicit utility types built on compiler intrinsics.
 
-**Deps:** None (foundational). **Consumers:** [Spec 07](./07-signature-files.md) (sig loading), [Spec 11](./11-adt-system.md)
-(unions), [Spec 24](./24-versioned-typings.md) (versioned typings), [Spec 32](./32-emacs-core-typings.md) (core typings workflow).
+- **Deps:** None (foundational)
+- **Consumers:**
+  - [Spec 07](./07-signature-files.md) (sig loading)
+  - [Spec 11](./11-adt-system.md) (unions)
+  - [Spec 24](./24-versioned-typings.md) (versioned typings)
+  - [Spec 32](./32-emacs-core-typings.md) (core typings workflow)
 
 ## Goal
 

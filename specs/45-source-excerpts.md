@@ -2,7 +2,9 @@
 
 Elm-style friendly errors showing source code at error sites with visual underlines.
 
-**Dependencies:** [Spec 13](./13-error-reporting.md) (error-reporting), [Spec 35](./35-structured-errors.md) (structured-errors)
+- **Dependencies:**
+  - [Spec 13](./13-error-reporting.md) (error-reporting)
+  - [Spec 35](./35-structured-errors.md) (structured-errors)
 
 ## Goal
 

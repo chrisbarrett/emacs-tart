@@ -2,7 +2,9 @@
 
 Subcommands for type-checking, evaluation, macro expansion, and interactive use.
 
-**Dependencies:** [Spec 05](./.archive/05-pure-interpreter.md) interpreter complete; [Spec 06](./.archive/06-type-inference.md) for type display.
+- **Dependencies:**
+  - [Spec 05](./.archive/05-pure-interpreter.md) interpreter complete
+  - [Spec 06](./.archive/06-type-inference.md) for type display
 
 ## Goal
 

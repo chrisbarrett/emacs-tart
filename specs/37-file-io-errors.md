@@ -3,7 +3,8 @@
 Structured handling of file I/O errors with clear messages and actionable
 suggestions.
 
-**Dependencies:** [Spec 35](./35-structured-errors.md) (structured-errors)
+- **Dependencies:**
+  - [Spec 35](./35-structured-errors.md) (structured-errors)
 
 ## Goal
 

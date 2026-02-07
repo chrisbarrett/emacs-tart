@@ -2,7 +2,9 @@
 
 Enable type variables to be shared across multiple signatures within a scope.
 
-**Dependencies:** [Spec 15](./15-explicit-forall.md) (Explicit Forall), [Spec 17](./17-higher-kinded-types.md) (Higher-Kinded Types)
+- **Dependencies:**
+  - [Spec 15](./15-explicit-forall.md) (Explicit Forall)
+  - [Spec 17](./17-higher-kinded-types.md) (Higher-Kinded Types)
 
 ## Goal
 

@@ -2,7 +2,10 @@
 
 Declare functions as type predicates that narrow types in conditional branches.
 
-**Deps:** [Spec 34](./34-funcall-apply-typing.md), [Spec 46](./46-truthiness-unions.md), [Spec 11](./11-adt-system.md)
+- **Deps:**
+  - [Spec 34](./34-funcall-apply-typing.md)
+  - [Spec 46](./46-truthiness-unions.md)
+  - [Spec 11](./11-adt-system.md)
 
 ## Goal
 

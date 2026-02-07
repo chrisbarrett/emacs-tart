@@ -2,8 +2,10 @@
 
 Systematic creation of complete, verified type signatures for Emacs C core.
 
-**Deps:** [Spec 30](./30-verbose-coverage.md) (verbose coverage), [Spec 31](./31-fast-feedback.md) (fast feedback), [Spec 48](./48-prelude.md) (prelude
-types available in signatures).
+- **Deps:**
+  - [Spec 30](./30-verbose-coverage.md) (verbose coverage)
+  - [Spec 31](./31-fast-feedback.md) (fast feedback)
+  - [Spec 48](./48-prelude.md) (prelude types available in signatures)
 
 ## Goal
 
@@ -176,7 +178,8 @@ is genuinely dynamic (e.g., `symbol-value` returns whatever was stored).
 ### `funcall`
 - **Location:** eval.c:2789
 - **Issue:** Accepts any function and any arguments; return type is dynamic
-- **Resolution:** See [Spec 34](./34-funcall-apply-typing.md) for type-safe funcall/apply via dual namespaces
+- **Resolution:**
+  - See [Spec 34](./34-funcall-apply-typing.md) for type-safe funcall/apply via dual namespaces
 
 ## ergonomic
 

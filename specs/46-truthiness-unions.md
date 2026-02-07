@@ -2,8 +2,10 @@
 
 Union type inference for branching forms with truthiness tracking.
 
-**Dependencies:** [Spec 34](./34-funcall-apply-typing.md) (R14 union-from-branches), [Spec 13](./13-error-reporting.md) (error format),
-[Spec 48](./48-prelude.md) (prelude: `truthy`, `nil`, `t`, `bool`)
+- **Dependencies:**
+  - [Spec 34](./34-funcall-apply-typing.md) (R14 union-from-branches)
+  - [Spec 13](./13-error-reporting.md) (error format)
+  - [Spec 48](./48-prelude.md) (prelude: `truthy`, `nil`, `t`, `bool`)
 
 ## Goal
 

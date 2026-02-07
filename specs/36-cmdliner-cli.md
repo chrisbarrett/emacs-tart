@@ -2,7 +2,8 @@
 
 Migrate manual argument parsing to Cmdliner for declarative CLI definition.
 
-**Dependencies:** [Spec 35](./35-structured-errors.md) (structured-errors).
+- **Dependencies:**
+  - [Spec 35](./35-structured-errors.md) (structured-errors)
 
 ## Goal
 

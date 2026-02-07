@@ -2,7 +2,11 @@
 
 Flow-sensitive type narrowing for runtime feature detection.
 
-**Dependencies:** [Spec 07](./07-signature-files.md), [Spec 24](./24-versioned-typings.md), [Spec 46](./46-truthiness-unions.md), [Spec 50](./50-version-constraints.md)
+- **Dependencies:**
+  - [Spec 07](./07-signature-files.md)
+  - [Spec 24](./24-versioned-typings.md)
+  - [Spec 46](./46-truthiness-unions.md)
+  - [Spec 50](./50-version-constraints.md)
 
 ## Constraints
 

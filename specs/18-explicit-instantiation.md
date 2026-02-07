@@ -2,7 +2,9 @@
 
 Enable explicit instantiation of polymorphic types at call sites.
 
-**Dependencies:** [Spec 15](./15-explicit-forall.md) (Explicit Forall); [Spec 17](./17-higher-kinded-types.md) (HKT) for R4 only
+- **Dependencies:**
+  - [Spec 15](./15-explicit-forall.md) (Explicit Forall)
+  - [Spec 17](./17-higher-kinded-types.md) (HKT) for R4 only
 
 ## Goal
 

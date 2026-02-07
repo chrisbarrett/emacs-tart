@@ -2,7 +2,7 @@
 
 XDG-compliant content-addressable caching for incremental type-checking.
 
-**Deps:** None
+- **Deps:** None
 
 ## Constraints
 

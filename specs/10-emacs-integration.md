@@ -2,7 +2,8 @@
 
 Emacs package providing tart REPL, LSP integration, and interactive commands.
 
-**Dependencies:** [Spec 09](./09-cli-interface.md) CLI complete (especially `tart repl` and `tart lsp`).
+- **Dependencies:**
+  - [Spec 09](./09-cli-interface.md) CLI complete (especially `tart repl` and `tart lsp`)
 
 ## Goal
 

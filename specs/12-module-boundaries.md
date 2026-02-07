@@ -2,7 +2,9 @@
 
 Rules for type checking at module boundaries.
 
-**Dependencies:** [Spec 07](./07-signature-files.md) (signature files), [Spec 08](./08-lsp-server.md) (LSP for trigger)
+- **Dependencies:**
+  - [Spec 07](./07-signature-files.md) (signature files)
+  - [Spec 08](./08-lsp-server.md) (LSP for trigger)
 
 ## Goal
 

@@ -1,6 +1,7 @@
 # Spec 44: Timing and Memory Statistics
 
-**Depends:** [Spec 36](./36-cmdliner-cli.md) (cmdliner-cli)
+- **Depends:**
+  - [Spec 36](./36-cmdliner-cli.md) (cmdliner-cli)
 
 ## Output
 

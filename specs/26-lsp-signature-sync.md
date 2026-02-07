@@ -4,7 +4,9 @@
 
 Keep type checking in sync when editing `.tart` signature files alongside `.el` files.
 
-**Deps:** [Spec 08](./08-lsp-server.md) (LSP server), [Spec 27](./27-dependency-graph.md) (dependency graph).
+- **Deps:**
+  - [Spec 08](./08-lsp-server.md) (LSP server)
+  - [Spec 27](./27-dependency-graph.md) (dependency graph)
 
 ## Problem
 

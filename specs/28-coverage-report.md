@@ -2,7 +2,9 @@
 
 Command to measure type signature coverage for Emacs packages.
 
-**Dependencies:** [Spec 07](./07-signature-files.md) (signatures), [Spec 09](./09-cli-interface.md) (CLI).
+- **Dependencies:**
+  - [Spec 07](./07-signature-files.md) (signatures)
+  - [Spec 09](./09-cli-interface.md) (CLI)
 
 ## Goal
 

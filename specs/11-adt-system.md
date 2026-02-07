@@ -2,8 +2,10 @@
 
 Type-safe structural typing for Elisp's idiomatic alist/plist patterns.
 
-**Dependencies:** [Spec 07](./07-signature-files.md) (signature files), [Spec 46](./46-truthiness-unions.md) (truthiness-aware unions),
-[Spec 48](./48-prelude.md) (prelude types: `list`, `option`, `is`, `nonempty`)
+- **Dependencies:**
+  - [Spec 07](./07-signature-files.md) (signature files)
+  - [Spec 46](./46-truthiness-unions.md) (truthiness-aware unions)
+  - [Spec 48](./48-prelude.md) (prelude types: `list`, `option`, `is`, `nonempty`)
 
 ## Goal
 

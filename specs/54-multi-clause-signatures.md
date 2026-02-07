@@ -3,7 +3,9 @@
 Replace `(x is T)` / `((name type))` syntax ([Spec 52](./52-type-predicates.md)) with ordered
 pattern-matching clauses on defun signatures.
 
-**Deps:** [Spec 07](./07-signature-files.md), [Spec 52](./52-type-predicates.md) (superseded syntax)
+- **Deps:**
+  - [Spec 07](./07-signature-files.md)
+  - [Spec 52](./52-type-predicates.md) (superseded syntax)
 
 ## Goal
 

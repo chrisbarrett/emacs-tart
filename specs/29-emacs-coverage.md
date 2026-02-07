@@ -2,7 +2,8 @@
 
 Development tool for tracking Tart's type coverage of Emacs itself.
 
-**Deps:** [Spec 24](./24-versioned-typings.md) (versioned typings).
+- **Deps:**
+  - [Spec 24](./24-versioned-typings.md) (versioned typings)
 
 ## Goal
 

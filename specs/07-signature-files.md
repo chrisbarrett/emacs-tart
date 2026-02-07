@@ -2,8 +2,10 @@
 
 Parser and loader for `.tart` signature files that declare types for Elisp code.
 
-**Dependencies:** [Spec 04](./.archive/04-elisp-parser.md) parser (reuse S-exp infrastructure), [Spec 06](./.archive/06-type-inference.md) type
-representation, [Spec 48](./48-prelude.md) (prelude).
+- **Dependencies:**
+  - [Spec 04](./.archive/04-elisp-parser.md) parser (reuse S-exp infrastructure)
+  - [Spec 06](./.archive/06-type-inference.md) type representation
+  - [Spec 48](./48-prelude.md) (prelude)
 
 ## Goal
 

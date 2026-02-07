@@ -2,7 +2,9 @@
 
 Add `--verbose|-v` flag to coverage commands for debugging and transparency.
 
-**Deps:** [Spec 28](./28-coverage-report.md) (coverage report), [Spec 29](./29-emacs-coverage.md) (emacs-coverage).
+- **Deps:**
+  - [Spec 28](./28-coverage-report.md) (coverage report)
+  - [Spec 29](./29-emacs-coverage.md) (emacs-coverage)
 
 ## Goal
 

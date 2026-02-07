@@ -2,8 +2,7 @@
 
 Language Server Protocol implementation for IDE integration via eglot.
 
-**Dependencies:** Specs 04-07 complete (parser, interpreter, inference,
-signatures).
+- **Dependencies:** Specs 04-07 complete (parser, interpreter, inference, signatures)
 
 ## Goal
 

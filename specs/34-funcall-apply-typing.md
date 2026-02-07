@@ -2,7 +2,9 @@
 
 Type `funcall` and `apply` accurately using tracked function types, dual namespaces, and tuple/list subtyping.
 
-**Dependencies:** [Spec 15](./15-explicit-forall.md) (Explicit Forall), [Spec 17](./17-higher-kinded-types.md) (HKT)
+- **Dependencies:**
+  - [Spec 15](./15-explicit-forall.md) (Explicit Forall)
+  - [Spec 17](./17-higher-kinded-types.md) (HKT)
 
 ## Context
 

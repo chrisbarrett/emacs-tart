@@ -2,7 +2,7 @@
 
 Print `Sexp.t` to valid Emacs Lisp for round-trip testing.
 
-**Deps:** None
+- **Deps:** None
 
 ## Constraints
 

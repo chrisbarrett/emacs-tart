@@ -2,7 +2,8 @@
 
 Unified error type system across the codebase with rich context and machine-readable output.
 
-**Dependencies:** [Spec 13](./13-error-reporting.md) (error-reporting)
+- **Dependencies:**
+  - [Spec 13](./13-error-reporting.md) (error-reporting)
 
 ## Goal
 

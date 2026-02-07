@@ -2,7 +2,8 @@
 
 Elisp library providing type annotation macros for inline use in `.el` files.
 
-**Dependencies:** [Spec 07](./07-signature-files.md) signature files (type syntax parsing).
+- **Dependencies:**
+  - [Spec 07](./07-signature-files.md) signature files (type syntax parsing)
 
 ## Goal
 

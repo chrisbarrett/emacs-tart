@@ -2,7 +2,9 @@
 
 Multi-version Emacs testing with blocking/advisory tiers.
 
-**Deps:** [Spec 21](./21-e2e-test-harness.md), 22
+- **Deps:**
+  - [Spec 21](./21-e2e-test-harness.md)
+  - [Spec 22](./.archive/22-ci-releases.md)
 
 ## Constraints
 

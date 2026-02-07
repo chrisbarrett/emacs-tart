@@ -2,7 +2,8 @@
 
 Download prebuilt tart binaries from GitHub releases.
 
-**Dependencies:** [Spec 22](./.archive/22-ci-releases.md) (CI releases must publish binaries).
+- **Dependencies:**
+  - [Spec 22](./.archive/22-ci-releases.md) (CI releases must publish binaries)
 
 ## Goal
 

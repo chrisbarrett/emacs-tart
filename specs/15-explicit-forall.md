@@ -2,7 +2,8 @@
 
 Require explicit universal quantifiers in polymorphic signatures.
 
-**Dependencies:** [Spec 07](./07-signature-files.md)
+- **Dependencies:**
+  - [Spec 07](./07-signature-files.md)
 
 ## Goal
 

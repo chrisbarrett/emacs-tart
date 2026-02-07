@@ -2,8 +2,14 @@
 
 Versioned Emacs core typings with auto-detection.
 
-**Deps:** [Spec 07](./07-signature-files.md) (search path), [Spec 09](./09-cli-interface.md) (CLI), [Spec 48](./48-prelude.md) (prelude). **Testing:**
-[Spec 25](./25-typechecker-test-harness.md). **LSP sync:** [Spec 26](./26-lsp-signature-sync.md).
+- **Deps:**
+  - [Spec 07](./07-signature-files.md) (search path)
+  - [Spec 09](./09-cli-interface.md) (CLI)
+  - [Spec 48](./48-prelude.md) (prelude)
+- **Testing:**
+  - [Spec 25](./25-typechecker-test-harness.md)
+- **LSP sync:**
+  - [Spec 26](./26-lsp-signature-sync.md)
 
 ## Goal
 

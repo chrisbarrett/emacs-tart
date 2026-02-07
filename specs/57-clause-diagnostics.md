@@ -2,7 +2,9 @@
 
 Emit user-authored diagnostics from multi-clause signature matches.
 
-**Dependencies:** [Spec 54](./54-multi-clause-signatures.md) (multi-clause signatures), [Spec 51](./51-diagnostic-severity.md) (diagnostic severity)
+- **Dependencies:**
+  - [Spec 54](./54-multi-clause-signatures.md) (multi-clause signatures)
+  - [Spec 51](./51-diagnostic-severity.md) (diagnostic severity)
 
 ## Goal
 

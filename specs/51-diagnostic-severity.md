@@ -2,7 +2,9 @@
 
 Severity levels: errors block; warnings/hints inform.
 
-**Dependencies:** [Spec 35](./35-structured-errors.md), [Spec 47](./47-error-codes.md)
+- **Dependencies:**
+  - [Spec 35](./35-structured-errors.md)
+  - [Spec 47](./47-error-codes.md)
 
 ## Constraints
 

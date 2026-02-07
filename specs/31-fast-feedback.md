@@ -3,7 +3,7 @@
 A `./tart` shell script for running tart against current source with minimal
 wait time.
 
-**Deps:** None.
+- **Deps:** None
 
 ## Goal
 
