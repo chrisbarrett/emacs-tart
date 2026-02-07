@@ -39,12 +39,11 @@ let format_parse_error (err : Tart.Read.parse_error) : string =
     err.message
 
 (** Find typings root directory with verbose logging. *)
-let find_typings_root ~verbose : string =
-  let open Tart.Verbose_log in
+let find_typings_root () : string =
   let exe_path = Sys.executable_name in
   let exe_dir = Filename.dirname exe_path in
-  verbose_log verbose "Executable: %s" exe_path;
-  verbose_log verbose "Typings root candidates:";
+  Tart.Log.verbose "Executable: %s" exe_path;
+  Tart.Log.verbose "Typings root candidates:";
 
   let candidates =
     [
@@ -66,7 +65,7 @@ let find_typings_root ~verbose : string =
     | [] -> found_path
     | path :: rest ->
         let exists = dir_exists path in
-        verbose_log verbose "  %s (%s)" path
+        Tart.Log.verbose "  %s (%s)" path
           (if exists then "found" else "not found");
         if exists then try_candidates (Some path) rest
         else try_candidates found_path rest
@@ -74,17 +73,16 @@ let find_typings_root ~verbose : string =
 
   match try_candidates None candidates with
   | Some path ->
-      verbose_log verbose "Using typings root: %s" path;
+      Tart.Log.verbose "Using typings root: %s" path;
       path
   | None ->
       let fallback = List.hd (List.rev candidates) in
-      verbose_log verbose "Using typings root: %s (may not exist)" fallback;
+      Tart.Log.verbose "Using typings root: %s (may not exist)" fallback;
       fallback
 
 (** Detect Emacs version with verbose logging. *)
-let detect_emacs_version ~verbose ~typings_root : Tart.Emacs_version.version =
-  let open Tart.Verbose_log in
-  verbose_log verbose "Detecting Emacs version...";
+let detect_emacs_version ~typings_root : Tart.Emacs_version.version =
+  Tart.Log.verbose "Detecting Emacs version...";
 
   let emacs_path =
     try
@@ -96,65 +94,62 @@ let detect_emacs_version ~verbose ~typings_root : Tart.Emacs_version.version =
       path
     with _ -> "not found"
   in
-  verbose_log verbose "Emacs binary: %s" emacs_path;
+  Tart.Log.verbose "Emacs binary: %s" emacs_path;
 
   let detection_result = Tart.Emacs_version.detect () in
   let version =
     match detection_result with
     | Tart.Emacs_version.Detected v ->
-        verbose_log verbose "Detected version: %s"
+        Tart.Log.verbose "Detected version: %s"
           (Tart.Emacs_version.version_to_string v);
         v
     | Tart.Emacs_version.NotFound ->
-        verbose_log verbose "Emacs not found, using default";
+        Tart.Log.verbose "Emacs not found, using default";
         Tart.Emacs_version.latest
     | Tart.Emacs_version.ParseError msg ->
-        verbose_log verbose "Version parse error: %s, using default" msg;
+        Tart.Log.verbose "Version parse error: %s, using default" msg;
         Tart.Emacs_version.latest
   in
 
   let fallback_chain = Tart.Search_path.version_fallback_candidates version in
-  verbose_log verbose "Version fallback chain: %s"
+  Tart.Log.verbose "Version fallback chain: %s"
     (String.concat " -> " fallback_chain);
 
   (match Tart.Search_path.find_typings_dir ~typings_root ~version with
   | Some dir ->
       let selected_version = Filename.basename dir in
-      verbose_log verbose "Using typings version: %s" selected_version
-  | None -> verbose_log verbose "No typings directory found");
+      Tart.Log.verbose "Using typings version: %s" selected_version
+  | None -> Tart.Log.verbose "No typings directory found");
 
   version
 
 (** Log typings files being loaded. *)
-let log_typings_loading ~verbose ~typings_root ~version =
-  let open Tart.Verbose_log in
+let log_typings_loading ~typings_root ~version =
   match Tart.Search_path.find_typings_dir ~typings_root ~version with
   | None -> ()
   | Some typings_dir ->
       let c_core_dir = Filename.concat typings_dir "c-core" in
       let files = Tart.Search_path.list_c_core_files c_core_dir in
-      if files = [] then verbose_log verbose "No c-core typings files found"
+      if files = [] then Tart.Log.verbose "No c-core typings files found"
       else (
-        verbose_log verbose "Loading c-core typings from %s" c_core_dir;
+        Tart.Log.verbose "Loading c-core typings from %s" c_core_dir;
         let total_sigs = ref 0 in
         List.iter
           (fun path ->
             match Tart.Search_path.parse_signature_file path with
             | None ->
-                verbose_log verbose "  %s: (parse error)"
-                  (Filename.basename path)
+                Tart.Log.verbose "  %s: (parse error)" (Filename.basename path)
             | Some sig_file ->
                 let count = List.length sig_file.Tart.Sig_ast.sig_decls in
                 total_sigs := !total_sigs + count;
-                verbose_log verbose "  %s: %d signatures"
-                  (Filename.basename path) count)
+                Tart.Log.verbose "  %s: %d signatures" (Filename.basename path)
+                  count)
           files;
-        verbose_log verbose "Total signatures loaded: %d" !total_sigs)
+        Tart.Log.verbose "Total signatures loaded: %d" !total_sigs)
 
 (** Scan C source files with verbose logging. *)
-let scan_c_source_verbose ~verbose ~src_dir : Tart.C_scanner.c_definition list =
-  let open Tart.Verbose_log in
-  verbose_log verbose "Scanning C source: %s" src_dir;
+let scan_c_source_verbose ~src_dir : Tart.C_scanner.c_definition list =
+  Tart.Log.verbose "Scanning C source: %s" src_dir;
 
   let entries =
     if Sys.file_exists src_dir && Sys.is_directory src_dir then
@@ -193,7 +188,7 @@ let scan_c_source_verbose ~verbose ~src_dir : Tart.C_scanner.c_definition list =
         |> List.length
       in
       if defuns > 0 || defvars > 0 || defsyms > 0 then
-        verbose_log verbose "  %s: %d DEFUNs, %d DEFVARs, %d DEFSYMs" filename
+        Tart.Log.verbose "  %s: %d DEFUNs, %d DEFVARs, %d DEFSYMs" filename
           defuns defvars defsyms;
       total_defuns := !total_defuns + defuns;
       total_defvars := !total_defvars + defvars;
@@ -201,7 +196,7 @@ let scan_c_source_verbose ~verbose ~src_dir : Tart.C_scanner.c_definition list =
       all_defs := !all_defs @ defs)
     c_files;
 
-  verbose_log verbose "Total: %d DEFUNs, %d DEFVARs, %d DEFSYMs" !total_defuns
+  Tart.Log.verbose "Total: %d DEFUNs, %d DEFVARs, %d DEFSYMs" !total_defuns
     !total_defvars !total_defsyms;
   !all_defs
 
@@ -294,7 +289,7 @@ let run_check format warn_as_error ignore_warnings ignore_hints emacs_version
   let valid_files = List.rev valid_files in
   let file_errors = List.rev file_errors in
   (* Build initial environment with c-core signatures *)
-  let typings_root = find_typings_root ~verbose:false in
+  let typings_root = find_typings_root () in
   let version =
     match emacs_version with
     | Some v -> v
@@ -627,15 +622,15 @@ let run_lsp log_level port =
       exit exit_code
 
 (** Coverage subcommand: measure type coverage *)
-let run_coverage format verbose fail_under exclude paths =
+let run_coverage format fail_under exclude paths =
   let config = { Tart.File_scanner.exclude_patterns = exclude } in
   let files = Tart.File_scanner.scan_paths ~config paths in
   if files = [] then (
     prerr_endline "tart coverage: no .el files found";
     exit 1);
-  let typings_root = find_typings_root ~verbose in
-  let version = detect_emacs_version ~verbose ~typings_root in
-  log_typings_loading ~verbose ~typings_root ~version;
+  let typings_root = find_typings_root () in
+  let version = detect_emacs_version ~typings_root in
+  log_typings_loading ~typings_root ~version;
   let search_path =
     Tart.Search_path.empty
     |> Tart.Search_path.with_typings_root typings_root
@@ -645,6 +640,11 @@ let run_coverage format verbose fail_under exclude paths =
   let result = Tart.Coverage_report.analyze_files ~search_path files in
   let summary = Tart.Coverage_report.summarize result in
 
+  let verbose =
+    match Tart.Log.level () with
+    | Tart.Log.Verbose | Tart.Log.Debug -> true
+    | _ -> false
+  in
   let output_config = { Tart.Report_format.format; verbose } in
   print_endline (Tart.Report_format.format_report ~config:output_config result);
 
@@ -655,31 +655,30 @@ let run_coverage format verbose fail_under exclude paths =
   | None -> ()
 
 (** Emacs-coverage subcommand: measure C layer coverage *)
-let run_emacs_coverage verbose emacs_source emacs_version_opt =
-  let open Tart.Verbose_log in
+let run_emacs_coverage emacs_source emacs_version_opt =
   let source_result = Tart.Emacs_source.discover ~explicit_path:emacs_source in
   match source_result with
   | Tart.Emacs_source.NotFound _ | Tart.Emacs_source.InvalidPath _ ->
       prerr_endline (Tart.Emacs_source.format_error source_result);
       exit 1
   | Tart.Emacs_source.Found { source_dir; version = detected_version } ->
-      let typings_root = find_typings_root ~verbose in
+      let typings_root = find_typings_root () in
 
-      verbose_log verbose "Detecting Emacs version...";
-      verbose_log verbose "Emacs source: %s" source_dir;
-      verbose_log verbose "Detected version (from source): %s" detected_version;
+      Tart.Log.verbose "Detecting Emacs version...";
+      Tart.Log.verbose "Emacs source: %s" source_dir;
+      Tart.Log.verbose "Detected version (from source): %s" detected_version;
 
       let version_str, version =
         match emacs_version_opt with
         | Some v ->
-            verbose_log verbose "Using override version: %s"
+            Tart.Log.verbose "Using override version: %s"
               (Tart.Emacs_version.version_to_string v);
             (Tart.Emacs_version.version_to_string v, v)
         | None -> (
             match Tart.Emacs_version.parse_version detected_version with
             | Some v -> (detected_version, v)
             | None ->
-                verbose_log verbose "Could not parse version, using default: %s"
+                Tart.Log.verbose "Could not parse version, using default: %s"
                   (Tart.Emacs_version.version_to_string
                      Tart.Emacs_version.latest);
                 ( Tart.Emacs_version.version_to_string Tart.Emacs_version.latest,
@@ -689,19 +688,19 @@ let run_emacs_coverage verbose emacs_source emacs_version_opt =
       let fallback_chain =
         Tart.Search_path.version_fallback_candidates version
       in
-      verbose_log verbose "Version fallback chain: %s"
+      Tart.Log.verbose "Version fallback chain: %s"
         (String.concat " -> " fallback_chain);
 
       (match Tart.Search_path.find_typings_dir ~typings_root ~version with
       | Some dir ->
           let selected_version = Filename.basename dir in
-          verbose_log verbose "Using typings version: %s" selected_version
-      | None -> verbose_log verbose "No typings directory found");
+          Tart.Log.verbose "Using typings version: %s" selected_version
+      | None -> Tart.Log.verbose "No typings directory found");
 
-      log_typings_loading ~verbose ~typings_root ~version;
+      log_typings_loading ~typings_root ~version;
 
       let src_dir = Filename.concat source_dir "src" in
-      let definitions = scan_c_source_verbose ~verbose ~src_dir in
+      let definitions = scan_c_source_verbose ~src_dir in
 
       let result =
         Tart.Emacs_coverage.calculate_coverage ~source_dir
@@ -710,27 +709,26 @@ let run_emacs_coverage verbose emacs_source emacs_version_opt =
       let summary = Tart.Emacs_coverage.summarize result in
       let percentage = Tart.Emacs_coverage.coverage_percentage summary in
 
-      if verbose then (
-        verbose_log verbose "Matching symbols against typings...";
-        verbose_log verbose "Sample matches:";
-        let covered = Tart.Emacs_coverage.covered_public result in
-        List.iteri
-          (fun i item ->
-            if i < 5 then
-              verbose_log verbose "  %s: COVERED (%s:%d)"
-                item.Tart.Emacs_coverage.definition.name
-                item.Tart.Emacs_coverage.definition.file
-                item.Tart.Emacs_coverage.definition.line)
-          covered;
-        let uncovered = Tart.Emacs_coverage.uncovered_public result in
-        List.iteri
-          (fun i item ->
-            if i < 5 then
-              verbose_log verbose "  %s: UNCOVERED"
-                item.Tart.Emacs_coverage.definition.name)
-          uncovered;
-        verbose_log verbose "Match complete: %d/%d DEFUNs covered (%.1f%%)"
-          summary.covered_public summary.total_public percentage);
+      Tart.Log.verbose "Matching symbols against typings...";
+      Tart.Log.verbose "Sample matches:";
+      let covered = Tart.Emacs_coverage.covered_public result in
+      List.iteri
+        (fun i item ->
+          if i < 5 then
+            Tart.Log.verbose "  %s: COVERED (%s:%d)"
+              item.Tart.Emacs_coverage.definition.name
+              item.Tart.Emacs_coverage.definition.file
+              item.Tart.Emacs_coverage.definition.line)
+        covered;
+      let uncovered_items = Tart.Emacs_coverage.uncovered_public result in
+      List.iteri
+        (fun i item ->
+          if i < 5 then
+            Tart.Log.verbose "  %s: UNCOVERED"
+              item.Tart.Emacs_coverage.definition.name)
+        uncovered_items;
+      Tart.Log.verbose "Match complete: %d/%d DEFUNs covered (%.1f%%)"
+        summary.covered_public summary.total_public percentage;
 
       print_endline "=== C Layer Coverage ===";
       Printf.printf "Emacs source: %s\n" source_dir;
@@ -1035,13 +1033,7 @@ let coverage_cmd =
   let info = Cmd.info "coverage" ~doc ~man in
   let run log_level log_format verbose_flag format fail_under exclude paths =
     setup_logging ~log_level ~log_format ~verbose_flag;
-    (* Bridge: pass verbose=true when log level >= Verbose *)
-    let verbose =
-      match Tart.Log.level () with
-      | Tart.Log.Verbose | Tart.Log.Debug -> true
-      | _ -> false
-    in
-    run_coverage format verbose fail_under exclude paths
+    run_coverage format fail_under exclude paths
   in
   Cmd.v info
     Term.(
@@ -1067,13 +1059,7 @@ let emacs_coverage_cmd =
   let info = Cmd.info "emacs-coverage" ~doc ~man in
   let run log_level log_format verbose_flag emacs_source emacs_version_opt =
     setup_logging ~log_level ~log_format ~verbose_flag;
-    (* Bridge: pass verbose=true when log level >= Verbose *)
-    let verbose =
-      match Tart.Log.level () with
-      | Tart.Log.Verbose | Tart.Log.Debug -> true
-      | _ -> false
-    in
-    run_emacs_coverage verbose emacs_source emacs_version_opt
+    run_emacs_coverage emacs_source emacs_version_opt
   in
   Cmd.v info
     Term.(
