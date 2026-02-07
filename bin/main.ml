@@ -204,8 +204,11 @@ let scan_c_source_verbose ~src_dir : Tart.C_scanner.c_definition list =
    Command Implementations
    ============================================================================ *)
 
-(** Type-check a single file with a given environment. *)
-let check_file ~memory env filename : Tart.Type_env.t * Tart.Error.t list =
+(** Type-check a single file using module-aware checking.
+
+    Uses [Module_check.check_module] which handles require resolution, sibling
+    signature loading, autoload detection, and feature guards. *)
+let check_file ~memory ~config filename : Tart.Error.t list =
   let mem_before_parse =
     if memory then Some (Tart.Memory_stats.snapshot ()) else None
   in
@@ -233,13 +236,15 @@ let check_file ~memory env filename : Tart.Type_env.t * Tart.Error.t list =
       parse_result.errors
   in
 
-  if parse_result.sexps = [] then (env, parse_errors)
+  if parse_result.sexps = [] then parse_errors
   else
     let mem_before_infer =
       if memory then Some (Tart.Memory_stats.snapshot ()) else None
     in
     let t_infer = Tart.Timing.start () in
-    let check_result = Tart.Check.check_program ~env parse_result.sexps in
+    let check_result =
+      Tart.Module_check.check_module ~config ~filename parse_result.sexps
+    in
     let infer_elapsed = Tart.Timing.elapsed_s t_infer in
     let mem_infer_str =
       match mem_before_infer with
@@ -254,26 +259,9 @@ let check_file ~memory env filename : Tart.Type_env.t * Tart.Error.t list =
     Tart.Log.verbose "Type inference... %s%s"
       (Tart.Timing.format_duration infer_elapsed)
       mem_infer_str;
-    let type_diagnostics =
-      Tart.Diagnostic.of_unify_errors check_result.errors
-    in
-    let candidates = Tart.Type_env.names check_result.env in
-    let undefined_diagnostics =
-      List.map
-        (fun (undef : Tart.Infer.undefined_var) ->
-          Tart.Diagnostic.undefined_variable ~span:undef.span ~name:undef.name
-            ~candidates ())
-        check_result.undefineds
-    in
-    let clause_diag_list =
-      List.map Tart.Module_check.clause_diagnostic_to_diagnostic
-        check_result.clause_diagnostics
-    in
-    let diagnostics =
-      type_diagnostics @ undefined_diagnostics @ clause_diag_list
-    in
+    let diagnostics = Tart.Module_check.diagnostics_of_result check_result in
     let type_errors = Tart.Error.of_diagnostics diagnostics in
-    (check_result.env, parse_errors @ type_errors)
+    parse_errors @ type_errors
 
 (** Validate a file exists and is readable, returning structured error on
     failure. *)
@@ -325,7 +313,7 @@ let run_check ~memory format warn_as_error ignore_warnings ignore_hints
   in
   let valid_files = List.rev valid_files in
   let file_errors = List.rev file_errors in
-  (* Build initial environment with c-core signatures *)
+  (* Build module check config with search path *)
   let typings_root = find_typings_root () in
   let version =
     match emacs_version with
@@ -340,15 +328,12 @@ let run_check ~memory format warn_as_error ignore_warnings ignore_hints
     |> Tart.Search_path.with_typings_root typings_root
     |> Tart.Search_path.with_emacs_version version
   in
-  let base_env = Tart.Check.default_env () in
-  let initial_env = Tart.Search_path.load_c_core ~search_path base_env in
-  let initial_env = Tart.Search_path.load_lisp_core ~search_path initial_env in
-  let _, type_errors =
-    List.fold_left
-      (fun (env, acc_errors) file ->
-        let env', errs = check_file ~memory env file in
-        (env', acc_errors @ errs))
-      (initial_env, []) valid_files
+  let config =
+    Tart.Module_check.default_config ()
+    |> Tart.Module_check.with_search_path search_path
+  in
+  let type_errors =
+    List.concat_map (fun file -> check_file ~memory ~config file) valid_files
   in
   let total_elapsed = Tart.Timing.elapsed_s t_total in
   Tart.Log.verbose "Total: %s" (Tart.Timing.format_duration total_elapsed);

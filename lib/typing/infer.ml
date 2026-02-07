@@ -684,14 +684,24 @@ and infer_let_star env bindings body span =
 
 (** Infer the type of a progn expression.
 
-    Returns the type of the last expression, or nil if empty. *)
+    Returns the type of the last expression, or nil if empty.
+
+    Hard require forms [(require 'X)] extend the environment for subsequent
+    expressions in the progn (Spec 49 R5). Soft requires [(require 'X nil t)]
+    do not extend the environment. *)
 and infer_progn env exprs span =
   match exprs with
   | [] -> pure Prim.nil
   | [ e ] -> infer env e
   | e :: rest ->
       let e_result = infer env e in
-      let rest_result = infer_progn env rest span in
+      (* Hard require extends env for subsequent forms (Spec 49 R5) *)
+      let rest_env =
+        match Narrow.detect_hard_require e with
+        | Some feature_name -> Env.load_feature feature_name env
+        | None -> env
+      in
+      let rest_result = infer_progn rest_env rest span in
       {
         ty = rest_result.ty;
         constraints = C.combine e_result.constraints rest_result.constraints;

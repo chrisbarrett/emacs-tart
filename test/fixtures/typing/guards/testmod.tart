@@ -1,0 +1,11 @@
+;; Test module for feature guard fixtures (Spec 49)
+;;
+;; Provides testmod-greet and testmod-version for use in require/featurep tests.
+;; Also provides hidden-fn whose name doesn't match the testmod prefix,
+;; so it is NOT auto-discovered by the autoload scanner.
+
+(defun testmod-greet (string) -> string)
+
+(defun hidden-fn (int) -> int)
+
+(defvar testmod-version string)

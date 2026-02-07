@@ -77,18 +77,7 @@
 ;; (obarray-size OBARRAY) - return number of symbols in obarray
 (defun obarray-size ((vector any)) -> int)
 
-;; ===========================================================================
-;; Features and provides
-;; ===========================================================================
-
-;; (featurep FEATURE &optional SUBFEATURE) - test if feature is loaded
-(defun featurep (symbol &optional symbol) -> bool)
-
-;; (provide FEATURE &optional SUBFEATURES) - announce that feature is loaded
-(defun provide (symbol &optional (list symbol)) -> symbol)
-
-;; (require FEATURE &optional FILENAME NOERROR) - ensure feature is loaded
-(defun require (symbol &optional string any) -> symbol)
+;; featurep, provide, require are defined in fns.tart (canonical)
 
 ;; ===========================================================================
 ;; Load path and locate

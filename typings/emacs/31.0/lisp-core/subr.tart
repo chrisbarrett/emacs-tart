@@ -336,18 +336,7 @@
 ;; (locate-library LIBRARY &optional NOSUFFIX PATH INTERACTIVE-CALL)
 (defun locate-library (string &optional bool (list string) bool) -> (string | nil))
 
-;; ===========================================================================
-;; Miscellaneous predicates
-;; ===========================================================================
-
-;; (provide FEATURE &optional SUBFEATURES) - declare feature
-(defun provide (symbol &optional (list symbol)) -> symbol)
-
-;; (require FEATURE &optional FILENAME NOERROR) - load feature
-(defun require (symbol &optional string bool) -> symbol)
-
-;; (featurep FEATURE &optional SUBFEATURE) - test if feature is present
-(defun featurep (symbol &optional symbol) -> bool)
+;; featurep, provide, require are defined in fns.tart (canonical)
 
 ;; ===========================================================================
 ;; List manipulation

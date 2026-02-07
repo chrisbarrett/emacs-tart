@@ -223,6 +223,64 @@ let test_and_no_matches () =
   check "and no matches" "NoPredicate" (analysis_to_string result)
 
 (* =============================================================================
+   require as guard (Spec 49 R5-R6)
+   ============================================================================= *)
+
+let test_soft_require_as_guard () =
+  (* (require 'json nil t) → Guard (FeatureGuard "json") *)
+  let cond = call "require" [ quote "json"; sym "nil"; sym "t" ] in
+  let result = Narrow.analyze_condition cond empty_env in
+  check "soft require" "Guard(FeatureGuard json)" (analysis_to_string result)
+
+let test_hard_require_not_a_guard () =
+  (* (require 'json) — hard require is NOT a guard (it unconditionally loads);
+     guard analysis returns NoPredicate, but it's handled via infer_progn *)
+  let cond = call "require" [ quote "json" ] in
+  let result = Narrow.analyze_condition cond empty_env in
+  check "hard require not guard" "NoPredicate" (analysis_to_string result)
+
+let test_require_non_literal () =
+  (* (require x nil t) — non-literal feature → NoPredicate *)
+  let cond = call "require" [ sym "x"; sym "nil"; sym "t" ] in
+  let result = Narrow.analyze_condition cond empty_env in
+  check "require non-literal" "NoPredicate" (analysis_to_string result)
+
+(* =============================================================================
+   detect_hard_require
+   ============================================================================= *)
+
+let test_detect_hard_require_basic () =
+  (* (require 'json) → Some "json" *)
+  let sexp = call "require" [ quote "json" ] in
+  let result = Narrow.detect_hard_require sexp in
+  Alcotest.(check (option string)) "hard require" (Some "json") result
+
+let test_detect_hard_require_with_filename () =
+  (* (require 'json "json.el") → Some "json" (still hard, no noerror flag) *)
+  let sexp = call "require" [ quote "json"; Sexp.String ("json.el", dummy) ] in
+  let result = Narrow.detect_hard_require sexp in
+  Alcotest.(check (option string))
+    "hard require with filename" (Some "json") result
+
+let test_detect_hard_require_explicit_nil_noerror () =
+  (* (require 'json nil nil) → Some "json" (explicit nil noerror is still hard) *)
+  let sexp = call "require" [ quote "json"; sym "nil"; sym "nil" ] in
+  let result = Narrow.detect_hard_require sexp in
+  Alcotest.(check (option string)) "explicit nil noerror" (Some "json") result
+
+let test_detect_soft_require () =
+  (* (require 'json nil t) → None (soft require, not hard) *)
+  let sexp = call "require" [ quote "json"; sym "nil"; sym "t" ] in
+  let result = Narrow.detect_hard_require sexp in
+  Alcotest.(check (option string)) "soft require" None result
+
+let test_detect_non_require () =
+  (* (featurep 'json) → None *)
+  let sexp = call "featurep" [ quote "json" ] in
+  let result = Narrow.detect_hard_require sexp in
+  Alcotest.(check (option string)) "non-require" None result
+
+(* =============================================================================
    non-guard functions
    ============================================================================= *)
 
@@ -291,6 +349,24 @@ let () =
             test_and_mixed_predicate_and_guard;
           Alcotest.test_case "only predicates" `Quick test_and_only_predicates;
           Alcotest.test_case "no matches" `Quick test_and_no_matches;
+        ] );
+      ( "require",
+        [
+          Alcotest.test_case "soft require as guard" `Quick
+            test_soft_require_as_guard;
+          Alcotest.test_case "hard require not guard" `Quick
+            test_hard_require_not_a_guard;
+          Alcotest.test_case "non-literal" `Quick test_require_non_literal;
+        ] );
+      ( "detect_hard_require",
+        [
+          Alcotest.test_case "basic" `Quick test_detect_hard_require_basic;
+          Alcotest.test_case "with filename" `Quick
+            test_detect_hard_require_with_filename;
+          Alcotest.test_case "explicit nil noerror" `Quick
+            test_detect_hard_require_explicit_nil_noerror;
+          Alcotest.test_case "soft require" `Quick test_detect_soft_require;
+          Alcotest.test_case "non-require" `Quick test_detect_non_require;
         ] );
       ( "non-guard",
         [

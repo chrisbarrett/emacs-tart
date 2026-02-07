@@ -52,6 +52,14 @@ val narrow_type : typ -> typ -> typ
     For non-union types, returns [original] when it overlaps with [target], or
     [TUnion []] (empty) when disjoint. *)
 
+val detect_hard_require : Syntax.Sexp.t -> string option
+(** [detect_hard_require sexp] returns [Some name] when [sexp] is a hard require
+    form like [(require 'X)] that unconditionally loads a feature.
+
+    Returns [None] for soft requires [(require 'X nil t)] or non-require forms.
+    Used by [infer_progn] to thread the extended environment to subsequent forms
+    (Spec 49 R5). *)
+
 val analyze_condition : Syntax.Sexp.t -> Core.Type_env.t -> condition_analysis
 (** [analyze_condition condition env] examines a condition for predicate calls
     and feature guards.

@@ -89,8 +89,13 @@ let analyze_single_predicate (fn_name : string) (args : Syntax.Sexp.t list)
 (** Try to extract a feature guard from a call expression.
 
     Recognizes: [(featurep 'X)], [(fboundp 'f)], [(boundp 'v)],
-    [(bound-and-true-p v)]. The first three require a quoted symbol argument;
-    [bound-and-true-p] takes a bare symbol (it's a macro). *)
+    [(bound-and-true-p v)], [(require 'X nil t)] (soft require). The first three
+    require a quoted symbol argument; [bound-and-true-p] takes a bare symbol
+    (it's a macro).
+
+    Soft require [(require 'X nil t)] is treated as a [FeatureGuard] when used
+    as a condition: the third argument [t] (noerror) means "return nil if not
+    found" (Spec 49 R6). *)
 let analyze_single_guard (fn_name : string) (args : Syntax.Sexp.t list) :
     guard_info option =
   match (fn_name, args) with
@@ -119,6 +124,60 @@ let analyze_single_guard (fn_name : string) (args : Syntax.Sexp.t list) :
   (* (bound-and-true-p v) — bare symbol (macro) *)
   | "bound-and-true-p", [ Syntax.Sexp.Symbol (vname, _) ] ->
       Some (BoundTrueGuard vname)
+  (* (require 'X nil t) — soft require, acts as FeatureGuard when used
+     as condition. The noerror flag (3rd arg = t) makes it return nil
+     on failure instead of signaling. *)
+  | ( "require",
+      [
+        Syntax.Sexp.List
+          ( [ Syntax.Sexp.Symbol ("quote", _); Syntax.Sexp.Symbol (feature, _) ],
+            _ );
+        Syntax.Sexp.Symbol ("nil", _);
+        Syntax.Sexp.Symbol ("t", _);
+      ] ) ->
+      Some (FeatureGuard feature)
+  | _ -> None
+
+(** Detect a hard require form: [(require 'X)] with no noerror flag.
+
+    Returns [Some feature_name] for hard requires, [None] for soft requires or
+    non-require forms. A hard require unconditionally loads the feature, so it
+    extends the environment for all subsequent forms (Spec 49 R5). *)
+let detect_hard_require (sexp : Syntax.Sexp.t) : string option =
+  match sexp with
+  (* (require 'X) — no optional args *)
+  | Syntax.Sexp.List
+      ( [
+          Syntax.Sexp.Symbol ("require", _);
+          Syntax.Sexp.List
+            ( [ Syntax.Sexp.Symbol ("quote", _); Syntax.Sexp.Symbol (name, _) ],
+              _ );
+        ],
+        _ ) ->
+      Some name
+  (* (require 'X filename) — no noerror flag, still hard *)
+  | Syntax.Sexp.List
+      ( [
+          Syntax.Sexp.Symbol ("require", _);
+          Syntax.Sexp.List
+            ( [ Syntax.Sexp.Symbol ("quote", _); Syntax.Sexp.Symbol (name, _) ],
+              _ );
+          _;
+        ],
+        _ ) ->
+      Some name
+  (* (require 'X filename nil) — explicit nil noerror, still hard *)
+  | Syntax.Sexp.List
+      ( [
+          Syntax.Sexp.Symbol ("require", _);
+          Syntax.Sexp.List
+            ( [ Syntax.Sexp.Symbol ("quote", _); Syntax.Sexp.Symbol (name, _) ],
+              _ );
+          _;
+          Syntax.Sexp.Symbol ("nil", _);
+        ],
+        _ ) ->
+      Some name
   | _ -> None
 
 (** Analyze a single sexp as either a predicate or a guard.
