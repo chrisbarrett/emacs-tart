@@ -629,6 +629,80 @@ let generate_bump_version_action ~(uri : string) ~(doc_text : string)
           ca_edit = Some workspace_edit;
         }
 
+(** Extract text from a document at the given LSP range.
+
+    Returns the substring of [doc_text] covered by the 0-based [range], or
+    [None] if the range is out of bounds. *)
+let extract_text_at_range (doc_text : string) (range : Protocol.range) :
+    string option =
+  let lines = String.split_on_char '\n' doc_text in
+  let lines_arr = Array.of_list lines in
+  let nlines = Array.length lines_arr in
+  if
+    range.start.line < 0 || range.start.line >= nlines || range.end_.line < 0
+    || range.end_.line >= nlines
+  then None
+  else if range.start.line = range.end_.line then
+    let line = lines_arr.(range.start.line) in
+    let len = String.length line in
+    let s = min range.start.character len in
+    let e = min range.end_.character len in
+    if s <= e then Some (String.sub line s (e - s)) else None
+  else
+    (* Multi-line range *)
+    let buf = Buffer.create 128 in
+    for i = range.start.line to range.end_.line do
+      let line = lines_arr.(i) in
+      let len = String.length line in
+      if i = range.start.line then
+        let s = min range.start.character len in
+        Buffer.add_string buf (String.sub line s (len - s))
+      else if i = range.end_.line then (
+        Buffer.add_char buf '\n';
+        let e = min range.end_.character len in
+        Buffer.add_string buf (String.sub line 0 e))
+      else (
+        Buffer.add_char buf '\n';
+        Buffer.add_string buf line)
+    done;
+    Some (Buffer.contents buf)
+
+(** Generate "Wrap in feature guard" code action for E0900.
+
+    Wraps the offending call expression in [(when (fboundp 'fn) ...)] to guard
+    against the function not being available in older Emacs versions. *)
+let generate_wrap_guard_action ~(uri : string) ~(doc_text : string)
+    ~(fn_name : string) ~(diagnostic : Protocol.diagnostic) :
+    Protocol.code_action option =
+  match extract_text_at_range doc_text diagnostic.range with
+  | None ->
+      Log.debug "Could not extract text at diagnostic range for wrap guard";
+      None
+  | Some original_text ->
+      let indent = String.make diagnostic.range.start.character ' ' in
+      let wrapped =
+        Printf.sprintf "(when (fboundp '%s)\n%s  %s)" fn_name indent
+          original_text
+      in
+      let edit : Protocol.text_edit =
+        { te_range = diagnostic.range; new_text = wrapped }
+      in
+      let doc_edit : Protocol.text_document_edit =
+        { tde_uri = uri; tde_version = None; edits = [ edit ] }
+      in
+      let workspace_edit : Protocol.workspace_edit =
+        { document_changes = [ doc_edit ] }
+      in
+      Some
+        {
+          Protocol.ca_title =
+            Printf.sprintf "Wrap in (when (fboundp '%s) ...)" fn_name;
+          ca_kind = Some Protocol.QuickFix;
+          ca_diagnostics = [ diagnostic ];
+          ca_is_preferred = false;
+          ca_edit = Some workspace_edit;
+        }
+
 (** Generate version constraint code actions for diagnostics in the request
     context.
 
@@ -684,17 +758,30 @@ let generate_version_actions ~(uri : string) ~(doc_text : string)
               | Some Typing.Diagnostic.VersionTooLow -> (
                   match extract_required_version internal_diag.message with
                   | Some required_version -> (
-                      match
-                        generate_bump_version_action ~uri ~doc_text
-                          ~required_version ~diagnostic:client_diag
-                      with
+                      (* Task 7: "Bump minimum Emacs version to X.Y" *)
+                      (match
+                         generate_bump_version_action ~uri ~doc_text
+                           ~required_version ~diagnostic:client_diag
+                       with
                       | Some action -> actions := action :: !actions
-                      | None -> ())
+                      | None -> ());
+                      (* Task 8: "Wrap in feature guard" *)
+                      match extract_function_name internal_diag.message with
+                      | Some fn_name -> (
+                          match
+                            generate_wrap_guard_action ~uri ~doc_text ~fn_name
+                              ~diagnostic:client_diag
+                          with
+                          | Some action -> actions := action :: !actions
+                          | None -> ())
+                      | None ->
+                          Log.debug "Could not extract function name from: %s"
+                            internal_diag.message)
                   | None ->
                       Log.debug "Could not extract version from: %s"
                         internal_diag.message)
               | _ -> ());
-              (* Tasks 8-9 will add more actions here *)
+              (* Task 9 will add more actions here *)
               List.rev !actions
           | None ->
               Log.debug "No matching internal diagnostic for %s"

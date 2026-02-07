@@ -80,6 +80,22 @@ val generate_bump_version_action :
 
     Edits the Package-Requires header to raise the Emacs version floor. *)
 
+val extract_text_at_range : string -> Protocol.range -> string option
+(** [extract_text_at_range doc_text range] extracts the substring of [doc_text]
+    covered by the 0-based LSP [range]. Returns [None] if the range is out of
+    bounds. *)
+
+val generate_wrap_guard_action :
+  uri:string ->
+  doc_text:string ->
+  fn_name:string ->
+  diagnostic:Protocol.diagnostic ->
+  Protocol.code_action option
+(** Generate a "Wrap in feature guard" quickfix for E0900.
+
+    Wraps the offending call in [(when (fboundp 'fn) ...)] to guard against the
+    function not being available in older Emacs versions. *)
+
 val generate_version_actions :
   uri:string ->
   doc_text:string ->

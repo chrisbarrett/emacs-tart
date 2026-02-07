@@ -180,6 +180,151 @@ let test_extract_function_name_removed () =
     "removed" (Some "old-api")
     (Code_action.extract_function_name "`old-api` was removed after Emacs 30.1")
 
+(** {1 extract_text_at_range} *)
+
+let test_extract_text_single_line () =
+  let doc = "(json-parse-string \"{}\")" in
+  let range : Protocol.range =
+    { start = { line = 0; character = 0 }; end_ = { line = 0; character = 24 } }
+  in
+  Alcotest.(check (option string))
+    "full line" (Some "(json-parse-string \"{}\")")
+    (Code_action.extract_text_at_range doc range)
+
+let test_extract_text_partial_line () =
+  let doc = "  (json-parse-string \"{}\")" in
+  let range : Protocol.range =
+    { start = { line = 0; character = 2 }; end_ = { line = 0; character = 26 } }
+  in
+  Alcotest.(check (option string))
+    "partial" (Some "(json-parse-string \"{}\")")
+    (Code_action.extract_text_at_range doc range)
+
+let test_extract_text_multi_line () =
+  let doc = "line0\n  (progn\n    (foo))" in
+  let range : Protocol.range =
+    { start = { line = 1; character = 2 }; end_ = { line = 2; character = 10 } }
+  in
+  Alcotest.(check (option string))
+    "multi-line" (Some "(progn\n    (foo))")
+    (Code_action.extract_text_at_range doc range)
+
+let test_extract_text_out_of_bounds () =
+  let doc = "short" in
+  let range : Protocol.range =
+    { start = { line = 5; character = 0 }; end_ = { line = 5; character = 10 } }
+  in
+  Alcotest.(check (option string))
+    "out of bounds" None
+    (Code_action.extract_text_at_range doc range)
+
+(** {1 generate_wrap_guard_action} *)
+
+let test_wrap_guard_basic () =
+  let doc =
+    ";;; test.el --- Test -*- lexical-binding: t -*-\n\
+     ;; Package-Requires: ((emacs \"28.1\"))\n\
+     (json-parse-string \"{}\")"
+  in
+  let uri = "file:///tmp/test.el" in
+  let diagnostic : Protocol.diagnostic =
+    {
+      range =
+        {
+          start = { line = 2; character = 0 };
+          end_ = { line = 2; character = 24 };
+        };
+      severity = None;
+      code = Some "E0900";
+      message = "`json-parse-string` requires Emacs 29.1+";
+      source = None;
+      related_information = [];
+    }
+  in
+  match
+    Code_action.generate_wrap_guard_action ~uri ~doc_text:doc
+      ~fn_name:"json-parse-string" ~diagnostic
+  with
+  | Some action -> (
+      Alcotest.(check string)
+        "title" "Wrap in (when (fboundp 'json-parse-string) ...)"
+        action.ca_title;
+      Alcotest.(check bool)
+        "is quickfix" true
+        (action.ca_kind = Some Protocol.QuickFix);
+      match action.ca_edit with
+      | Some edit ->
+          let text_edit = List.hd (List.hd edit.document_changes).edits in
+          Alcotest.(check string)
+            "new text"
+            "(when (fboundp 'json-parse-string)\n  (json-parse-string \"{}\"))"
+            text_edit.new_text;
+          Alcotest.(check int) "start line" 2 text_edit.te_range.start.line;
+          Alcotest.(check int) "start char" 0 text_edit.te_range.start.character
+      | None -> Alcotest.fail "expected edit")
+  | None -> Alcotest.fail "expected Some action"
+
+let test_wrap_guard_indented () =
+  let doc = "  (json-parse-string \"{}\")" in
+  let uri = "file:///tmp/test.el" in
+  let diagnostic : Protocol.diagnostic =
+    {
+      range =
+        {
+          start = { line = 0; character = 2 };
+          end_ = { line = 0; character = 26 };
+        };
+      severity = None;
+      code = Some "E0900";
+      message = "`json-parse-string` requires Emacs 29.1+";
+      source = None;
+      related_information = [];
+    }
+  in
+  match
+    Code_action.generate_wrap_guard_action ~uri ~doc_text:doc
+      ~fn_name:"json-parse-string" ~diagnostic
+  with
+  | Some action -> (
+      match action.ca_edit with
+      | Some edit ->
+          let text_edit = List.hd (List.hd edit.document_changes).edits in
+          (* Indented by 2 spaces matching the original position *)
+          Alcotest.(check string)
+            "preserves indent"
+            "(when (fboundp 'json-parse-string)\n\
+            \    (json-parse-string \"{}\"))"
+            text_edit.new_text
+      | None -> Alcotest.fail "expected edit")
+  | None -> Alcotest.fail "expected Some action"
+
+let test_wrap_guard_has_diagnostic () =
+  let doc = "(json-parse-string \"{}\")" in
+  let uri = "file:///tmp/test.el" in
+  let diagnostic : Protocol.diagnostic =
+    {
+      range =
+        {
+          start = { line = 0; character = 0 };
+          end_ = { line = 0; character = 24 };
+        };
+      severity = None;
+      code = Some "E0900";
+      message = "`json-parse-string` requires Emacs 29.1+";
+      source = None;
+      related_information = [];
+    }
+  in
+  match
+    Code_action.generate_wrap_guard_action ~uri ~doc_text:doc
+      ~fn_name:"json-parse-string" ~diagnostic
+  with
+  | Some action ->
+      Alcotest.(check int)
+        "has diagnostic" 1
+        (List.length action.ca_diagnostics)
+  | None -> Alcotest.fail "expected Some action"
+
 (** {1 Test runner} *)
 
 let () =
@@ -217,5 +362,21 @@ let () =
             test_extract_function_name;
           Alcotest.test_case "extract function name removed" `Quick
             test_extract_function_name_removed;
+        ] );
+      ( "extract-text-at-range",
+        [
+          Alcotest.test_case "single line" `Quick test_extract_text_single_line;
+          Alcotest.test_case "partial line" `Quick
+            test_extract_text_partial_line;
+          Alcotest.test_case "multi-line" `Quick test_extract_text_multi_line;
+          Alcotest.test_case "out of bounds" `Quick
+            test_extract_text_out_of_bounds;
+        ] );
+      ( "wrap-guard-action",
+        [
+          Alcotest.test_case "basic" `Quick test_wrap_guard_basic;
+          Alcotest.test_case "indented" `Quick test_wrap_guard_indented;
+          Alcotest.test_case "has diagnostic" `Quick
+            test_wrap_guard_has_diagnostic;
         ] );
     ]
