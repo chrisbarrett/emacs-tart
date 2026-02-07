@@ -213,5 +213,87 @@
    "(include\nother-module)"
    "(include\n  other-module)"))
 
+;;; Imenu Tests (Spec 61)
+
+(defun tart-mode-test--imenu-index (content)
+  "Return the imenu index for CONTENT in a `tart-signature-mode' buffer."
+  (with-temp-buffer
+    (tart-signature-mode)
+    (insert content)
+    (funcall imenu-create-index-function)))
+
+(ert-deftest tart-mode-imenu-functions ()
+  "Imenu indexes defun declarations under Functions."
+  (let ((index (tart-mode-test--imenu-index
+                "(defun buffer-live-p (any) -> bool)
+(defun current-buffer () -> buffer)
+(defvar some-var int)")))
+    (should (assoc "Functions" index))
+    (let ((fns (cdr (assoc "Functions" index))))
+      (should (= (length fns) 2))
+      (should (assoc "buffer-live-p" fns))
+      (should (assoc "current-buffer" fns)))))
+
+(ert-deftest tart-mode-imenu-variables ()
+  "Imenu indexes defvar declarations under Variables."
+  (let ((index (tart-mode-test--imenu-index
+                "(defvar buffer-alist (list any))
+(defvar inhibit-read-only bool)
+(defun some-fn () -> nil)")))
+    (should (assoc "Variables" index))
+    (let ((vars (cdr (assoc "Variables" index))))
+      (should (= (length vars) 2))
+      (should (assoc "buffer-alist" vars))
+      (should (assoc "inhibit-read-only" vars)))))
+
+(ert-deftest tart-mode-imenu-types ()
+  "Imenu indexes type declarations under Types."
+  (let ((index (tart-mode-test--imenu-index
+                "(type int %tart-intrinsic%Int)
+(type list [a] (%tart-intrinsic%List a))
+(defun some-fn () -> nil)")))
+    (should (assoc "Types" index))
+    (let ((types (cdr (assoc "Types" index))))
+      (should (= (length types) 2))
+      (should (assoc "int" types))
+      (should (assoc "list" types)))))
+
+(ert-deftest tart-mode-imenu-mixed-categories ()
+  "Imenu returns categorised index when multiple kinds exist."
+  (let ((index (tart-mode-test--imenu-index
+                "(type bool (t | nil))
+(defun identity [a] (a) -> a)
+(defvar load-path (list string))")))
+    (should (= (length index) 3))
+    (should (assoc "Functions" index))
+    (should (assoc "Variables" index))
+    (should (assoc "Types" index))))
+
+(ert-deftest tart-mode-imenu-flat-fallback ()
+  "Imenu flattens when only one declaration kind exists."
+  (let ((index (tart-mode-test--imenu-index
+                "(defun buffer-live-p (any) -> bool)
+(defun current-buffer () -> buffer)
+(defun buffer-list () -> (list buffer))")))
+    ;; Should be flat — no category wrapper
+    (should (= (length index) 3))
+    (should (assoc "buffer-live-p" index))
+    (should (assoc "current-buffer" index))
+    (should (assoc "buffer-list" index))))
+
+(ert-deftest tart-mode-imenu-empty-buffer ()
+  "Imenu returns nil for empty buffer."
+  (let ((index (tart-mode-test--imenu-index "")))
+    (should (null index))))
+
+(ert-deftest tart-mode-imenu-ignores-comments ()
+  "Imenu does not index commented-out declarations."
+  (let ((index (tart-mode-test--imenu-index
+                ";; (defun commented-out () -> nil)
+(defun real-fn () -> nil)")))
+    ;; Flat since only one kind
+    (should (= (length index) 1))
+    (should (assoc "real-fn" index))))
+
 (provide 'tart-mode-tests)
 ;;; tart-mode-tests.el ends here

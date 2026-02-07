@@ -515,6 +515,31 @@ falls back to `lisp-indent-function' symbol properties."
               (method
                (funcall method indent-point state)))))))
 
+(defvar tart-signature-mode-imenu-generic-expression
+  `(("Functions" ,(rx bol (* space) "(defun" (+ space)
+                      (group (+ (or (syntax word) (syntax symbol)))))
+     1)
+    ("Variables" ,(rx bol (* space) "(defvar" (+ space)
+                      (group (+ (or (syntax word) (syntax symbol)))))
+     1)
+    ("Types" ,(rx bol (* space) "(type" (+ space)
+                  (group (+ (or (syntax word) (syntax symbol)))))
+     1))
+  "Imenu generic expression for `tart-signature-mode'.
+Indexes `defun', `defvar', and `type' declarations.")
+
+(defun tart-signature-mode--imenu-create-index ()
+  "Create imenu index for current `tart-signature-mode' buffer.
+Flattens the index when all entries fall under a single category,
+avoiding unnecessary nesting (e.g., most c-core files are all `defun')."
+  (let ((index (imenu-default-create-index-function)))
+    (if (and (= (length index) 1)
+             (consp (car index))
+             (listp (cdar index)))
+        ;; Single category — flatten by stripping the category wrapper
+        (cdar index)
+      index)))
+
 ;;;###autoload
 (define-derived-mode tart-signature-mode lisp-mode "Tart"
   "Major mode for editing Tart type signature files."
@@ -522,7 +547,11 @@ falls back to `lisp-indent-function' symbol properties."
   (setq-local font-lock-defaults
               '(tart-signature-mode-font-lock-keywords
                 nil nil nil nil))
-  (setq-local lisp-indent-function #'tart-signature-indent-function))
+  (setq-local lisp-indent-function #'tart-signature-indent-function)
+  (setq-local imenu-generic-expression
+              tart-signature-mode-imenu-generic-expression)
+  (setq-local imenu-create-index-function
+              #'tart-signature-mode--imenu-create-index))
 
 ;;;###autoload
 (add-to-list 'auto-mode-alist `(,(rx ".tart" eos) . tart-signature-mode))
