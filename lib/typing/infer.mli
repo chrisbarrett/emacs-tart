@@ -13,37 +13,8 @@
     - Let: generate constraints for bindings with generalization
     - Progn: result is type of last expression *)
 
-(** {1 Types} *)
-
-type undefined_var = { name : string; span : Syntax.Location.span }
-(** An undefined variable reference. *)
-
-type resolved_clause_diagnostic = Clause_dispatch.resolved_diagnostic = {
-  rcd_severity : Core.Type_env.diagnostic_severity;
-  rcd_message : string;
-  rcd_span : Syntax.Location.span;
-}
-(** A clause diagnostic resolved at a call site.
-
-    Re-exported from {!Clause_dispatch} for backward compatibility. *)
-
-type result = {
-  ty : Core.Types.typ;
-  constraints : Constraint.set;
-  undefineds : undefined_var list;
-  clause_diagnostics : resolved_clause_diagnostic list;
-}
-(** Result of inference: the inferred type, constraints, undefined vars, and any
-    clause diagnostics emitted during multi-clause dispatch. *)
-
-type defun_result = {
-  name : string;
-  fn_type : Core.Types.typ;
-  defun_constraints : Constraint.set;
-  defun_undefineds : undefined_var list;
-  defun_clause_diagnostics : resolved_clause_diagnostic list;
-}
-(** Result of inferring a top-level definition. *)
+include module type of Infer_types
+(** @inline *)
 
 (** {1 Inference} *)
 
@@ -59,17 +30,3 @@ val infer_defun : Core.Type_env.t -> Syntax.Sexp.t -> defun_result option
 
     Returns [Some] with the function name and type if [sexp] is a defun form, or
     [None] otherwise. The returned type is already generalized. *)
-
-(** {1 Helpers} *)
-
-val pure : Core.Types.typ -> result
-(** Create a result with no constraints and no undefined vars. *)
-
-val with_constraint : Core.Types.typ -> Constraint.t -> result
-(** Create a result with a single constraint. *)
-
-val combine_results : result list -> Constraint.set
-(** Combine results, merging constraints. *)
-
-val combine_undefineds : result list -> undefined_var list
-(** Combine undefined variables from results. *)

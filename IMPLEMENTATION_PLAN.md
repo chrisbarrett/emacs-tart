@@ -50,13 +50,13 @@ Lines 829–1112 of `infer.ml` contain 8 mutually-recursive functions for
 pcase pattern binding extraction and pcase form inference. They form a
 self-contained subsystem operating on `Sexp.t` patterns.
 
-- [ ] Create `lib/typing/pcase_infer.ml` + `.mli`
-- [ ] Move: `extract_pattern_bindings`, `extract_backquote_bindings`,
+- [x] Create `lib/typing/pcase_infer.ml` + `.mli`
+- [x] Move: `extract_pattern_bindings`, `extract_backquote_bindings`,
       `extract_unquote_binding`, `extract_map_pattern_bindings`,
       `extract_map_pattern_constraints`, `infer_pcase_let`, `infer_pcase`
-- [ ] Wire into `infer.ml` via module reference
-- [ ] Update `lib/typing/dune` if needed
-- [ ] Build + test to confirm no regressions
+- [x] Wire into `infer.ml` via module reference
+- [x] Update `lib/typing/dune` if needed
+- [x] Build + test to confirm no regressions
 
 ### Task 2.2: Extract `defun_infer.ml` from `infer.ml`
 
