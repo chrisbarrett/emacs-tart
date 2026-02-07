@@ -200,6 +200,7 @@ let test_diagnostics_empty () =
       undefined_errors = [];
       exhaustiveness_warnings = [];
       kind_errors = [];
+      clause_diagnostics = [];
       signature_env = None;
       final_env = Core.Type_env.empty;
     }

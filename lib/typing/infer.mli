@@ -18,18 +18,32 @@
 type undefined_var = { name : string; span : Syntax.Location.span }
 (** An undefined variable reference. *)
 
+type resolved_clause_diagnostic = {
+  rcd_severity : Core.Type_env.diagnostic_severity;
+  rcd_message : string;  (** Fully resolved message (no remaining %s) *)
+  rcd_span : Syntax.Location.span;  (** Call-site span *)
+}
+(** A clause diagnostic resolved at a call site.
+
+    When multi-clause dispatch selects a clause with a diagnostic annotation,
+    the format string's [%s] placeholders are resolved against the actual types
+    inferred at the call site. *)
+
 type result = {
   ty : Core.Types.typ;
   constraints : Constraint.set;
   undefineds : undefined_var list;
+  clause_diagnostics : resolved_clause_diagnostic list;
 }
-(** Result of inference: the inferred type, constraints, and undefined vars. *)
+(** Result of inference: the inferred type, constraints, undefined vars, and any
+    clause diagnostics emitted during multi-clause dispatch. *)
 
 type defun_result = {
   name : string;
   fn_type : Core.Types.typ;
   defun_constraints : Constraint.set;
   defun_undefineds : undefined_var list;
+  defun_clause_diagnostics : resolved_clause_diagnostic list;
 }
 (** Result of inferring a top-level definition. *)
 

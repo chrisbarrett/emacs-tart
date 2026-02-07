@@ -77,6 +77,8 @@ type check_result = {
       (** Warnings for non-exhaustive pcase matches *)
   kind_errors : kind_check_error list;
       (** Kind mismatch errors in signatures *)
+  clause_diagnostics : Infer.resolved_clause_diagnostic list;
+      (** Diagnostics emitted from multi-clause dispatch *)
   signature_env : Env.t option;
       (** Environment from loaded signature, if any *)
   final_env : Env.t;  (** Final type environment after checking *)
@@ -559,6 +561,7 @@ let check_module ~(config : config) ~(filename : string)
     undefined_errors = check_result.Check.undefineds;
     exhaustiveness_warnings;
     kind_errors;
+    clause_diagnostics = check_result.Check.clause_diagnostics;
     signature_env =
       (match sibling_result with Some (env, _) -> Some env | None -> None);
     final_env = check_result.Check.env;
@@ -590,6 +593,29 @@ let exhaustiveness_to_diagnostic (warn : Exhaustiveness.warning) : Diagnostic.t
 let kind_error_to_diagnostic (err : kind_check_error) : Diagnostic.t =
   Diagnostic.of_kind_error err.span err.kind_error
 
+(** Convert a resolved clause diagnostic to a [Diagnostic.t].
+
+    Maps severity: DiagError → Error, DiagWarn → Warning, DiagNote → Hint. The
+    message is already fully resolved (no remaining [%s] placeholders). *)
+let clause_diagnostic_to_diagnostic (cd : Infer.resolved_clause_diagnostic) :
+    Diagnostic.t =
+  let severity =
+    match cd.rcd_severity with
+    | Env.DiagError -> Diagnostic.Error
+    | Env.DiagWarn -> Diagnostic.Warning
+    | Env.DiagNote -> Diagnostic.Hint
+  in
+  {
+    Diagnostic.severity;
+    code = None;
+    span = cd.rcd_span;
+    message = cd.rcd_message;
+    expected = None;
+    actual = None;
+    related = [];
+    help = [];
+  }
+
 (** Get all diagnostics from a check result *)
 let diagnostics_of_result (result : check_result) : Diagnostic.t list =
   let type_diagnostics = Diagnostic.of_unify_errors result.type_errors in
@@ -608,5 +634,9 @@ let diagnostics_of_result (result : check_result) : Diagnostic.t list =
     List.map exhaustiveness_to_diagnostic result.exhaustiveness_warnings
   in
   let kind_diagnostics = List.map kind_error_to_diagnostic result.kind_errors in
+  let clause_diags =
+    List.map clause_diagnostic_to_diagnostic result.clause_diagnostics
+  in
   type_diagnostics @ mismatch_diagnostics @ missing_sig_diagnostics
   @ undefined_diagnostics @ exhaustiveness_diagnostics @ kind_diagnostics
+  @ clause_diags

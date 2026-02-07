@@ -66,6 +66,8 @@ type check_result = {
       (** Warnings for non-exhaustive pcase matches *)
   kind_errors : kind_check_error list;
       (** Kind mismatch errors in signatures *)
+  clause_diagnostics : Infer.resolved_clause_diagnostic list;
+      (** Diagnostics emitted from multi-clause dispatch *)
   signature_env : Core.Type_env.t option;
       (** Environment from loaded signature, if any *)
   final_env : Core.Type_env.t;  (** Final type environment after checking *)

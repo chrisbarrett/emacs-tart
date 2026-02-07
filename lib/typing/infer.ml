@@ -19,14 +19,32 @@ module Sig_ast = Sig.Sig_ast
 type undefined_var = { name : string; span : Loc.span }
 (** An undefined variable reference *)
 
-type result = { ty : typ; constraints : C.set; undefineds : undefined_var list }
-(** Result of inference: the inferred type, constraints, and undefined vars *)
+type resolved_clause_diagnostic = {
+  rcd_severity : Env.diagnostic_severity;
+  rcd_message : string;  (** Fully resolved message (no remaining %s) *)
+  rcd_span : Loc.span;  (** Call-site span *)
+}
+(** A clause diagnostic resolved at a call site.
+
+    When multi-clause dispatch selects a clause with a diagnostic annotation,
+    the format string's [%s] placeholders are resolved against the actual types
+    inferred at the call site. *)
+
+type result = {
+  ty : typ;
+  constraints : C.set;
+  undefineds : undefined_var list;
+  clause_diagnostics : resolved_clause_diagnostic list;
+}
+(** Result of inference: the inferred type, constraints, undefined vars, and any
+    clause diagnostics emitted during multi-clause dispatch. *)
 
 type defun_result = {
   name : string;
   fn_type : typ;
   defun_constraints : C.set;
   defun_undefineds : undefined_var list;
+  defun_clause_diagnostics : resolved_clause_diagnostic list;
 }
 (** Result of inferring a top-level definition *)
 
@@ -34,15 +52,26 @@ type pattern_binding = { pb_name : string; pb_type : typ }
 (** A binding extracted from a pcase pattern: name and its type *)
 
 (** Create a result with no constraints and no undefined vars *)
-let pure ty = { ty; constraints = C.empty; undefineds = [] }
+let pure ty =
+  { ty; constraints = C.empty; undefineds = []; clause_diagnostics = [] }
 
 (** Create a result with a single constraint *)
 let with_constraint ty c =
-  { ty; constraints = C.add c C.empty; undefineds = [] }
+  {
+    ty;
+    constraints = C.add c C.empty;
+    undefineds = [];
+    clause_diagnostics = [];
+  }
 
 (** Create a result with an undefined variable error *)
 let with_undefined ty name span =
-  { ty; constraints = C.empty; undefineds = [ { name; span } ] }
+  {
+    ty;
+    constraints = C.empty;
+    undefineds = [ { name; span } ];
+    clause_diagnostics = [];
+  }
 
 (** Combine results, merging constraints and undefined vars *)
 let combine_results results =
@@ -50,6 +79,10 @@ let combine_results results =
 
 (** Combine undefined variables from results *)
 let combine_undefineds results = List.concat_map (fun r -> r.undefineds) results
+
+(** Combine clause diagnostics from results *)
+let combine_clause_diagnostics results =
+  List.concat_map (fun r -> r.clause_diagnostics) results
 
 (** Apply a single predicate narrowing to an env, returning (then_env,
     else_env). *)
@@ -332,6 +365,7 @@ and infer_lambda env params body span =
     ty = fn_type;
     constraints = body_result.constraints;
     undefineds = body_result.undefineds;
+    clause_diagnostics = body_result.clause_diagnostics;
   }
 
 (** Infer the type of an if expression with else branch.
@@ -400,7 +434,12 @@ and infer_if env cond then_branch else_branch _span =
     combine_undefineds [ cond_result; then_result; else_result ]
   in
 
-  { ty = result_ty; constraints = all_constraints; undefineds = all_undefineds }
+  {
+    ty = result_ty;
+    constraints = all_constraints;
+    undefineds = all_undefineds;
+    clause_diagnostics = [];
+  }
 
 (** Infer the type of an if expression without else branch.
 
@@ -436,7 +475,12 @@ and infer_if_no_else env cond then_branch span =
 
   (* The result type should really be (Or then_type Nil),
      but for now we just use the then type. *)
-  { ty = result_ty; constraints = all_constraints; undefineds = all_undefineds }
+  {
+    ty = result_ty;
+    constraints = all_constraints;
+    undefineds = all_undefineds;
+    clause_diagnostics = [];
+  }
 
 (** Infer the type of a when expression with predicate narrowing.
 
@@ -462,7 +506,12 @@ and infer_when env cond body span =
       (C.combine body_result.constraints (C.add body_constraint C.empty))
   in
   let all_undefineds = combine_undefineds [ cond_result; body_result ] in
-  { ty = result_ty; constraints = all_constraints; undefineds = all_undefineds }
+  {
+    ty = result_ty;
+    constraints = all_constraints;
+    undefineds = all_undefineds;
+    clause_diagnostics = [];
+  }
 
 (** Infer the type of an unless expression with predicate narrowing.
 
@@ -489,7 +538,12 @@ and infer_unless env cond body span =
       (C.combine body_result.constraints (C.add body_constraint C.empty))
   in
   let all_undefineds = combine_undefineds [ cond_result; body_result ] in
-  { ty = result_ty; constraints = all_constraints; undefineds = all_undefineds }
+  {
+    ty = result_ty;
+    constraints = all_constraints;
+    undefineds = all_undefineds;
+    clause_diagnostics = [];
+  }
 
 (** Infer the type of a let expression with generalization.
 
@@ -551,6 +605,7 @@ and infer_let env bindings body span =
     ty = body_result.ty;
     constraints = C.combine binding_constraints body_result.constraints;
     undefineds = binding_undefineds @ body_result.undefineds;
+    clause_diagnostics = body_result.clause_diagnostics;
   }
 
 (** Infer the type of a let* expression with generalization.
@@ -593,6 +648,7 @@ and infer_let_star env bindings body span =
     ty = body_result.ty;
     constraints = C.combine binding_constraints body_result.constraints;
     undefineds = binding_undefineds @ body_result.undefineds;
+    clause_diagnostics = body_result.clause_diagnostics;
   }
 
 (** Infer the type of a progn expression.
@@ -609,6 +665,8 @@ and infer_progn env exprs span =
         ty = rest_result.ty;
         constraints = C.combine e_result.constraints rest_result.constraints;
         undefineds = e_result.undefineds @ rest_result.undefineds;
+        clause_diagnostics =
+          e_result.clause_diagnostics @ rest_result.clause_diagnostics;
       }
 
 (** Infer the type of a setq expression.
@@ -618,10 +676,10 @@ and infer_setq env pairs span =
   let open Syntax.Sexp in
   let rec process_pairs pairs constraints undefineds last_ty =
     match pairs with
-    | [] -> { ty = last_ty; constraints; undefineds }
+    | [] -> { ty = last_ty; constraints; undefineds; clause_diagnostics = [] }
     | [ _ ] ->
         (* Odd number of args - malformed, return nil *)
-        { ty = Prim.nil; constraints; undefineds }
+        { ty = Prim.nil; constraints; undefineds; clause_diagnostics = [] }
     | Symbol (name, _) :: value :: rest ->
         let result = infer env value in
         (* Check if variable exists in variable namespace only.
@@ -686,7 +744,12 @@ and infer_cond env clauses span =
   let all_constraints, all_undefineds =
     process_clauses env clauses C.empty []
   in
-  { ty = result_ty; constraints = all_constraints; undefineds = all_undefineds }
+  {
+    ty = result_ty;
+    constraints = all_constraints;
+    undefineds = all_undefineds;
+    clause_diagnostics = [];
+  }
 
 (** Infer the type of an and expression with predicate narrowing (Spec 52 R4).
 
@@ -710,7 +773,13 @@ and infer_and env args _span =
   let constraints = combine_results results in
   let undefineds = combine_undefineds results in
   match List.rev results with
-  | last :: _ -> { ty = last.ty; constraints; undefineds }
+  | last :: _ ->
+      {
+        ty = last.ty;
+        constraints;
+        undefineds;
+        clause_diagnostics = combine_clause_diagnostics results;
+      }
   | [] -> pure Prim.t
 
 (** Infer the type of an or expression.
@@ -722,7 +791,13 @@ and infer_or env args _span =
   let constraints = combine_results results in
   let undefineds = combine_undefineds results in
   match List.rev results with
-  | last :: _ -> { ty = last.ty; constraints; undefineds }
+  | last :: _ ->
+      {
+        ty = last.ty;
+        constraints;
+        undefineds;
+        clause_diagnostics = combine_clause_diagnostics results;
+      }
   | [] -> pure Prim.nil
 
 (** Infer the type of a not expression.
@@ -734,6 +809,7 @@ and infer_not env arg _span =
     ty = Prim.bool;
     constraints = arg_result.constraints;
     undefineds = arg_result.undefineds;
+    clause_diagnostics = arg_result.clause_diagnostics;
   }
 
 (** {1 Pcase Pattern Matching}
@@ -957,6 +1033,7 @@ and infer_pcase_let (env : Env.t) (bindings : Syntax.Sexp.t list)
     ty = body_result.ty;
     constraints = C.combine binding_constraints body_result.constraints;
     undefineds = binding_undefineds @ body_result.undefineds;
+    clause_diagnostics = body_result.clause_diagnostics;
   }
 
 (** Infer the type of a pcase expression.
@@ -1027,7 +1104,12 @@ and infer_pcase (env : Env.t) (expr : Syntax.Sexp.t)
   let all_constraints = C.combine expr_result.constraints clause_constraints in
   let all_undefineds = expr_result.undefineds @ clause_undefineds in
 
-  { ty = result_ty; constraints = all_constraints; undefineds = all_undefineds }
+  {
+    ty = result_ty;
+    constraints = all_constraints;
+    undefineds = all_undefineds;
+    clause_diagnostics = [];
+  }
 
 (** Infer the type of a tart annotation expression.
 
@@ -1073,6 +1155,7 @@ and infer_tart_annotation env type_sexp form _span =
         ty = declared_ty;
         constraints = C.add annotation_constraint form_result.constraints;
         undefineds = form_result.undefineds;
+        clause_diagnostics = form_result.clause_diagnostics;
       }
   | None ->
       (* Parse failed - return form's type unchanged with a fresh tvar *)
@@ -1210,7 +1293,12 @@ and infer_explicit_instantiation (env : Env.t)
   in
   let all_undefineds = combine_undefineds arg_results in
 
-  { ty = result_ty; constraints = all_constraints; undefineds = all_undefineds }
+  {
+    ty = result_ty;
+    constraints = all_constraints;
+    undefineds = all_undefineds;
+    clause_diagnostics = [];
+  }
 
 (** Extract function name from a function expression for error context *)
 and get_fn_name (fn : Syntax.Sexp.t) : string option =
@@ -1340,7 +1428,12 @@ and infer_apply env fn_expr args span =
     @ combine_undefineds fixed_results
   in
 
-  { ty = result_ty; constraints = all_constraints; undefineds = all_undefineds }
+  {
+    ty = result_ty;
+    constraints = all_constraints;
+    undefineds = all_undefineds;
+    clause_diagnostics = [];
+  }
 
 (** Infer the type of a funcall expression.
 
@@ -1427,7 +1520,12 @@ and infer_funcall env fn_expr args span =
   in
   let all_undefineds = fn_result.undefineds @ combine_undefineds arg_results in
 
-  { ty = result_ty; constraints = all_constraints; undefineds = all_undefineds }
+  {
+    ty = result_ty;
+    constraints = all_constraints;
+    undefineds = all_undefineds;
+    clause_diagnostics = [];
+  }
 
 (** Extract the literal value from a call-site argument expression.
 
@@ -1447,9 +1545,13 @@ and extract_arg_literal (arg : Syntax.Sexp.t) : string option =
 
     The clause's param and return types contain [TCon] names for quantified type
     variables (from the enclosing [defun]). This creates fresh tvars for each
-    name and substitutes them, producing types ready for unification. *)
+    name and substitutes them, producing types ready for unification.
+
+    Returns [(params, return_type, substitution)] where [substitution] maps type
+    variable names to fresh tvars. The substitution is needed to resolve format
+    string arguments in clause diagnostics after matching. *)
 and instantiate_clause (level : int) (tvar_names : string list)
-    (clause : Env.loaded_clause) : param list * typ =
+    (clause : Env.loaded_clause) : param list * typ * (string * typ) list =
   let subst = List.map (fun v -> (v, fresh_tvar level)) tvar_names in
   let params =
     List.map
@@ -1463,7 +1565,7 @@ and instantiate_clause (level : int) (tvar_names : string list)
       clause.lc_params
   in
   let ret = substitute_tvar_names subst clause.lc_return in
-  (params, ret)
+  (params, ret, subst)
 
 (** Try to match a single clause against argument types via speculative
     unification. Returns [Some return_type] if the clause matches, [None] if
@@ -1510,6 +1612,49 @@ and try_clause_match (arg_types : typ list) (arg_literals : string option list)
       | Ok () -> Some clause_ret
       | Error _ -> None)
 
+(** Resolve a clause diagnostic's format string by substituting [%s]
+    placeholders with the stringified types of referenced type variables.
+
+    The [subst] maps type variable names to the fresh tvars created during
+    clause instantiation. After successful unification, those tvars have been
+    unified with actual types, so [repr] resolves them. *)
+and resolve_clause_diagnostic (subst : (string * typ) list)
+    (diag : Env.loaded_diagnostic) (span : Loc.span) :
+    resolved_clause_diagnostic =
+  (* Resolve %s placeholders by walking the message character-by-character *)
+  let args_resolved =
+    List.map
+      (fun name ->
+        match List.assoc_opt name subst with
+        | Some tv -> to_string (repr tv)
+        | None -> name)
+      diag.ld_args
+  in
+  let message =
+    let buf = Buffer.create (String.length diag.ld_message) in
+    let remaining_args = ref args_resolved in
+    let i = ref 0 in
+    let len = String.length diag.ld_message in
+    while !i < len do
+      if
+        !i + 1 < len
+        && diag.ld_message.[!i] = '%'
+        && diag.ld_message.[!i + 1] = 's'
+      then (
+        (match !remaining_args with
+        | arg :: rest ->
+            Buffer.add_string buf arg;
+            remaining_args := rest
+        | [] -> Buffer.add_string buf "%s");
+        i := !i + 2)
+      else (
+        Buffer.add_char buf diag.ld_message.[!i];
+        i := !i + 1)
+    done;
+    Buffer.contents buf
+  in
+  { rcd_severity = diag.ld_severity; rcd_message = message; rcd_span = span }
+
 (** Try clause-by-clause dispatch for a multi-clause function.
 
     Tries each clause top-to-bottom. For each clause: 1. Instantiate with fresh
@@ -1520,23 +1665,31 @@ and try_clause_match (arg_types : typ list) (arg_literals : string option list)
     [arg_literals] provides literal values from call-site argument expressions
     for matching against [PLiteral] clause parameters.
 
-    Returns [Some return_type] if a clause matched, [None] if no clause matched
-    (caller should fall back to union-type constraint path). *)
+    Returns [Some (return_type, diagnostic_opt)] if a clause matched, [None] if
+    no clause matched (caller should fall back to union-type constraint path).
+    When the matching clause has a diagnostic annotation, the diagnostic is
+    resolved with the actual types from unification. *)
 and try_clause_dispatch (env : Env.t) (tvar_names : string list)
     (clauses : Env.loaded_clause list) (arg_types : typ list)
     (arg_literals : string option list) (loc : Syntax.Location.span) :
-    typ option =
+    (typ * resolved_clause_diagnostic option) option =
   let level = Env.current_level env in
   let rec try_clauses = function
     | [] -> None
     | clause :: rest -> (
-        let clause_params, clause_ret =
+        let clause_params, clause_ret, subst =
           instantiate_clause level tvar_names clause
         in
         match
           try_clause_match arg_types arg_literals clause_params clause_ret loc
         with
-        | Some ret_ty -> Some ret_ty
+        | Some ret_ty ->
+            let diag_opt =
+              Option.map
+                (fun d -> resolve_clause_diagnostic subst d loc)
+                clause.lc_diagnostic
+            in
+            Some (ret_ty, diag_opt)
         | None -> try_clauses rest)
   in
   try_clauses clauses
@@ -1701,7 +1854,7 @@ and infer_application env fn args span =
   in
 
   match (clause_result, row_accessor_result) with
-  | Some clause_ret_ty, _ ->
+  | Some (clause_ret_ty, clause_diag_opt), _ ->
       (* Clause matched — use the clause's return type directly.
          Still need to emit fn_result constraints and arg constraints for
          the sub-expressions, but the return type is determined by the clause
@@ -1711,10 +1864,16 @@ and infer_application env fn args span =
       let all_undefineds =
         fn_result.undefineds @ combine_undefineds arg_results
       in
+      let clause_diags =
+        match clause_diag_opt with Some d -> [ d ] | None -> []
+      in
       {
         ty = clause_ret_ty;
         constraints = all_constraints;
         undefineds = all_undefineds;
+        clause_diagnostics =
+          clause_diags @ fn_result.clause_diagnostics
+          @ combine_clause_diagnostics arg_results;
       }
   | None, Some (row_ret_ty, row_constraint) ->
       (* Row accessor dispatch matched — use the row-derived return type.
@@ -1733,6 +1892,8 @@ and infer_application env fn args span =
         ty = row_ret_ty;
         constraints = all_constraints;
         undefineds = all_undefineds;
+        clause_diagnostics =
+          fn_result.clause_diagnostics @ combine_clause_diagnostics arg_results;
       }
   | None, None ->
       (* No clause or row dispatch — fall back to standard constraint path *)
@@ -1799,6 +1960,8 @@ and infer_application env fn args span =
         ty = result_ty;
         constraints = all_constraints;
         undefineds = all_undefineds;
+        clause_diagnostics =
+          fn_result.clause_diagnostics @ combine_clause_diagnostics arg_results;
       }
 
 (** Infer an eq/eql call with disjointness checking (Spec 11 R14).
@@ -1854,6 +2017,7 @@ and infer_eq_with_disjointness env fn_name arg1 arg2 span =
       ty = result_ty;
       constraints = all_constraints;
       undefineds = all_undefineds;
+      clause_diagnostics = [];
     }
   in
 
@@ -2038,6 +2202,7 @@ and infer_defun_as_expr env _name params body span =
     ty = Prim.symbol;
     constraints = fn_result.constraints;
     undefineds = fn_result.undefineds;
+    clause_diagnostics = fn_result.clause_diagnostics;
   }
 
 (** Infer the type of a defun and return the binding information.
@@ -2221,6 +2386,7 @@ and infer_defun_with_declaration (env : Env.t) (name : string)
       fn_type;
       defun_constraints = all_constraints;
       defun_undefineds = body_result.undefineds;
+      defun_clause_diagnostics = body_result.clause_diagnostics;
     }
 
 (** Infer a defun without type declaration (original behavior). *)
@@ -2272,6 +2438,7 @@ and infer_defun_inferred (env : Env.t) (name : string)
       fn_type = generalized_ty;
       defun_constraints = body_result.constraints;
       defun_undefineds = body_result.undefineds;
+      defun_clause_diagnostics = body_result.clause_diagnostics;
     }
 
 (** Infer the type of a vector literal.
@@ -2308,4 +2475,7 @@ and infer_vector env elems span =
         ty = vector_of first_result.ty;
         constraints = all_constraints;
         undefineds = all_undefineds;
+        clause_diagnostics =
+          first_result.clause_diagnostics
+          @ combine_clause_diagnostics rest_results;
       }

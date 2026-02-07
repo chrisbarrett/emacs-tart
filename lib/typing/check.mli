@@ -22,6 +22,8 @@ type check_result = {
   forms : form_result list;  (** Results for each top-level form *)
   errors : Unify.error list;  (** Any type errors encountered *)
   undefineds : Infer.undefined_var list;  (** Undefined variable references *)
+  clause_diagnostics : Infer.resolved_clause_diagnostic list;
+      (** Clause diagnostics emitted during multi-clause dispatch *)
   aliases : Sig.Sig_loader.alias_context;
       (** File-local type aliases from tart-type forms *)
 }

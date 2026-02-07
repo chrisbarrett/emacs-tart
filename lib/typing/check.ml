@@ -32,6 +32,8 @@ type check_result = {
   forms : form_result list;  (** Results for each top-level form *)
   errors : Unify.error list;  (** Any type errors encountered *)
   undefineds : Infer.undefined_var list;  (** Undefined variable references *)
+  clause_diagnostics : Infer.resolved_clause_diagnostic list;
+      (** Clause diagnostics emitted during multi-clause dispatch *)
   aliases : Sig_loader.alias_context;
       (** File-local type aliases from tart-type forms *)
 }
@@ -42,6 +44,7 @@ type check_state = {
   st_aliases : Sig_loader.alias_context;
   st_errors : Unify.error list;
   st_undefineds : Infer.undefined_var list;
+  st_clause_diagnostics : Infer.resolved_clause_diagnostic list;
   st_forms : form_result list;
 }
 (** Internal state for type checking a program. Tracks environment, aliases, and
@@ -138,7 +141,11 @@ let extract_defvar_tart_annotation (init : Syntax.Sexp.t) :
     [aliases] provides file-local type aliases for expansion. *)
 let check_defvar ~(aliases : Sig_loader.alias_context) (env : Env.t)
     (name : string) (init : Syntax.Sexp.t option) (_span : Loc.span) :
-    Env.t * form_result * Unify.error list * Infer.undefined_var list =
+    Env.t
+    * form_result
+    * Unify.error list
+    * Infer.undefined_var list
+    * Infer.resolved_clause_diagnostic list =
   match init with
   | Some init_expr -> (
       match extract_defvar_tart_annotation init_expr with
@@ -173,7 +180,8 @@ let check_defvar ~(aliases : Sig_loader.alias_context) (env : Env.t)
               ( env',
                 DefvarForm { name; var_type },
                 errors,
-                value_result.Infer.undefineds )
+                value_result.Infer.undefineds,
+                value_result.Infer.clause_diagnostics )
           | None ->
               (* Parse failed - fall through to regular inference *)
               let result = Infer.infer env init_expr in
@@ -185,7 +193,8 @@ let check_defvar ~(aliases : Sig_loader.alias_context) (env : Env.t)
               ( env',
                 DefvarForm { name; var_type = result.Infer.ty },
                 errors,
-                result.Infer.undefineds ))
+                result.Infer.undefineds,
+                result.Infer.clause_diagnostics ))
       | None ->
           (* No tart annotation: infer the type from init *)
           let result = Infer.infer env init_expr in
@@ -197,19 +206,20 @@ let check_defvar ~(aliases : Sig_loader.alias_context) (env : Env.t)
           ( env',
             DefvarForm { name; var_type = result.Infer.ty },
             errors,
-            result.Infer.undefineds ))
+            result.Infer.undefineds,
+            result.Infer.clause_diagnostics ))
   | None -> (
       (* (defvar NAME) with no init - respect existing tart-declare type if present *)
       match Env.lookup name env with
       | Some scheme ->
           (* Variable already declared (e.g., via tart-declare) - keep that type *)
           let var_type = Env.instantiate scheme env in
-          (env, DefvarForm { name; var_type }, [], [])
+          (env, DefvarForm { name; var_type }, [], [], [])
       | None ->
           (* New variable without init - use Any type *)
           let var_type = Prim.any in
           let env' = Env.extend_mono name var_type env in
-          (env', DefvarForm { name; var_type }, [], []))
+          (env', DefvarForm { name; var_type }, [], [], []))
 
 (** Check a tart-declare form: (tart-declare NAME TYPE)
 
@@ -217,7 +227,11 @@ let check_defvar ~(aliases : Sig_loader.alias_context) (env : Env.t)
     [aliases] provides file-local type aliases for expansion. *)
 let check_tart_declare ~(aliases : Sig_loader.alias_context) (env : Env.t)
     (name : string) (type_sexp : Syntax.Sexp.t) :
-    Env.t * form_result * Unify.error list * Infer.undefined_var list =
+    Env.t
+    * form_result
+    * Unify.error list
+    * Infer.undefined_var list
+    * Infer.resolved_clause_diagnostic list =
   match parse_tart_type type_sexp with
   | Some sig_type ->
       let var_type =
@@ -225,12 +239,12 @@ let check_tart_declare ~(aliases : Sig_loader.alias_context) (env : Env.t)
       in
       let scheme = Generalize.generalize (Env.current_level env) var_type in
       let env' = Env.extend name scheme env in
-      (env', TartDeclareForm { name; var_type }, [], [])
+      (env', TartDeclareForm { name; var_type }, [], [], [])
   | None ->
       (* Parse failed - use Any type *)
       let var_type = Prim.any in
       let env' = Env.extend_mono name var_type env in
-      (env', TartDeclareForm { name; var_type }, [], [])
+      (env', TartDeclareForm { name; var_type }, [], [], [])
 
 (** Try to match a defvar or defconst form.
 
@@ -356,7 +370,7 @@ let check_form_with_state (state : check_state) (sexp : Syntax.Sexp.t) :
       (* Try to match tart-declare *)
       match match_tart_declare sexp with
       | Some (name, type_sexp) ->
-          let env', result, errors, undefs =
+          let env', result, errors, undefs, cdiags =
             check_tart_declare ~aliases env name type_sexp
           in
           {
@@ -364,13 +378,15 @@ let check_form_with_state (state : check_state) (sexp : Syntax.Sexp.t) :
             st_aliases = aliases;
             st_errors = List.rev_append errors state.st_errors;
             st_undefineds = List.rev_append undefs state.st_undefineds;
+            st_clause_diagnostics =
+              List.rev_append cdiags state.st_clause_diagnostics;
             st_forms = result :: state.st_forms;
           }
       | None -> (
           (* Try to match defvar/defconst *)
           match match_defvar sexp with
           | Some (name, init, span) ->
-              let env', result, errors, undefs =
+              let env', result, errors, undefs, cdiags =
                 check_defvar ~aliases env name init span
               in
               {
@@ -378,6 +394,8 @@ let check_form_with_state (state : check_state) (sexp : Syntax.Sexp.t) :
                 st_aliases = aliases;
                 st_errors = List.rev_append errors state.st_errors;
                 st_undefineds = List.rev_append undefs state.st_undefineds;
+                st_clause_diagnostics =
+                  List.rev_append cdiags state.st_clause_diagnostics;
                 st_forms = result :: state.st_forms;
               }
           | None -> (
@@ -408,6 +426,10 @@ let check_form_with_state (state : check_state) (sexp : Syntax.Sexp.t) :
                     st_undefineds =
                       List.rev_append defun_result.Infer.defun_undefineds
                         state.st_undefineds;
+                    st_clause_diagnostics =
+                      List.rev_append
+                        defun_result.Infer.defun_clause_diagnostics
+                        state.st_clause_diagnostics;
                     st_forms = result :: state.st_forms;
                   }
               | None ->
@@ -421,6 +443,9 @@ let check_form_with_state (state : check_state) (sexp : Syntax.Sexp.t) :
                     st_undefineds =
                       List.rev_append result.Infer.undefineds
                         state.st_undefineds;
+                    st_clause_diagnostics =
+                      List.rev_append result.Infer.clause_diagnostics
+                        state.st_clause_diagnostics;
                     st_forms =
                       ExprForm { ty = result.Infer.ty } :: state.st_forms;
                   })))
@@ -438,6 +463,7 @@ let check_form (env : Env.t) (sexp : Syntax.Sexp.t) :
       st_aliases = Sig_loader.empty_aliases;
       st_errors = [];
       st_undefineds = [];
+      st_clause_diagnostics = [];
       st_forms = [];
     }
   in
@@ -463,6 +489,7 @@ let check_program ?(env = default_env ()) (forms : Syntax.Sexp.t list) :
       st_aliases = prelude_aliases;
       st_errors = [];
       st_undefineds = [];
+      st_clause_diagnostics = [];
       st_forms = [];
     }
   in
@@ -472,6 +499,7 @@ let check_program ?(env = default_env ()) (forms : Syntax.Sexp.t list) :
     forms = List.rev final_state.st_forms;
     errors = List.rev final_state.st_errors;
     undefineds = List.rev final_state.st_undefineds;
+    clause_diagnostics = List.rev final_state.st_clause_diagnostics;
     aliases = final_state.st_aliases;
   }
 
