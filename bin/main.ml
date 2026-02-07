@@ -205,8 +205,26 @@ let scan_c_source_verbose ~src_dir : Tart.C_scanner.c_definition list =
    ============================================================================ *)
 
 (** Type-check a single file with a given environment. *)
-let check_file env filename : Tart.Type_env.t * Tart.Error.t list =
+let check_file ~memory env filename : Tart.Type_env.t * Tart.Error.t list =
+  let mem_before_parse =
+    if memory then Some (Tart.Memory_stats.snapshot ()) else None
+  in
+  let t_parse = Tart.Timing.start () in
   let parse_result = Tart.Read.parse_file filename in
+  let parse_elapsed = Tart.Timing.elapsed_s t_parse in
+  let mem_parse_str =
+    match mem_before_parse with
+    | Some before ->
+        let after = Tart.Memory_stats.snapshot () in
+        " ("
+        ^ Tart.Memory_stats.format_delta (Tart.Memory_stats.diff ~before ~after)
+        ^ ")"
+    | None -> ""
+  in
+  Tart.Log.verbose "Parsing %s... %s%s"
+    (Filename.basename filename)
+    (Tart.Timing.format_duration parse_elapsed)
+    mem_parse_str;
 
   let parse_errors =
     List.map
@@ -217,7 +235,25 @@ let check_file env filename : Tart.Type_env.t * Tart.Error.t list =
 
   if parse_result.sexps = [] then (env, parse_errors)
   else
+    let mem_before_infer =
+      if memory then Some (Tart.Memory_stats.snapshot ()) else None
+    in
+    let t_infer = Tart.Timing.start () in
     let check_result = Tart.Check.check_program ~env parse_result.sexps in
+    let infer_elapsed = Tart.Timing.elapsed_s t_infer in
+    let mem_infer_str =
+      match mem_before_infer with
+      | Some before ->
+          let after = Tart.Memory_stats.snapshot () in
+          " ("
+          ^ Tart.Memory_stats.format_delta
+              (Tart.Memory_stats.diff ~before ~after)
+          ^ ")"
+      | None -> ""
+    in
+    Tart.Log.verbose "Type inference... %s%s"
+      (Tart.Timing.format_duration infer_elapsed)
+      mem_infer_str;
     let type_diagnostics =
       Tart.Diagnostic.of_unify_errors check_result.errors
     in
@@ -268,8 +304,8 @@ let apply_severity_flags ~warn_as_error ~ignore_warnings ~ignore_hints
   else errors
 
 (** Check subcommand: type-check files *)
-let run_check format warn_as_error ignore_warnings ignore_hints emacs_version
-    files =
+let run_check ~memory format warn_as_error ignore_warnings ignore_hints
+    emacs_version files =
   if files = [] then (
     let err =
       Tart.Error.cli_error ~message:"no input files"
@@ -277,6 +313,7 @@ let run_check format warn_as_error ignore_warnings ignore_hints emacs_version
     in
     prerr_endline (Tart.Error.to_string err);
     exit 2);
+  let t_total = Tart.Timing.start () in
   (* Validate all files exist first, collecting file errors *)
   let file_errors, valid_files =
     List.fold_left
@@ -309,10 +346,14 @@ let run_check format warn_as_error ignore_warnings ignore_hints emacs_version
   let _, type_errors =
     List.fold_left
       (fun (env, acc_errors) file ->
-        let env', errs = check_file env file in
+        let env', errs = check_file ~memory env file in
         (env', acc_errors @ errs))
       (initial_env, []) valid_files
   in
+  let total_elapsed = Tart.Timing.elapsed_s t_total in
+  Tart.Log.verbose "Total: %s" (Tart.Timing.format_duration total_elapsed);
+  if memory then
+    Printf.eprintf "[memory] %s\n" (Tart.Memory_stats.format_summary ());
   let all_errors = file_errors @ type_errors in
   let all_errors =
     apply_severity_flags ~warn_as_error ~ignore_warnings ~ignore_hints
@@ -853,10 +894,10 @@ let check_cmd =
   in
   let info = Cmd.info "check" ~doc ~man in
   let run log_level log_format verbose_flag format warn_as_error ignore_warnings
-      ignore_hints _memory emacs_version files =
+      ignore_hints memory emacs_version files =
     setup_logging ~log_level ~log_format ~verbose_flag;
-    run_check format warn_as_error ignore_warnings ignore_hints emacs_version
-      files
+    run_check ~memory format warn_as_error ignore_warnings ignore_hints
+      emacs_version files
   in
   Cmd.v info
     Term.(
@@ -1069,10 +1110,10 @@ let emacs_coverage_cmd =
 
 let default_cmd =
   let run log_level log_format verbose_flag format warn_as_error ignore_warnings
-      ignore_hints _memory emacs_version files =
+      ignore_hints memory emacs_version files =
     setup_logging ~log_level ~log_format ~verbose_flag;
-    run_check format warn_as_error ignore_warnings ignore_hints emacs_version
-      files
+    run_check ~memory format warn_as_error ignore_warnings ignore_hints
+      emacs_version files
   in
   Term.(
     const run $ log_level_arg $ log_format_arg $ verbose_flag_arg $ format_arg
