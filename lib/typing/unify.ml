@@ -649,6 +649,72 @@ let solve_all (constraints : C.set) : error list =
       | Error e -> Some (to_external_error c.context e))
     constraints
 
+(** {1 Speculative Unification} *)
+
+(** Collect all tvar ref cells reachable from a type, with their current states.
+    Used for snapshot/rollback during speculative unification. *)
+let rec collect_tvar_refs acc ty =
+  match ty with
+  | TVar tv -> (
+      if List.exists (fun (tv', _) -> tv == tv') acc then acc
+      else
+        let saved = !tv in
+        let acc = (tv, saved) :: acc in
+        match saved with
+        | Link ty' -> collect_tvar_refs acc ty'
+        | Unbound _ -> acc)
+  | TCon _ -> acc
+  | TApp (con, args) ->
+      List.fold_left collect_tvar_refs (collect_tvar_refs acc con) args
+  | TArrow (params, ret) ->
+      let acc =
+        List.fold_left
+          (fun a p ->
+            match p with
+            | PPositional t | POptional t | PRest t | PKey (_, t) ->
+                collect_tvar_refs a t)
+          acc params
+      in
+      collect_tvar_refs acc ret
+  | TForall (_, body) -> collect_tvar_refs acc body
+  | TUnion types | TTuple types -> List.fold_left collect_tvar_refs acc types
+  | TRow { row_fields; row_var } -> (
+      let acc =
+        List.fold_left (fun a (_, t) -> collect_tvar_refs a t) acc row_fields
+      in
+      match row_var with None -> acc | Some v -> collect_tvar_refs acc v)
+
+(** Restore tvar refs to their saved states. *)
+let restore_tvars snapshot = List.iter (fun (tv, saved) -> tv := saved) snapshot
+
+(** Attempt unification speculatively. If it fails, all tvar mutations are
+    rolled back and the types remain unchanged. Returns [Ok ()] on success or
+    [Error] on failure. On success, the unification side-effects are committed
+    (tvars remain linked). *)
+let try_unify t1 t2 loc : unit result =
+  let snapshot = collect_tvar_refs (collect_tvar_refs [] t1) t2 in
+  match unify t1 t2 loc with
+  | Ok () -> Ok ()
+  | Error e ->
+      restore_tvars snapshot;
+      Error (to_external_error C.NoContext e)
+
+(** Attempt to unify two param lists speculatively. Rolls back on failure. *)
+let try_unify_params ps1 ps2 loc : unit result =
+  let snapshot =
+    List.fold_left
+      (fun acc p ->
+        match p with
+        | PPositional t | POptional t | PRest t | PKey (_, t) ->
+            collect_tvar_refs acc t)
+      [] (ps1 @ ps2)
+  in
+  match unify_param_lists ps1 ps2 loc with
+  | Ok () -> Ok ()
+  | Error e ->
+      restore_tvars snapshot;
+      Error (to_external_error C.NoContext e)
+
 (** Check if two types are provably disjoint (empty intersection).
 
     Returns [true] when the types cannot share any value at runtime:

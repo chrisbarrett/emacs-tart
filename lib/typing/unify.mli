@@ -56,6 +56,25 @@ val solve_all : Constraint.set -> error list
 (** [solve_all constraints] solves constraints and returns all errors. Useful
     for reporting multiple type errors at once. *)
 
+(** {1 Speculative Unification} *)
+
+val try_unify :
+  Core.Types.typ -> Core.Types.typ -> Syntax.Location.span -> unit result
+(** [try_unify t1 t2 loc] attempts unification speculatively. If unification
+    succeeds, the side-effects are committed (tvars remain linked). If it fails,
+    all tvar mutations are rolled back and the types remain unchanged.
+
+    Used by clause dispatch to try each clause without permanently modifying
+    type state on failure. *)
+
+val try_unify_params :
+  Core.Types.param list ->
+  Core.Types.param list ->
+  Syntax.Location.span ->
+  unit result
+(** [try_unify_params ps1 ps2 loc] attempts param list unification speculatively
+    with rollback on failure. *)
+
 (** {1 Disjointness} *)
 
 val types_disjoint : Core.Types.typ -> Core.Types.typ -> bool
