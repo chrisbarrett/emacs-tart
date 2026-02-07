@@ -619,8 +619,7 @@ let test_parse_eval_tart () =
           sig_file.sig_decls
       in
       Alcotest.(check bool) "has eval" true (has_defun "eval");
-      Alcotest.(check bool) "has funcall" true (has_defun "funcall");
-      Alcotest.(check bool) "has apply" true (has_defun "apply");
+      (* funcall and apply are special-cased in infer.ml; no .tart sigs *)
       Alcotest.(check bool) "has throw" true (has_defun "throw");
       Alcotest.(check bool) "has signal" true (has_defun "signal");
       Alcotest.(check bool) "has macroexpand" true (has_defun "macroexpand")
@@ -636,10 +635,7 @@ let test_load_eval_tart () =
       (match Type_env.lookup "eval" env with
       | None -> Alcotest.fail "eval not found in env"
       | Some _ -> ());
-      (* Check that funcall is loaded *)
-      (match Type_env.lookup "funcall" env with
-      | None -> Alcotest.fail "funcall not found in env"
-      | Some _ -> ());
+      (* funcall and apply are special-cased in infer.ml; no .tart sigs *)
       (* Check that signal is loaded *)
       match Type_env.lookup "signal" env with
       | None -> Alcotest.fail "signal not found in env"

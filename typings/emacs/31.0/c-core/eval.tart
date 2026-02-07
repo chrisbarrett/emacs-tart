@@ -79,13 +79,8 @@
 ;; (eval FORM &optional LEXICAL) - evaluate form
 (defun eval (any &optional any) -> any)
 
-;; (funcall FN &rest ARGS) - call function
-;; Note: Return type depends on FN, typed as any
-(defun funcall (any &rest any) -> any)
-
-;; (apply FN &rest ARGS) - call with last arg as list
-;; Note: Return type depends on FN, typed as any
-(defun apply (any &rest any) -> any)
+;; funcall and apply are special-cased in the type checker (infer.ml);
+;; signatures here would mask type errors. See Spec 34.
 
 ;; (funcall-with-delayed-message TIMEOUT MESSAGE FN &rest ARGS) - call with timeout message
 (defun funcall-with-delayed-message (num string any &rest any) -> any)

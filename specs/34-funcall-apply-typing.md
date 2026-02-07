@@ -258,17 +258,17 @@ purpose of the type system. See Spec 48 for general `any` discipline.
 - [x] [R2] Handle quoted symbols in funcall/apply (both #' and ')
 - [x] [R3] Ensure variable refs use variable namespace
 - [x] [R4] Special-case funcall in type inference
-- [ ] [R5] Emit style warning for regular-quoted symbols in funcall/apply
+- [x] [R5] Emit style warning for regular-quoted symbols in funcall/apply
 - [x] [R6] Add funcall-specific error messages
 - [x] [R7] Implement apply for &rest functions
 - [x] [R8] Implement apply for fixed-arity with tuples
-- [ ] [R9] Add tuple <: list subtyping to unification
-- [ ] [R10] Context-sensitive tuple inference for list literals
-- [ ] [R11] Handle union function types in funcall/apply
-- [ ] [R12] Implement occurrence typing for type predicates
-- [ ] [R13] Thread narrowed types through funcall
+- [x] [R9] Add tuple <: list subtyping to unification
+- [x] [R10] Context-sensitive tuple inference for list literals
+- [x] [R11] Handle union function types in funcall/apply
+- [x] [R12] Implement occurrence typing for type predicates
+- [x] [R13] Thread narrowed types through funcall
 - [x] [R14] Ensure unification errors rather than widens
-- [ ] Remove funcall/apply from builtin_types.ml entirely (no signatures, only type-checker special-casing)
-- [ ] Add test fixtures for all requirements
+- [x] Remove funcall/apply from eval.tart (no signatures, only type-checker special-casing)
+- [x] Add test fixtures for all requirements
 
-**Status:** Core funcall/apply typing implemented in `lib/typing/infer.ml` (lines 901-1070). Dual namespace via `Env.lookup_fn` vs `Env.lookup`. Remaining: occurrence typing (R12-R13), tuple subtyping (R9-R10), union functions (R11).
+**Status:** Complete
