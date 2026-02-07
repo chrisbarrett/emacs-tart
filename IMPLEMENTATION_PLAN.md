@@ -1,165 +1,164 @@
-# Implementation Plan: Spec 53 — Structured Logging
+# Implementation Plan: Spec 44 — Timing and Memory Statistics
 
 ## Background
 
-Spec 53 replaces ad-hoc logging with a unified `Log` module. Two
-separate logging systems exist:
+Spec 44 adds opt-in timing and memory statistics to `check`, `eval`,
+and `expand` subcommands. The existing `Log` module (Spec 53) already
+provides `-v`/`--verbose` which gates at the `Verbose` level — timing
+output uses `Log.verbose` so no new `-v` flag is needed. The only new
+CLI flag is `--memory`.
 
-1. `lib/coverage/verbose_log.ml` — format-string based, gated by a
-   `bool` threaded through call sites. Used by `main.ml` helpers
-   (5 `open` sites, ~40 `verbose_log` calls).
+**Key insight:** The spec's output example uses `[verbose]` prefix,
+which maps directly to `Log.verbose` calls. Memory summary uses a
+`[memory]` tag which we'll emit via `Log.info` (always shown when
+`--memory` is set) or a dedicated emit function that bypasses log level
+gating when `--memory` is active.
 
-2. `lib/lsp/server.ml` — string-based `log`, `debug`, `info` methods
-   tied to server state. ~80 call sites inside server.ml. Has its own
-   `log_level = Quiet | Normal | Debug`.
+**Phases in `run_check`:**
+1. Parsing (`Read.parse_file`)
+2. Type inference (`Check.check_program`)
+3. Diagnostic formatting
 
-**What the spec wants:** A new `lib/log/` sub-library with global
-mutable state (set once at CLI startup), format-string gating via
-`Printf.ifprintf`, four levels (Quiet, Normal, Verbose, Debug),
-optional JSON-lines output format, and global `--log-level`/`-v`/
-`--log-format` flags on every subcommand.
+**Phases in `run_eval`:**
+1. Parsing (`Read.parse_string`)
+2. Evaluation (`Eval.eval_toplevel`)
+3. Type inference (`Check.check_expr`)
 
-**Key constraint:** Zero-cost when disabled — suppressed calls must
-not allocate or format strings. The existing `verbose_log` already
-does this correctly with `Printf.ifprintf`. The LSP server's `log`
-function builds string first then gates — that's non-zero-cost.
-
-**Migration complexity:**
-
-- `main.ml` verbose_log calls: straightforward substitution of
-  `verbose_log verbose` → `Log.verbose`. The `~verbose:bool` parameter
-  threading can be removed since `Log` uses global state.
-- `server.ml` log calls: ~80 sites use `debug server "..."` and
-  `info server "..."` patterns (string, not format). These become
-  `Log.debug "%s" msg` or better, convert inline string construction
-  to `Log.debug "msg %s" arg` for zero-cost.
-- The LSP server's own `log_level` type and `log`/`debug`/`info`
-  functions are deleted. The `--log-level` arg on the `lsp` subcommand
-  maps to the global `Log.set_level` call.
-- `verbose_arg` currently used by coverage commands becomes the global
-  `-v` shorthand. The coverage-specific `verbose` param threading is
-  removed.
+**Phases in `run_expand`:**
+1. Parsing (`Read.parse_file`)
+2. Expansion (`Expand.expand_all`)
 
 ---
 
-## Iteration 1: Create `lib/log/` module and global CLI flags
+## Iteration 1: Timing module + `--memory` flag
 
 **What to build:**
 
-1. Create `lib/log/dune` — new sub-library `tart.log` depending on
-   `yojson`.
+1. Create `lib/timing/dune` — new sub-library `tart.timing` depending
+   on `unix`.
 
-2. Create `lib/log/log.ml` and `lib/log/log.mli`:
-   - `type level = Quiet | Normal | Verbose | Debug`
-   - `type format = Text | Json`
-   - Global refs: `current_level`, `current_format`
-   - `set_level`, `set_format` mutators
-   - `info`, `verbose`, `debug` using `Printf.kfprintf`/`Printf.ifprintf`
-   - `debug_with_ctx` for optional JSON context
+2. Create `lib/timing/timing.ml` and `lib/timing/timing.mli`:
+   - `type t` (opaque, wraps float from `Unix.gettimeofday`)
+   - `val start : unit -> t`
+   - `val elapsed_s : t -> float` (seconds)
+   - `val elapsed_ms : t -> float` (milliseconds)
+   - `val format_duration : float -> string` (auto-scales:
+     `"1.23s"` / `"45ms"` / `"123μs"`)
 
-3. Add `tart.log` as dependency of `tart` (top-level lib/dune).
+3. Create `lib/memory_stats/dune` — new sub-library
+   `tart.memory_stats` (no extra deps, uses `Gc` stdlib).
 
-4. Wire global flags in `main.ml`:
-   - Add `--log-level` enum (quiet/normal/verbose/debug)
-   - Add `--log-format` enum (text/json)
-   - Resolve `-v` flag: if set and `--log-level` is default, use
-     Verbose; otherwise `--log-level` wins
-   - Call `Log.set_level` and `Log.set_format` before dispatching
-     each subcommand
+4. Create `lib/memory_stats/memory_stats.ml` and
+   `lib/memory_stats/memory_stats.mli`:
+   - `type snapshot` (wraps `Gc.stat` result)
+   - `type delta` (diffs of minor/major words, minor/major collections)
+   - `val snapshot : unit -> snapshot`
+   - `val diff : before:snapshot -> after:snapshot -> delta`
+   - `val format_delta : delta -> string` (e.g., `"1.2MB alloc, 3 minor GC"`)
+   - `val format_summary : unit -> string` (heap size, GC counts, total alloc)
+   - `val format_bytes : float -> string` (auto-scales: `"1.2MB"` / `"45KB"`)
 
-5. Add `tart.log` dependency to coverage dune and lsp dune.
+5. Add `tart.timing` and `tart.memory_stats` as dependencies of
+   `tart` (lib/dune).
+
+6. Re-export as `Tart.Timing` and `Tart.Memory_stats` in
+   `lib/tart.ml` and `lib/tart.mli`.
+
+7. Add `--memory` flag in `bin/main.ml`:
+   - `memory_flag_arg`: `Arg.(value & flag & info ["memory"] ~doc)`
+   - Wire into `check_cmd`, `eval_cmd`, `expand_cmd` terms
 
 **Files:**
-- `lib/log/dune` (new)
-- `lib/log/log.ml` (new)
-- `lib/log/log.mli` (new)
-- `lib/dune` — add `tart.log` to libraries
-- `lib/coverage/dune` — add `log` to libraries
-- `lib/lsp/dune` — add `log` to libraries
-- `bin/main.ml` — global flag definitions and wiring
+- `lib/timing/dune` (new)
+- `lib/timing/timing.ml` (new)
+- `lib/timing/timing.mli` (new)
+- `lib/memory_stats/dune` (new)
+- `lib/memory_stats/memory_stats.ml` (new)
+- `lib/memory_stats/memory_stats.mli` (new)
+- `lib/dune` — add dependencies
+- `lib/tart.ml` / `lib/tart.mli` — re-exports
+- `bin/main.ml` — `--memory` flag definition
 
 **Verify:** `dune build`; `dune test`
 
 ---
 
-## Iteration 2: Migrate coverage/main.ml from Verbose_log to Log
+## Iteration 2: Instrument `run_check` (R1, R3–R5, R8, R11)
 
 **What to build:**
 
-1. Replace all `verbose_log verbose` calls in `main.ml` with
-   `Log.verbose` calls. Remove `let open Tart.Verbose_log in` blocks.
-   Remove `~verbose` parameter threading from helper functions
-   (`find_typings_root`, `detect_emacs_version`, `log_typings_loading`,
-   `scan_c_source_verbose`).
+1. Wrap `check_file` phases with timing:
+   - `Tart.Timing.start ()` before parsing
+   - Log after parsing: `Log.verbose "Parsing %s... %s" file (format)`
+   - `Tart.Timing.start ()` before type inference
+   - Log after inference: `Log.verbose "Type inference... %s" (format)`
 
-2. Update `run_coverage` and `run_emacs_coverage` — remove `verbose`
-   parameter, update Cmdliner terms.
+2. When `--memory` is set, take `Memory_stats.snapshot` before/after
+   each phase. Append delta to the verbose line:
+   `Log.verbose "Parsing %s... %s (%s)" file time_str mem_delta_str`
 
-3. Delete `lib/coverage/verbose_log.ml` and `verbose_log.mli`.
+3. After all files, log total:
+   `Log.verbose "Total: %s" (format total_elapsed)`
 
-4. Update `lib/coverage/dune` if needed.
+4. When `--memory` is set, emit memory summary after total:
+   `Printf.eprintf "[memory] %s\n" (Memory_stats.format_summary ())`
 
-5. Verify no remaining `Verbose_log` references: `grep -r Verbose_log`.
+5. For multiple files (R5), wrap each `check_file` call to show
+   per-file timing.
+
+6. Thread `memory` flag through `run_check` parameter.
 
 **Files:**
-- `bin/main.ml` — bulk migration
-- `lib/coverage/verbose_log.ml` — delete
-- `lib/coverage/verbose_log.mli` — delete
+- `bin/main.ml` — instrument `run_check` and `check_file`
 
-**Verify:** `dune build`; `dune test`; `grep -r Verbose_log lib/ bin/`
-returns nothing
+**Verify:** `dune build`; `dune test`;
+`./tart check -v test/fixtures/typing/core/basic.el 2>&1 | grep Parsing`
 
 ---
 
-## Iteration 3: Migrate LSP server to Log
+## Iteration 3: Instrument `run_eval` and `run_expand` (R9, R10)
 
 **What to build:**
 
-1. Remove `log_level` type and `log`/`debug`/`info` functions from
-   `server.ml` and `server.mli`.
+1. Instrument `run_eval`:
+   - Time parsing, evaluation, type inference phases
+   - Log each phase at verbose level
+   - Log total at verbose level
+   - When `--memory`, include deltas and summary
 
-2. Remove `log_level` field from server `t` record and `create`
-   parameter.
+2. Instrument `run_expand`:
+   - Time parsing (per file for `--load` files and target)
+   - Time expansion
+   - Log each phase at verbose level
+   - Log total at verbose level
+   - When `--memory`, include deltas and summary
 
-3. Replace all `debug server "..."` with `Log.debug "%s" "..."` or
-   convert to format-string calls where feasible. Prioritize the ~10
-   most common patterns; use `%s` wrapper for complex string-built
-   messages.
-
-4. Update `main.ml` `run_lsp`: remove `log_level` param from
-   `Server.create` call. The global `Log.set_level` (wired in
-   iteration 1) handles level configuration.
-
-5. Remove `lsp_log_level_arg` from main.ml (superseded by global
-   `--log-level`).
-
-6. Update any tests that reference `Server.log_level`,
-   `Server.Debug`, `Server.Normal`, `Server.Quiet`.
+3. Thread `memory` flag through both functions.
 
 **Files:**
-- `lib/lsp/server.ml` / `server.mli` — remove log infrastructure
-- `bin/main.ml` — update `run_lsp`, remove `lsp_log_level_arg`
-- `test/lsp/server_test.ml` (if it references log_level)
+- `bin/main.ml` — instrument `run_eval` and `run_expand`
 
-**Verify:** `dune build`; `dune test`
+**Verify:** `dune build`; `dune test`;
+`./tart eval -v '(+ 1 2)' 2>&1 | grep Total`
 
 ---
 
-## Iteration 4: Spec status update
+## Iteration 4: Polish formatting + spec status (R12)
 
 **What to build:**
 
-1. Check all task boxes in specs/53-structured-logging.md.
-2. Add Status section: "Complete".
-3. Verify R8 (verbose logging shows signature loading) — already
-   present from verbose_log migration.
-4. R9 (debug logging for unification/resolution) — defer to future
-   if no existing debug call sites exist in typing modules. Mark
-   task as checked with note.
-5. R10-R11 (stderr/stdout separation, quiet mode) — verify by
-   inspection; Log module writes to stderr, results to stdout.
+1. Verify human-readable units are properly scaled in all output.
+
+2. Align output columns if feasible (phase name padding).
+
+3. Verify stderr/stdout separation (R11): timing goes to stderr via
+   Log.verbose (which uses `eprintf`), results go to stdout.
+
+4. Check all task boxes in `specs/44-timing-stats.md`.
+
+5. Add Status section: "Complete".
 
 **Files:**
-- `specs/53-structured-logging.md`
+- `specs/44-timing-stats.md`
 
 **Verify:** `dune test`; all tests pass

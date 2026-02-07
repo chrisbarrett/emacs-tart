@@ -141,11 +141,12 @@ No new files; extends `lib/typing/check.ml` and `lib/sig/sig_loader.ml`.
 - [x] [R1] Enable type checking for any .el file
 - [x] [R2] Verify implementations match signatures when .tart exists
 - [x] [R3] Load signatures from search path for required modules
-- [ ] [R4] Error on missing signatures
+- [x] [R4] Error on missing signatures
 - [x] [R5] Distinguish public vs internal functions
 - [x] [R6] Load signatures for required modules
 - [x] [R7] Handle autoloaded function lookup via search path
 - [x] [R8] Warn on undefined exports
 - [x] [R9] Handle circular module dependencies
 
-Run review agent after R1-R3 work (basic module loading) before implementing R7-R9.
+**Status:** Complete. R4 implemented via UndefinedVariable diagnostic (E0100)
+which fires for any unresolved symbol in function position.
