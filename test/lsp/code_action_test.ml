@@ -180,6 +180,138 @@ let test_extract_function_name_removed () =
     "removed" (Some "old-api")
     (Code_action.extract_function_name "`old-api` was removed after Emacs 30.1")
 
+(** {1 generate_downgrade_version_action} *)
+
+let test_downgrade_action_basic () =
+  let doc =
+    ";;; test.el --- Test -*- lexical-binding: t -*-\n\
+     ;; Package-Requires: ((emacs \"31.0\"))\n\
+     (old-api)"
+  in
+  let uri = "file:///tmp/test.el" in
+  let diagnostic : Protocol.diagnostic =
+    {
+      range =
+        {
+          start = { line = 2; character = 0 };
+          end_ = { line = 2; character = 9 };
+        };
+      severity = None;
+      code = Some "E0901";
+      message = "`old-api` was removed after Emacs 30.1";
+      source = None;
+      related_information = [];
+    }
+  in
+  match
+    Code_action.generate_downgrade_version_action ~uri ~doc_text:doc
+      ~target_version:"30.1" ~diagnostic
+  with
+  | Some action -> (
+      Alcotest.(check string)
+        "title" "Downgrade minimum Emacs version to 30.1" action.ca_title;
+      Alcotest.(check bool)
+        "is quickfix" true
+        (action.ca_kind = Some Protocol.QuickFix);
+      match action.ca_edit with
+      | Some edit ->
+          let doc_changes = edit.document_changes in
+          Alcotest.(check int) "one doc change" 1 (List.length doc_changes);
+          let doc_edit = List.hd doc_changes in
+          Alcotest.(check string) "uri" uri doc_edit.tde_uri;
+          let edits = doc_edit.edits in
+          Alcotest.(check int) "one edit" 1 (List.length edits);
+          let text_edit = List.hd edits in
+          Alcotest.(check string) "new text" "30.1" text_edit.new_text;
+          Alcotest.(check int) "edit line" 1 text_edit.te_range.start.line
+      | None -> Alcotest.fail "expected edit")
+  | None -> Alcotest.fail "expected Some action"
+
+let test_downgrade_action_none_without_header () =
+  let doc = "(old-api)" in
+  let uri = "file:///tmp/test.el" in
+  let diagnostic : Protocol.diagnostic =
+    {
+      range =
+        {
+          start = { line = 0; character = 0 };
+          end_ = { line = 0; character = 9 };
+        };
+      severity = None;
+      code = Some "E0901";
+      message = "`old-api` was removed after Emacs 30.1";
+      source = None;
+      related_information = [];
+    }
+  in
+  Alcotest.(check bool)
+    "no action" true
+    (Code_action.generate_downgrade_version_action ~uri ~doc_text:doc
+       ~target_version:"30.1" ~diagnostic
+    = None)
+
+let test_downgrade_action_replaces_correct_range () =
+  let doc = ";; Package-Requires: ((emacs \"31.0\") (seq \"2.24\"))" in
+  let uri = "file:///tmp/test.el" in
+  let diagnostic : Protocol.diagnostic =
+    {
+      range =
+        {
+          start = { line = 1; character = 0 };
+          end_ = { line = 1; character = 9 };
+        };
+      severity = None;
+      code = Some "E0901";
+      message = "`old-api` was removed after Emacs 30.1";
+      source = None;
+      related_information = [];
+    }
+  in
+  match
+    Code_action.generate_downgrade_version_action ~uri ~doc_text:doc
+      ~target_version:"30.1" ~diagnostic
+  with
+  | Some action -> (
+      match action.ca_edit with
+      | Some edit ->
+          let text_edit = List.hd (List.hd edit.document_changes).edits in
+          let start_char = text_edit.te_range.start.character in
+          let end_char = text_edit.te_range.end_.character in
+          let old_text = String.sub doc start_char (end_char - start_char) in
+          Alcotest.(check string) "replaces version" "31.0" old_text;
+          Alcotest.(check string) "new version" "30.1" text_edit.new_text
+      | None -> Alcotest.fail "expected edit")
+  | None -> Alcotest.fail "expected Some action"
+
+let test_downgrade_action_has_diagnostic () =
+  let doc =
+    ";;; test.el --- Test\n;; Package-Requires: ((emacs \"31.0\"))\n(old-api)"
+  in
+  let uri = "file:///tmp/test.el" in
+  let diagnostic : Protocol.diagnostic =
+    {
+      range =
+        {
+          start = { line = 2; character = 0 };
+          end_ = { line = 2; character = 9 };
+        };
+      severity = None;
+      code = Some "E0901";
+      message = "`old-api` was removed after Emacs 30.1";
+      source = None;
+      related_information = [];
+    }
+  in
+  match
+    Code_action.generate_downgrade_version_action ~uri ~doc_text:doc
+      ~target_version:"30.1" ~diagnostic
+  with
+  | Some action ->
+      Alcotest.(check int)
+        "has diagnostic" 1
+        (List.length action.ca_diagnostics)
+  | None -> Alcotest.fail "expected Some action"
+
 (** {1 extract_text_at_range} *)
 
 let test_extract_text_single_line () =
@@ -362,6 +494,16 @@ let () =
             test_extract_function_name;
           Alcotest.test_case "extract function name removed" `Quick
             test_extract_function_name_removed;
+        ] );
+      ( "downgrade-version-action",
+        [
+          Alcotest.test_case "basic" `Quick test_downgrade_action_basic;
+          Alcotest.test_case "none without header" `Quick
+            test_downgrade_action_none_without_header;
+          Alcotest.test_case "replaces correct range" `Quick
+            test_downgrade_action_replaces_correct_range;
+          Alcotest.test_case "has diagnostic" `Quick
+            test_downgrade_action_has_diagnostic;
         ] );
       ( "extract-text-at-range",
         [

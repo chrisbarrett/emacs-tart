@@ -667,6 +667,46 @@ let extract_text_at_range (doc_text : string) (range : Protocol.range) :
     done;
     Some (Buffer.contents buf)
 
+(** Generate "Downgrade minimum Emacs version to X.Y" code action for E0901.
+
+    Edits the Package-Requires header in the document to lower the Emacs version
+    floor to the removed-after version, so the deprecated function is still
+    available. *)
+let generate_downgrade_version_action ~(uri : string) ~(doc_text : string)
+    ~(target_version : string) ~(diagnostic : Protocol.diagnostic) :
+    Protocol.code_action option =
+  match find_package_requires_version doc_text with
+  | None ->
+      Log.debug "No Package-Requires header found for downgrade action";
+      None
+  | Some (line, col_start, col_end) ->
+      let edit : Protocol.text_edit =
+        {
+          te_range =
+            {
+              start = { line; character = col_start };
+              end_ = { line; character = col_end };
+            };
+          new_text = target_version;
+        }
+      in
+      let doc_edit : Protocol.text_document_edit =
+        { tde_uri = uri; tde_version = None; edits = [ edit ] }
+      in
+      let workspace_edit : Protocol.workspace_edit =
+        { document_changes = [ doc_edit ] }
+      in
+      Some
+        {
+          Protocol.ca_title =
+            Printf.sprintf "Downgrade minimum Emacs version to %s"
+              target_version;
+          ca_kind = Some Protocol.QuickFix;
+          ca_diagnostics = [ diagnostic ];
+          ca_is_preferred = false;
+          ca_edit = Some workspace_edit;
+        }
+
 (** Generate "Wrap in feature guard" code action for E0900.
 
     Wraps the offending call expression in [(when (fboundp 'fn) ...)] to guard
@@ -780,8 +820,19 @@ let generate_version_actions ~(uri : string) ~(doc_text : string)
                   | None ->
                       Log.debug "Could not extract version from: %s"
                         internal_diag.message)
+              | Some Typing.Diagnostic.VersionTooHigh -> (
+                  match extract_removed_version internal_diag.message with
+                  | Some target_version -> (
+                      match
+                        generate_downgrade_version_action ~uri ~doc_text
+                          ~target_version ~diagnostic:client_diag
+                      with
+                      | Some action -> actions := action :: !actions
+                      | None -> ())
+                  | None ->
+                      Log.debug "Could not extract removed version from: %s"
+                        internal_diag.message)
               | _ -> ());
-              (* Task 9 will add more actions here *)
               List.rev !actions
           | None ->
               Log.debug "No matching internal diagnostic for %s"
