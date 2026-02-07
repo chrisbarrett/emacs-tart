@@ -364,5 +364,15 @@
     (tart-mode 1)
     (should (assq 'tart-mode minor-mode-alist))))
 
+;;; Download Security Tests (Spec 65)
+
+(ert-deftest tart-mode-executable-is-risky-local-variable ()
+  "tart-executable is marked as risky local variable."
+  (should (get 'tart-executable 'risky-local-variable)))
+
+(ert-deftest tart-mode-install-directory-is-risky-local-variable ()
+  "tart-install-directory is marked as risky local variable."
+  (should (get 'tart-install-directory 'risky-local-variable)))
+
 (provide 'tart-mode-tests)
 ;;; tart-mode-tests.el ends here

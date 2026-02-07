@@ -68,6 +68,8 @@ When a string, use directly (absolute path or command on `exec-path')."
                  (string :tag "Custom path"))
   :group 'tart)
 
+(put 'tart-executable 'risky-local-variable t)
+
 (defcustom tart-version 'latest
   "Tart version to install.
 When `latest', installs the most recent GitHub release.
@@ -132,6 +134,8 @@ Binaries are downloaded as tart-VERSION (e.g., tart-0.2.0)."
   :type '(choice (const :tag "Based on tart-directory-style" default)
                  (directory :tag "Custom directory"))
   :group 'tart)
+
+(put 'tart-install-directory 'risky-local-variable t)
 
 (defcustom tart-setup-find-sibling-rules t
   "Whether to add find-sibling rules for .tart and .el files.
