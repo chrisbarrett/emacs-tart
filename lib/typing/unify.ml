@@ -9,6 +9,9 @@
 open Core.Types
 module C = Constraint
 
+(** Controls context-sensitive unification rules. *)
+type unify_context = Constraint_solving | Clause_matching
+
 (** Unification errors *)
 type error =
   | TypeMismatch of typ * typ * Syntax.Location.span * C.context
@@ -218,7 +221,8 @@ let extract_concrete_map_row ty =
     (inside type application arguments), Any must match exactly - this enforces
     invariance for parameterized types like [(list int)] not unifying with
     [(list any)]. *)
-let rec unify ?(invariant = false) t1 t2 loc : unit internal_result =
+let rec unify ?(invariant = false) ?(context = Constraint_solving) t1 t2 loc :
+    unit internal_result =
   let t1 = repr t1 in
   let t2 = repr t2 in
   if t1 == t2 then
@@ -286,47 +290,56 @@ let rec unify ?(invariant = false) t1 t2 loc : unit internal_result =
           match
             (extract_map_row_arg map_ty, extract_concrete_map_row other)
           with
-          | Some map_r, Some concrete_r -> unify ~invariant map_r concrete_r loc
+          | Some map_r, Some concrete_r ->
+              unify ~invariant ~context map_r concrete_r loc
           | _ ->
               (* Not a map subtyping situation — fall through to normal TApp *)
               if List.length args1 <> List.length args2 then
                 Error
                   (IArityMismatch (List.length args1, List.length args2, loc))
               else
-                let* () = unify ~invariant c1 c2 loc in
-                unify_list ~invariant:true args1 args2 loc
-        else if is_plist_con c1 && is_list_con c2 then
+                let* () = unify ~invariant ~context c1 c2 loc in
+                unify_list ~invariant:true ~context args1 args2 loc
+        else if context <> Clause_matching && is_plist_con c1 && is_list_con c2
+        then
           (* Plist → list subsumption: (Plist k v) widens to (list (k | v)).
-             Decompose the plist into its underlying list-of-union form. *)
+             Decompose the plist into its underlying list-of-union form.
+             Suppressed during clause matching so plist and list clauses
+             remain distinct. *)
           match (args1, args2) with
-          | [ k; v ], [ elem ] -> unify ~invariant (TUnion [ k; v ]) elem loc
+          | [ k; v ], [ elem ] ->
+              unify ~invariant ~context (TUnion [ k; v ]) elem loc
           | _ -> Error (ITypeMismatch (t1, t2, loc))
-        else if is_plist_con c1 && is_pair_con c2 then
+        else if context <> Clause_matching && is_plist_con c1 && is_pair_con c2
+        then
           (* Cons chain → plist promotion: flatten (cons k (cons v ... nil))
-             and check alternating key-value structure. *)
+             and check alternating key-value structure.
+             Suppressed during clause matching. *)
           match (args1, flatten_cons_chain t2) with
           | [ k; v ], Some elems
             when List.length elems mod 2 = 0 && List.length elems > 0 ->
-              unify_cons_chain_as_plist ~invariant k v elems loc
+              unify_cons_chain_as_plist ~invariant ~context k v elems loc
           | _ -> Error (ITypeMismatch (t1, t2, loc))
-        else if is_pair_con c1 && is_plist_con c2 then
-          (* Symmetric: cons chain on left, plist on right *)
+        else if context <> Clause_matching && is_pair_con c1 && is_plist_con c2
+        then
+          (* Symmetric: cons chain on left, plist on right.
+             Suppressed during clause matching. *)
           match (flatten_cons_chain t1, args2) with
           | Some elems, [ k; v ]
             when List.length elems mod 2 = 0 && List.length elems > 0 ->
-              unify_cons_chain_as_plist ~invariant k v elems loc
+              unify_cons_chain_as_plist ~invariant ~context k v elems loc
           | _ -> Error (ITypeMismatch (t1, t2, loc))
         else if List.length args1 <> List.length args2 then
           Error (IArityMismatch (List.length args1, List.length args2, loc))
         else
           (* Unify constructors first (enables HK instantiation) *)
-          let* () = unify ~invariant c1 c2 loc in
-          unify_list ~invariant:true args1 args2 loc
+          let* () = unify ~invariant ~context c1 c2 loc in
+          unify_list ~invariant:true ~context args1 args2 loc
     (* Function types: params and return must match.
        Handle rest/optional parameters specially. *)
     | TArrow (ps1, r1), TArrow (ps2, r2) ->
-        let* () = unify_param_lists ~invariant ps1 ps2 loc in
-        unify ~invariant r1 r2 loc
+        let* () = unify_param_lists ~invariant ~context ps1 ps2 loc in
+        unify ~invariant ~context r1 r2 loc
     (* Forall types: for now, require same structure.
        Full higher-rank polymorphism would need more sophisticated handling. *)
     | TForall (vs1, b1), TForall (vs2, b2) ->
@@ -335,11 +348,11 @@ let rec unify ?(invariant = false) t1 t2 loc : unit internal_result =
         else
           (* Unify bodies directly - this is simplified.
              A full implementation would alpha-rename. *)
-          unify ~invariant b1 b2 loc
+          unify ~invariant ~context b1 b2 loc
     (* Union types: structural equality for unions on both sides *)
     | TUnion ts1, TUnion ts2 ->
         if List.length ts1 = List.length ts2 then
-          unify_list ~invariant ts1 ts2 loc
+          unify_list ~invariant ~context ts1 ts2 loc
         else Error (ITypeMismatch (t1, t2, loc))
     (* Union on left (from signature), non-union on right (from arg):
        This is the "safe" direction - passing a more specific type where
@@ -348,7 +361,10 @@ let rec unify ?(invariant = false) t1 t2 loc : unit internal_result =
        Example: message expects (string | nil), we pass string → OK
        because string ⊆ (string | nil) *)
     | TUnion ts, t when not (is_union t) ->
-        if List.exists (fun ti -> Result.is_ok (unify ~invariant ti t loc)) ts
+        if
+          List.exists
+            (fun ti -> Result.is_ok (unify ~invariant ~context ti t loc))
+            ts
         then Ok ()
         else Error (ITypeMismatch (t1, t2, loc))
     (* Non-union on left (from signature), union on right (from arg):
@@ -361,16 +377,16 @@ let rec unify ?(invariant = false) t1 t2 loc : unit internal_result =
     | TTuple ts1, TTuple ts2 ->
         if List.length ts1 <> List.length ts2 then
           Error (IArityMismatch (List.length ts1, List.length ts2, loc))
-        else unify_list ~invariant ts1 ts2 loc
+        else unify_list ~invariant ~context ts1 ts2 loc
     (* Tuple-to-list subtyping (Spec 34 R9):
        TTuple [t1; t2; ...; tn] widens to (List elem) when each ti ~ elem.
        This is one-directional: tuple <: list, but not list <: tuple. *)
     | TTuple elems, TApp (c, [ elem ]) when is_list_con c ->
-        unify_list_to_single ~invariant elems elem loc
+        unify_list_to_single ~invariant ~context elems elem loc
     | TApp (c, [ elem ]), TTuple elems when is_list_con c ->
-        unify_list_to_single ~invariant elems elem loc
+        unify_list_to_single ~invariant ~context elems elem loc
     (* Row types: field-by-field unification with row variable handling *)
-    | TRow r1, TRow r2 -> unify_rows ~invariant r1 r2 loc
+    | TRow r1, TRow r2 -> unify_rows ~invariant ~context r1 r2 loc
     (* Row-to-homogeneous unification (Spec 11 R15):
        TRow {f1:t1, f2:t2, ...} ~ T succeeds when every ti ~ T.
        For open rows, the row variable is bound to T so that any
@@ -381,31 +397,31 @@ let rec unify ?(invariant = false) t1 t2 loc : unit internal_result =
           List.fold_left
             (fun acc (_name, field_ty) ->
               let* () = acc in
-              unify ~invariant field_ty t loc)
+              unify ~invariant ~context field_ty t loc)
             (Ok ()) r.row_fields
         in
         match r.row_var with
         | None -> Ok ()
-        | Some rv -> unify ~invariant rv t loc)
+        | Some rv -> unify ~invariant ~context rv t loc)
     | t, TRow r when not (is_row t) -> (
         let* () =
           List.fold_left
             (fun acc (_name, field_ty) ->
               let* () = acc in
-              unify ~invariant t field_ty loc)
+              unify ~invariant ~context t field_ty loc)
             (Ok ()) r.row_fields
         in
         match r.row_var with
         | None -> Ok ()
-        | Some rv -> unify ~invariant t rv loc)
+        | Some rv -> unify ~invariant ~context t rv loc)
     (* Literal types: same value → Ok, different value → widen to base types.
        TLiteral(_, base) widens to base type when the other side demands it.
        TVar case is handled above (links tvar to base type for proper widening). *)
     | TLiteral (v1, _), TLiteral (v2, _) when literal_value_equal v1 v2 -> Ok ()
     | TLiteral (_, base1), TLiteral (_, base2) ->
-        unify ~invariant base1 base2 loc
+        unify ~invariant ~context base1 base2 loc
     | TLiteral (_, base), other | other, TLiteral (_, base) ->
-        unify ~invariant other base loc
+        unify ~invariant ~context other base loc
     (* Map supertype subtyping (Spec 11 R12):
        (map {row}) is a supertype of alist, plist, and hash-table.
        When unifying a concrete map form with (Map row), extract the row
@@ -415,28 +431,29 @@ let rec unify ?(invariant = false) t1 t2 loc : unit internal_result =
         match extract_map_row_arg map_row with
         | Some map_r -> (
             match extract_concrete_map_row other with
-            | Some concrete_r -> unify ~invariant map_r concrete_r loc
+            | Some concrete_r -> unify ~invariant ~context map_r concrete_r loc
             | None -> Error (ITypeMismatch (t1, t2, loc)))
         | None -> Error (ITypeMismatch (t1, t2, loc)))
     (* All other combinations are type mismatches *)
     | _ -> Error (ITypeMismatch (t1, t2, loc))
 
-and unify_list ?(invariant = false) ts1 ts2 loc =
+and unify_list ?(invariant = false) ?(context = Constraint_solving) ts1 ts2 loc
+    =
   List.fold_left2
     (fun acc t1 t2 ->
       let* () = acc in
-      unify ~invariant t1 t2 loc)
+      unify ~invariant ~context t1 t2 loc)
     (Ok ()) ts1 ts2
 
 (** Unify each element of a list of types with a single target type.
 
     Used for tuple-to-list subtyping: each element of the tuple must unify with
     the list's element type. *)
-and unify_list_to_single ~invariant elems target loc =
+and unify_list_to_single ~invariant ~context elems target loc =
   List.fold_left
     (fun acc elem ->
       let* () = acc in
-      unify ~invariant target elem loc)
+      unify ~invariant ~context target elem loc)
     (Ok ()) elems
 
 (** Unify a flattened cons chain with a plist type [(Plist k v)].
@@ -444,12 +461,12 @@ and unify_list_to_single ~invariant elems target loc =
     Even-position elements (0, 2, ...) are unified with [k], odd-position
     elements (1, 3, ...) are unified with [v]. The chain must have even length
     (checked by caller). *)
-and unify_cons_chain_as_plist ~invariant k v elems loc =
+and unify_cons_chain_as_plist ~invariant ~context k v elems loc =
   let rec go i = function
     | [] -> Ok ()
     | elem :: rest ->
         let target = if i mod 2 = 0 then k else v in
-        let* () = unify ~invariant target elem loc in
+        let* () = unify ~invariant ~context target elem loc in
         go (i + 1) rest
   in
   go 0 elems
@@ -467,7 +484,7 @@ and unify_cons_chain_as_plist ~invariant k v elems loc =
     - [{name string & r1}] ~ [{name string age int & r2}] => r1 = {age int & r2}
     - [{name string}] ~ [{name string age int}] => FAIL (closed rejects extra)
 *)
-and unify_rows ?(invariant = false) r1 r2 loc =
+and unify_rows ?(invariant = false) ?(context = Constraint_solving) r1 r2 loc =
   let open Core.Types in
   (* Collect field names from both rows *)
   let names1 = List.map fst r1.row_fields in
@@ -481,7 +498,7 @@ and unify_rows ?(invariant = false) r1 r2 loc =
         let* () = acc in
         let t1 = List.assoc name r1.row_fields in
         let t2 = List.assoc name r2.row_fields in
-        unify ~invariant t1 t2 loc)
+        unify ~invariant ~context t1 t2 loc)
       (Ok ()) common_names
   in
 
@@ -496,7 +513,7 @@ and unify_rows ?(invariant = false) r1 r2 loc =
   (* Handle extra fields based on row variables *)
   match (extra1, r2.row_var, extra2, r1.row_var) with
   (* No extra fields on either side - just unify row variables if present *)
-  | [], _, [], _ -> unify_row_vars ~invariant r1.row_var r2.row_var loc
+  | [], _, [], _ -> unify_row_vars ~invariant ~context r1.row_var r2.row_var loc
   (* Extra fields in r1, r2 must be open to accept them *)
   | _ :: _, None, _, _ ->
       (* r2 is closed but r1 has extra fields - error *)
@@ -508,11 +525,11 @@ and unify_rows ?(invariant = false) r1 r2 loc =
   (* r1 has extra fields, r2 is open - bind r2's row var to extra1 + r1's row var *)
   | _ :: _, Some rv2, [], _ ->
       let new_row = TRow { row_fields = extra1; row_var = r1.row_var } in
-      unify ~invariant rv2 new_row loc
+      unify ~invariant ~context rv2 new_row loc
   (* r2 has extra fields, r1 is open - bind r1's row var to extra2 + r2's row var *)
   | [], _, _ :: _, Some rv1 ->
       let new_row = TRow { row_fields = extra2; row_var = r2.row_var } in
-      unify ~invariant rv1 new_row loc
+      unify ~invariant ~context rv1 new_row loc
   (* Both have extra fields and both are open - create intermediate row var *)
   | _ :: _, Some rv2, _ :: _, Some rv1 ->
       (* Create a fresh row variable that will capture any remaining fields *)
@@ -523,18 +540,19 @@ and unify_rows ?(invariant = false) r1 r2 loc =
       let row_for_rv2 =
         TRow { row_fields = extra1; row_var = Some fresh_var }
       in
-      let* () = unify ~invariant rv1 row_for_rv1 loc in
-      unify ~invariant rv2 row_for_rv2 loc
+      let* () = unify ~invariant ~context rv1 row_for_rv1 loc in
+      unify ~invariant ~context rv2 row_for_rv2 loc
 
 (** Unify two optional row variables *)
-and unify_row_vars ?(invariant = false) rv1 rv2 loc =
+and unify_row_vars ?(invariant = false) ?(context = Constraint_solving) rv1 rv2
+    loc =
   match (rv1, rv2) with
   | None, None -> Ok ()
-  | Some v1, Some v2 -> unify ~invariant v1 v2 loc
+  | Some v1, Some v2 -> unify ~invariant ~context v1 v2 loc
   | Some v, None | None, Some v ->
       (* One is open, other is closed - bind the open one to empty row *)
       let empty_row = Core.Types.TRow { row_fields = []; row_var = None } in
-      unify ~invariant v empty_row loc
+      unify ~invariant ~context v empty_row loc
 
 (** Check if a param is a rest param *)
 and is_rest_param = function PRest _ -> true | _ -> false
@@ -545,7 +563,8 @@ and is_rest_param = function PRest _ -> true | _ -> false
     strategy is: 1. If both lists have the same length, unify element-wise 2. If
     one has rest args, consume extra args from the other side 3. Otherwise, it's
     an arity mismatch *)
-and unify_param_lists ?(invariant = false) ps1 ps2 loc =
+and unify_param_lists ?(invariant = false) ?(context = Constraint_solving) ps1
+    ps2 loc =
   match (ps1, ps2) with
   (* Both empty - success *)
   | [], [] -> Ok ()
@@ -557,8 +576,8 @@ and unify_param_lists ?(invariant = false) ps1 ps2 loc =
           let* () = acc in
           match p2 with
           | PPositional t2 | POptional t2 | PKey (_, t2) ->
-              unify ~invariant elem_ty1 t2 loc
-          | PRest t2 -> unify ~invariant elem_ty1 t2 loc
+              unify ~invariant ~context elem_ty1 t2 loc
+          | PRest t2 -> unify ~invariant ~context elem_ty1 t2 loc
           | PLiteral _ -> Ok ())
         (Ok ()) params2
   (* Right side has rest param at end - consume all remaining from left *)
@@ -568,8 +587,8 @@ and unify_param_lists ?(invariant = false) ps1 ps2 loc =
           let* () = acc in
           match p1 with
           | PPositional t1 | POptional t1 | PKey (_, t1) ->
-              unify ~invariant t1 elem_ty2 loc
-          | PRest t1 -> unify ~invariant t1 elem_ty2 loc
+              unify ~invariant ~context t1 elem_ty2 loc
+          | PRest t1 -> unify ~invariant ~context t1 elem_ty2 loc
           | PLiteral _ -> Ok ())
         (Ok ()) params1
   (* Non-rest params on both sides - unify element-wise *)
@@ -584,8 +603,8 @@ and unify_param_lists ?(invariant = false) ps1 ps2 loc =
               | PPositional t | POptional t | PKey (_, t) | PRest t -> t
               | PLiteral _ -> Prim.any
             in
-            let* () = unify ~invariant elem_ty1 t2 loc in
-            unify_param_lists ~invariant ps1 rest2 loc
+            let* () = unify ~invariant ~context elem_ty1 t2 loc in
+            unify_param_lists ~invariant ~context ps1 rest2 loc
             (* Keep consuming with same rest *)
         | _, PRest elem_ty2 ->
             (* Right is rest, left is not *)
@@ -594,17 +613,17 @@ and unify_param_lists ?(invariant = false) ps1 ps2 loc =
               | PPositional t | POptional t | PKey (_, t) | PRest t -> t
               | PLiteral _ -> Prim.any
             in
-            let* () = unify ~invariant t1 elem_ty2 loc in
-            unify_param_lists ~invariant rest1 ps2 loc
+            let* () = unify ~invariant ~context t1 elem_ty2 loc in
+            unify_param_lists ~invariant ~context rest1 ps2 loc
             (* Keep consuming with same rest *)
         | _, _ ->
             (* Neither is rest - unreachable given the guard, but needed for exhaustiveness *)
-            let* () = unify_param ~invariant p1 p2 loc in
-            unify_param_lists ~invariant rest1 rest2 loc
+            let* () = unify_param ~invariant ~context p1 p2 loc in
+            unify_param_lists ~invariant ~context rest1 rest2 loc
       else
         (* Neither is rest param - normal element-wise unification *)
-        let* () = unify_param ~invariant p1 p2 loc in
-        unify_param_lists ~invariant rest1 rest2 loc
+        let* () = unify_param ~invariant ~context p1 p2 loc in
+        unify_param_lists ~invariant ~context rest1 rest2 loc
   (* Left exhausted but right has more (and no rest on left) *)
   | [], remaining ->
       (* Check if all remaining params are optional or rest - if so, OK *)
@@ -643,13 +662,13 @@ and unify_param_lists ?(invariant = false) ps1 ps2 loc =
         in
         Error (IArityMismatch (required_count, 0, loc))
 
-and unify_param ?(invariant = false) p1 p2 loc =
+and unify_param ?(invariant = false) ?(context = Constraint_solving) p1 p2 loc =
   match (p1, p2) with
-  | PPositional t1, PPositional t2 -> unify ~invariant t1 t2 loc
-  | POptional t1, POptional t2 -> unify ~invariant t1 t2 loc
-  | PRest t1, PRest t2 -> unify ~invariant t1 t2 loc
+  | PPositional t1, PPositional t2 -> unify ~invariant ~context t1 t2 loc
+  | POptional t1, POptional t2 -> unify ~invariant ~context t1 t2 loc
+  | PRest t1, PRest t2 -> unify ~invariant ~context t1 t2 loc
   | PKey (n1, t1), PKey (n2, t2) ->
-      if n1 = n2 then unify ~invariant t1 t2 loc
+      if n1 = n2 then unify ~invariant ~context t1 t2 loc
       else
         Error
           (ITypeMismatch
@@ -748,8 +767,11 @@ let try_unify t1 t2 loc : unit result =
       restore_tvars snapshot;
       Error (to_external_error C.NoContext e)
 
-(** Attempt to unify two param lists speculatively. Rolls back on failure. *)
-let try_unify_params ps1 ps2 loc : unit result =
+(** Attempt to unify two param lists speculatively. Rolls back on failure.
+
+    When [context] is [Clause_matching], cross-constructor subsumption rules are
+    suppressed during unification. *)
+let try_unify_params ?(context = Constraint_solving) ps1 ps2 loc : unit result =
   let snapshot =
     List.fold_left
       (fun acc p ->
@@ -759,7 +781,7 @@ let try_unify_params ps1 ps2 loc : unit result =
         | PLiteral _ -> acc)
       [] (ps1 @ ps2)
   in
-  match unify_param_lists ps1 ps2 loc with
+  match unify_param_lists ~context ps1 ps2 loc with
   | Ok () -> Ok ()
   | Error e ->
       restore_tvars snapshot;

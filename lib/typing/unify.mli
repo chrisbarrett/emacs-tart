@@ -6,6 +6,19 @@
 
     The occurs check prevents infinite types like [a = List a]. *)
 
+(** {1 Unification Context} *)
+
+(** Controls context-sensitive unification rules.
+
+    During normal constraint solving, subsumption rules (e.g. plist↔list
+    widening) are applied freely. During clause matching, these
+    cross-constructor rules are suppressed so that clause dispatch treats
+    structurally distinct types (e.g. [plist] vs [list]) as non-matching. *)
+type unify_context =
+  | Constraint_solving  (** Normal constraint solving (default). *)
+  | Clause_matching
+      (** Clause dispatch: suppress cross-constructor subsumption. *)
+
 (** {1 Errors} *)
 
 (** Unification errors. *)
@@ -68,12 +81,18 @@ val try_unify :
     type state on failure. *)
 
 val try_unify_params :
+  ?context:unify_context ->
   Core.Types.param list ->
   Core.Types.param list ->
   Syntax.Location.span ->
   unit result
-(** [try_unify_params ps1 ps2 loc] attempts param list unification speculatively
-    with rollback on failure. *)
+(** [try_unify_params ~context ps1 ps2 loc] attempts param list unification
+    speculatively with rollback on failure.
+
+    When [context] is [Clause_matching], cross-constructor subsumption rules
+    (e.g. plist↔list widening) are suppressed so that clause dispatch treats
+    structurally distinct types as non-matching. Defaults to
+    [Constraint_solving]. *)
 
 (** {1 Disjointness} *)
 
