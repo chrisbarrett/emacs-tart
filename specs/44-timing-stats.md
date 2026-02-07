@@ -78,13 +78,17 @@ $ tart check -v --memory large.el
 
 ## Tasks
 
-- [ ] Add `-v`/`--memory` flags to check, eval, expand [R1-R2]
-- [ ] Create `lib/timing/` module
-- [ ] Create `lib/memory_stats/` module
-- [ ] Instrument `run_check` per-file and per-phase [R3-R5]
-- [ ] Instrument `run_eval` [R9]
-- [ ] Instrument `run_expand` [R10]
-- [ ] Add GC tracking per phase [R6-R7]
-- [ ] Coherent combined output [R8]
-- [ ] Verify stderr/stdout separation [R11]
-- [ ] Polish formatting [R12]
+- [x] Add `-v`/`--memory` flags to check, eval, expand [R1-R2]
+- [x] Create `lib/timing/` module
+- [x] Create `lib/memory_stats/` module
+- [x] Instrument `run_check` per-file and per-phase [R3-R5]
+- [x] Instrument `run_eval` [R9]
+- [x] Instrument `run_expand` [R10]
+- [x] Add GC tracking per phase [R6-R7]
+- [x] Coherent combined output [R8]
+- [x] Verify stderr/stdout separation [R11]
+- [x] Polish formatting [R12]
+
+## Status
+
+Complete
