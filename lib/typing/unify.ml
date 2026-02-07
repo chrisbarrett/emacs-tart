@@ -117,6 +117,8 @@ type 'a internal_result = ('a, internal_error) Result.t
 let map_con_name = intrinsic "Map"
 let plist_con_name = intrinsic "Plist"
 let list_con_name = intrinsic "List"
+let pair_con_name = intrinsic "Pair"
+let nil_con_name = intrinsic "Nil"
 
 (** Is the constructor the plist intrinsic? *)
 let is_plist_con con =
@@ -125,6 +127,23 @@ let is_plist_con con =
 (** Is the constructor the list intrinsic? *)
 let is_list_con con =
   match repr con with TCon n -> n = list_con_name | _ -> false
+
+(** Is the constructor the pair intrinsic? *)
+let is_pair_con con =
+  match repr con with TCon n -> n = pair_con_name | _ -> false
+
+(** Flatten a cons chain [(cons a (cons b ... nil))] into a list of elements.
+
+    Returns [Some elems] for a well-formed chain terminated by nil, or [None] if
+    the type is not a cons chain. *)
+let flatten_cons_chain ty =
+  let rec go acc t =
+    match repr t with
+    | TCon n when n = nil_con_name -> Some (List.rev acc)
+    | TApp (con, [ car; cdr ]) when is_pair_con con -> go (car :: acc) cdr
+    | _ -> None
+  in
+  go [] ty
 
 (** Check if a type is a map supertype: [TApp(Map, [_])]. *)
 let is_map ty =
@@ -274,6 +293,21 @@ let rec unify ?(invariant = false) t1 t2 loc : unit internal_result =
           match (args1, args2) with
           | [ k; v ], [ elem ] -> unify ~invariant (TUnion [ k; v ]) elem loc
           | _ -> Error (ITypeMismatch (t1, t2, loc))
+        else if is_plist_con c1 && is_pair_con c2 then
+          (* Cons chain → plist promotion: flatten (cons k (cons v ... nil))
+             and check alternating key-value structure. *)
+          match (args1, flatten_cons_chain t2) with
+          | [ k; v ], Some elems
+            when List.length elems mod 2 = 0 && List.length elems > 0 ->
+              unify_cons_chain_as_plist ~invariant k v elems loc
+          | _ -> Error (ITypeMismatch (t1, t2, loc))
+        else if is_pair_con c1 && is_plist_con c2 then
+          (* Symmetric: cons chain on left, plist on right *)
+          match (flatten_cons_chain t1, args2) with
+          | Some elems, [ k; v ]
+            when List.length elems mod 2 = 0 && List.length elems > 0 ->
+              unify_cons_chain_as_plist ~invariant k v elems loc
+          | _ -> Error (ITypeMismatch (t1, t2, loc))
         else if List.length args1 <> List.length args2 then
           Error (IArityMismatch (List.length args1, List.length args2, loc))
         else
@@ -370,6 +404,21 @@ and unify_list ?(invariant = false) ts1 ts2 loc =
       let* () = acc in
       unify ~invariant t1 t2 loc)
     (Ok ()) ts1 ts2
+
+(** Unify a flattened cons chain with a plist type [(Plist k v)].
+
+    Even-position elements (0, 2, ...) are unified with [k], odd-position
+    elements (1, 3, ...) are unified with [v]. The chain must have even length
+    (checked by caller). *)
+and unify_cons_chain_as_plist ~invariant k v elems loc =
+  let rec go i = function
+    | [] -> Ok ()
+    | elem :: rest ->
+        let target = if i mod 2 = 0 then k else v in
+        let* () = unify ~invariant target elem loc in
+        go (i + 1) rest
+  in
+  go 0 elems
 
 (** Unify two row types.
 
