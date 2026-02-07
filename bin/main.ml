@@ -1368,6 +1368,90 @@ let corpus_cmd =
     [ corpus_checkout_cmd; corpus_list_cmd; corpus_path_cmd; corpus_clean_cmd ]
 
 (* ============================================================================
+   Roundtrip Subcommand
+   ============================================================================ *)
+
+(** Format a roundtrip failure for human-readable output. *)
+let format_roundtrip_failure (path, result) =
+  match result with
+  | Tart.Roundtrip.Parse_error { error; _ } ->
+      Printf.sprintf "FAIL %s\n  Parse error: %s\n" path error
+  | Tart.Roundtrip.Mismatch { form_index; diff; _ } ->
+      Printf.sprintf "FAIL %s\n  Mismatch at form %d:\n%s" path form_index diff
+  | Tart.Roundtrip.Emacs_mismatch { tart_output; emacs_output; _ } ->
+      Printf.sprintf "FAIL %s\n  Emacs mismatch:\n  tart:  %s\n  emacs: %s\n"
+        path tart_output emacs_output
+  | _ -> ""
+
+(** Roundtrip subcommand: test parse-print-parse round-trip consistency *)
+let run_roundtrip ~with_emacs ~no_cache files =
+  let files =
+    match files with
+    | [] ->
+        if not (Tart.Emacs_corpus.is_cloned ()) then (
+          Printf.eprintf
+            "error: no files given and corpus not cloned; run 'tart corpus \
+             checkout' first or pass FILES\n";
+          exit 2);
+        Tart.Emacs_corpus.list_el_files ()
+    | fs -> fs
+  in
+  if files = [] then (
+    Printf.eprintf "error: no .el files found\n";
+    exit 2);
+  let summary = Tart.Roundtrip.run_corpus ~no_cache ~with_emacs files in
+  (* Print failures *)
+  List.iter
+    (fun failure ->
+      let output = format_roundtrip_failure failure in
+      if output <> "" then print_string output)
+    summary.failures;
+  (* Print summary *)
+  Printf.printf "\n%s\n" (Tart.Roundtrip.summary_to_string summary);
+  if summary.failed > 0 then exit 1
+
+(* Roundtrip CLI definitions *)
+let roundtrip_with_emacs_arg =
+  let doc = "Also verify against Emacs's native reader." in
+  Arg.(value & flag & info [ "with-emacs" ] ~doc)
+
+let roundtrip_no_cache_arg =
+  let doc = "Skip cache lookup; always run full checks." in
+  Arg.(value & flag & info [ "no-cache" ] ~doc)
+
+let roundtrip_files_arg =
+  let doc =
+    "Elisp files to test. If omitted, uses all .el files from the Emacs corpus."
+  in
+  Arg.(value & pos_all string [] & info [] ~docv:"FILE" ~doc)
+
+let roundtrip_cmd =
+  let doc = "Test parse-print-parse round-trip consistency" in
+  let man =
+    [
+      `S Manpage.s_description;
+      `P
+        "Verify that parsing an Elisp file, printing each form, and re-parsing \
+         produces identical ASTs. Optionally verify against Emacs's native \
+         reader.";
+      `P
+        "With no files given, tests all .el files from the Emacs corpus (see \
+         'tart corpus checkout').";
+      `S Manpage.s_exit_status;
+      `P "0 on success, 1 on any failure, 2 on usage error.";
+    ]
+  in
+  let info = Cmd.info "roundtrip" ~doc ~man in
+  let run log_level log_format verbose_flag with_emacs no_cache files =
+    setup_logging ~log_level ~log_format ~verbose_flag;
+    run_roundtrip ~with_emacs ~no_cache files
+  in
+  Cmd.v info
+    Term.(
+      const run $ log_level_arg $ log_format_arg $ verbose_flag_arg
+      $ roundtrip_with_emacs_arg $ roundtrip_no_cache_arg $ roundtrip_files_arg)
+
+(* ============================================================================
    Main Command
    ============================================================================ *)
 
@@ -1409,6 +1493,7 @@ let main_cmd =
       coverage_cmd;
       emacs_coverage_cmd;
       corpus_cmd;
+      roundtrip_cmd;
     ]
 
 (** Determine if an argument looks like a file path rather than a subcommand. *)
