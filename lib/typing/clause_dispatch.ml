@@ -142,7 +142,10 @@ let try_clause_match (arg_types : typ list) (arg_literals : string option list)
   match check_literals clause_params arg_types arg_literals [] [] with
   | None -> None (* Literal check failed *)
   | Some (clause_typed, arg_typed) -> (
-      match Unify.try_unify_params clause_typed arg_typed loc with
+      match
+        Unify.try_unify_params ~context:Clause_matching clause_typed arg_typed
+          loc
+      with
       | Ok () -> Some clause_ret
       | Error _ -> None)
 
