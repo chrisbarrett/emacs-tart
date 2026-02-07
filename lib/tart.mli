@@ -114,6 +114,7 @@ module Emacs_coverage = Coverage.Emacs_coverage
 (** {1 Oracle} *)
 
 module Emacs_reader = Oracle.Emacs_reader
+module Oracle_compare = Oracle.Compare
 
 (** {1 Logging} *)
 

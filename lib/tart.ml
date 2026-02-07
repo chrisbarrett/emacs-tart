@@ -81,6 +81,8 @@ module Emacs_coverage = Coverage.Emacs_coverage
 module Emacs_reader = Oracle.Emacs_reader
 (** Re-export oracle modules *)
 
+module Oracle_compare = Oracle.Compare
+
 module Log = Tart_log.Log
 (** Re-export structured logging module *)
 

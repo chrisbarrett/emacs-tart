@@ -79,22 +79,22 @@ Compare tart output against Emacs oracle.
 
 ### Task 2.1: Create oracle module
 
-- [ ] Create `lib/oracle/oracle.ml` and `oracle.mli`
-- [ ] `comparison_result` type: `Match`, `Mismatch`, `TartError`,
-      `EmacsError`
-- [ ] `compare_string : ?timeout_ms:int -> string -> comparison_result`
+- [x] Create `lib/oracle/compare.ml` and `compare.mli`
+- [x] `comparison_result` type: `Match`, `Mismatch`, `Tart_error`,
+      `Emacs_error`
+- [x] `compare_string : ?timeout_ms:int -> string -> comparison_result`
       — parse with tart, read with Emacs, compare canonical forms
-- [ ] `compare_file : ?timeout_ms:int -> string -> comparison_result list`
+- [x] `compare_file : ?timeout_ms:int -> string -> comparison_result list`
       — per-form comparison for multi-form files
-- [ ] Build + test
+- [x] Build + test
 
 ### Task 2.2: Canonical form normalisation
 
-- [ ] Verify `Print.to_string` matches Emacs `prin1-to-string` for:
+- [x] Verify `Print.to_string` matches Emacs `prin1-to-string` for:
       integers, floats, strings, symbols, keywords, lists, vectors,
       cons pairs, quote/backquote/function reader macros
-- [ ] Fix any discrepancies found (feed back into print.ml)
-- [ ] Build + test
+- [x] Fix any discrepancies found (feed back into print.ml)
+- [x] Build + test
 
 ---
 
