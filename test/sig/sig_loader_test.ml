@@ -1790,6 +1790,44 @@ let test_clauses_have_correct_types () =
       let c2 = List.nth clauses 1 in
       Alcotest.(check int) "clause 2 has 1 param" 1 (List.length c2.lc_params)
 
+(** Test that literal params in clauses are preserved as PLiteral *)
+let test_clauses_literal_params () =
+  let sig_src =
+    {|
+    (defun my-get [k v]
+      (((plist {:name string & r}) :name &optional any) -> string)
+      (((plist k v) k &optional any) -> (v | nil)))
+  |}
+  in
+  let env = load_sig_str sig_src in
+  match Type_env.lookup_fn_clauses "my-get" env with
+  | None -> Alcotest.fail "multi-clause with literals should preserve clauses"
+  | Some clauses -> (
+      Alcotest.(check int) "should have 2 clauses" 2 (List.length clauses);
+      (* First clause has 3 params: plist, :name literal, &optional any *)
+      let c1 = List.nth clauses 0 in
+      Alcotest.(check int) "clause 1 has 3 params" 3 (List.length c1.lc_params);
+      (* Second param should be PLiteral ":name" *)
+      (match List.nth c1.lc_params 1 with
+      | Types.PLiteral ":name" -> ()
+      | Types.PLiteral other ->
+          Alcotest.fail
+            (Printf.sprintf "Expected PLiteral \":name\" but got PLiteral %S"
+               other)
+      | other ->
+          Alcotest.fail
+            (Printf.sprintf "Expected PLiteral but got %s"
+               (Types.param_to_string other)));
+      (* Second clause: generic, no literals *)
+      let c2 = List.nth clauses 1 in
+      Alcotest.(check int) "clause 2 has 3 params" 3 (List.length c2.lc_params);
+      match List.nth c2.lc_params 1 with
+      | Types.PPositional _ -> ()
+      | other ->
+          Alcotest.fail
+            (Printf.sprintf "Expected PPositional but got %s"
+               (Types.param_to_string other)))
+
 (** {1 Shadowing Error Tests} *)
 
 (** Test that redefining a type imported via open produces an error *)
@@ -2344,6 +2382,8 @@ let () =
             test_clauses_not_stored_single;
           Alcotest.test_case "clauses have correct types" `Quick
             test_clauses_have_correct_types;
+          Alcotest.test_case "literal params preserved" `Quick
+            test_clauses_literal_params;
         ] );
       ( "shadowing",
         [

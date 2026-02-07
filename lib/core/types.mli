@@ -65,6 +65,10 @@ and param =
   | POptional of typ  (** Type should be (Option a) *)
   | PRest of typ  (** Type is the element type; expands to (List a) *)
   | PKey of string * typ  (** :keyword name and type *)
+  | PLiteral of string
+      (** Literal value parameter for clause matching. Keywords [:name] become
+          [PLiteral ":name"], quoted symbols ['foo] become [PLiteral "foo"].
+          Matches only when the call-site argument is the same literal. *)
 
 (** {1 Comparison} *)
 

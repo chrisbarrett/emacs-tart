@@ -217,10 +217,14 @@ and infer_param_kind (env : Kind.env) (param : sig_param) :
   let ty =
     match param with
     | SPPositional (_, ty) | SPOptional (_, ty) | SPRest ty | SPKey (_, ty) ->
-        ty
+        Some ty
+    | SPLiteral _ -> None
   in
-  let* kind = infer_sig_type_kind env ty in
-  unify_scheme_with_kind kind Kind.KStar "parameter type"
+  match ty with
+  | Some ty ->
+      let* kind = infer_sig_type_kind env ty in
+      unify_scheme_with_kind kind Kind.KStar "parameter type"
+  | None -> Ok () (* Literal params have no type to kind-check *)
 
 (** {1 High-Level Interface}
 

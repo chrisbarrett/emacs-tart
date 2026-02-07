@@ -1432,6 +1432,20 @@ and infer_funcall env fn_expr args span =
 
   { ty = result_ty; constraints = all_constraints; undefineds = all_undefineds }
 
+(** Extract the literal value from a call-site argument expression.
+
+    Returns [Some literal] for keywords and quoted symbols, matching the
+    convention used in {!Types.PLiteral}:
+    - Keywords [:name] produce [Some ":name"]
+    - Quoted symbols ['foo] produce [Some "foo"]
+    - All other expressions produce [None] *)
+and extract_arg_literal (arg : Syntax.Sexp.t) : string option =
+  let open Syntax.Sexp in
+  match arg with
+  | Keyword (name, _) -> Some (":" ^ name)
+  | List ([ Symbol ("quote", _); Symbol (name, _) ], _) -> Some name
+  | _ -> None
+
 (** Instantiate a loaded clause with fresh type variables.
 
     The clause's param and return types contain [TCon] names for quantified type
@@ -1447,7 +1461,8 @@ and instantiate_clause (level : int) (tvar_names : string list)
         | PPositional t -> PPositional (substitute_tvar_names subst t)
         | POptional t -> POptional (substitute_tvar_names subst t)
         | PRest t -> PRest (substitute_tvar_names subst t)
-        | PKey (n, t) -> PKey (n, substitute_tvar_names subst t))
+        | PKey (n, t) -> PKey (n, substitute_tvar_names subst t)
+        | PLiteral _ -> p)
       clause.lc_params
   in
   let ret = substitute_tvar_names subst clause.lc_return in
@@ -1455,16 +1470,48 @@ and instantiate_clause (level : int) (tvar_names : string list)
 
 (** Try to match a single clause against argument types via speculative
     unification. Returns [Some return_type] if the clause matches, [None] if
-    unification fails (all tvar mutations are rolled back on failure). *)
-and try_clause_match (arg_types : typ list) (clause_params : param list)
-    (clause_ret : typ) (loc : Syntax.Location.span) : typ option =
-  (* Build positional params from arg types for unification *)
-  let arg_params = List.map (fun t -> PPositional t) arg_types in
-  match Unify.try_unify_params clause_params arg_params loc with
-  | Ok () ->
-      (* Also unify return type direction: constrain fresh result_ty *)
-      Some clause_ret
-  | Error _ -> None
+    unification fails (all tvar mutations are rolled back on failure).
+
+    [arg_literals] provides the literal values of call-site arguments (extracted
+    from the AST), used to match against [PLiteral] clause parameters. *)
+and try_clause_match (arg_types : typ list) (arg_literals : string option list)
+    (clause_params : param list) (clause_ret : typ) (loc : Syntax.Location.span)
+    : typ option =
+  (* Check literal parameters first. Walk clause params and arg info together;
+     for PLiteral params, verify the call-site arg is the matching literal.
+     Collect non-literal params and their corresponding arg types for
+     unification. *)
+  let rec check_literals c_params a_types a_lits typed_params typed_args =
+    match (c_params, a_types, a_lits) with
+    | PLiteral expected :: c_rest, _ :: a_types_rest, Some actual :: a_lits_rest
+      ->
+        if expected = actual then
+          check_literals c_rest a_types_rest a_lits_rest typed_params typed_args
+        else None (* Literal mismatch — clause does not match *)
+    | PLiteral _ :: _, _ :: _, None :: _ ->
+        None (* Clause expects literal but arg is not a literal *)
+    | PLiteral _ :: _, _, [] -> None (* Not enough args for literal param *)
+    | param :: c_rest, ty :: a_types_rest, _ :: a_lits_rest ->
+        check_literals c_rest a_types_rest a_lits_rest (param :: typed_params)
+          (ty :: typed_args)
+    | param :: c_rest, ty :: a_types_rest, [] ->
+        (* Fewer literals than args — remaining args have no literal info *)
+        check_literals c_rest a_types_rest [] (param :: typed_params)
+          (ty :: typed_args)
+    | _, _, _ ->
+        (* Remaining clause params (optional/rest) or exhausted args *)
+        let clause_typed = List.rev typed_params @ c_params in
+        let arg_typed =
+          List.rev typed_args @ a_types |> List.map (fun t -> PPositional t)
+        in
+        Some (clause_typed, arg_typed)
+  in
+  match check_literals clause_params arg_types arg_literals [] [] with
+  | None -> None (* Literal check failed *)
+  | Some (clause_typed, arg_typed) -> (
+      match Unify.try_unify_params clause_typed arg_typed loc with
+      | Ok () -> Some clause_ret
+      | Error _ -> None)
 
 (** Try clause-by-clause dispatch for a multi-clause function.
 
@@ -1473,11 +1520,15 @@ and try_clause_match (arg_types : typ list) (clause_params : param list)
     3. If all succeed → return clause's return type 4. If any fail → rollback
     and try next clause
 
+    [arg_literals] provides literal values from call-site argument expressions
+    for matching against [PLiteral] clause parameters.
+
     Returns [Some return_type] if a clause matched, [None] if no clause matched
     (caller should fall back to union-type constraint path). *)
 and try_clause_dispatch (env : Env.t) (tvar_names : string list)
     (clauses : Env.loaded_clause list) (arg_types : typ list)
-    (loc : Syntax.Location.span) : typ option =
+    (arg_literals : string option list) (loc : Syntax.Location.span) :
+    typ option =
   let level = Env.current_level env in
   let rec try_clauses = function
     | [] -> None
@@ -1485,7 +1536,9 @@ and try_clause_dispatch (env : Env.t) (tvar_names : string list)
         let clause_params, clause_ret =
           instantiate_clause level tvar_names clause
         in
-        match try_clause_match arg_types clause_params clause_ret loc with
+        match
+          try_clause_match arg_types arg_literals clause_params clause_ret loc
+        with
         | Some ret_ty -> Some ret_ty
         | None -> try_clauses rest)
   in
@@ -1514,7 +1567,8 @@ and infer_application env fn args span =
             match Env.lookup_fn name env with
             | Some (Env.Poly (vars, _)) ->
                 let arg_types = List.map (fun r -> r.ty) arg_results in
-                try_clause_dispatch env vars clauses arg_types span
+                let arg_literals = List.map extract_arg_literal args in
+                try_clause_dispatch env vars clauses arg_types arg_literals span
             | _ -> None)
         | None -> None)
     | None -> None
@@ -1963,7 +2017,8 @@ and substitute_tvar_names (subst : (string * typ) list) (ty : typ) : typ =
             | PPositional t -> PPositional (substitute_tvar_names subst t)
             | POptional t -> POptional (substitute_tvar_names subst t)
             | PRest t -> PRest (substitute_tvar_names subst t)
-            | PKey (n, t) -> PKey (n, substitute_tvar_names subst t))
+            | PKey (n, t) -> PKey (n, substitute_tvar_names subst t)
+            | PLiteral _ as p -> p)
           params
       in
       TArrow (params', substitute_tvar_names subst ret)
@@ -2045,6 +2100,9 @@ and infer_defun_with_declaration (env : Env.t) (name : string)
             | Sig_ast.SPRest sty
             | Sig_ast.SPKey (_, sty) ->
                 convert_and_subst sty
+            | Sig_ast.SPLiteral _ ->
+                (* Literal params have no type — give fresh tvar *)
+                fresh_tvar (Env.current_level inner_env)
           in
           loop ps sps ((pname, ty) :: acc)
       | _ :: ps, _ :: sps -> loop ps sps acc
@@ -2081,7 +2139,8 @@ and infer_defun_with_declaration (env : Env.t) (name : string)
         | Sig_ast.SPPositional (_, sty) -> PPositional (convert_and_subst sty)
         | Sig_ast.SPOptional (_, sty) -> POptional (convert_and_subst sty)
         | Sig_ast.SPRest sty -> PRest (convert_and_subst sty)
-        | Sig_ast.SPKey (kname, sty) -> PKey (kname, convert_and_subst sty))
+        | Sig_ast.SPKey (kname, sty) -> PKey (kname, convert_and_subst sty)
+        | Sig_ast.SPLiteral (value, _) -> PLiteral value)
       sig_params
   in
   let fn_type = TArrow (param_types, declared_return) in

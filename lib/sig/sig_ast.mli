@@ -83,6 +83,11 @@ and sig_param =
       (** Optional parameter (&optional) with optional name *)
   | SPRest of sig_type  (** Rest parameter (&rest) *)
   | SPKey of string * sig_type  (** Keyword parameter (&key :name type) *)
+  | SPLiteral of string * span
+      (** Literal value parameter for clause matching. Keywords [:name] become
+          [SPLiteral (":name", span)], quoted symbols ['foo] become
+          [SPLiteral ("foo", span)]. Used in multi-clause signatures for
+          literal-based dispatch. *)
 
 and sig_row = {
   srow_fields : (string * sig_type) list;  (** Named fields *)

@@ -894,6 +894,92 @@ let test_pcase_exhaustive_same_as_pcase () =
     "pcase-exhaustive returns string" "string" (to_string ty)
 
 (* =============================================================================
+   Literal Clause Dispatch Tests
+   ============================================================================= *)
+
+let test_literal_clause_keyword_match () =
+  (* Function with literal keyword dispatch: calling with :name selects the
+     first clause which returns string, not the generic clause. *)
+  let plist_string = TArrow ([ PPositional Prim.string ], Prim.string) in
+  let env =
+    Env.extend_fn_poly "my-get" [ "v" ]
+      (TArrow
+         ( [ PPositional Prim.any; PPositional Prim.keyword ],
+           TVar (ref (Unbound (0, 1))) ))
+      Env.empty
+    |> Env.extend_fn_clauses "my-get"
+         [
+           {
+             Env.lc_params = [ PPositional plist_string; PLiteral ":name" ];
+             lc_return = Prim.string;
+           };
+           {
+             Env.lc_params = [ PPositional Prim.any; PPositional Prim.keyword ];
+             lc_return = Prim.any;
+           };
+         ]
+  in
+  (* (my-get x :name) should match the first clause → string *)
+  let sexp = parse "(my-get x :name)" in
+  let ty, errors = Check.check_expr ~env sexp in
+  Alcotest.(check int) "no errors" 0 (List.length errors);
+  Alcotest.(check string) "literal match returns string" "string" (to_string ty)
+
+let test_literal_clause_no_match_fallback () =
+  (* When the literal doesn't match, falls back to the generic clause *)
+  let plist_string = TArrow ([ PPositional Prim.string ], Prim.string) in
+  let env =
+    Env.extend_fn_poly "my-get" [ "v" ]
+      (TArrow
+         ( [ PPositional Prim.any; PPositional Prim.keyword ],
+           TVar (ref (Unbound (0, 1))) ))
+      Env.empty
+    |> Env.extend_fn_clauses "my-get"
+         [
+           {
+             Env.lc_params = [ PPositional plist_string; PLiteral ":name" ];
+             lc_return = Prim.string;
+           };
+           {
+             Env.lc_params = [ PPositional Prim.any; PPositional Prim.keyword ];
+             lc_return = Prim.int;
+           };
+         ]
+  in
+  (* (my-get x :age) should NOT match the :name clause, falls to second → int *)
+  let sexp = parse "(my-get x :age)" in
+  let ty, errors = Check.check_expr ~env sexp in
+  Alcotest.(check int) "no errors" 0 (List.length errors);
+  Alcotest.(check string) "non-matching literal falls back" "int" (to_string ty)
+
+let test_literal_clause_quoted_symbol_match () =
+  (* Quoted symbol literal dispatch: 'name matches PLiteral "name" *)
+  let env =
+    Env.extend_fn_poly "my-lookup" [ "v" ]
+      (TArrow
+         ( [ PPositional Prim.symbol; PPositional Prim.any ],
+           TVar (ref (Unbound (0, 1))) ))
+      Env.empty
+    |> Env.extend_fn_clauses "my-lookup"
+         [
+           {
+             Env.lc_params = [ PLiteral "name"; PPositional Prim.any ];
+             lc_return = Prim.string;
+           };
+           {
+             Env.lc_params = [ PPositional Prim.symbol; PPositional Prim.any ];
+             lc_return = Prim.any;
+           };
+         ]
+  in
+  (* (my-lookup 'name xs) should match the first clause → string *)
+  let sexp = parse "(my-lookup 'name xs)" in
+  let ty, errors = Check.check_expr ~env sexp in
+  Alcotest.(check int) "no errors" 0 (List.length errors);
+  Alcotest.(check string)
+    "quoted symbol match returns string" "string" (to_string ty)
+
+(* =============================================================================
    Test Suite
    ============================================================================= *)
 
@@ -1055,5 +1141,14 @@ let () =
             test_pcase_binds_pattern_var;
           Alcotest.test_case "exhaustive same as pcase" `Quick
             test_pcase_exhaustive_same_as_pcase;
+        ] );
+      ( "literal_clause_dispatch",
+        [
+          Alcotest.test_case "keyword literal match" `Quick
+            test_literal_clause_keyword_match;
+          Alcotest.test_case "non-matching literal fallback" `Quick
+            test_literal_clause_no_match_fallback;
+          Alcotest.test_case "quoted symbol match" `Quick
+            test_literal_clause_quoted_symbol_match;
         ] );
     ]

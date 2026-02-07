@@ -401,6 +401,14 @@ and parse_params (params : Sexp.t list) : sig_param list result =
         match parse_sig_type ty_sexp with
         | Ok ty -> loop (SPKey (name, ty) :: acc) `Key rest
         | Error e -> Error e)
+    (* Literal keyword parameter for clause matching: :name *)
+    | Sexp.Keyword (name, span) :: rest when mode = `Positional ->
+        loop (SPLiteral (":" ^ name, span) :: acc) `Positional rest
+    (* Literal quoted symbol parameter for clause matching: 'foo *)
+    | Sexp.List ([ Sexp.Symbol ("quote", _); Sexp.Symbol (name, _) ], span)
+      :: rest
+      when mode = `Positional ->
+        loop (SPLiteral (name, span) :: acc) `Positional rest
     (* Unnamed parameter: just a type *)
     | ty_sexp :: rest -> (
         match parse_sig_type ty_sexp with

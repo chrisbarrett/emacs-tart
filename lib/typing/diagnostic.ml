@@ -300,6 +300,7 @@ let function_arg_note fn_name fn_type arg_index expected : related_location list
             Printf.sprintf "optional argument %d" (arg_index + 1)
         | Some (Types.PRest _) -> "rest argument"
         | Some (Types.PKey (name, _)) -> Printf.sprintf "keyword :%s" name
+        | Some (Types.PLiteral value) -> Printf.sprintf "literal %s" value
         | None -> Printf.sprintf "argument %d" (arg_index + 1))
     | _ -> Printf.sprintf "argument %d" (arg_index + 1)
   in
@@ -339,6 +340,7 @@ let count_params params =
         aux min_required (optionals + 1) has_rest rest
     | Types.PRest _ :: rest -> aux min_required optionals true rest
     | Types.PKey _ :: rest -> aux min_required optionals has_rest rest
+    | Types.PLiteral _ :: rest -> aux (min_required + 1) optionals has_rest rest
   in
   aux 0 0 false params
 

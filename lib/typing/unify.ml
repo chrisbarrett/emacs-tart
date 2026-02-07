@@ -99,11 +99,10 @@ and occurs_check_params tv_id tv_level params loc =
   List.fold_left
     (fun acc param ->
       let* () = acc in
-      let ty =
-        match param with
-        | PPositional ty | POptional ty | PRest ty | PKey (_, ty) -> ty
-      in
-      occurs_check tv_id tv_level ty loc)
+      match param with
+      | PPositional ty | POptional ty | PRest ty | PKey (_, ty) ->
+          occurs_check tv_id tv_level ty loc
+      | PLiteral _ -> Ok ())
     (Ok ()) params
 
 (** Internal error type without context (used during unification) *)
@@ -524,7 +523,8 @@ and unify_param_lists ?(invariant = false) ps1 ps2 loc =
           match p2 with
           | PPositional t2 | POptional t2 | PKey (_, t2) ->
               unify ~invariant elem_ty1 t2 loc
-          | PRest t2 -> unify ~invariant elem_ty1 t2 loc)
+          | PRest t2 -> unify ~invariant elem_ty1 t2 loc
+          | PLiteral _ -> Ok ())
         (Ok ()) params2
   (* Right side has rest param at end - consume all remaining from left *)
   | params1, [ PRest elem_ty2 ] ->
@@ -534,7 +534,8 @@ and unify_param_lists ?(invariant = false) ps1 ps2 loc =
           match p1 with
           | PPositional t1 | POptional t1 | PKey (_, t1) ->
               unify ~invariant t1 elem_ty2 loc
-          | PRest t1 -> unify ~invariant t1 elem_ty2 loc)
+          | PRest t1 -> unify ~invariant t1 elem_ty2 loc
+          | PLiteral _ -> Ok ())
         (Ok ()) params1
   (* Non-rest params on both sides - unify element-wise *)
   | p1 :: rest1, p2 :: rest2 ->
@@ -546,6 +547,7 @@ and unify_param_lists ?(invariant = false) ps1 ps2 loc =
             let t2 =
               match p2 with
               | PPositional t | POptional t | PKey (_, t) | PRest t -> t
+              | PLiteral _ -> Prim.any
             in
             let* () = unify ~invariant elem_ty1 t2 loc in
             unify_param_lists ~invariant ps1 rest2 loc
@@ -555,6 +557,7 @@ and unify_param_lists ?(invariant = false) ps1 ps2 loc =
             let t1 =
               match p1 with
               | PPositional t | POptional t | PKey (_, t) | PRest t -> t
+              | PLiteral _ -> Prim.any
             in
             let* () = unify ~invariant t1 elem_ty2 loc in
             unify_param_lists ~invariant rest1 ps2 loc
@@ -580,7 +583,8 @@ and unify_param_lists ?(invariant = false) ps1 ps2 loc =
         let required_count =
           List.length
             (List.filter
-               (function PPositional _ | PKey _ -> true | _ -> false)
+               (function
+                 | PPositional _ | PKey _ | PLiteral _ -> true | _ -> false)
                remaining)
         in
         Error (IArityMismatch (0, required_count, loc))
@@ -598,7 +602,8 @@ and unify_param_lists ?(invariant = false) ps1 ps2 loc =
         let required_count =
           List.length
             (List.filter
-               (function PPositional _ | PKey _ -> true | _ -> false)
+               (function
+                 | PPositional _ | PKey _ | PLiteral _ -> true | _ -> false)
                remaining)
         in
         Error (IArityMismatch (required_count, 0, loc))
@@ -610,6 +615,13 @@ and unify_param ?(invariant = false) p1 p2 loc =
   | PRest t1, PRest t2 -> unify ~invariant t1 t2 loc
   | PKey (n1, t1), PKey (n2, t2) ->
       if n1 = n2 then unify ~invariant t1 t2 loc
+      else
+        Error
+          (ITypeMismatch
+             (TArrow ([ p1 ], Prim.any), TArrow ([ p2 ], Prim.any), loc))
+  | PLiteral v1, PLiteral v2 ->
+      (* Two literal params match if they have the same value *)
+      if v1 = v2 then Ok ()
       else
         Error
           (ITypeMismatch
@@ -672,7 +684,8 @@ let rec collect_tvar_refs acc ty =
           (fun a p ->
             match p with
             | PPositional t | POptional t | PRest t | PKey (_, t) ->
-                collect_tvar_refs a t)
+                collect_tvar_refs a t
+            | PLiteral _ -> a)
           acc params
       in
       collect_tvar_refs acc ret
@@ -706,7 +719,8 @@ let try_unify_params ps1 ps2 loc : unit result =
       (fun acc p ->
         match p with
         | PPositional t | POptional t | PRest t | PKey (_, t) ->
-            collect_tvar_refs acc t)
+            collect_tvar_refs acc t
+        | PLiteral _ -> acc)
       [] (ps1 @ ps2)
   in
   match unify_param_lists ps1 ps2 loc with

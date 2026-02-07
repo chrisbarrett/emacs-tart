@@ -187,6 +187,7 @@ and substitute_param subst = function
   | POptional ty -> POptional (substitute subst ty)
   | PRest ty -> PRest (substitute subst ty)
   | PKey (name, ty) -> PKey (name, substitute subst ty)
+  | PLiteral _ as p -> p
 
 (** Convert a scheme to string for debugging *)
 let scheme_to_string = function

@@ -306,6 +306,7 @@ let instantiate_forall (ty : Types.typ) : Types.typ =
         | Types.POptional t -> Types.POptional (substitute t)
         | Types.PRest t -> Types.PRest (substitute t)
         | Types.PKey (name, t) -> Types.PKey (name, substitute t)
+        | Types.PLiteral _ -> p
       in
       substitute body
   | _ -> ty

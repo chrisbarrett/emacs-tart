@@ -63,6 +63,10 @@ and param =
   | POptional of typ  (** Type should be (Option a) *)
   | PRest of typ  (** Type should be the element type; desugars to (List a) *)
   | PKey of string * typ  (** :keyword name and type *)
+  | PLiteral of string
+      (** Literal value parameter for clause matching. Keywords [:name] become
+          [PLiteral ":name"], quoted symbols ['foo] become [PLiteral "foo"].
+          Matches only when the call-site argument is the same literal. *)
 
 (** Global counter for fresh type variable IDs *)
 let tvar_counter = ref 0
@@ -271,6 +275,7 @@ and param_to_string = function
   | POptional ty -> Printf.sprintf "&optional %s" (to_string ty)
   | PRest ty -> Printf.sprintf "&rest %s" (to_string ty)
   | PKey (name, ty) -> Printf.sprintf "&key %s %s" name (to_string ty)
+  | PLiteral value -> Printf.sprintf "'%s" value
 
 (** Check if two types are syntactically equal (after following links). This
     does NOT unify - it only checks structural equality. Type variables are
@@ -315,6 +320,7 @@ and param_equal p1 p2 =
   | POptional t1, POptional t2 -> equal t1 t2
   | PRest t1, PRest t2 -> equal t1 t2
   | PKey (n1, t1), PKey (n2, t2) -> n1 = n2 && equal t1 t2
+  | PLiteral v1, PLiteral v2 -> v1 = v2
   | _ -> false
 
 (** Truthiness checking for the Option type constraint.

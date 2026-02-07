@@ -117,7 +117,8 @@ and validate_params ctx params =
       match param with
       | SPPositional (_, ty) | SPOptional (_, ty) | SPRest ty ->
           validate_type ctx ty
-      | SPKey (_, ty) -> validate_type ctx ty)
+      | SPKey (_, ty) -> validate_type ctx ty
+      | SPLiteral _ -> Ok ())
     (Ok ()) params
 
 and validate_binder_bounds outer_ctx binders =
@@ -531,6 +532,7 @@ and substitute_sig_param subst = function
   | SPOptional (name, ty) -> SPOptional (name, substitute_sig_type subst ty)
   | SPRest ty -> SPRest (substitute_sig_type subst ty)
   | SPKey (name, ty) -> SPKey (name, substitute_sig_type subst ty)
+  | SPLiteral _ as p -> p
 
 (** {1 Type Context}
 
@@ -776,6 +778,7 @@ and sig_param_to_param_with_ctx ?(scope_tvars : (string * Types.typ) list = [])
   | SPOptional (_, ty) -> Types.POptional (convert ty)
   | SPRest ty -> Types.PRest (convert ty)
   | SPKey (name, ty) -> Types.PKey (name, convert ty)
+  | SPLiteral (value, _) -> Types.PLiteral value
 
 (** Convert a signature type to a core type with alias expansion. [aliases] is
     the alias context for expansion. [tvar_names] is the list of bound type
@@ -875,12 +878,21 @@ let union_of_params (params : Types.param list) : Types.param =
         | Types.PRest t
         | Types.PKey (_, t) ->
             t
+        | Types.PLiteral v ->
+            (* Literal params contribute the type of the literal value *)
+            if String.length v > 0 && v.[0] = ':' then Types.Prim.keyword
+            else Types.Prim.symbol
       in
       let types = List.map extract_type params in
       let union_ty = union_of_types types in
-      (* Preserve the param kind from the first occurrence *)
-      match first with
-      | Types.PPositional _ -> Types.PPositional union_ty
+      (* Preserve the param kind from the first non-literal occurrence,
+         falling back to PPositional for all-literal positions *)
+      let first_typed =
+        List.find_opt (function Types.PLiteral _ -> false | _ -> true) params
+      in
+      let kind = match first_typed with Some p -> p | None -> first in
+      match kind with
+      | Types.PPositional _ | Types.PLiteral _ -> Types.PPositional union_ty
       | Types.POptional _ -> Types.POptional union_ty
       | Types.PRest _ -> Types.PRest union_ty
       | Types.PKey (name, _) -> Types.PKey (name, union_ty))
@@ -1028,7 +1040,11 @@ let derive_predicate_info ?(scope_tvars : (string * Types.typ) list = [])
                 | Types.POptional t
                 | Types.PRest t
                 | Types.PKey (_, t) ->
-                    t)
+                    t
+                | Types.PLiteral v ->
+                    if String.length v > 0 && v.[0] = ':' then
+                      Types.Prim.keyword
+                    else Types.Prim.symbol)
               truthy_clauses
           in
           let narrowed = union_of_types truthy_types in
@@ -1062,7 +1078,11 @@ let derive_predicate_info ?(scope_tvars : (string * Types.typ) list = [])
                   | Types.POptional t
                   | Types.PRest t
                   | Types.PKey (_, t) ->
-                      t)
+                      t
+                  | Types.PLiteral v ->
+                      if String.length v > 0 && v.[0] = ':' then
+                        Types.Prim.keyword
+                      else Types.Prim.symbol)
                 falsy_clauses
             in
             let falsy_union = union_of_types falsy_types in

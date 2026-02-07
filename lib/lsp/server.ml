@@ -1052,6 +1052,7 @@ and param_to_sig_string = function
   | Core.Types.PRest ty -> Printf.sprintf "&rest %s" (type_to_sig_string ty)
   | Core.Types.PKey (name, ty) ->
       Printf.sprintf "&key :%s %s" name (type_to_sig_string ty)
+  | Core.Types.PLiteral value -> Printf.sprintf "'%s" value
 
 (** Format a polymorphic type with explicit type variable binders *)
 and type_to_sig_string_with_vars (vars : string list) (body : Core.Types.typ) :
@@ -2042,6 +2043,7 @@ let param_to_label (param : Core.Types.param) : string =
   | Core.Types.PRest ty -> Printf.sprintf "&rest %s" (Core.Types.to_string ty)
   | Core.Types.PKey (name, ty) ->
       Printf.sprintf ":%s %s" name (Core.Types.to_string ty)
+  | Core.Types.PLiteral value -> Printf.sprintf "'%s" value
 
 (** Generate signature help for a function type.
 

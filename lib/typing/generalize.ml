@@ -66,11 +66,10 @@ let rec collect_generalizable_tvars level ty acc =
       let acc =
         List.fold_left
           (fun acc param ->
-            let ty =
-              match param with
-              | PPositional ty | POptional ty | PRest ty | PKey (_, ty) -> ty
-            in
-            collect_generalizable_tvars level ty acc)
+            match param with
+            | PPositional ty | POptional ty | PRest ty | PKey (_, ty) ->
+                collect_generalizable_tvars level ty acc
+            | PLiteral _ -> acc)
           acc params
       in
       collect_generalizable_tvars level ret acc
@@ -138,6 +137,7 @@ and replace_tvar_in_param var_map = function
   | POptional ty -> POptional (replace_tvars_with_names var_map ty)
   | PRest ty -> PRest (replace_tvars_with_names var_map ty)
   | PKey (name, ty) -> PKey (name, replace_tvars_with_names var_map ty)
+  | PLiteral _ as p -> p
 
 (** Generalize a type at the given level.
 

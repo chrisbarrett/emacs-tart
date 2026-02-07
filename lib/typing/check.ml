@@ -71,7 +71,8 @@ let rec substitute_tvar_names (subst : (string * typ) list) (ty : typ) : typ =
             | PPositional t -> PPositional (substitute_tvar_names subst t)
             | POptional t -> POptional (substitute_tvar_names subst t)
             | PRest t -> PRest (substitute_tvar_names subst t)
-            | PKey (n, t) -> PKey (n, substitute_tvar_names subst t))
+            | PKey (n, t) -> PKey (n, substitute_tvar_names subst t)
+            | PLiteral _ as p -> p)
           params
       in
       TArrow (params', substitute_tvar_names subst ret)

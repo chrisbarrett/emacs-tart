@@ -313,6 +313,54 @@ let test_multi_clause_three () =
   | Ok _ -> Alcotest.fail "Expected 4-clause defun"
   | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
 
+let test_literal_keyword_param () =
+  (* Keyword literal in clause: (defun f [k v] (((plist k v) :name) -> string) (((plist k v) k) -> v)) *)
+  match
+    parse_decl_str
+      "(defun f [k v] (((plist k v) :name) -> string) (((plist k v) k) -> v))"
+  with
+  | Ok
+      (Sig_ast.DDefun
+         {
+           defun_name = "f";
+           defun_clauses =
+             [
+               {
+                 clause_params = [ _; Sig_ast.SPLiteral (":name", _) ];
+                 clause_return = Sig_ast.STCon ("string", _);
+                 _;
+               };
+               {
+                 clause_params =
+                   [ _; Sig_ast.SPPositional (_, Sig_ast.STVar ("k", _)) ];
+                 clause_return = Sig_ast.STVar ("v", _);
+                 _;
+               };
+             ];
+           _;
+         }) ->
+      ()
+  | Ok _ -> Alcotest.fail "Expected multi-clause with keyword literal"
+  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
+
+let test_literal_quoted_symbol_param () =
+  (* Quoted symbol literal in clause: (defun f [k v] (((alist k v) 'name) -> string) (((alist k v) k) -> v)) *)
+  match
+    parse_decl_str
+      "(defun f [k v] (((alist k v) 'name) -> string) (((alist k v) k) -> v))"
+  with
+  | Ok
+      (Sig_ast.DDefun
+         {
+           defun_name = "f";
+           defun_clauses =
+             [ { clause_params = [ _; Sig_ast.SPLiteral ("name", _) ]; _ }; _ ];
+           _;
+         }) ->
+      ()
+  | Ok _ -> Alcotest.fail "Expected multi-clause with quoted symbol literal"
+  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
+
 let test_type_app_param () =
   (* (seq a) should still be type application in params *)
   match parse_decl_str "(defun f [a] ((seq a)) -> a)" with
@@ -644,6 +692,10 @@ let () =
             test_multi_clause_with_binders;
           Alcotest.test_case "three-clause defun" `Quick test_multi_clause_three;
           Alcotest.test_case "type app in params" `Quick test_type_app_param;
+          Alcotest.test_case "literal keyword param" `Quick
+            test_literal_keyword_param;
+          Alcotest.test_case "literal quoted symbol param" `Quick
+            test_literal_quoted_symbol_param;
         ] );
       ( "declarations",
         [
