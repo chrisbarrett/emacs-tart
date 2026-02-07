@@ -302,6 +302,7 @@ let instantiate_forall (ty : Types.typ) : Types.typ =
                   List.map (fun (n, t) -> (n, substitute t)) row_fields;
                 row_var = Option.map substitute row_var;
               }
+        | Types.TLiteral _ -> ty
       and substitute_param (p : Types.param) : Types.param =
         match p with
         | Types.PPositional t -> Types.PPositional (substitute t)

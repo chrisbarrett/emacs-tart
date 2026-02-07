@@ -1005,6 +1005,7 @@ let rec type_to_sig_string (ty : Core.Types.typ) : string =
       | None -> Printf.sprintf "{%s}" fields_str
       | Some var ->
           Printf.sprintf "{%s & %s}" fields_str (type_to_sig_string var))
+  | Core.Types.TLiteral (_, base) -> type_to_sig_string base
 
 and param_to_sig_string = function
   | Core.Types.PPositional ty -> type_to_sig_string ty

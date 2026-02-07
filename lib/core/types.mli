@@ -12,14 +12,27 @@
 type tvar_id = int
 (** Unique identifier for type variables. *)
 
+(** {1 Literal Values} *)
+
+(** Literal value representation for literal types.
+
+    Literal types carry their precise value and widen to their base type when
+    context demands it during unification. *)
+type literal_value =
+  | LitInt of int
+  | LitFloat of float
+  | LitString of string
+  | LitSymbol of string  (** quoted symbol *)
+  | LitKeyword of string  (** :keyword *)
+
+(** {1 Type Variables and Types} *)
+
 (** Type variable state - uses union-find representation.
 
     - [Unbound (id, level)] is an unresolved type variable. The level tracks the
       scope depth for let-generalization.
     - [Link ty] indicates this variable has been unified with [ty]. *)
 type tvar = Unbound of tvar_id * int  (** id, level *) | Link of typ
-
-(** {1 Types} *)
 
 (** Type representation.
 
@@ -31,7 +44,8 @@ type tvar = Unbound of tvar_id * int  (** id, level *) | Link of typ
     - [TForall] - Universally quantified type
     - [TUnion] - Union types (Or a b)
     - [TTuple] - Fixed-length heterogeneous tuples
-    - [TRow] - Row type for record-style map types (alist, plist, hash-table) *)
+    - [TRow] - Row type for record-style map types (alist, plist, hash-table)
+    - [TLiteral] - Literal type carrying a precise value and its base type *)
 and typ =
   | TVar of tvar ref
   | TCon of string
@@ -41,6 +55,7 @@ and typ =
   | TUnion of typ list
   | TTuple of typ list
   | TRow of row
+  | TLiteral of literal_value * typ
 
 and row = {
   row_fields : (string * typ) list;  (** Named fields in declaration order *)
@@ -246,6 +261,13 @@ val validation_error_to_string : validation_error -> string
 (** Format a validation error as a string. *)
 
 (** {1 Type Subtraction} *)
+
+val literal_value_equal : literal_value -> literal_value -> bool
+(** Structural equality for literal values. *)
+
+val literal_base_type : literal_value -> typ
+(** [literal_base_type v] returns the base Prim type for a literal value. E.g.,
+    [LitInt _] → [Prim.int], [LitString _] → [Prim.string]. *)
 
 val subtract_type : typ -> typ -> typ
 (** [subtract_type minuend subtrahend] returns [minuend - subtrahend].

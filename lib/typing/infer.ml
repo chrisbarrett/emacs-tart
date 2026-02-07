@@ -2472,6 +2472,7 @@ and substitute_tvar_names (subst : (string * typ) list) (ty : typ) : typ =
               row_fields;
           row_var = Option.map (substitute_tvar_names subst) row_var;
         }
+  | TLiteral _ -> ty
 
 (** Infer a defun with a type declaration.
 

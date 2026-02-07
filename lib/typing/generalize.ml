@@ -87,6 +87,7 @@ let rec collect_generalizable_tvars level ty acc =
       match row_var with
       | None -> acc
       | Some var -> collect_generalizable_tvars level var acc)
+  | TLiteral _ -> acc
 
 (** Generate fresh variable names for generalization.
 
@@ -131,6 +132,7 @@ let rec replace_tvars_with_names var_map ty =
               row_fields;
           row_var = Option.map (replace_tvars_with_names var_map) row_var;
         }
+  | TLiteral _ -> ty
 
 and replace_tvar_in_param var_map = function
   | PPositional ty -> PPositional (replace_tvars_with_names var_map ty)

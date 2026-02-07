@@ -19,6 +19,14 @@ type tvar_id = int [@@deriving show, eq]
     [Link ty] indicates this variable has been unified with [ty]. *)
 type tvar = Unbound of tvar_id * int  (** id, level *) | Link of typ
 
+(** Literal value representation for literal types. *)
+and literal_value =
+  | LitInt of int
+  | LitFloat of float
+  | LitString of string
+  | LitSymbol of string  (** quoted symbol *)
+  | LitKeyword of string  (** :keyword *)
+
 (** Type representation.
 
     - [TVar] - Mutable type variable for union-find unification
@@ -29,7 +37,8 @@ type tvar = Unbound of tvar_id * int  (** id, level *) | Link of typ
     - [TForall] - Universally quantified type
     - [TUnion] - Union types (Or a b)
     - [TTuple] - Fixed-length heterogeneous tuples
-    - [TRow] - Row type for record-style map types (alist, plist, hash-table) *)
+    - [TRow] - Row type for record-style map types (alist, plist, hash-table)
+    - [TLiteral] - Literal type carrying a precise value and its base type *)
 and typ =
   | TVar of tvar ref
   | TCon of string
@@ -39,6 +48,7 @@ and typ =
   | TUnion of typ list
   | TTuple of typ list
   | TRow of row
+  | TLiteral of literal_value * typ
 
 and row = {
   row_fields : (string * typ) list;  (** Named fields in declaration order *)
@@ -229,6 +239,24 @@ let is_row ty = match repr ty with TRow _ -> true | _ -> false
 let is_open_row ty =
   match repr ty with TRow { row_var = Some _; _ } -> true | _ -> false
 
+(** Structural equality for literal values. *)
+let literal_value_equal v1 v2 =
+  match (v1, v2) with
+  | LitInt a, LitInt b -> a = b
+  | LitFloat a, LitFloat b -> Float.equal a b
+  | LitString a, LitString b -> a = b
+  | LitSymbol a, LitSymbol b -> a = b
+  | LitKeyword a, LitKeyword b -> a = b
+  | _ -> false
+
+(** Return the base Prim type for a literal value. *)
+let literal_base_type = function
+  | LitInt _ -> Prim.int
+  | LitFloat _ -> Prim.float
+  | LitString _ -> Prim.string
+  | LitSymbol _ -> Prim.symbol
+  | LitKeyword _ -> Prim.keyword
+
 (** Pretty-print a type to string.
 
     For user-facing output, intrinsic types are shown with their base name
@@ -269,6 +297,17 @@ let rec to_string ty =
       match row_var with
       | None -> Printf.sprintf "{%s}" fields_str
       | Some var -> Printf.sprintf "{%s & %s}" fields_str (to_string var))
+  | TLiteral (v, _base) -> literal_value_to_string v
+
+and literal_value_to_string = function
+  | LitInt n -> string_of_int n
+  | LitFloat f ->
+      let s = string_of_float f in
+      (* Ensure trailing .0 for round floats *)
+      if String.contains s '.' then s else s ^ ".0"
+  | LitString s -> Printf.sprintf "\"%s\"" (String.escaped s)
+  | LitSymbol s -> Printf.sprintf "'%s" s
+  | LitKeyword s -> Printf.sprintf ":%s" s
 
 and param_to_string = function
   | PPositional ty -> to_string ty
@@ -300,6 +339,7 @@ let rec equal t1 t2 =
   | TTuple ts1, TTuple ts2 ->
       List.length ts1 = List.length ts2 && List.for_all2 equal ts1 ts2
   | TRow r1, TRow r2 -> row_equal r1 r2
+  | TLiteral (v1, _), TLiteral (v2, _) -> literal_value_equal v1 v2
   | _ -> false
 
 and row_equal r1 r2 =
@@ -411,6 +451,9 @@ let rec is_truthy ty =
   | TRow _ ->
       (* Rows are always truthy - they represent non-nil map structures *)
       true
+  | TLiteral (_, base) ->
+      (* A literal type is truthy if its base type is truthy *)
+      is_truthy base
 
 (** Validate that a type is suitable as an Option argument.
 

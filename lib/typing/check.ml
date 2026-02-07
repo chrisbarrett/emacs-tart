@@ -98,6 +98,7 @@ let rec substitute_tvar_names (subst : (string * typ) list) (ty : typ) : typ =
               row_fields;
           row_var = Option.map (substitute_tvar_names subst) row_var;
         }
+  | TLiteral _ -> ty
 
 (** Convert a sig_type to a typ at the given level with alias expansion.
 

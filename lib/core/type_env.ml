@@ -190,6 +190,7 @@ and substitute subst ty =
             List.map (fun (n, t) -> (n, substitute subst t)) row_fields;
           row_var = Option.map (substitute subst) row_var;
         }
+  | TLiteral _ -> ty
 
 and substitute_param subst = function
   | PPositional ty -> PPositional (substitute subst ty)

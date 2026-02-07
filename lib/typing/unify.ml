@@ -87,6 +87,7 @@ let rec occurs_check tv_id tv_level ty loc : (unit, occurs_error) Result.t =
       match row_var with
       | None -> Ok ()
       | Some var -> occurs_check tv_id tv_level var loc)
+  | TLiteral _ -> Ok ()
 
 and occurs_check_list tv_id tv_level types loc =
   List.fold_left
@@ -714,6 +715,7 @@ let rec collect_tvar_refs acc ty =
         List.fold_left (fun a (_, t) -> collect_tvar_refs a t) acc row_fields
       in
       match row_var with None -> acc | Some v -> collect_tvar_refs acc v)
+  | TLiteral _ -> acc
 
 (** Restore tvar refs to their saved states. *)
 let restore_tvars snapshot = List.iter (fun (tv, saved) -> tv := saved) snapshot
