@@ -10,10 +10,13 @@
 ;; ===========================================================================
 
 ;; (eq A B) - identity comparison
-;; Disjointness is checked by the type checker as a special case.
-;; Using two independent type params allows polymorphic use while
-;; the checker reports errors when args are provably disjoint.
-(defun eq [a b] (a b) -> bool)
+;; eq compares by pointer identity. Safe for interned types (symbols,
+;; keywords, small integers, t, nil). Unreliable for heap-allocated
+;; types (strings, lists, floats). Disjointness is checked separately.
+(defun eq
+  ((eq-safe eq-safe) -> bool)
+  ((_ _) -> bool
+    (warn "eq compares by identity; use equal for structural comparison")))
 
 ;; (null OBJ) - test if nil
 (defun null

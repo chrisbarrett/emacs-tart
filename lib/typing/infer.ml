@@ -284,9 +284,6 @@ let rec infer (env : Env.t) (sexp : Syntax.Sexp.t) : result =
   (* === Apply: (apply f arg1 arg2 ... list) === *)
   | List (Symbol ("apply", _) :: fn_expr :: args, span) when args <> [] ->
       infer_apply env fn_expr args span
-  (* === eq/eql with disjointness checking (Spec 11 R14) === *)
-  | List ([ Symbol ((("eq" | "eql") as fn_name), _); arg1; arg2 ], span) ->
-      infer_eq_with_disjointness env fn_name arg1 arg2 span
   (* === When/Unless with predicate narrowing (Spec 52) === *)
   | List (Symbol ("when", _) :: cond :: body, span) ->
       infer_when env cond body span
@@ -1871,189 +1868,145 @@ and infer_application env fn args span =
         | None -> None)
   in
 
-  match (clause_result, row_accessor_result) with
-  | Some (clause_ret_ty, clause_diag_opt), _ ->
-      (* Clause matched — use the clause's return type directly.
+  let result =
+    match (clause_result, row_accessor_result) with
+    | Some (clause_ret_ty, clause_diag_opt), _ ->
+        (* Clause matched — use the clause's return type directly.
          Still need to emit fn_result constraints and arg constraints for
          the sub-expressions, but the return type is determined by the clause
          rather than by unifying the full merged function type. *)
-      let arg_constraints = combine_results arg_results in
-      let all_constraints = C.combine fn_result.constraints arg_constraints in
-      let all_undefineds =
-        fn_result.undefineds @ combine_undefineds arg_results
-      in
-      let clause_diags =
-        match clause_diag_opt with Some d -> [ d ] | None -> []
-      in
-      {
-        ty = clause_ret_ty;
-        constraints = all_constraints;
-        undefineds = all_undefineds;
-        clause_diagnostics =
-          clause_diags @ fn_result.clause_diagnostics
-          @ combine_clause_diagnostics arg_results;
-      }
-  | None, Some (row_ret_ty, row_constraint) ->
-      (* Row accessor dispatch matched — use the row-derived return type.
+        let arg_constraints = combine_results arg_results in
+        let all_constraints = C.combine fn_result.constraints arg_constraints in
+        let all_undefineds =
+          fn_result.undefineds @ combine_undefineds arg_results
+        in
+        let clause_diags =
+          match clause_diag_opt with Some d -> [ d ] | None -> []
+        in
+        {
+          ty = clause_ret_ty;
+          constraints = all_constraints;
+          undefineds = all_undefineds;
+          clause_diagnostics =
+            clause_diags @ fn_result.clause_diagnostics
+            @ combine_clause_diagnostics arg_results;
+        }
+    | None, Some (row_ret_ty, row_constraint) ->
+        (* Row accessor dispatch matched — use the row-derived return type.
          Emit any container constraint plus sub-expression constraints. *)
-      let arg_constraints = combine_results arg_results in
-      let base_constraints =
-        match row_constraint with
-        | Some c -> C.add c arg_constraints
-        | None -> arg_constraints
-      in
-      let all_constraints = C.combine fn_result.constraints base_constraints in
-      let all_undefineds =
-        fn_result.undefineds @ combine_undefineds arg_results
-      in
-      {
-        ty = row_ret_ty;
-        constraints = all_constraints;
-        undefineds = all_undefineds;
-        clause_diagnostics =
-          fn_result.clause_diagnostics @ combine_clause_diagnostics arg_results;
-      }
-  | None, None ->
-      (* No clause or row dispatch — fall back to standard constraint path *)
+        let arg_constraints = combine_results arg_results in
+        let base_constraints =
+          match row_constraint with
+          | Some c -> C.add c arg_constraints
+          | None -> arg_constraints
+        in
+        let all_constraints =
+          C.combine fn_result.constraints base_constraints
+        in
+        let all_undefineds =
+          fn_result.undefineds @ combine_undefineds arg_results
+        in
+        {
+          ty = row_ret_ty;
+          constraints = all_constraints;
+          undefineds = all_undefineds;
+          clause_diagnostics =
+            fn_result.clause_diagnostics
+            @ combine_clause_diagnostics arg_results;
+        }
+    | None, None ->
+        (* No clause or row dispatch — fall back to standard constraint path *)
 
-      (* Fresh type variable for the result *)
-      let result_ty = fresh_tvar (Env.current_level env) in
+        (* Fresh type variable for the result *)
+        let result_ty = fresh_tvar (Env.current_level env) in
 
-      (* Build expected function type - one constraint per argument for better
+        (* Build expected function type - one constraint per argument for better
          error messages *)
-      let arg_constraints_with_context =
-        List.mapi
-          (fun i arg_result ->
-            let expected_param_ty = fresh_tvar (Env.current_level env) in
-            let arg_expr = List.nth args i in
-            let arg_expr_source = get_expr_source arg_expr in
-            let context =
-              match fn_name with
-              | Some name ->
-                  C.FunctionArg
-                    {
-                      fn_name = name;
-                      fn_type = fn_result.ty;
-                      arg_index = i;
-                      arg_expr_source;
-                    }
-              | None -> C.NoContext
-            in
-            ( expected_param_ty,
-              C.equal ~context expected_param_ty arg_result.ty
-                (Syntax.Sexp.span_of arg_expr) ))
-          arg_results
-      in
+        let arg_constraints_with_context =
+          List.mapi
+            (fun i arg_result ->
+              let expected_param_ty = fresh_tvar (Env.current_level env) in
+              let arg_expr = List.nth args i in
+              let arg_expr_source = get_expr_source arg_expr in
+              let context =
+                match fn_name with
+                | Some name ->
+                    C.FunctionArg
+                      {
+                        fn_name = name;
+                        fn_type = fn_result.ty;
+                        arg_index = i;
+                        arg_expr_source;
+                      }
+                | None -> C.NoContext
+              in
+              ( expected_param_ty,
+                C.equal ~context expected_param_ty arg_result.ty
+                  (Syntax.Sexp.span_of arg_expr) ))
+            arg_results
+        in
 
-      (* Build the expected function type using the fresh param types *)
-      let param_types =
-        List.map (fun (ty, _) -> PPositional ty) arg_constraints_with_context
-      in
-      let expected_fn_type = TArrow (param_types, result_ty) in
+        (* Build the expected function type using the fresh param types *)
+        let param_types =
+          List.map (fun (ty, _) -> PPositional ty) arg_constraints_with_context
+        in
+        let expected_fn_type = TArrow (param_types, result_ty) in
 
-      (* Constraint: actual function type = expected function type *)
-      let fn_constraint = C.equal fn_result.ty expected_fn_type span in
+        (* Constraint: actual function type = expected function type *)
+        let fn_constraint = C.equal fn_result.ty expected_fn_type span in
 
-      (* Collect all argument constraints *)
-      let arg_type_constraints =
-        List.fold_left
-          (fun acc (_, c) -> C.add c acc)
-          C.empty arg_constraints_with_context
-      in
+        (* Collect all argument constraints *)
+        let arg_type_constraints =
+          List.fold_left
+            (fun acc (_, c) -> C.add c acc)
+            C.empty arg_constraints_with_context
+        in
 
-      (* Combine all constraints.
+        (* Combine all constraints.
          Order matters for error context: fn_constraint must come BEFORE
          arg_type_constraints so that the function signature determines the
          expected type before we compare with actual argument types. *)
-      let arg_constraints = combine_results arg_results in
-      let all_constraints =
-        C.combine fn_result.constraints
-          (C.combine arg_constraints (C.add fn_constraint arg_type_constraints))
-      in
-      let all_undefineds =
-        fn_result.undefineds @ combine_undefineds arg_results
-      in
+        let arg_constraints = combine_results arg_results in
+        let all_constraints =
+          C.combine fn_result.constraints
+            (C.combine arg_constraints
+               (C.add fn_constraint arg_type_constraints))
+        in
+        let all_undefineds =
+          fn_result.undefineds @ combine_undefineds arg_results
+        in
 
-      {
-        ty = result_ty;
-        constraints = all_constraints;
-        undefineds = all_undefineds;
-        clause_diagnostics =
-          fn_result.clause_diagnostics @ combine_clause_diagnostics arg_results;
-      }
-
-(** Infer an eq/eql call with disjointness checking (Spec 11 R14).
-
-    Delegates to normal application inference for the standard type checking,
-    then checks if the argument types are provably disjoint. If so, injects a
-    failing constraint with [EqDisjointness] context.
-
-    The argument types are inferred first so we can inspect them directly. Those
-    inferred results are then reused as the arguments to
-    [infer_application_with_inferred_args] to avoid double-inference. *)
-and infer_eq_with_disjointness env fn_name arg1 arg2 span =
-  let open Syntax.Sexp in
-  (* Infer both argument types *)
-  let arg1_result = infer env arg1 in
-  let arg2_result = infer env arg2 in
-
-  (* Infer the function *)
-  let fn_sym = Symbol (fn_name, span) in
-  let fn_result = infer env fn_sym in
-
-  (* Build the application constraint as infer_application would *)
-  let result_ty = fresh_tvar (Env.current_level env) in
-
-  let arg_results = [ arg1_result; arg2_result ] in
-  let arg_types = List.map (fun r -> PPositional r.ty) arg_results in
-  let fn_constraint =
-    C.equal
-      ~context:
-        (C.FunctionArg
-           {
-             fn_name;
-             fn_type = fn_result.ty;
-             arg_index = 0;
-             arg_expr_source = None;
-           })
-      fn_result.ty
-      (TArrow (arg_types, result_ty))
-      span
+        {
+          ty = result_ty;
+          constraints = all_constraints;
+          undefineds = all_undefineds;
+          clause_diagnostics =
+            fn_result.clause_diagnostics
+            @ combine_clause_diagnostics arg_results;
+        }
   in
 
-  let all_constraints =
-    C.add fn_constraint
-      (C.combine fn_result.constraints
-         (C.combine arg1_result.constraints arg2_result.constraints))
-  in
-  let all_undefineds =
-    fn_result.undefineds @ arg1_result.undefineds @ arg2_result.undefineds
-  in
-
-  let base_result =
-    {
-      ty = result_ty;
-      constraints = all_constraints;
-      undefineds = all_undefineds;
-      clause_diagnostics = [];
-    }
-  in
-
-  (* Check disjointness on the inferred argument types *)
-  let arg1_ty = repr arg1_result.ty in
-  let arg2_ty = repr arg2_result.ty in
-
-  if Unify.types_disjoint arg1_ty arg2_ty then
-    (* Types are provably disjoint — inject a failing constraint *)
-    let context =
-      C.EqDisjointness { fn_name; arg1_type = arg1_ty; arg2_type = arg2_ty }
-    in
-    let disjoint_constraint = C.equal ~context arg1_ty arg2_ty span in
-    {
-      base_result with
-      constraints = C.add disjoint_constraint base_result.constraints;
-    }
-  else base_result
+  (* Post-processing: eq/eql disjointness checking (Spec 11 R14).
+     After standard inference (including clause dispatch), check if the
+     two argument types are provably disjoint. If so, inject a failing
+     constraint with EqDisjointness context. This is complementary to the
+     identity-safety clause diagnostic (Spec 48 R7). *)
+  match (fn_name, arg_results) with
+  | Some (("eq" | "eql") as name), [ arg1_result; arg2_result ] ->
+      let arg1_ty = repr arg1_result.ty in
+      let arg2_ty = repr arg2_result.ty in
+      if Unify.types_disjoint arg1_ty arg2_ty then
+        let context =
+          C.EqDisjointness
+            { fn_name = name; arg1_type = arg1_ty; arg2_type = arg2_ty }
+        in
+        let disjoint_constraint = C.equal ~context arg1_ty arg2_ty span in
+        {
+          result with
+          constraints = C.add disjoint_constraint result.constraints;
+        }
+      else result
+  | _ -> result
 
 (** Try to extract a row type from an alist type: [(list (cons symbol TRow))].
 

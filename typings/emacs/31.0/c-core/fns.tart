@@ -13,8 +13,14 @@
 (defun identity [a] (a) -> a)
 
 ;; (eql A B) - compare using eq for non-numbers, = for numbers
-;; Disjointness is checked by the type checker as a special case.
-(defun eql [a b] (a b) -> bool)
+;; eql uses identity for non-numbers and numeric equality for numbers.
+;; Safe for symbols, keywords, integers, floats, t, nil.
+;; Unreliable for strings, lists, and other heap-allocated types.
+;; Disjointness is checked separately.
+(defun eql
+  ((eql-safe eql-safe) -> bool)
+  ((_ _) -> bool
+    (warn "eql compares by identity for non-numbers; use equal for structural comparison")))
 
 ;; (equal A B) - structural equality
 (defun equal (any any) -> bool)

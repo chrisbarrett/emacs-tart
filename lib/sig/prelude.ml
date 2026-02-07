@@ -12,6 +12,8 @@
     - option: Union type (a | nil) with truthy bound on a
     - is: Type subtraction (a - nil) - removes nil from a type
     - nonempty: Non-empty list (is (list a)) - list without nil
+    - eq-safe: Types where eq is safe (symbol | keyword | int | t | nil)
+    - eql-safe: Types where eql is safe (eq-safe + float)
 
     The prelude is loaded before any other .tart file and its bindings cannot be
     shadowed (per Spec 07 R17). *)
@@ -158,6 +160,39 @@ let prelude_aliases : (string * Sig_loader.type_alias) list =
           tsubtract
             (tapp (intrinsic "List") [ tvar "a" ])
             (tcon (intrinsic "Nil"));
+      } );
+    (* (type eq-safe (symbol | keyword | int | t | nil)) - types where eq is
+       safe (identity comparison matches structural equality) *)
+    ( "eq-safe",
+      {
+        Sig_loader.alias_params = [];
+        alias_body =
+          Sig_ast.STUnion
+            ( [
+                tcon (intrinsic "Symbol");
+                tcon (intrinsic "Keyword");
+                tcon (intrinsic "Int");
+                tcon (intrinsic "T");
+                tcon (intrinsic "Nil");
+              ],
+              prelude_span );
+      } );
+    (* (type eql-safe (symbol | keyword | int | float | t | nil)) - types where
+       eql is safe (adds float to eq-safe for numeric equality) *)
+    ( "eql-safe",
+      {
+        Sig_loader.alias_params = [];
+        alias_body =
+          Sig_ast.STUnion
+            ( [
+                tcon (intrinsic "Symbol");
+                tcon (intrinsic "Keyword");
+                tcon (intrinsic "Int");
+                tcon (intrinsic "Float");
+                tcon (intrinsic "T");
+                tcon (intrinsic "Nil");
+              ],
+              prelude_span );
       } );
   ]
 

@@ -12,6 +12,8 @@
     - option: Add nil to a truthy type (a | nil) with bound (a : truthy)
     - is: Type subtraction (a - nil) - removes nil from a type
     - nonempty: Non-empty list (is (list a)) - list without nil
+    - eq-safe: Types where eq is safe (symbol | keyword | int | t | nil)
+    - eql-safe: Types where eql is safe (eq-safe + float)
 
     Prelude opaque types:
     - buffer: Emacs buffer
