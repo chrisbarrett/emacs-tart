@@ -112,12 +112,12 @@ construction: `format_pos`, `format_span`, `to_string`,
 `to_string_human`, `to_string_compact`, `to_string_list`,
 `error_type_of_code`, plus the JSON serializer at lines 1101–1155.
 
-- [ ] Create `lib/typing/diagnostic_format.ml` + `.mli`
-- [ ] Move formatting + JSON serialization (~330 lines)
-- [ ] Keep diagnostic construction (types, constructors, context dispatch) in
+- [x] Create `lib/typing/diagnostic_format.ml` + `.mli`
+- [x] Move formatting + JSON serialization (~330 lines)
+- [x] Keep diagnostic construction (types, constructors, context dispatch) in
       `diagnostic.ml`
-- [ ] Wire together; update `diagnostic.mli` re-exports as needed
-- [ ] Build + test
+- [x] Wire together; update `diagnostic.mli` re-exports as needed
+- [x] Build + test
 
 ### Task 4.2: Extract LSP `completion.ml` from `server.ml`
 
@@ -126,10 +126,10 @@ Lines 1182–1389 contain the entire completion subsystem:
 `collect_env_completions`, `filter_by_prefix`,
 `deduplicate_completions`, `handle_completion`.
 
-- [ ] Create `lib/lsp/completion.ml` + `.mli`
-- [ ] Move completion functions (~210 lines)
-- [ ] Wire into `server.ml` dispatch
-- [ ] Build + test
+- [x] Create `lib/lsp/completion.ml` + `.mli`
+- [x] Move completion functions (~210 lines)
+- [x] Wire into `server.ml` dispatch
+- [x] Build + test
 
 ### Task 4.3: Extract LSP `signature_help.ml` from `server.ml`
 
