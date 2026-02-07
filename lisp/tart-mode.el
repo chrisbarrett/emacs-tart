@@ -142,9 +142,10 @@ and their corresponding .el implementation files."
   :group 'tart)
 
 (defcustom tart-setup-eglot t
-  "Whether to register tart as an eglot server for `emacs-lisp-mode'.
-When non-nil, adds tart to `eglot-server-programs' so that eglot
-can use tart for type checking elisp files with sibling .tart files."
+  "Whether to register tart as an eglot server.
+When non-nil, adds tart to `eglot-server-programs' for both
+`emacs-lisp-mode' and `tart-signature-mode', so that eglot can
+use tart for type checking elisp files and signature files."
   :type 'boolean
   :group 'tart)
 
@@ -799,10 +800,13 @@ have already installed the binary."
              (tart--binary-available-p))
     (eglot-ensure)))
 
-;; Register tart as an LSP server for emacs-lisp-mode
+;; Register tart as an LSP server for emacs-lisp-mode and tart-signature-mode.
+;; Using a multi-mode entry means eglot shares a single server connection when
+;; both .el and .tart buffers belong to the same project (Spec 62, R3).
 (when tart-setup-eglot
   (add-to-list 'eglot-server-programs
-               '(emacs-lisp-mode . tart--eglot-server-program)))
+               '((emacs-lisp-mode tart-signature-mode)
+                 . tart--eglot-server-program)))
 
 ;;; Find-sibling Integration
 
