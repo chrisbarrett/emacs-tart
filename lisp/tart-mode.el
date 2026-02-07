@@ -436,10 +436,45 @@ Modelled on `inferior-tart-mode-syntax-table' with additional
 symbol constituents for `|' (union operator), `&' (`&optional',
 `&rest', `&key'), and `:' (type bounds).")
 
+(defvar tart-signature-mode-font-lock-keywords
+  (let ((declaration-keywords '("defun" "defvar" "type" "open" "include")))
+    `(;; R1: Declaration keywords
+      (,(concat "(" (regexp-opt declaration-keywords t) "\\_>")
+       (1 font-lock-keyword-face))
+
+      ;; R2: Function name after defun
+      ("(defun\\_>[ \t]+\\(\\(?:\\sw\\|\\s_\\)+\\)"
+       (1 font-lock-function-name-face))
+
+      ;; R2: Variable name after defvar
+      ("(defvar\\_>[ \t]+\\(\\(?:\\sw\\|\\s_\\)+\\)"
+       (1 font-lock-variable-name-face))
+
+      ;; R2: Type name after type
+      ("(type\\_>[ \t]+\\(\\(?:\\sw\\|\\s_\\)+\\)"
+       (1 font-lock-type-face))
+
+      ;; R5: Module name after open/include
+      (,(concat "(" (regexp-opt '("open" "include") t)
+                "\\_>[ \t]+\\(\\(?:\\sw\\|\\s_\\)+\\)")
+       (2 font-lock-constant-face))
+
+      ;; R3: Arrow operator
+      ("\\_<->\\_>"
+       (0 font-lock-keyword-face))
+
+      ;; R4: Type variable quantifiers — variables inside [...]
+      ("\\[\\([^]]*\\)\\]"
+       (1 font-lock-variable-name-face))))
+  "Font-lock keywords for `tart-signature-mode'.")
+
 ;;;###autoload
 (define-derived-mode tart-signature-mode lisp-mode "Tart"
   "Major mode for editing Tart type signature files."
-  :syntax-table tart-signature-mode-syntax-table)
+  :syntax-table tart-signature-mode-syntax-table
+  (setq-local font-lock-defaults
+              '(tart-signature-mode-font-lock-keywords
+                nil nil nil nil)))
 
 ;;;###autoload
 (add-to-list 'auto-mode-alist `(,(rx ".tart" eos) . tart-signature-mode))
