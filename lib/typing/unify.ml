@@ -115,6 +115,16 @@ type internal_error =
 type 'a internal_result = ('a, internal_error) Result.t
 
 let map_con_name = intrinsic "Map"
+let plist_con_name = intrinsic "Plist"
+let list_con_name = intrinsic "List"
+
+(** Is the constructor the plist intrinsic? *)
+let is_plist_con con =
+  match repr con with TCon n -> n = plist_con_name | _ -> false
+
+(** Is the constructor the list intrinsic? *)
+let is_list_con con =
+  match repr con with TCon n -> n = list_con_name | _ -> false
 
 (** Check if a type is a map supertype: [TApp(Map, [_])]. *)
 let is_map ty =
@@ -258,6 +268,12 @@ let rec unify ?(invariant = false) t1 t2 loc : unit internal_result =
               else
                 let* () = unify ~invariant c1 c2 loc in
                 unify_list ~invariant:true args1 args2 loc
+        else if is_plist_con c1 && is_list_con c2 then
+          (* Plist → list subsumption: (Plist k v) widens to (list (k | v)).
+             Decompose the plist into its underlying list-of-union form. *)
+          match (args1, args2) with
+          | [ k; v ], [ elem ] -> unify ~invariant (TUnion [ k; v ]) elem loc
+          | _ -> Error (ITypeMismatch (t1, t2, loc))
         else if List.length args1 <> List.length args2 then
           Error (IArityMismatch (List.length args1, List.length args2, loc))
         else
