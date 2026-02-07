@@ -108,6 +108,9 @@ let narrow_else_from_analysis (analysis : Narrow.condition_analysis)
     (env : Env.t) : Env.t =
   snd (narrow_env_from_analysis analysis env)
 
+(** Which row-typed accessor is being called. *)
+type accessor_kind = PlistGet | AlistGet | Gethash | MapElt
+
 (** Infer the type of an S-expression.
 
     This generates constraints but does not solve them. Call [Unify.solve] on
@@ -224,36 +227,33 @@ let rec infer (env : Env.t) (sexp : Syntax.Sexp.t) : result =
   (* === Apply: (apply f arg1 arg2 ... list) === *)
   | List (Symbol ("apply", _) :: fn_expr :: args, span) when args <> [] ->
       infer_apply env fn_expr args span
-  (* === alist-get with literal symbol key: row-typed inference === *)
+  (* === Row-typed accessor calls with literal keys (Spec 11 R4–R8, Spec 56) === *)
   | List
       ( Symbol ("alist-get", _)
         :: List ([ Symbol ("quote", _); Symbol (key_name, _) ], _)
         :: alist_expr :: rest_args,
-        span ) ->
-      infer_alist_get_row env key_name alist_expr rest_args span
-  (* === plist-get with literal keyword key: row-typed inference === *)
+        _span ) ->
+      infer_row_accessor env AlistGet key_name alist_expr rest_args
   | List
       ( Symbol ("plist-get", _)
         :: plist_expr
         :: Keyword (key_name, _)
         :: rest_args,
-        span ) ->
-      infer_plist_get_row env (":" ^ key_name) plist_expr rest_args span
-  (* === map-elt with literal symbol key: row-typed inference (Spec 11 R12) === *)
+        _span ) ->
+      infer_row_accessor env PlistGet (":" ^ key_name) plist_expr rest_args
   | List
       ( Symbol ("map-elt", _)
         :: map_expr
         :: List ([ Symbol ("quote", _); Symbol (key_name, _) ], _)
         :: rest_args,
-        span ) ->
-      infer_map_elt_row env key_name map_expr rest_args span
-  (* === gethash with literal symbol key: row-typed inference (Spec 11 R13) === *)
+        _span ) ->
+      infer_row_accessor env MapElt key_name map_expr rest_args
   | List
       ( Symbol ("gethash", _)
         :: List ([ Symbol ("quote", _); Symbol (key_name, _) ], _)
         :: table_expr :: rest_args,
-        span ) ->
-      infer_gethash_row env key_name table_expr rest_args span
+        _span ) ->
+      infer_row_accessor env Gethash key_name table_expr rest_args
   (* === eq/eql with disjointness checking (Spec 11 R14) === *)
   | List ([ Symbol ((("eq" | "eql") as fn_name), _); arg1; arg2 ], span) ->
       infer_eq_with_disjointness env fn_name arg1 arg2 span
@@ -1581,96 +1581,6 @@ and extract_alist_row ty =
       match repr value_ty with TRow row -> Some row | _ -> None)
   | _ -> None
 
-(** Infer a row-typed alist-get call with a literal symbol key.
-
-    [(alist-get 'KEY ALIST &optional DEFAULT REMOVE TESTFN)]
-
-    Implements the 7-case decision table from Spec 11 R4:
-
-    - Cases 1–2: literal key found in row → return [field_type] (no nil)
-    - Cases 3–4: literal key absent from closed row → return [nil] or default
-    - Case 5: literal key absent from open row → return [(α | nil)]
-    - Case 6: variable key (not handled here, only literal keys reach this path)
-    - Case 7: incompatible testfn (deferred to Iteration 3)
-
-    When the alist's type is not yet known (fresh type variable, R8), infers a
-    row type from field access: constrains the alist to an open row containing
-    the key and returns [field_ty] directly (the constraint guarantees
-    presence). *)
-and infer_alist_get_row env key_name alist_expr rest_args _span =
-  (* Infer the alist expression *)
-  let alist_result = infer env alist_expr in
-
-  (* Infer remaining optional args (DEFAULT, REMOVE, TESTFN) *)
-  let rest_results = List.map (infer env) rest_args in
-
-  (* Check if the alist already has a known row type (from annotation) *)
-  let result_ty, alist_constraint =
-    match extract_alist_row alist_result.ty with
-    | Some row -> (
-        match row_lookup row key_name with
-        | Some field_ty ->
-            (* Cases 1–2: key is in the row → return field_type directly *)
-            (field_ty, None)
-        | None -> (
-            match row.row_var with
-            | None ->
-                (* Cases 3–4: key absent from closed row → return nil or default *)
-                let result_ty =
-                  match rest_args with
-                  | _default_expr :: _ ->
-                      (* Case 4: DEFAULT provided → return default's type.
-                         The default was already inferred in rest_results above. *)
-                      (List.hd rest_results).ty
-                  | [] ->
-                      (* Case 3: no default → return nil *)
-                      Prim.nil
-                in
-                (result_ty, None)
-            | Some _ ->
-                (* Case 5: key absent from open row → constrain and return
-                   (α | nil) *)
-                let field_ty = fresh_tvar (Env.current_level env) in
-                let row_var = fresh_tvar (Env.current_level env) in
-                let expected_row = open_row [ (key_name, field_ty) ] row_var in
-                let expected_alist_ty =
-                  list_of (pair_of Prim.symbol expected_row)
-                in
-                let c =
-                  C.equal expected_alist_ty alist_result.ty
-                    (Syntax.Sexp.span_of alist_expr)
-                in
-                (option_of field_ty, Some c)))
-    | None ->
-        (* R8: Type not yet known — infer row from field access.
-           We constrain the alist to have an open row containing this key,
-           so the key is provably present. Return field_ty directly
-           (not option_of field_ty) since our constraint guarantees presence. *)
-        let field_ty = fresh_tvar (Env.current_level env) in
-        let row_var = fresh_tvar (Env.current_level env) in
-        let expected_row = open_row [ (key_name, field_ty) ] row_var in
-        let expected_alist_ty = list_of (pair_of Prim.symbol expected_row) in
-        let c =
-          C.equal expected_alist_ty alist_result.ty
-            (Syntax.Sexp.span_of alist_expr)
-        in
-        (field_ty, Some c)
-  in
-
-  (* Combine constraints *)
-  let rest_constraints = combine_results rest_results in
-  let base_constraints =
-    match alist_constraint with
-    | Some c -> C.add c rest_constraints
-    | None -> rest_constraints
-  in
-  let all_constraints = C.combine alist_result.constraints base_constraints in
-  let all_undefineds =
-    alist_result.undefineds @ combine_undefineds rest_results
-  in
-
-  { ty = result_ty; constraints = all_constraints; undefineds = all_undefineds }
-
 (** Try to extract a row type from a plist type.
 
     Recognises:
@@ -1710,82 +1620,6 @@ and extract_plist_row ty =
       | _ -> None)
   | _ -> None
 
-(** Infer a row-typed plist-get call with a literal keyword key.
-
-    [(plist-get PLIST :KEY &optional PREDICATE)]
-
-    Implements the same decision table as alist-get (Spec 11 R4/R5):
-
-    - Cases 1–2: literal key found in row → return [field_type] (no nil)
-    - Cases 3–4: literal key absent from closed row → return [nil]
-    - Case 5: literal key absent from open row → return [(α | nil)]
-
-    When the plist's type is not yet known (fresh type variable, R8), infers a
-    row type from field access: constrains the plist to an open row containing
-    the key and returns [field_ty] directly (the constraint guarantees
-    presence). *)
-and infer_plist_get_row env key_name plist_expr rest_args _span =
-  (* Infer the plist expression *)
-  let plist_result = infer env plist_expr in
-
-  (* Infer remaining optional args (PREDICATE) *)
-  let rest_results = List.map (infer env) rest_args in
-
-  (* Check if the plist already has a known row type (from annotation) *)
-  let result_ty, plist_constraint =
-    match extract_plist_row plist_result.ty with
-    | Some row -> (
-        match row_lookup row key_name with
-        | Some field_ty ->
-            (* Cases 1–2: key is in the row → return field_type directly *)
-            (field_ty, None)
-        | None -> (
-            match row.row_var with
-            | None ->
-                (* Cases 3–4: key absent from closed row → return nil *)
-                (Prim.nil, None)
-            | Some _ ->
-                (* Case 5: key absent from open row → constrain and return
-                   (α | nil) *)
-                let field_ty = fresh_tvar (Env.current_level env) in
-                let row_var = fresh_tvar (Env.current_level env) in
-                let expected_row = open_row [ (key_name, field_ty) ] row_var in
-                let expected_plist_ty = plist_of Prim.keyword expected_row in
-                let c =
-                  C.equal expected_plist_ty plist_result.ty
-                    (Syntax.Sexp.span_of plist_expr)
-                in
-                (option_of field_ty, Some c)))
-    | None ->
-        (* R8: Type not yet known — infer row from field access.
-           We constrain the plist to have an open row containing this key,
-           so the key is provably present. Return field_ty directly
-           (not option_of field_ty) since our constraint guarantees presence. *)
-        let field_ty = fresh_tvar (Env.current_level env) in
-        let row_var = fresh_tvar (Env.current_level env) in
-        let expected_row = open_row [ (key_name, field_ty) ] row_var in
-        let expected_plist_ty = plist_of Prim.keyword expected_row in
-        let c =
-          C.equal expected_plist_ty plist_result.ty
-            (Syntax.Sexp.span_of plist_expr)
-        in
-        (field_ty, Some c)
-  in
-
-  (* Combine constraints *)
-  let rest_constraints = combine_results rest_results in
-  let base_constraints =
-    match plist_constraint with
-    | Some c -> C.add c rest_constraints
-    | None -> rest_constraints
-  in
-  let all_constraints = C.combine plist_result.constraints base_constraints in
-  let all_undefineds =
-    plist_result.undefineds @ combine_undefineds rest_results
-  in
-
-  { ty = result_ty; constraints = all_constraints; undefineds = all_undefineds }
-
 (** Try to extract a row type from a map supertype: [(Map TRow)].
 
     Returns [Some row] if the type is a row-typed map, [None] otherwise. *)
@@ -1795,88 +1629,6 @@ and extract_map_row ty =
   | TApp (map_con, [ value_ty ]) when equal (repr map_con) (TCon map_name) -> (
       match repr value_ty with TRow row -> Some row | _ -> None)
   | _ -> None
-
-(** Infer a row-typed map-elt call with a literal symbol key.
-
-    [(map-elt MAP 'KEY &optional DEFAULT)]
-
-    Implements the same decision table as alist-get/plist-get:
-
-    - Cases 1–2: literal key found in row → return [field_type] (no nil)
-    - Cases 3–4: literal key absent from closed row → return [nil] or default
-    - Case 5: literal key absent from open row → return [(α | nil)]
-
-    When the map's type is not yet known (fresh type variable), infers a row
-    type from field access: constrains the map to an open row containing the key
-    and returns [field_ty] directly (the constraint guarantees presence). *)
-and infer_map_elt_row env key_name map_expr rest_args _span =
-  (* Infer the map expression *)
-  let map_result = infer env map_expr in
-
-  (* Infer remaining optional args (DEFAULT) *)
-  let rest_results = List.map (infer env) rest_args in
-
-  (* Check if the map already has a known row type (from annotation) *)
-  let result_ty, map_constraint =
-    match extract_map_row map_result.ty with
-    | Some row -> (
-        match row_lookup row key_name with
-        | Some field_ty ->
-            (* Cases 1–2: key is in the row → return field_type directly *)
-            (field_ty, None)
-        | None -> (
-            match row.row_var with
-            | None ->
-                (* Cases 3–4: key absent from closed row → return nil or default *)
-                let result_ty =
-                  match rest_args with
-                  | _default_expr :: _ ->
-                      (* Case 4: DEFAULT provided → return default's type *)
-                      (List.hd rest_results).ty
-                  | [] ->
-                      (* Case 3: no default → return nil *)
-                      Prim.nil
-                in
-                (result_ty, None)
-            | Some _ ->
-                (* Case 5: key absent from open row → constrain and return
-                   (α | nil) *)
-                let field_ty = fresh_tvar (Env.current_level env) in
-                let row_var = fresh_tvar (Env.current_level env) in
-                let expected_row = open_row [ (key_name, field_ty) ] row_var in
-                let expected_map_ty = map_of expected_row in
-                let c =
-                  C.equal expected_map_ty map_result.ty
-                    (Syntax.Sexp.span_of map_expr)
-                in
-                (option_of field_ty, Some c)))
-    | None ->
-        (* Type not yet known — infer row from field access.
-           We constrain the map to have an open row containing this key,
-           so the key is provably present. Return field_ty directly. *)
-        let field_ty = fresh_tvar (Env.current_level env) in
-        let row_var = fresh_tvar (Env.current_level env) in
-        let expected_row = open_row [ (key_name, field_ty) ] row_var in
-        let expected_map_ty = map_of expected_row in
-        let c =
-          C.equal expected_map_ty map_result.ty (Syntax.Sexp.span_of map_expr)
-        in
-        (field_ty, Some c)
-  in
-
-  (* Combine constraints *)
-  let rest_constraints = combine_results rest_results in
-  let base_constraints =
-    match map_constraint with
-    | Some c -> C.add c rest_constraints
-    | None -> rest_constraints
-  in
-  let all_constraints = C.combine map_result.constraints base_constraints in
-  let all_undefineds =
-    map_result.undefineds @ combine_undefineds rest_results
-  in
-
-  { ty = result_ty; constraints = all_constraints; undefineds = all_undefineds }
 
 (** Try to extract a row type from a hash-table type: [(HashTable symbol TRow)].
 
@@ -1890,26 +1642,48 @@ and extract_hash_table_row ty =
       match repr value_ty with TRow row -> Some row | _ -> None)
   | _ -> None
 
-(** Infer a row-typed gethash call with a literal symbol key.
+(** Extract a row from a container type, dispatching on accessor kind. *)
+and extract_row_for_accessor kind ty =
+  match kind with
+  | PlistGet -> extract_plist_row ty
+  | AlistGet -> extract_alist_row ty
+  | Gethash -> extract_hash_table_row ty
+  | MapElt -> extract_map_row ty
 
-    [(gethash 'KEY TABLE &optional DEFAULT)]
+(** Build the expected container type for a given accessor kind from a row.
 
-    Implements the same decision table as alist-get/plist-get:
+    Used for the R8 (unknown container) and Case 5 (open row, absent key) paths,
+    where we constrain the container to have an open row containing the accessed
+    key. *)
+and build_expected_container kind row =
+  match kind with
+  | PlistGet -> plist_of Prim.keyword row
+  | AlistGet -> list_of (pair_of Prim.symbol row)
+  | Gethash -> hash_table_of Prim.symbol row
+  | MapElt -> map_of row
 
-    - Cases 1–2: literal key found in row → return [field_type] (no nil)
-    - Cases 3–4: literal key absent from closed row → return [nil] or default
-    - Case 5: literal key absent from open row → return [(α | nil)]
+(** Whether an accessor kind supports a DEFAULT argument.
 
-    When the hash-table's type is not yet known (fresh type variable), infers a
-    row type from field access: constrains the table to an open row containing
-    the key and returns [field_ty] directly (the constraint guarantees
-    presence). *)
-and infer_gethash_row env key_name table_expr rest_args _span =
-  let table_result = infer env table_expr in
+    plist-get has no default (only an optional predicate); the others do. *)
+and accessor_has_default kind =
+  match kind with PlistGet -> false | AlistGet | Gethash | MapElt -> true
+
+(** Unified row-typed accessor inference for literal keys (Spec 56).
+
+    Implements the decision table from Spec 11 R4–R8 for [plist-get],
+    [alist-get], [gethash], and [map-elt]:
+
+    - Cases 1–2: literal key found in row → [field_type]
+    - Case 3: literal key absent, closed row, no default → [nil]
+    - Case 4: literal key absent, closed row, with default → default type
+    - Case 5: literal key absent, open row → [(α | nil)]
+    - R8: container type unknown → constrain to open row, return [field_ty] *)
+and infer_row_accessor env kind key_name container_expr rest_args =
+  let container_result = infer env container_expr in
   let rest_results = List.map (infer env) rest_args in
 
-  let result_ty, table_constraint =
-    match extract_hash_table_row table_result.ty with
+  let result_ty, container_constraint =
+    match extract_row_for_accessor kind container_result.ty with
     | Some row -> (
         match row_lookup row key_name with
         | Some field_ty ->
@@ -1918,15 +1692,13 @@ and infer_gethash_row env key_name table_expr rest_args _span =
         | None -> (
             match row.row_var with
             | None ->
-                (* Cases 3–4: key absent from closed row → return nil or default *)
+                (* Cases 3–4: key absent from closed row *)
                 let result_ty =
-                  match rest_args with
-                  | _default_expr :: _ ->
-                      (* Case 4: DEFAULT provided → return default's type *)
-                      (List.hd rest_results).ty
-                  | [] ->
-                      (* Case 3: no default → return nil *)
-                      Prim.nil
+                  if accessor_has_default kind then
+                    match rest_args with
+                    | _default_expr :: _ -> (List.hd rest_results).ty
+                    | [] -> Prim.nil
+                  else Prim.nil
                 in
                 (result_ty, None)
             | Some _ ->
@@ -1935,36 +1707,39 @@ and infer_gethash_row env key_name table_expr rest_args _span =
                 let field_ty = fresh_tvar (Env.current_level env) in
                 let row_var = fresh_tvar (Env.current_level env) in
                 let expected_row = open_row [ (key_name, field_ty) ] row_var in
-                let expected_ht_ty = hash_table_of Prim.symbol expected_row in
+                let expected_ty = build_expected_container kind expected_row in
                 let c =
-                  C.equal expected_ht_ty table_result.ty
-                    (Syntax.Sexp.span_of table_expr)
+                  C.equal expected_ty container_result.ty
+                    (Syntax.Sexp.span_of container_expr)
                 in
                 (option_of field_ty, Some c)))
     | None ->
         (* R8: Type not yet known — infer row from field access.
-           We constrain the hash-table to have an open row containing this key,
-           so the key is provably present. Return field_ty directly. *)
+           Constrain container to have an open row containing this key.
+           Return field_ty directly (not option_of) since our constraint
+           guarantees presence. *)
         let field_ty = fresh_tvar (Env.current_level env) in
         let row_var = fresh_tvar (Env.current_level env) in
         let expected_row = open_row [ (key_name, field_ty) ] row_var in
-        let expected_ht_ty = hash_table_of Prim.symbol expected_row in
+        let expected_ty = build_expected_container kind expected_row in
         let c =
-          C.equal expected_ht_ty table_result.ty
-            (Syntax.Sexp.span_of table_expr)
+          C.equal expected_ty container_result.ty
+            (Syntax.Sexp.span_of container_expr)
         in
         (field_ty, Some c)
   in
 
   let rest_constraints = combine_results rest_results in
   let base_constraints =
-    match table_constraint with
+    match container_constraint with
     | Some c -> C.add c rest_constraints
     | None -> rest_constraints
   in
-  let all_constraints = C.combine table_result.constraints base_constraints in
+  let all_constraints =
+    C.combine container_result.constraints base_constraints
+  in
   let all_undefineds =
-    table_result.undefineds @ combine_undefineds rest_results
+    container_result.undefineds @ combine_undefineds rest_results
   in
 
   { ty = result_ty; constraints = all_constraints; undefineds = all_undefineds }
