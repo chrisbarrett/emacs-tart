@@ -1,163 +1,202 @@
-# Implementation Plan: Feature Guards (Spec 49)
+# Implementation Plan: Version Constraints (Spec 50)
 
-Flow-sensitive type narrowing for runtime feature detection (`featurep`,
-`fboundp`, `boundp`, `bound-and-true-p`, `require`).
+Track min/max Emacs version from typings and package headers; warn on
+violations.
 
 ## Analysis
 
 ### Current Architecture
 
-**Module loading** happens in `module_check.ml` at the top level:
-1. `extract_requires` finds `(require 'X)` forms in the sexp list
-2. `Search.load_module` resolves `X.tart` → loads signatures into env
-3. `Check.check_program` type-checks with that pre-populated env
+**Version detection** exists in `lib/sig/emacs_version.ml`: detects
+installed Emacs version via `emacs --version`, provides `parse_version`,
+`compare_version`, `version_to_dir`.
 
-**Type narrowing** happens in `infer.ml` via `narrow.ml`:
-1. `Narrow.analyze_condition` detects predicate calls in conditions
-2. `narrow_env_from_analysis` produces then/else environments
-3. `infer_if`, `infer_when`, etc. use narrowed envs for branches
+**Typings** are stored under `typings/emacs/{version}/c-core/*.tart` and
+`typings/emacs/{version}/lisp-core/*.tart`. Directory path implies
+minimum version (e.g., `31.0/c-core/json.tart` means `json-*` requires
+31.0+). Currently this path info is discarded after loading.
 
-Feature guards reuse the narrowing pattern but operate on
-**name availability** rather than type intersection:
-- `(featurep 'json)` → make all json.tart names available in then-branch
-- `(fboundp 'f)` → make function `f` available in then-branch
-- `(boundp 'v)` → make variable `v` available in then-branch
+**Module checking** in `module_check.ml` builds a `config` with a
+`search_path`, loads c-core/lisp-core/required modules into `type_env`,
+then type-checks. No version metadata propagates to diagnostics.
+
+**Type environment** (`type_env.mli`) has `fn_bindings` and `bindings`
+lists of `(string * scheme)`. No version annotation per-name.
 
 ### Key Design Decisions
 
-1. **Guard analysis in narrow.ml** — extend `condition_analysis` with a
-   `FeatureGuard` variant alongside existing `Predicate`/`Predicates`
-2. **Lazy signature loading** — `featurep` guard triggers loading of
-   `X.tart` at inference time (not pre-loaded like `require`)
-3. **Environment extension** — guards add names to the env (vs narrowing
-   which refines existing types)
-4. **No new module files** — the spec suggests `feature_env.ml` and
-   `guards.ml` but the existing `narrow.ml` + `infer.ml` pattern is
-   simpler and more consistent
+1. **Version metadata per-name in type_env** — extend `type_env.t` with
+   a `fn_versions` field mapping `string -> version_range`, populated
+   during sig loading from the directory path of the source `.tart` file.
+
+2. **Package header parsing in a new `package_header.ml`** — parse
+   `Package-Requires` from the first few lines of the entry-point `.el`
+   file. Simple regex-style parsing, no full sexp parsing needed.
+
+3. **Constraint propagation via post-check pass** — after type checking
+   completes, scan inferred calls against fn_versions and the declared
+   min version. Emit warnings for version violations.
+
+4. **Feature guard exemption** — calls inside a feature guard scope
+   (already tracked by Spec 49) are exempt from version warnings.
 
 ### Scope Deferral
 
-- R14 (redundant guard warning) requires version constraint propagation
-  (Spec 50) — defer
-- R15 (macro transparency) — already works since macros expand before
-  type checking
+- `@max-version` annotation (R3) — defer initially; no current typings
+  use it; can be added later via sig_ast extension
+- R13-R15 (LSP code actions) — implement after core diagnostics work
 
 ---
 
-## Iteration 1: Guard pattern recognition
+## Iteration 1: Version range type + per-name tracking
 
-Extend `narrow.ml` to recognize feature guard patterns in conditions.
+Add version range metadata to type_env and populate it during sig
+loading.
 
-### Task 1.1: Add guard types to narrow.ml
+### Task 1.1: Add version_range to type_env
 
-- [ ] Add `guard_info` type: `FeatureGuard of string` | `FboundGuard of string` | `BoundGuard of string` | `BoundTrueGuard of string`
-- [ ] Add `Guard of guard_info` and `Guards of guard_info list` to `condition_analysis`
-- [ ] Add `analyze_guard` function: recognizes `(featurep 'X)`, `(fboundp 'f)`, `(boundp 'v)`, `(bound-and-true-p v)` patterns
-- [ ] Extend `analyze_condition`: try guard analysis when predicate analysis yields NoPredicate
-- [ ] Handle `(and ...)` containing mixed predicates and guards
-- [ ] Update narrow.mli
+- [ ] Add `version_range` record to `type_env.mli/.ml`:
+      `{ min_version : Emacs_version.version option;
+         max_version : Emacs_version.version option }`
+- [ ] Add `fn_versions : (string * version_range) list` field to
+      `type_env.t`
+- [ ] Add `var_versions : (string * version_range) list` field
+- [ ] Add `extend_fn_version`, `lookup_fn_version`,
+      `extend_var_version`, `lookup_var_version` functions
+- [ ] Update `empty` and `of_list` constructors
 - [ ] Build + test
 
-### Task 1.2: Unit tests for guard recognition
+### Task 1.2: Populate version from typings path
 
-- [ ] Test `analyze_condition` with `(featurep 'json)` → `Guard (FeatureGuard "json")`
-- [ ] Test `(fboundp 'json-parse-string)` → `Guard (FboundGuard "json-parse-string")`
-- [ ] Test `(boundp 'json-null)` → `Guard (BoundGuard "json-null")`
-- [ ] Test `(bound-and-true-p my-var)` → `Guard (BoundTrueGuard "my-var")`
-- [ ] Test `(and (featurep 'json) (stringp x))` → mixed result
-- [ ] Test `(featurep x)` (non-literal) → NoPredicate
-- [ ] Build + test
-
----
-
-## Iteration 2: Signature loading for feature guards
-
-Wire guard recognition into the inference engine so that guards
-extend the environment with loaded signatures.
-
-### Task 2.1: Add module loader callback to infer
-
-- [ ] Add `load_feature : (string -> Env.t -> Env.t) option` field to a
-      new `infer_config` record (or pass as labeled param)
-- [ ] Thread the loader through `infer` → control flow functions
-- [ ] When a `FeatureGuard "X"` is detected, call `load_feature "X" env`
-      to get an env extended with X.tart signatures
-- [ ] `FboundGuard "f"`: look up f in the loaded module env, extend
-      only function f
-- [ ] `BoundGuard "v"`: look up v in the loaded module env, extend
-      only variable v
-- [ ] `BoundTrueGuard "v"`: extend v with type `t` (truthy)
-- [ ] Build + test
-
-### Task 2.2: Wire loader in module_check.ml
-
-- [ ] Create `make_feature_loader` in module_check.ml using
-      `Search.load_module`
-- [ ] Pass loader into `Check.check_program` → `Infer`
-- [ ] Ensure loaded features are cached (avoid re-loading json.tart
-      for every `(featurep 'json)` call)
+- [ ] In `search_path.ml`: extract version from directory path when
+      loading c-core/lisp-core files. The path pattern is
+      `typings/emacs/{version}/c-core/` or `.../lisp-core/`
+- [ ] Add `?source_version:Emacs_version.version` param to
+      `load_c_core_files`; pass through to sig_loader
+- [ ] In `sig_loader.ml`: add `?source_version` to `load_signature`
+      and `load_signature_with_resolver`; when set, add version_range
+      for every loaded defun and defvar name
+- [ ] In `load_c_core` and `load_lisp_core`: parse the version from
+      the resolved typings directory path and thread it through
 - [ ] Build + test
 
 ---
 
-## Iteration 3: Control flow propagation
+## Iteration 2: Package header parsing
 
-Extend all control flow inference functions to handle guards.
+Parse `Package-Requires` from `.el` files to determine the package's
+declared minimum Emacs version.
 
-### Task 3.1: Guard env application in infer.ml
+### Task 2.1: Create package_header module
 
-- [ ] Add `apply_guard_narrowing`: given guard_info + loader + env,
-      returns (then_env, else_env) where then_env has names,
-      else_env unchanged
-- [ ] Add `narrow_env_from_analysis` handling for `Guard`/`Guards`
-      variants (compose with existing predicate narrowing)
-- [ ] `infer_if`: then-branch gets guarded env, else-branch unchanged
-- [ ] `infer_when`: body gets guarded env
-- [ ] `infer_unless`: body gets **unguarded** env (R12: negated guard)
-- [ ] `infer_cond`: each clause independently guarded
-- [ ] `infer_and`: guards propagate to later operands (R16)
+- [ ] Create `lib/sig/package_header.ml` and `package_header.mli`
+- [ ] `parse_package_requires : string -> Emacs_version.version option`
+      — given file content string, scan for
+      `Package-Requires: ((emacs "X.Y") ...)` and extract version
+- [ ] Only scan first ~50 lines (header section)
+- [ ] Handle variations: spaces, multiple deps, emacs-only
+- [ ] `find_package_version : string -> Emacs_version.version option`
+      — given `.el` file path, read header and parse
+- [ ] Add to `lib/sig/dune`
+- [ ] Re-export in `tart.ml/tart.mli`
 - [ ] Build + test
 
-### Task 3.2: Require as top-level guard
+### Task 2.2: Unit tests
 
-- [ ] In `infer` main dispatch, intercept `(require 'X)` as expression
-- [ ] Hard require `(require 'X)`: load X.tart into env, return
-      feature symbol type; env persists for subsequent forms
-- [ ] Soft require `(require 'X nil t)`: return result type but
-      **don't** extend env (needs guard)
-- [ ] Soft require as condition `(when (require 'X nil t) ...)`:
-      treat as FeatureGuard in then-branch
-- [ ] Note: top-level `(require 'X)` already handled by module_check;
-      this handles require inside control flow
+- [ ] Standard: `;; Package-Requires: ((emacs "29.1"))`
+- [ ] Multiple deps: `((emacs "28.1") (seq "2.24"))`
+- [ ] Missing header → None
+- [ ] Malformed → None
+- [ ] No emacs dep: `((seq "2.24"))` → None
 - [ ] Build + test
 
 ---
 
-## Iteration 4: Test fixtures
+## Iteration 3: Version constraint diagnostics
 
-### Task 4.1: Feature guard test fixtures
+Add new error codes and emit version warnings.
 
-- [ ] `feature_guard_basic.{el,expected}`: featurep in when/if unlocks
-      names (PASS); unguarded call errors (FAIL with UNDEFINED)
-- [ ] `feature_guard_fboundp.{el,expected}`: fboundp unlocks single
-      function; other names from same module still unavailable
-- [ ] `feature_guard_boundp.{el,expected}`: boundp unlocks variable
-- [ ] `feature_guard_negated.{el,expected}`: else-branch of if with
-      featurep does NOT have guarded names (R12)
-- [ ] `feature_guard_and.{el,expected}`: combined guards via and (R16)
-- [ ] `feature_guard_require.{el,expected}`: hard require extends env;
-      soft require needs guard
+### Task 3.1: Add error codes
+
+- [ ] Add `VersionTooLow` (E0900), `VersionTooHigh` (E0901),
+      `VersionParseFailed` (E0902) to `error_code` in
+      `diagnostic.ml/.mli`
+- [ ] Add `error_code_to_string` arms
+- [ ] Update `diagnostic_test.ml` error_code_stability test
+- [ ] Add constructor:
+      `version_too_low : span -> name:string ->
+       required:Emacs_version.version -> declared:Emacs_version.version
+       -> unit -> t`
+- [ ] Include help text: "bump to X.Y, or add feature guard"
+- [ ] Build + test
+
+### Task 3.2: Version checking pass in module_check
+
+- [ ] Add `declared_version : Emacs_version.version option` to
+      `module_check.config`
+- [ ] Add `with_declared_version` setter to config
+- [ ] Add `check_version_constraints` function: walks check_result's
+      final_env, looks up fn_versions for each called function, compares
+      against declared_version
+- [ ] Needs call-site spans: collect from the sexp AST (function call
+      positions) — reuse `collect_all_call_symbols` approach but return
+      spans too
+- [ ] Add `version_diagnostics` to check_result
+- [ ] Wire into `diagnostics_of_result`
 - [ ] Build + test
 
 ---
 
-## Iteration 5: Spec completion
+## Iteration 4: CLI + LSP integration
 
-### Task 5.1: Documentation and inline-only
+### Task 4.1: CLI integration
 
-- [ ] R17 is inherent: guards only recognized inline (same as predicates)
-- [ ] Create `feature_guard_no_stored.{el,expected}`: stored featurep
-      result does NOT unlock names
-- [ ] Check all task boxes in specs/49-feature-guards.md
-- [ ] Update status (Complete, except R14 which needs Spec 50)
+- [ ] In `bin/main.ml` `run_check`: call
+      `Package_header.find_package_version` on each file
+- [ ] Pass declared version into module_check config
+- [ ] Fallback: when no Package-Requires, use detected Emacs version
+      (warnings only, not errors)
+- [ ] Build + test
+
+### Task 4.2: LSP integration
+
+- [ ] In `server.ml`: parse Package-Requires at document open
+- [ ] Cache per-workspace
+- [ ] Pass declared version into module_check config
+- [ ] Build + test
+
+---
+
+## Iteration 5: Feature guard exemption + test fixtures
+
+### Task 5.1: Guard exemption
+
+- [ ] Names loaded via feature guards (Spec 49) are inherently exempt:
+      they're only available inside guard scopes, so they won't trigger
+      version warnings in unguarded code
+- [ ] Names loaded via hard `(require 'X)` DO trigger version warnings
+      (the require proves the dependency exists, but if the package
+      declares a lower min version, the require might fail)
+- [ ] Verify this behavior with tests
+- [ ] Build + test
+
+### Task 5.2: Test fixtures
+
+- [ ] `version-constraint.{el,expected}`: function from newer version
+      typings produces VERSION TOO LOW warning
+- [ ] `version-guarded.{el,expected}`: featurep-guarded call produces
+      no version warning
+- [ ] `version-no-header.{el,expected}`: no Package-Requires, no
+      version warnings (uses detected Emacs as baseline)
+- [ ] Build + test
+
+---
+
+## Iteration 6: Spec completion
+
+### Task 6.1: Check boxes and status
+
+- [ ] Check task boxes in specs/50-version-constraints.md
+- [ ] Add E0900-E0902 to specs/47-error-codes.md
+- [ ] Update status
 - [ ] Build + test
