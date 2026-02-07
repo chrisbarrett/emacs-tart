@@ -1,0 +1,111 @@
+;; Type signatures for tart-mode.el
+;;
+;; Development tools for the Tart type checker: LSP integration via
+;; eglot, REPL interaction, and minor mode with keybindings.
+;; Macros are declared as defun per project convention.
+
+;; ===========================================================================
+;; Customization variables
+;; ===========================================================================
+
+;; Path to tart binary, or `managed' for automatic installation
+(defvar tart-executable (symbol | string))
+
+;; Tart version to install
+(defvar tart-version (symbol | string))
+
+;; Additional arguments to pass to `tart lsp'
+(defvar tart-lsp-args (list string))
+
+;; Additional arguments to pass to `tart repl'
+(defvar tart-repl-args (list string))
+
+;; Where to store tart files (binaries, history)
+(defvar tart-directory-style symbol)
+
+;; File to save REPL input history
+(defvar tart-repl-history-file (symbol | string | nil))
+
+;; Directory for managed tart binary installations
+(defvar tart-install-directory (symbol | string))
+
+;; Whether to add find-sibling rules for .tart and .el files
+(defvar tart-setup-find-sibling-rules bool)
+
+;; Whether to register tart as an eglot server
+(defvar tart-setup-eglot bool)
+
+;; ===========================================================================
+;; Other public variables
+;; ===========================================================================
+
+;; Compilation error regexp for tart output
+(defvar tart-error-regexp (list any))
+
+;; Keymap for `inferior-tart-mode'
+(defvar inferior-tart-mode-map any)
+
+;; Keymap for `tart-mode'
+(defvar tart-mode-map any)
+
+;; ===========================================================================
+;; Mode definitions (macros declared as defun)
+;; ===========================================================================
+
+;; (inferior-tart-mode) - major mode for tart REPL
+(defun inferior-tart-mode () -> nil)
+
+;; (tart-signature-mode) - major mode for .tart files
+(defun tart-signature-mode () -> nil)
+
+;; (tart-mode &optional ARG) - minor mode for tart integration
+(defun tart-mode (&optional any) -> nil)
+
+;; ===========================================================================
+;; REPL commands
+;; ===========================================================================
+
+;; (run-tart) - start an inferior tart REPL process
+(defun run-tart () -> nil)
+
+;; (tart-send-region START END) - send region to tart REPL
+(defun tart-send-region (int int) -> nil)
+
+;; (tart-send-defun) - send defun at point to tart REPL
+(defun tart-send-defun () -> nil)
+
+;; (tart-send-last-sexp) - send sexp before point to tart REPL
+(defun tart-send-last-sexp () -> nil)
+
+;; (tart-send-buffer) - send entire buffer to tart REPL
+(defun tart-send-buffer () -> nil)
+
+;; (tart-switch-to-repl) - switch to tart REPL buffer
+(defun tart-switch-to-repl () -> nil)
+
+;; ===========================================================================
+;; Type/expand inspection
+;; ===========================================================================
+
+;; (tart-type-at-point) - show type of sexp at point
+(defun tart-type-at-point () -> nil)
+
+;; (tart-expand-at-point) - show macro expansion of sexp at point
+(defun tart-expand-at-point () -> nil)
+
+;; ===========================================================================
+;; Eglot integration
+;; ===========================================================================
+
+;; (tart-eglot) - start eglot for tart, prompting to install if needed
+(defun tart-eglot () -> nil)
+
+;; (tart-eglot-ensure) - start eglot if sibling .tart file exists
+(defun tart-eglot-ensure () -> nil)
+
+;; ===========================================================================
+;; Binary management
+;; ===========================================================================
+
+;; (tart-install-binary) - download and install tart from GitHub
+(defun tart-install-binary () -> nil)
