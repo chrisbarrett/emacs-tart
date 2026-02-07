@@ -130,23 +130,23 @@ let build_expected_container kind row =
     replaces the hard-coded get_config lookup with type-driven detection that
     works for any function. *)
 
+(** Extractors paired with their container kind, in priority order. *)
+let container_extractors =
+  [
+    (extract_plist_row, Plist);
+    (extract_alist_row, Alist);
+    (extract_hash_table_row, HashTable);
+    (extract_map_row, Map);
+  ]
+
 (** Try to detect a row-typed container in an argument's type.
 
     Returns [Some (kind, row)] if the argument has a known row-typed container
-    type, [None] otherwise. *)
+    type, [None] otherwise. Tries extractors in priority order (plist first). *)
 let detect_container_in_type ty =
-  match extract_plist_row ty with
-  | Some row -> Some (Plist, row)
-  | None -> (
-      match extract_alist_row ty with
-      | Some row -> Some (Alist, row)
-      | None -> (
-          match extract_hash_table_row ty with
-          | Some row -> Some (HashTable, row)
-          | None -> (
-              match extract_map_row ty with
-              | Some row -> Some (Map, row)
-              | None -> None)))
+  List.find_map
+    (fun (extract, kind) -> Option.map (fun row -> (kind, row)) (extract ty))
+    container_extractors
 
 (** Scan argument types to find a row-typed container argument.
 
@@ -165,8 +165,10 @@ let detect_container (arg_types : typ list) : detected_container option =
 
 (** Scan argument literals to find a literal key argument.
 
-    Returns [Some detected_key] for the first literal argument, skipping the
-    container argument at [skip_index]. *)
+    Returns [Some detected_key] for the first literal argument found that is not
+    at [skip_index] (the container position). This heuristic relies on accessor
+    functions having exactly one literal key parameter, which holds for all
+    current signatures (plist-get, alist-get, gethash, map-elt). *)
 let detect_key ~(skip_index : int) (arg_literals : string option list) :
     detected_key option =
   let rec go i = function
