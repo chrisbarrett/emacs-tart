@@ -10,6 +10,12 @@
 
 open Types
 
+type loaded_clause = {
+  lc_params : param list;  (** Parameter types for this clause *)
+  lc_return : typ;  (** Return type for this clause *)
+}
+(** A single clause from a multi-clause defun, preserved through loading. *)
+
 type predicate_info = {
   param_index : int;  (** Index of the parameter being narrowed (0-based) *)
   param_name : string;  (** Name of the parameter (for validation) *)
@@ -38,6 +44,8 @@ type t = {
       (** Variable namespace: let, setq, defvar, lambda params *)
   fn_bindings : (string * scheme) list;
       (** Function namespace: defun, defalias, flet *)
+  fn_clauses : (string * loaded_clause list) list;
+      (** Multi-clause function signatures for overload resolution (Spec 56) *)
   predicates : (string * predicate_info) list;
       (** Type predicates: maps function names to their predicate info *)
   level : int;  (** Current scope level for generalization *)
@@ -45,11 +53,18 @@ type t = {
 (** Type environment with dual namespaces for Elisp's Lisp-2 semantics *)
 
 (** Empty environment at level 0 *)
-let empty = { bindings = []; fn_bindings = []; predicates = []; level = 0 }
+let empty =
+  {
+    bindings = [];
+    fn_bindings = [];
+    fn_clauses = [];
+    predicates = [];
+    level = 0;
+  }
 
 (** Create an environment with initial bindings (in variable namespace) *)
 let of_list bindings =
-  { bindings; fn_bindings = []; predicates = []; level = 0 }
+  { bindings; fn_bindings = []; fn_clauses = []; predicates = []; level = 0 }
 
 (** Get the current level *)
 let current_level env = env.level
@@ -101,6 +116,13 @@ let extend_fn_mono name ty env = extend_fn name (Mono ty) env
 
 (** Extend function namespace with a polymorphic binding *)
 let extend_fn_poly name vars ty env = extend_fn name (Poly (vars, ty)) env
+
+(** Register the preserved clause list for a multi-clause defun *)
+let extend_fn_clauses name clauses env =
+  { env with fn_clauses = (name, clauses) :: env.fn_clauses }
+
+(** Look up the preserved clause list for a function *)
+let lookup_fn_clauses name env = List.assoc_opt name env.fn_clauses
 
 (** Look up predicate info for a function name *)
 let lookup_predicate name env = List.assoc_opt name env.predicates

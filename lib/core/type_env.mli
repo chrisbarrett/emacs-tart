@@ -24,6 +24,18 @@ type predicate_info = {
     ]}
     Declares [stringp] as narrowing parameter [x] to [string] when true. *)
 
+(** {1 Loaded Clauses} *)
+
+type loaded_clause = {
+  lc_params : Types.param list;  (** Parameter types for this clause *)
+  lc_return : Types.typ;  (** Return type for this clause *)
+}
+(** A single clause from a multi-clause defun, preserved through loading.
+
+    During signature loading, multi-clause defuns are merged into a single union
+    arrow type for backward compatibility. The clause list is preserved
+    alongside for call-site overload resolution (Spec 56). *)
+
 (** {1 Type Schemes} *)
 
 (** A type scheme is a possibly-polymorphic type.
@@ -42,6 +54,10 @@ type t = {
       (** Variable namespace: let, setq, defvar, lambda params *)
   fn_bindings : (string * scheme) list;
       (** Function namespace: defun, defalias, flet *)
+  fn_clauses : (string * loaded_clause list) list;
+      (** Multi-clause function signatures: maps function names to their
+          preserved clause list for call-site overload resolution (Spec 56).
+          Only present for multi-clause defuns loaded from .tart files. *)
   predicates : (string * predicate_info) list;
       (** Type predicates: maps function names to their predicate info *)
   level : int;  (** Current scope level for generalization *)
@@ -119,6 +135,12 @@ val extend_fn_mono : string -> Types.typ -> t -> t
 
 val extend_fn_poly : string -> string list -> Types.typ -> t -> t
 (** Extend function namespace with a polymorphic binding. *)
+
+val extend_fn_clauses : string -> loaded_clause list -> t -> t
+(** Register the preserved clause list for a multi-clause defun. *)
+
+val lookup_fn_clauses : string -> t -> loaded_clause list option
+(** Look up the preserved clause list for a function, if any. *)
 
 (** {1 Predicates} *)
 

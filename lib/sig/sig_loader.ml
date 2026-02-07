@@ -945,6 +945,32 @@ let compute_defun_type ?(scope_tvars : (string * Types.typ) list = [])
       let union_ret = union_of_types returns in
       Types.TArrow (union_params, union_ret)
 
+(** Convert defun clauses to loaded_clause list for overload resolution.
+
+    Each clause's parameters and return type are converted to core types,
+    preserving clause structure for call-site dispatch (Spec 56). Returns
+    [Some clauses] for multi-clause defuns, [None] for single-clause. *)
+let compute_defun_clauses ?(scope_tvars : (string * Types.typ) list = [])
+    (ctx : type_context) (tvar_names : string list)
+    (clauses : defun_clause list) : Type_env.loaded_clause list option =
+  match clauses with
+  | [] | [ _ ] -> None
+  | _ ->
+      Some
+        (List.map
+           (fun c ->
+             let lc_params =
+               List.map
+                 (sig_param_to_param_with_ctx ~scope_tvars ctx tvar_names)
+                 c.clause_params
+             in
+             let lc_return =
+               sig_type_to_typ_with_ctx ~scope_tvars ctx tvar_names
+                 c.clause_return
+             in
+             { Type_env.lc_params; lc_return })
+           clauses)
+
 (** Derive predicate information from multi-clause structure.
 
     Analyzes clause structure to determine if this function acts as a type
@@ -1191,6 +1217,10 @@ let add_value_to_state name scheme state =
 (** Add a function binding to the load state (function namespace) *)
 let add_fn_to_state name scheme state =
   { state with ls_env = Type_env.extend_fn name scheme state.ls_env }
+
+(** Add loaded clauses to the load state for overload resolution *)
+let add_fn_clauses_to_state name clauses state =
+  { state with ls_env = Type_env.extend_fn_clauses name clauses state.ls_env }
 
 (** Add a predicate to the load state *)
 let add_predicate_to_state name info state =
@@ -1585,6 +1615,16 @@ and load_decls_into_state ?(from_include = false) (sig_file : signature)
               let scheme = load_defun_with_ctx state.ls_type_ctx d in
               (* Add to function namespace for Lisp-2 semantics *)
               let state = add_fn_to_state d.defun_name scheme state in
+              (* Preserve clause structure for overload resolution *)
+              let state =
+                match
+                  compute_defun_clauses state.ls_type_ctx tvar_names
+                    d.defun_clauses
+                with
+                | Some clauses ->
+                    add_fn_clauses_to_state d.defun_name clauses state
+                | None -> state
+              in
               (* Derive and register predicate info from clause structure *)
               let state =
                 match
@@ -1733,6 +1773,15 @@ and load_scoped_decl ?(from_include = false) (sig_file : signature)
       let scheme = load_defun_with_scope state.ls_type_ctx scope_tvars d in
       (* Add to function namespace for Lisp-2 semantics *)
       let state = add_fn_to_state d.defun_name scheme state in
+      (* Preserve clause structure for overload resolution *)
+      let state =
+        match
+          compute_defun_clauses ~scope_tvars state.ls_type_ctx fn_tvar_names
+            d.defun_clauses
+        with
+        | Some clauses -> add_fn_clauses_to_state d.defun_name clauses state
+        | None -> state
+      in
       (* Derive and register predicate info from clause structure *)
       let state =
         match

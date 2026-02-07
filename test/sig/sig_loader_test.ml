@@ -1748,6 +1748,48 @@ let test_no_predicate_single_clause () =
   | None -> () (* Expected *)
   | Some _ -> Alcotest.fail "single-clause should NOT be a predicate"
 
+(** {1 Clause Preservation Tests (Spec 56)} *)
+
+(** Test that multi-clause defun preserves clauses in fn_clauses *)
+let test_clauses_preserved_multi () =
+  let sig_src = {|
+    (defun stringp ((string) -> t) ((_) -> nil))
+  |} in
+  let env = load_sig_str sig_src in
+  match Type_env.lookup_fn_clauses "stringp" env with
+  | None -> Alcotest.fail "multi-clause defun should preserve clauses"
+  | Some clauses ->
+      Alcotest.(check int) "should have 2 clauses" 2 (List.length clauses)
+
+(** Test that single-clause defun does NOT store clauses *)
+let test_clauses_not_stored_single () =
+  let sig_src = {|
+    (defun length (any) -> int)
+  |} in
+  let env = load_sig_str sig_src in
+  match Type_env.lookup_fn_clauses "length" env with
+  | None -> () (* Expected: single clause, no clause storage *)
+  | Some _ -> Alcotest.fail "single-clause should NOT have stored clauses"
+
+(** Test that preserved clauses have correct param/return types *)
+let test_clauses_have_correct_types () =
+  let sig_src =
+    {|
+    (defun car [a b] (((cons a b)) -> a) ((nil) -> nil))
+  |}
+  in
+  let env = load_sig_str sig_src in
+  match Type_env.lookup_fn_clauses "car" env with
+  | None -> Alcotest.fail "multi-clause car should preserve clauses"
+  | Some clauses ->
+      Alcotest.(check int) "should have 2 clauses" 2 (List.length clauses);
+      (* First clause: (cons a b) -> a *)
+      let c1 = List.nth clauses 0 in
+      Alcotest.(check int) "clause 1 has 1 param" 1 (List.length c1.lc_params);
+      (* Second clause: nil -> nil *)
+      let c2 = List.nth clauses 1 in
+      Alcotest.(check int) "clause 2 has 1 param" 1 (List.length c2.lc_params)
+
 (** {1 Shadowing Error Tests} *)
 
 (** Test that redefining a type imported via open produces an error *)
@@ -2293,6 +2335,15 @@ let () =
             test_no_predicate_mixed_returns;
           Alcotest.test_case "no predicate single clause" `Quick
             test_no_predicate_single_clause;
+        ] );
+      ( "clause-preservation",
+        [
+          Alcotest.test_case "multi-clause preserves clauses" `Quick
+            test_clauses_preserved_multi;
+          Alcotest.test_case "single-clause no stored clauses" `Quick
+            test_clauses_not_stored_single;
+          Alcotest.test_case "clauses have correct types" `Quick
+            test_clauses_have_correct_types;
         ] );
       ( "shadowing",
         [
