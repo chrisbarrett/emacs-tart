@@ -161,11 +161,18 @@ name: Test (Emacs ${{ matrix.emacs-version }}, ${{ matrix.tier }})
 
 ## Tasks
 
-- [ ] [R6] Emacs dev shells in flake.nix
-- [ ] [R1, R9] Version matrix in ci.yml
-- [ ] [R2-3] Blocking/advisory logic
-- [ ] [R4] Advisory warning annotations
-- [ ] [R5] E2E with correct Emacs
-- [ ] [R7] Parallel config
-- [ ] [R8] Version-skip helpers
-- [ ] [R10] Verify Nix caching
+- [x] [R6] Emacs dev shells in flake.nix
+- [x] [R1, R9] Version matrix in ci.yml
+- [x] [R2-3] Blocking/advisory logic
+- [x] [R4] Advisory warning annotations
+- [x] [R5] E2E with correct Emacs
+- [x] [R7] Parallel config
+- [x] [R8] Version-skip helpers
+- [x] [R10] Verify Nix caching
+
+## Status
+
+Complete. Reduced to 2 versions (emacs30 blocking, emacsGit advisory)
+because nixpkgs dropped emacs29 due to CVEs and emacs28 is even older.
+Uses `advisory` boolean instead of `tier` string for simpler
+`continue-on-error` expressions. Job names show version + tier.

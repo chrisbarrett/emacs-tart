@@ -28,12 +28,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - emacs: emacsGit
-            advisory: false
           - emacs: emacs30
-            advisory: true
+            advisory: false  # blocking: current stable
+          - emacs: emacsGit
+            advisory: true   # advisory: development HEAD
 
-    name: test (${{ matrix.emacs }})
+    name: test (${{ matrix.emacs }}, ${{ matrix.advisory && 'advisory' || 'blocking' }})
     continue-on-error: ${{ matrix.advisory }}
 
     steps:
@@ -59,6 +59,10 @@ jobs:
             -l lisp/tart-tests.el \
             -l lisp/tart-mode-tests.el \
             -f ert-run-tests-batch-and-exit
+
+      - name: Report advisory failure
+        if: failure() && matrix.advisory
+        run: echo "::warning::Advisory tier (${{ matrix.emacs }}) failed"
 
   lint:
     runs-on: ubuntu-latest
@@ -114,12 +118,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - emacs: emacsGit
-            advisory: false
           - emacs: emacs30
-            advisory: true
+            advisory: false  # blocking: current stable
+          - emacs: emacsGit
+            advisory: true   # advisory: development HEAD
 
-    name: e2e (${{ matrix.emacs }})
+    name: e2e (${{ matrix.emacs }}, ${{ matrix.advisory && 'advisory' || 'blocking' }})
     continue-on-error: ${{ matrix.advisory }}
 
     steps:
@@ -145,3 +149,7 @@ jobs:
             -l lisp/tart-test-helpers.el \
             -l lisp/tart-e2e-tests.el \
             -f ert-run-tests-batch-and-exit
+
+      - name: Report advisory failure
+        if: failure() && matrix.advisory
+        run: echo "::warning::Advisory tier (${{ matrix.emacs }}) failed"

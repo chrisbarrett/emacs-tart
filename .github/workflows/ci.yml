@@ -24,12 +24,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - emacs: emacsGit
-            advisory: false
           - emacs: emacs30
-            advisory: true
+            advisory: false  # blocking: current stable
+          - emacs: emacsGit
+            advisory: true   # advisory: development HEAD
 
-    name: test (${{ matrix.emacs }})
+    name: test (${{ matrix.emacs }}, ${{ matrix.advisory && 'advisory' || 'blocking' }})
     continue-on-error: ${{ matrix.advisory }}
 
     steps:
@@ -56,6 +56,10 @@ jobs:
 
       - name: Test
         run: nix develop .#${{ matrix.emacs }} --command dune test
+
+      - name: Report advisory failure
+        if: failure() && matrix.advisory
+        run: echo "::warning::Advisory tier (${{ matrix.emacs }}) failed"
 
   lint:
     runs-on: ubuntu-latest

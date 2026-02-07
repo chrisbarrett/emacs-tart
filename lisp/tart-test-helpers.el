@@ -51,6 +51,17 @@
 (defvar tart-test--cleanup-processes nil
   "List of processes to cleanup after each test.")
 
+;;; Version Gating
+
+(defmacro tart-test-skip-unless-version (major-version)
+  "Skip the current test unless Emacs MAJOR-VERSION or later.
+MAJOR-VERSION is an integer (e.g., 29, 30).  If the running Emacs
+is older, the test is skipped with a descriptive message rather
+than failing."
+  (declare (indent 0) (debug (form)))
+  `(when (< emacs-major-version ,major-version)
+     (ert-skip (format "Requires Emacs %d+" ,major-version))))
+
 ;;; Fixture Resolution
 
 (defun tart-test-fixture-path (name)

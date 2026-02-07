@@ -26,6 +26,7 @@
 
 (require 'ert)
 (require 'tart)
+(require 'tart-test-helpers)
 
 ;;; Macro Expansion Tests (R8)
 
@@ -87,5 +88,20 @@
   "The `tart' macro with empty vector should work with nullary functions."
   (should (equal (macroexpand '(tart [] point))
                  '(point))))
+
+;;; Version Skip Tests
+
+(ert-deftest tart-test-skip-unless-version-expands ()
+  "The `tart-test-skip-unless-version' macro should expand to a version check."
+  (let ((expansion (macroexpand '(tart-test-skip-unless-version 29))))
+    (should (equal expansion
+                   '(when (< emacs-major-version 29)
+                      (ert-skip (format "Requires Emacs %d+" 29)))))))
+
+(ert-deftest tart-test-skip-unless-version-passes-current ()
+  "The macro should not skip when the version is satisfied."
+  ;; emacs-major-version is always >= 28 for any version we support
+  (tart-test-skip-unless-version 28)
+  (should t))
 
 ;;; tart-tests.el ends here

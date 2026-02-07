@@ -1,138 +1,78 @@
-# Implementation Plan: Round-Trip Test Harness (Spec 42)
+# Implementation Plan: CI Version Matrix (Spec 43)
 
-Parse-print-parse testing for parsing accuracy verification against
-Emacs corpus.
+Multi-version Emacs testing with blocking/advisory tiers.
 
 ## Analysis
 
-### Current Architecture
+### Current State
 
-**Oracle module** (`lib/oracle/`): `Compare.compare_file` already does
-per-form tart-vs-Emacs comparison. `Emacs_reader.read_file` reads all
-forms via Emacs subprocess. `Compare.normalise` handles insignificant
-differences.
+**flake.nix** already has `mkDevShell` helper and two shells:
+`emacs30` (stable) and `emacsGit` (development HEAD). Comment notes
+emacs29 was removed from nixpkgs due to CVEs. No emacs28 available.
 
-**Corpus module** (`lib/corpus/`): `Emacs_corpus.list_el_files()`
-recursively discovers `.el` files. `corpus_dir()` gives the path.
+**ci.yml** already has a version matrix with `emacsGit`/`emacs30`,
+`fail-fast: false`, `continue-on-error` keyed on `advisory` boolean,
+magic-nix-cache, and correct `nix develop .#${{ matrix.emacs }}`
+usage. Job name shows version but not tier.
 
-**Content cache** (`lib/cache/`): `Content_cache.compute_key` hashes
-binary+input. `store`/`retrieve` handle JSON envelope. Already used
-for type-checking cache.
+**elisp.yml** has same matrix pattern for Emacs Lisp tests and E2E.
 
-**Parser/printer** (`lib/syntax/`): `Read.parse_file` returns
-`parse_result` with `sexps` and `errors`. `Print.to_string` prints
-individual sexps. `Sexp.equal` does structural comparison.
+### Gap Analysis
+
+| Requirement | Status | Gap |
+|-------------|--------|-----|
+| R1 matrix | Partial | Uses `advisory: bool` not `tier: string` |
+| R2 blocking fails | Done | `continue-on-error` logic works |
+| R3 advisory passes | Done | Same mechanism |
+| R4 advisory warning | Missing | No `::warning::` step |
+| R5 E2E per version | Done | Both workflows use matrix shells |
+| R6 Nix shells | Done | emacs30+emacsGit (28/29 unavailable) |
+| R7 parallel | Done | `fail-fast: false` |
+| R8 version skip | Missing | No skip helper pattern |
+| R9 job naming | Partial | Shows version, not tier |
+| R10 build caching | Done | magic-nix-cache present |
 
 ### Key Design Decisions
 
-1. **Reuse `Content_cache`** for roundtrip caching — same XDG path,
-   same binary+file keying, same eviction. No separate cache module
-   needed. Store `"roundtrip:pass"` as data.
+1. **Keep `advisory` boolean** — converting to `tier: string` would
+   require changing the `continue-on-error` expression from
+   `${{ matrix.advisory }}` to `${{ matrix.tier == 'advisory' }}`.
+   The boolean is simpler and already works. Add a comment noting
+   the tier semantics instead.
 
-2. **Reuse `Oracle_compare.compare_file`** for Emacs oracle mode —
-   already implements per-form comparison with normalisation.
+2. **emacs28/29 unavailable** — nixpkgs dropped emacs29 for CVEs,
+   emacs28 even older. Spec's 4-version matrix reduces to 2 versions
+   (emacs30 blocking, emacsGit advisory). Document this constraint.
 
-3. **Separate structural round-trip from oracle** — `check_file`
-   does parse→print→reparse→compare (fast, no subprocess);
-   `check_file_with_emacs` delegates to `Oracle_compare`.
-
-4. **Simple text diff** — OCaml stdlib has no diff library; implement
-   minimal line-by-line diff showing expected vs actual (not full
-   unified diff). Good enough for debugging.
-
-5. **Sequential by default** — R12 says parallel, but OCaml's
-   `Domain` is Multicore-only (5.0+). Use sequential with future
-   parallel note. The cache makes repeated runs fast anyway.
-
-6. **CLI subcommand** — `tart roundtrip` rather than a shell script.
-   More consistent with existing `tart corpus` pattern.
+3. **Version-skip via Elisp helper** — provide a `tart-test-skip`
+   macro that wraps `ert-skip` with version check, usable in tests.
 
 ---
 
-## Iteration 1: Core roundtrip library
+## Iteration 1: CI workflow polish + advisory warnings
 
-Create `lib/roundtrip/` with result types, check_file, summary.
+Small changes to existing workflows for R1, R4, R9.
 
-### Task 1.1: Create lib/roundtrip sub-library
+### Task 1.1: Add tier comments + advisory warning step
 
-- [ ] Create `lib/roundtrip/dune` (library `roundtrip`, public
-      `tart.roundtrip`, deps `tart.syntax tart.oracle tart.cache
-      tart.corpus tart.log unix`)
-- [ ] Create `lib/roundtrip/roundtrip.mli` with full interface
-- [ ] Create `lib/roundtrip/roundtrip.ml` implementation
-- [ ] Add `tart.roundtrip` to `lib/dune` libraries
-- [ ] Re-export as `Tart.Roundtrip` in `tart.ml`/`tart.mli`
-- [ ] Build
+- [x] `ci.yml`: add `tier` comment to each matrix entry for clarity
+- [x] `ci.yml`: add advisory warning annotation step after Test
+      (R4: `echo "::warning::Advisory tier (emacsGit) failed"`)
+- [x] `ci.yml`: update job name to include tier info (R9)
+- [x] `elisp.yml`: same advisory warning step in test job
+- [x] `elisp.yml`: same advisory warning step in e2e job
+- [x] `elisp.yml`: update job names to include tier info
+- [x] Verify YAML syntax: `python3 -c "import yaml; yaml.safe_load(...)"`
 
-### Task 1.2: Implement core functions
+### Task 1.2: Version-skip helper
 
-- [ ] `result` type: `Pass`, `Cached`, `Parse_error of {path; error}`,
-      `Mismatch of {path; expected; actual; diff}`,
-      `Emacs_mismatch of {path; tart_output; emacs_output}`
-- [ ] `summary` type: `{total; passed; failed; cached; failures}`
-- [ ] `summary_to_string`: format as "N total, N passed, N failed,
-      N cached" (R11)
-- [ ] `check_file`: parse file → print each sexp → reparse printed →
-      compare with `Sexp.equal` (R1); on mismatch return
-      `Mismatch` with textual diff (R3, R4)
-- [ ] `check_file_with_emacs`: delegates to
-      `Oracle_compare.compare_file` (R2)
-- [ ] `make_diff`: show expected vs actual line-by-line (R4)
-- [ ] `cache_key`: `Content_cache.compute_key` with binary_path +
-      file path (R5)
-- [ ] `check_file_cached`: if cache hit return `Cached`; else run
-      `check_file`, record on pass (R5, R6)
-- [ ] `run_corpus`: iterate `list_el_files`, call
-      `check_file_cached` on each, collect summary (R7, R11)
-- [ ] Build + test
+- [x] Add `tart-test-skip-unless-version` macro to
+      `lisp/tart-test-helpers.el` (R8)
+- [x] Wraps `(when (< emacs-major-version N) (ert-skip ...))`
+- [x] Add unit test in `lisp/tart-tests.el` verifying macro expands
 
----
+### Task 1.3: Spec completion
 
-## Iteration 2: CLI subcommand + script
-
-Wire roundtrip into `tart roundtrip` CLI and create shell script.
-
-### Task 2.1: Add CLI subcommand
-
-- [ ] `roundtrip_cmd`: `tart roundtrip [--with-emacs] [--no-cache]
-      [FILES...]`
-- [ ] Default (no files): use `Emacs_corpus.list_el_files()` (R7)
-- [ ] Explicit files: check just those files
-- [ ] `--with-emacs`: also run oracle check (R2)
-- [ ] `--no-cache`: skip cache lookup
-- [ ] Exit 0 on all pass, exit 1 on any failure (R8, R9)
-- [ ] Print summary at end (R11)
-- [ ] Wire into `main_cmd` group
-- [ ] Build + test
-
-### Task 2.2: Create run-roundtrip.sh
-
-- [ ] Create `scripts/run-roundtrip.sh`: thin wrapper calling
-      `tart roundtrip` with appropriate flags
-- [ ] `--with-emacs` flag forwarded
-- [ ] Make executable
-- [ ] Build + test
-
----
-
-## Iteration 3: Unit tests + spec completion
-
-### Task 3.1: Create test suite
-
-- [ ] Create `test/roundtrip/dune` and
-      `test/roundtrip/roundtrip_test.ml`
-- [ ] `check_file`: valid .el passes, broken .el returns Parse_error,
-      round-trip mismatch returns Mismatch with diff
-- [ ] `check_file_with_emacs`: match and mismatch cases
-- [ ] `check_file_cached`: cache hit returns Cached, cache miss runs
-      check
-- [ ] `run_corpus`: summary counts correct
-- [ ] `make_diff`: shows expected vs actual
-- [ ] `summary_to_string`: correct format
-- [ ] Build + test
-
-### Task 3.2: Spec completion
-
-- [ ] Check all task boxes in specs/42-roundtrip-harness.md
-- [ ] Add Status section
-- [ ] Build + test
+- [x] Check all applicable task boxes in specs/43-ci-version-matrix.md
+- [x] Add Status section documenting emacs28/29 unavailability
+- [x] Build + test
