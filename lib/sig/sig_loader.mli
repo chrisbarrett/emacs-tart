@@ -213,6 +213,7 @@ val load_signature_with_resolver :
   ?prelude_ctx:type_context ->
   ?prelude_type_names:string list ->
   ?has_el_file:(string -> bool) ->
+  ?source_version:Core.Type_env.emacs_version ->
   resolver:module_resolver ->
   Core.Type_env.t ->
   Sig_ast.signature ->
@@ -237,6 +238,10 @@ val load_signature_with_resolver :
       provided, {!process_open} will reject auxiliary .tart files (no .el) with
       an error directing the user to use include instead (Spec 07 R19). Defaults
       to allowing all modules.
+    @param source_version
+      Optional Emacs version from the typings directory path. When set, every
+      defun and defvar loaded will be annotated with this as the minimum version
+      in the type environment (Spec 50).
     @param resolver Function to resolve module names to signatures
     @param env Base type environment to extend
     @param sig_file The signature to load *)

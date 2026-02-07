@@ -490,6 +490,9 @@ type load_state = {
       (** Type names imported from prelude/open/include (for shadowing check) *)
   ls_imported_values : string list;
       (** Value names imported from include (for shadowing check) *)
+  ls_source_version : Type_env.emacs_version option;
+      (** When loading from versioned typings, the minimum Emacs version implied
+          by the typings directory path (Spec 50) *)
 }
 (** State accumulated during loading *)
 
@@ -507,7 +510,8 @@ let default_has_el_file : string -> bool = fun _ -> true
     @param imported_types
       Initial set of imported type names (e.g., from prelude). *)
 let init_load_state ~type_ctx ~resolver ?(has_el_file = default_has_el_file)
-    ~base_env ~module_name ?(imported_types = []) ?(imported_values = []) () =
+    ~base_env ~module_name ?(imported_types = []) ?(imported_values = [])
+    ?source_version () =
   {
     ls_type_ctx = type_ctx;
     ls_env = base_env;
@@ -518,6 +522,7 @@ let init_load_state ~type_ctx ~resolver ?(has_el_file = default_has_el_file)
     ls_scope_tvars = [];
     ls_imported_types = imported_types;
     ls_imported_values = imported_values;
+    ls_source_version = source_version;
   }
 
 (** Add a type alias to the load state *)
@@ -545,6 +550,29 @@ let add_fn_clauses_to_state name clauses state =
 (** Add a predicate to the load state *)
 let add_predicate_to_state name info state =
   { state with ls_env = Type_env.extend_predicate name info state.ls_env }
+
+(** Add version range for a function from source_version (Spec 50) *)
+let add_fn_version_to_state name state =
+  match state.ls_source_version with
+  | Some v ->
+      let range : Type_env.version_range =
+        { min_version = Some v; max_version = None }
+      in
+      { state with ls_env = Type_env.extend_fn_version name range state.ls_env }
+  | None -> state
+
+(** Add version range for a variable from source_version (Spec 50) *)
+let add_var_version_to_state name state =
+  match state.ls_source_version with
+  | Some v ->
+      let range : Type_env.version_range =
+        { min_version = Some v; max_version = None }
+      in
+      {
+        state with
+        ls_env = Type_env.extend_var_version name range state.ls_env;
+      }
+  | None -> state
 
 (** {1 Shadowing Checks}
 
@@ -935,6 +963,8 @@ and load_decls_into_state ?(from_include = false) (sig_file : signature)
               let scheme = load_defun_with_ctx state.ls_type_ctx d in
               (* Add to function namespace for Lisp-2 semantics *)
               let state = add_fn_to_state d.defun_name scheme state in
+              (* Track version from typings path (Spec 50) *)
+              let state = add_fn_version_to_state d.defun_name state in
               (* Preserve clause structure for overload resolution *)
               let state =
                 match
@@ -968,6 +998,8 @@ and load_decls_into_state ?(from_include = false) (sig_file : signature)
               in
               let scheme = load_defvar_with_ctx state.ls_type_ctx d in
               let state = add_value_to_state d.defvar_name scheme state in
+              (* Track version from typings path (Spec 50) *)
+              let state = add_var_version_to_state d.defvar_name state in
               (* Mark as imported if from include *)
               Ok
                 (if from_include then mark_value_imported d.defvar_name state
@@ -1093,6 +1125,8 @@ and load_scoped_decl ?(from_include = false) (sig_file : signature)
       let scheme = load_defun_with_scope state.ls_type_ctx scope_tvars d in
       (* Add to function namespace for Lisp-2 semantics *)
       let state = add_fn_to_state d.defun_name scheme state in
+      (* Track version from typings path (Spec 50) *)
+      let state = add_fn_version_to_state d.defun_name state in
       (* Preserve clause structure for overload resolution *)
       let state =
         match
@@ -1122,6 +1156,8 @@ and load_scoped_decl ?(from_include = false) (sig_file : signature)
       in
       let scheme = load_defvar_with_ctx state.ls_type_ctx d in
       let state = add_value_to_state d.defvar_name scheme state in
+      (* Track version from typings path (Spec 50) *)
+      let state = add_var_version_to_state d.defvar_name state in
       Ok
         (if from_include then mark_value_imported d.defvar_name state else state)
   | DImportStruct d ->
@@ -1231,14 +1267,16 @@ and load_let ?(from_include = false) (sig_file : signature) (d : let_decl)
     @param env Base type environment to extend
     @param sig_file The signature to load *)
 let load_signature_with_resolver ?prelude_ctx ?(prelude_type_names = [])
-    ?has_el_file ~(resolver : module_resolver) (env : Type_env.t)
-    (sig_file : signature) : (Type_env.t, load_error) Result.t =
+    ?has_el_file ?source_version ~(resolver : module_resolver)
+    (env : Type_env.t) (sig_file : signature) :
+    (Type_env.t, load_error) Result.t =
   let type_ctx =
     match prelude_ctx with Some ctx -> ctx | None -> empty_type_context
   in
   let state =
-    init_load_state ~type_ctx ~resolver ?has_el_file ~base_env:env
-      ~module_name:sig_file.sig_module ~imported_types:prelude_type_names ()
+    init_load_state ~type_ctx ~resolver ?has_el_file ?source_version
+      ~base_env:env ~module_name:sig_file.sig_module
+      ~imported_types:prelude_type_names ()
   in
   let* final_state = load_decls_into_state sig_file state in
   Ok final_state.ls_env

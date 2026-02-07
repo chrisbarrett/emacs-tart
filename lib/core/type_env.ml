@@ -48,6 +48,26 @@ type predicate_info = {
     syntactic value (lambda, literal, variable, constructor application). *)
 type scheme = Mono of typ | Poly of string list * typ
 
+type emacs_version = { major : int; minor : int }
+(** Simple version representation for the core layer (Spec 50).
+
+    Mirrors [Emacs_version.version] but lives in core to avoid depending on the
+    sig library. Converted from [Emacs_version.version] during sig loading. *)
+
+type version_range = {
+  min_version : emacs_version option;  (** Minimum Emacs version required *)
+  max_version : emacs_version option;
+      (** Maximum Emacs version where available *)
+}
+(** Version range for Emacs version constraints (Spec 50).
+
+    Tracks the minimum and/or maximum Emacs version in which a function or
+    variable is available. Derived from the typings directory path. *)
+
+(** Format a version as "major.minor" *)
+let version_to_string (v : emacs_version) : string =
+  Printf.sprintf "%d.%d" v.major v.minor
+
 type t = {
   bindings : (string * scheme) list;
       (** Variable namespace: let, setq, defvar, lambda params *)
@@ -57,6 +77,12 @@ type t = {
       (** Multi-clause function signatures for overload resolution (Spec 56) *)
   predicates : (string * predicate_info) list;
       (** Type predicates: maps function names to their predicate info *)
+  fn_versions : (string * version_range) list;
+      (** Version ranges for functions, populated from typings paths (Spec 50)
+      *)
+  var_versions : (string * version_range) list;
+      (** Version ranges for variables, populated from typings paths (Spec 50)
+      *)
   feature_loader : (string -> t -> t) option;
       (** Optional callback to load a feature's signatures into the env (Spec
           49). Called with the feature name and current env; returns extended
@@ -72,6 +98,8 @@ let empty =
     fn_bindings = [];
     fn_clauses = [];
     predicates = [];
+    fn_versions = [];
+    var_versions = [];
     feature_loader = None;
     level = 0;
   }
@@ -83,6 +111,8 @@ let of_list bindings =
     fn_bindings = [];
     fn_clauses = [];
     predicates = [];
+    fn_versions = [];
+    var_versions = [];
     feature_loader = None;
     level = 0;
   }
@@ -151,6 +181,22 @@ let lookup_predicate name env = List.assoc_opt name env.predicates
 (** Register a function as a type predicate *)
 let extend_predicate name info env =
   { env with predicates = (name, info) :: env.predicates }
+
+(** {1 Version Tracking (Spec 50)} *)
+
+(** Extend function namespace with a version range *)
+let extend_fn_version name range env =
+  { env with fn_versions = (name, range) :: env.fn_versions }
+
+(** Look up the version range for a function *)
+let lookup_fn_version name env = List.assoc_opt name env.fn_versions
+
+(** Extend variable namespace with a version range *)
+let extend_var_version name range env =
+  { env with var_versions = (name, range) :: env.var_versions }
+
+(** Look up the version range for a variable *)
+let lookup_var_version name env = List.assoc_opt name env.var_versions
 
 (** Override a variable's type in the variable namespace for narrowing.
 

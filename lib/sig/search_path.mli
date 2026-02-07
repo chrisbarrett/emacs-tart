@@ -186,7 +186,11 @@ val list_c_core_files : string -> string list
     @return Sorted list of full paths to .tart files *)
 
 val load_c_core_files :
-  c_core_dir:string -> ?with_prelude:bool -> Core.Type_env.t -> Core.Type_env.t
+  c_core_dir:string ->
+  ?with_prelude:bool ->
+  ?source_version:Core.Type_env.emacs_version ->
+  Core.Type_env.t ->
+  Core.Type_env.t
 (** Load all c-core signature files into a type environment.
 
     Iterates through all .tart files in the c-core directory and loads their
@@ -196,6 +200,8 @@ val load_c_core_files :
 
     @param c_core_dir Path to the c-core directory containing .tart files
     @param with_prelude If true (default), prelude types are available
+    @param source_version
+      Optional Emacs version to associate with loaded names (Spec 50)
     @param env Base type environment to extend
     @return Extended type environment with all c-core signatures *)
 

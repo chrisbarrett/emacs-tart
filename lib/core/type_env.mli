@@ -70,6 +70,28 @@ type loaded_clause = {
     syntactic value (lambda, literal, variable, constructor application). *)
 type scheme = Mono of Types.typ | Poly of string list * Types.typ
 
+(** {1 Version Ranges (Spec 50)} *)
+
+type emacs_version = { major : int; minor : int }
+(** Simple version representation for the core layer.
+
+    Mirrors [Emacs_version.version] but lives in core to avoid depending on the
+    sig library. Converted from [Emacs_version.version] during sig loading. *)
+
+type version_range = {
+  min_version : emacs_version option;  (** Minimum Emacs version required *)
+  max_version : emacs_version option;
+      (** Maximum Emacs version where available *)
+}
+(** Version range for Emacs version constraints.
+
+    Tracks the minimum and/or maximum Emacs version in which a function or
+    variable is available. Derived from the typings directory path during
+    signature loading. *)
+
+val version_to_string : emacs_version -> string
+(** Format a version as "major.minor". *)
+
 (** {1 Environment} *)
 
 type t = {
@@ -83,6 +105,10 @@ type t = {
           Only present for multi-clause defuns loaded from .tart files. *)
   predicates : (string * predicate_info) list;
       (** Type predicates: maps function names to their predicate info *)
+  fn_versions : (string * version_range) list;
+      (** Version ranges for functions, from typings paths (Spec 50) *)
+  var_versions : (string * version_range) list;
+      (** Version ranges for variables, from typings paths (Spec 50) *)
   feature_loader : (string -> t -> t) option;
       (** Optional callback to load a feature's signatures into the env (Spec
           49). Called with the feature name and current env; returns extended
@@ -176,6 +202,20 @@ val lookup_predicate : string -> t -> predicate_info option
 
 val extend_predicate : string -> predicate_info -> t -> t
 (** Register a function as a type predicate. *)
+
+(** {1 Version Tracking (Spec 50)} *)
+
+val extend_fn_version : string -> version_range -> t -> t
+(** Register a version range for a function name. *)
+
+val lookup_fn_version : string -> t -> version_range option
+(** Look up the version range for a function name. *)
+
+val extend_var_version : string -> version_range -> t -> t
+(** Register a version range for a variable name. *)
+
+val lookup_var_version : string -> t -> version_range option
+(** Look up the version range for a variable name. *)
 
 val with_narrowed_var : string -> Types.typ -> t -> t
 (** [with_narrowed_var name ty env] overrides [name]'s type to [ty].

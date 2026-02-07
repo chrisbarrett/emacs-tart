@@ -451,6 +451,22 @@ let load_module_with_sig ~(search_path : t) ?(el_path : string option)
         | Error _ -> None
       else None
 
+(** Convert Emacs_version to Type_env.emacs_version (core layer). *)
+let to_core_version (v : V.version) : Core.Type_env.emacs_version =
+  { major = v.major; minor = v.minor }
+
+(** Extract the Emacs version from a resolved typings directory path.
+
+    Given a path like "/path/to/typings/emacs/31.0/c-core", extracts the version
+    segment ("31.0") and parses it. Returns None if the version can't be parsed
+    (e.g., the "latest" symlink). *)
+let extract_version_from_typings_dir (typings_dir : string) :
+    Core.Type_env.emacs_version option =
+  let ver_str = Filename.basename typings_dir in
+  match V.parse_version ver_str with
+  | Some v -> Some (to_core_version v)
+  | None -> None
+
 (** List all .tart files in a c-core directory. *)
 let list_c_core_files (c_core_dir : string) : string list =
   if dir_exists c_core_dir then
@@ -473,7 +489,7 @@ let list_c_core_files (c_core_dir : string) : string list =
     @param env Base type environment to extend
     @return Extended type environment with all c-core signatures *)
 let load_c_core_files ~(c_core_dir : string) ?(with_prelude = true)
-    (env : Core.Type_env.t) : Core.Type_env.t =
+    ?source_version (env : Core.Type_env.t) : Core.Type_env.t =
   let files = list_c_core_files c_core_dir in
   let prelude_ctx =
     if with_prelude then Some (Prelude.prelude_type_context ()) else None
@@ -500,8 +516,8 @@ let load_c_core_files ~(c_core_dir : string) ?(with_prelude = true)
             (* Use empty resolver since c-core files shouldn't have deps *)
             let resolver _ = None in
             match
-              Sig_loader.load_signature_with_resolver ?prelude_ctx ~resolver
-                acc_env sig_file
+              Sig_loader.load_signature_with_resolver ?prelude_ctx
+                ?source_version ~resolver acc_env sig_file
             with
             | Ok new_env -> new_env
             | Error _ -> acc_env
@@ -522,7 +538,8 @@ let load_c_core ~(search_path : t) (env : Core.Type_env.t) : Core.Type_env.t =
       match find_typings_dir ~typings_root ~version with
       | Some typings_dir ->
           let c_core_dir = Filename.concat typings_dir "c-core" in
-          load_c_core_files ~c_core_dir env
+          let source_version = extract_version_from_typings_dir typings_dir in
+          load_c_core_files ~c_core_dir ?source_version env
       | None -> env)
   | _ -> env
 
@@ -542,8 +559,9 @@ let load_lisp_core ~(search_path : t) (env : Core.Type_env.t) : Core.Type_env.t
       match find_typings_dir ~typings_root ~version with
       | Some typings_dir ->
           let lisp_core_dir = Filename.concat typings_dir "lisp-core" in
+          let source_version = extract_version_from_typings_dir typings_dir in
           if Sys.file_exists lisp_core_dir && Sys.is_directory lisp_core_dir
-          then load_c_core_files ~c_core_dir:lisp_core_dir env
+          then load_c_core_files ~c_core_dir:lisp_core_dir ?source_version env
           else env
       | None -> env)
   | _ -> env

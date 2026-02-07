@@ -73,6 +73,19 @@ let load_sig_str_with_resolver_result ?(env = Type_env.empty) ~resolver s =
   Sig_loader.load_signature_with_resolver ~prelude_ctx ~prelude_type_names
     ~resolver env sig_file
 
+(** Helper to load a signature with a source_version for version tracking tests
+*)
+let load_sig_str_with_version ?(env = Type_env.empty) ~source_version s =
+  let sig_file = parse_sig_str s in
+  let prelude_ctx = Prelude.prelude_type_context () in
+  let prelude_type_names = Prelude.prelude_type_names in
+  match
+    Sig_loader.load_signature_with_resolver ~prelude_ctx ~prelude_type_names
+      ~source_version ~resolver:Sig_loader.no_resolver env sig_file
+  with
+  | Ok env -> env
+  | Error e -> failwith ("Load error: " ^ e.message)
+
 (** Helper to parse and type-check an expression *)
 let check_expr_str ~env s =
   Types.reset_tvar_counter ();
@@ -2265,6 +2278,61 @@ let test_auxiliary_error_has_module_name () =
            true
          with Not_found -> false)
 
+(** {1 Version Tracking Tests (Spec 50)} *)
+
+let test_version_fn_tracked () =
+  let ver : Type_env.emacs_version = { major = 29; minor = 1 } in
+  let env =
+    load_sig_str_with_version ~source_version:ver "(defun foo (int) -> string)"
+  in
+  match Type_env.lookup_fn_version "foo" env with
+  | None -> Alcotest.fail "foo should have version info"
+  | Some range ->
+      Alcotest.(check bool)
+        "has min_version" true
+        (Option.is_some range.min_version);
+      let v = Option.get range.min_version in
+      Alcotest.(check int) "major" 29 v.major;
+      Alcotest.(check int) "minor" 1 v.minor;
+      Alcotest.(check bool)
+        "no max_version" true
+        (Option.is_none range.max_version)
+
+let test_version_var_tracked () =
+  let ver : Type_env.emacs_version = { major = 30; minor = 0 } in
+  let env =
+    load_sig_str_with_version ~source_version:ver "(defvar bar string)"
+  in
+  match Type_env.lookup_var_version "bar" env with
+  | None -> Alcotest.fail "bar should have version info"
+  | Some range ->
+      let v = Option.get range.min_version in
+      Alcotest.(check int) "major" 30 v.major;
+      Alcotest.(check int) "minor" 0 v.minor
+
+let test_version_no_source () =
+  let env = load_sig_str "(defun baz (int) -> string)" in
+  Alcotest.(check bool)
+    "no fn version" true
+    (Option.is_none (Type_env.lookup_fn_version "baz" env))
+
+let test_version_multiple_fns () =
+  let ver : Type_env.emacs_version = { major = 31; minor = 0 } in
+  let env =
+    load_sig_str_with_version ~source_version:ver
+      "(defun fn-a (int) -> int)\n(defun fn-b (string) -> string)"
+  in
+  Alcotest.(check bool)
+    "fn-a has version" true
+    (Option.is_some (Type_env.lookup_fn_version "fn-a" env));
+  Alcotest.(check bool)
+    "fn-b has version" true
+    (Option.is_some (Type_env.lookup_fn_version "fn-b" env))
+
+let test_version_to_string () =
+  let v : Type_env.emacs_version = { major = 29; minor = 1 } in
+  Alcotest.(check string) "29.1" "29.1" (Type_env.version_to_string v)
+
 let () =
   Alcotest.run "sig_loader"
     [
@@ -2522,5 +2590,15 @@ let () =
           Alcotest.test_case "open with el ok" `Quick test_open_with_el_ok;
           Alcotest.test_case "error has module name" `Quick
             test_auxiliary_error_has_module_name;
+        ] );
+      ( "version-tracking",
+        [
+          Alcotest.test_case "fn version tracked" `Quick test_version_fn_tracked;
+          Alcotest.test_case "var version tracked" `Quick
+            test_version_var_tracked;
+          Alcotest.test_case "no source version" `Quick test_version_no_source;
+          Alcotest.test_case "multiple fns versioned" `Quick
+            test_version_multiple_fns;
+          Alcotest.test_case "version_to_string" `Quick test_version_to_string;
         ] );
     ]
