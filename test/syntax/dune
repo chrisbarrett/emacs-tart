@@ -1,3 +1,7 @@
 (test
  (name parser_test)
  (libraries tart alcotest))
+
+(test
+ (name print_test)
+ (libraries tart alcotest))
