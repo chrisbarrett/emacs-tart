@@ -84,6 +84,7 @@ module Sig_parser = Sig.Sig_parser
 module Sig_loader = Sig.Sig_loader
 module Search_path = Sig.Search_path
 module Emacs_version = Sig.Emacs_version
+module Package_header = Sig.Package_header
 
 (** {1 LSP} *)
 
