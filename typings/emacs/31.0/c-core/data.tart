@@ -115,7 +115,7 @@
 (defun cl-type-of (any) -> symbol)
 
 ;; (subr-arity SUBR) - return (MIN . MAX) or (MIN . many)
-(defun subr-arity (any) -> (cons int any))
+(defun subr-arity (any) -> (cons int (int | symbol)))
 
 ;; (subr-name SUBR) - return symbol name
 (defun subr-name (any) -> symbol)
@@ -224,8 +224,8 @@
 ;; (local-variable-if-set-p SYM &optional BUFFER) - test if would be local
 (defun local-variable-if-set-p (symbol &optional any) -> bool)
 
-;; (variable-binding-locus SYM) - return binding location
-(defun variable-binding-locus (symbol) -> any)
+;; (variable-binding-locus SYM) - return buffer, frame, or nil
+(defun variable-binding-locus (symbol) -> (buffer | frame | nil))
 
 ;; ===========================================================================
 ;; Indirect access
@@ -241,8 +241,8 @@
 ;; Function introspection
 ;; ===========================================================================
 
-;; (interactive-form FN) - return interactive spec
-(defun interactive-form (any) -> any)
+;; (interactive-form FN) - return interactive spec or nil
+(defun interactive-form (any) -> ((list any) | nil))
 
 ;; (command-modes FN) - return command modes
 (defun command-modes (any) -> (list symbol))
@@ -346,28 +346,29 @@
 ;; ===========================================================================
 
 ;; (bool-vector-exclusive-or A B &optional C) - XOR bool vectors
-(defun bool-vector-exclusive-or (any any &optional any) -> any)
+;; When C given, stores result in C and returns C; otherwise allocates new.
+(defun bool-vector-exclusive-or (bool-vector bool-vector &optional bool-vector) -> bool-vector)
 
 ;; (bool-vector-union A B &optional C) - OR bool vectors
-(defun bool-vector-union (any any &optional any) -> any)
+(defun bool-vector-union (bool-vector bool-vector &optional bool-vector) -> bool-vector)
 
 ;; (bool-vector-intersection A B &optional C) - AND bool vectors
-(defun bool-vector-intersection (any any &optional any) -> any)
+(defun bool-vector-intersection (bool-vector bool-vector &optional bool-vector) -> bool-vector)
 
 ;; (bool-vector-set-difference A B &optional C) - set difference
-(defun bool-vector-set-difference (any any &optional any) -> any)
+(defun bool-vector-set-difference (bool-vector bool-vector &optional bool-vector) -> bool-vector)
 
 ;; (bool-vector-not A &optional B) - NOT bool vector
-(defun bool-vector-not (any &optional any) -> any)
+(defun bool-vector-not (bool-vector &optional bool-vector) -> bool-vector)
 
 ;; (bool-vector-subsetp A B) - subset test
-(defun bool-vector-subsetp (any any) -> bool)
+(defun bool-vector-subsetp (bool-vector bool-vector) -> bool)
 
 ;; (bool-vector-count-consecutive A B I) - count consecutive
-(defun bool-vector-count-consecutive (any any int) -> int)
+(defun bool-vector-count-consecutive (bool-vector bool-vector int) -> int)
 
 ;; (bool-vector-count-population A) - count true values
-(defun bool-vector-count-population (any) -> int)
+(defun bool-vector-count-population (bool-vector) -> int)
 
 ;; ===========================================================================
 ;; Variable watchers
@@ -406,7 +407,7 @@
 (defun subr-native-comp-unit (any) -> any)
 
 ;; (subr-native-lambda-list SUBR) - get lambda list
-(defun subr-native-lambda-list (any) -> any)
+(defun subr-native-lambda-list (any) -> (list any))
 
 ;; (native-comp-unit-file UNIT) - get file path
 (defun native-comp-unit-file (any) -> (string | nil))
