@@ -132,3 +132,7 @@ module Log = Tart_log.Log
 
 module Timing = Tart_timing.Timing
 module Memory_stats = Tart_memory_stats.Memory_stats
+
+(** {1 Round-Trip Testing} *)
+
+module Roundtrip = Tart_roundtrip.Roundtrip

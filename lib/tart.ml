@@ -97,3 +97,6 @@ module Timing = Tart_timing.Timing
 
 module Memory_stats = Tart_memory_stats.Memory_stats
 (** Re-export memory statistics module *)
+
+module Roundtrip = Tart_roundtrip.Roundtrip
+(** Re-export round-trip test harness module *)

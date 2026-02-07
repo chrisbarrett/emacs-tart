@@ -18,6 +18,7 @@
   tart.corpus
   tart.log
   tart.timing
-  tart.memory_stats)
+  tart.memory_stats
+  tart.roundtrip)
  (preprocess
   (pps ppx_deriving.show ppx_deriving.eq)))

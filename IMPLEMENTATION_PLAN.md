@@ -1,102 +1,117 @@
-# Implementation Plan: Emacs Source Corpus (Spec 41)
+# Implementation Plan: Round-Trip Test Harness (Spec 42)
 
-Lazy-cloned Emacs source in XDG cache for testing against real
-Elisp files.
+Parse-print-parse testing for parsing accuracy verification against
+Emacs corpus.
 
 ## Analysis
 
 ### Current Architecture
 
-**XDG path**: `Content_cache.cache_dir()` returns
-`$XDG_CACHE_HOME/tart/` or `~/.cache/tart/`. Corpus goes under
-`emacs-src/` subdirectory.
+**Oracle module** (`lib/oracle/`): `Compare.compare_file` already does
+per-form tart-vs-Emacs comparison. `Emacs_reader.read_file` reads all
+forms via Emacs subprocess. `Compare.normalise` handles insignificant
+differences.
 
-**Version detection**: `Emacs_version` module in `lib/sig/` provides
-`detect`, `parse_version`, `version_to_string`. Already used by
-`bin/main.ml` for typings version selection.
+**Corpus module** (`lib/corpus/`): `Emacs_corpus.list_el_files()`
+recursively discovers `.el` files. `corpus_dir()` gives the path.
 
-**Sub-library pattern**: `lib/X/dune` →
-`(library (name X) (public_name tart.X))`, re-exported in
-`lib/tart.ml`/`lib/tart.mli`.
+**Content cache** (`lib/cache/`): `Content_cache.compute_key` hashes
+binary+input. `store`/`retrieve` handle JSON envelope. Already used
+for type-checking cache.
 
-**CLI pattern**: `bin/main.ml` uses Cmdliner. Subcommands defined
-as `Cmd.v info Term.(...)`, grouped in `Cmd.group` at bottom.
-
-**Process invocation**: `Emacs_reader.run_batch` shells out to
-emacs. For git operations, use `Unix.open_process_full` similarly.
+**Parser/printer** (`lib/syntax/`): `Read.parse_file` returns
+`parse_result` with `sexps` and `errors`. `Print.to_string` prints
+individual sexps. `Sexp.equal` does structural comparison.
 
 ### Key Design Decisions
 
-1. **Reuse `Content_cache.cache_dir`** for XDG path — already handles
-   `$XDG_CACHE_HOME` and fallback. Corpus path =
-   `cache_dir() ^ "/emacs-src"`.
+1. **Reuse `Content_cache`** for roundtrip caching — same XDG path,
+   same binary+file keying, same eviction. No separate cache module
+   needed. Store `"roundtrip:pass"` as data.
 
-2. **Shell out to git** via `Unix.open_process_full` — simpler than
-   FFI, git is universally available.
+2. **Reuse `Oracle_compare.compare_file`** for Emacs oracle mode —
+   already implements per-form comparison with normalisation.
 
-3. **Shallow clone + shallow fetch** — `--depth 1` for clone,
-   `--depth 1 origin tag <tag>` for fetch. Minimises disk/network.
+3. **Separate structural round-trip from oracle** — `check_file`
+   does parse→print→reparse→compare (fast, no subprocess);
+   `check_file_with_emacs` delegates to `Oracle_compare`.
 
-4. **Version auto-detection reuses `Emacs_version.detect`** — already
-   parses `emacs --version` output.
+4. **Simple text diff** — OCaml stdlib has no diff library; implement
+   minimal line-by-line diff showing expected vs actual (not full
+   unified diff). Good enough for debugging.
 
-5. **`corpus` subcommand group** — `tart corpus checkout`,
-   `tart corpus list`, `tart corpus path`, `tart corpus clean`.
+5. **Sequential by default** — R12 says parallel, but OCaml's
+   `Domain` is Multicore-only (5.0+). Use sequential with future
+   parallel note. The cache makes repeated runs fast anyway.
+
+6. **CLI subcommand** — `tart roundtrip` rather than a shell script.
+   More consistent with existing `tart corpus` pattern.
 
 ---
 
-## Iteration 1: Core corpus library
+## Iteration 1: Core roundtrip library
 
-Create `lib/corpus/` with path resolution, clone, checkout, list.
+Create `lib/roundtrip/` with result types, check_file, summary.
 
-### Task 1.1: Create lib/corpus sub-library
+### Task 1.1: Create lib/roundtrip sub-library
 
-- [x] Create `lib/corpus/dune` (library `corpus`, public
-      `tart.corpus`, deps `unix tart.cache tart.sig tart.log`)
-- [x] Create `lib/corpus/emacs_corpus.mli` with full interface
-- [x] Create `lib/corpus/emacs_corpus.ml` implementation
-- [x] Add `tart.corpus` to `lib/dune` libraries
-- [x] Re-export as `Tart.Emacs_corpus` in `tart.ml`/`tart.mli`
-- [x] Build
+- [ ] Create `lib/roundtrip/dune` (library `roundtrip`, public
+      `tart.roundtrip`, deps `tart.syntax tart.oracle tart.cache
+      tart.corpus tart.log unix`)
+- [ ] Create `lib/roundtrip/roundtrip.mli` with full interface
+- [ ] Create `lib/roundtrip/roundtrip.ml` implementation
+- [ ] Add `tart.roundtrip` to `lib/dune` libraries
+- [ ] Re-export as `Tart.Roundtrip` in `tart.ml`/`tart.mli`
+- [ ] Build
 
 ### Task 1.2: Implement core functions
 
-- [x] `corpus_error` type: `Clone_failed`, `Fetch_failed`,
-      `Checkout_failed`, `No_emacs`, `Invalid_ref`
-- [x] `corpus_dir`: `Content_cache.cache_dir() ^ "/emacs-src"` (R3, R4)
-- [x] `run_git`: helper to shell out to git, capture stdout/stderr,
-      return result
-- [x] `ensure_clone`: if dir missing, `git clone --depth 1 --branch
-      <tag> <url> <path>` (R1); if exists, no-op (R2)
-- [x] `checkout`: `git fetch --depth 1 origin tag <tag> --no-tags`
-      then `git checkout <tag>` (R5); for SHA, `git fetch --depth 1
-      origin <sha>` then checkout (R6)
-- [x] `detect_tag`: uses `Emacs_version.detect` → `emacs-M.N` tag
-      (R7, R8); returns error if no Emacs found
-- [x] `list_el_files`: recursive `.el` discovery in corpus dir,
-      returns absolute paths (R10, R11)
-- [x] `clean`: `rm -rf` corpus dir, return bytes freed (R15)
-- [x] Build + test
+- [ ] `result` type: `Pass`, `Cached`, `Parse_error of {path; error}`,
+      `Mismatch of {path; expected; actual; diff}`,
+      `Emacs_mismatch of {path; tart_output; emacs_output}`
+- [ ] `summary` type: `{total; passed; failed; cached; failures}`
+- [ ] `summary_to_string`: format as "N total, N passed, N failed,
+      N cached" (R11)
+- [ ] `check_file`: parse file → print each sexp → reparse printed →
+      compare with `Sexp.equal` (R1); on mismatch return
+      `Mismatch` with textual diff (R3, R4)
+- [ ] `check_file_with_emacs`: delegates to
+      `Oracle_compare.compare_file` (R2)
+- [ ] `make_diff`: show expected vs actual line-by-line (R4)
+- [ ] `cache_key`: `Content_cache.compute_key` with binary_path +
+      file path (R5)
+- [ ] `check_file_cached`: if cache hit return `Cached`; else run
+      `check_file`, record on pass (R5, R6)
+- [ ] `run_corpus`: iterate `list_el_files`, call
+      `check_file_cached` on each, collect summary (R7, R11)
+- [ ] Build + test
 
 ---
 
-## Iteration 2: CLI subcommands
+## Iteration 2: CLI subcommand + script
 
-Wire corpus operations into `tart corpus` command group.
+Wire roundtrip into `tart roundtrip` CLI and create shell script.
 
-### Task 2.1: Add corpus subcommand group
+### Task 2.1: Add CLI subcommand
 
-- [x] `corpus_checkout_cmd`: `tart corpus checkout [REF]`
-      with optional `--emacs-version` override (R9);
-      auto-detects if no ref given (R7)
-- [x] `corpus_list_cmd`: `tart corpus list` prints `.el` paths
-- [x] `corpus_path_cmd`: `tart corpus path` prints corpus dir (R14)
-- [x] `corpus_clean_cmd`: `tart corpus clean` removes corpus (R15)
-- [x] `corpus_cmd`: `Cmd.group` combining subcommands
-- [x] Wire `corpus_cmd` into `main_cmd` group
-- [x] Error handling: network failures → exit 1 with message (R12,
-      R13); invalid version → exit 2; no Emacs → exit 3
-- [x] Build + test
+- [ ] `roundtrip_cmd`: `tart roundtrip [--with-emacs] [--no-cache]
+      [FILES...]`
+- [ ] Default (no files): use `Emacs_corpus.list_el_files()` (R7)
+- [ ] Explicit files: check just those files
+- [ ] `--with-emacs`: also run oracle check (R2)
+- [ ] `--no-cache`: skip cache lookup
+- [ ] Exit 0 on all pass, exit 1 on any failure (R8, R9)
+- [ ] Print summary at end (R11)
+- [ ] Wire into `main_cmd` group
+- [ ] Build + test
+
+### Task 2.2: Create run-roundtrip.sh
+
+- [ ] Create `scripts/run-roundtrip.sh`: thin wrapper calling
+      `tart roundtrip` with appropriate flags
+- [ ] `--with-emacs` flag forwarded
+- [ ] Make executable
+- [ ] Build + test
 
 ---
 
@@ -104,18 +119,20 @@ Wire corpus operations into `tart corpus` command group.
 
 ### Task 3.1: Create test suite
 
-- [x] Create `test/corpus/dune` and
-      `test/corpus/emacs_corpus_test.ml`
-- [x] `corpus_dir`: XDG override, fallback
-- [x] `run_git`: captures stdout/stderr
-- [x] `detect_tag`: parses version to tag string
-- [x] `list_el_files`: discovers .el in temp dir
-- [x] `clean`: removes directory
-- [x] Error types: all constructors tested
-- [x] Build + test
+- [ ] Create `test/roundtrip/dune` and
+      `test/roundtrip/roundtrip_test.ml`
+- [ ] `check_file`: valid .el passes, broken .el returns Parse_error,
+      round-trip mismatch returns Mismatch with diff
+- [ ] `check_file_with_emacs`: match and mismatch cases
+- [ ] `check_file_cached`: cache hit returns Cached, cache miss runs
+      check
+- [ ] `run_corpus`: summary counts correct
+- [ ] `make_diff`: shows expected vs actual
+- [ ] `summary_to_string`: correct format
+- [ ] Build + test
 
 ### Task 3.2: Spec completion
 
-- [x] Check all task boxes in specs/41-emacs-corpus.md
-- [x] Add Status section
-- [x] Build + test
+- [ ] Check all task boxes in specs/42-roundtrip-harness.md
+- [ ] Add Status section
+- [ ] Build + test
