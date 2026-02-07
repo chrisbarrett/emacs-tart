@@ -1828,6 +1828,101 @@ let test_clauses_literal_params () =
             (Printf.sprintf "Expected PPositional but got %s"
                (Types.param_to_string other)))
 
+(** {1 Clause Diagnostic Preservation Tests (Spec 57)} *)
+
+(** Test that clause diagnostics are preserved through loading *)
+let test_clause_diagnostic_preserved () =
+  let sig_src =
+    {|
+    (defun old-fn [a]
+      ((a) -> a (warn "deprecated; use new-fn"))
+      ((_) -> nil))
+  |}
+  in
+  let env = load_sig_str sig_src in
+  match Type_env.lookup_fn_clauses "old-fn" env with
+  | None -> Alcotest.fail "multi-clause defun should preserve clauses"
+  | Some clauses -> (
+      Alcotest.(check int) "should have 2 clauses" 2 (List.length clauses);
+      let c1 = List.nth clauses 0 in
+      (match c1.lc_diagnostic with
+      | None -> Alcotest.fail "clause 1 should have diagnostic"
+      | Some diag ->
+          Alcotest.(check string)
+            "message" "deprecated; use new-fn" diag.ld_message;
+          Alcotest.(check bool)
+            "severity is warn"
+            (diag.ld_severity = Type_env.DiagWarn)
+            true;
+          Alcotest.(check int) "no args" 0 (List.length diag.ld_args));
+      let c2 = List.nth clauses 1 in
+      match c2.lc_diagnostic with
+      | None -> ()
+      | Some _ -> Alcotest.fail "clause 2 should not have diagnostic")
+
+(** Test that diagnostic with format args preserves arg names *)
+let test_clause_diagnostic_with_args () =
+  let sig_src =
+    {|
+    (defun coerce [a b]
+      ((a) -> b (warn "implicit coercion from %s to %s" a b))
+      ((_) -> nil))
+  |}
+  in
+  let env = load_sig_str sig_src in
+  match Type_env.lookup_fn_clauses "coerce" env with
+  | None -> Alcotest.fail "multi-clause defun should preserve clauses"
+  | Some clauses -> (
+      let c1 = List.nth clauses 0 in
+      match c1.lc_diagnostic with
+      | None -> Alcotest.fail "clause 1 should have diagnostic"
+      | Some diag ->
+          Alcotest.(check string)
+            "message" "implicit coercion from %s to %s" diag.ld_message;
+          Alcotest.(check int) "2 args" 2 (List.length diag.ld_args);
+          Alcotest.(check string) "arg 1" "a" (List.nth diag.ld_args 0);
+          Alcotest.(check string) "arg 2" "b" (List.nth diag.ld_args 1))
+
+(** Test that error severity diagnostic is preserved *)
+let test_clause_diagnostic_error_severity () =
+  let sig_src =
+    {|
+    (defun bad-fn [a]
+      ((a) -> nil (error "this is always wrong"))
+      ((_) -> nil))
+  |}
+  in
+  let env = load_sig_str sig_src in
+  match Type_env.lookup_fn_clauses "bad-fn" env with
+  | None -> Alcotest.fail "multi-clause defun should preserve clauses"
+  | Some clauses -> (
+      let c1 = List.nth clauses 0 in
+      match c1.lc_diagnostic with
+      | None -> Alcotest.fail "clause 1 should have error diagnostic"
+      | Some diag ->
+          Alcotest.(check bool)
+            "severity is error"
+            (diag.ld_severity = Type_env.DiagError)
+            true)
+
+(** Test that clauses without diagnostics have None *)
+let test_clause_no_diagnostic () =
+  let sig_src = {|
+    (defun stringp ((string) -> t) ((_) -> nil))
+  |} in
+  let env = load_sig_str sig_src in
+  match Type_env.lookup_fn_clauses "stringp" env with
+  | None -> Alcotest.fail "multi-clause defun should preserve clauses"
+  | Some clauses ->
+      List.iteri
+        (fun i c ->
+          match c.Type_env.lc_diagnostic with
+          | None -> ()
+          | Some _ ->
+              Alcotest.fail
+                (Printf.sprintf "clause %d should not have diagnostic" i))
+        clauses
+
 (** {1 Shadowing Error Tests} *)
 
 (** Test that redefining a type imported via open produces an error *)
@@ -2384,6 +2479,17 @@ let () =
             test_clauses_have_correct_types;
           Alcotest.test_case "literal params preserved" `Quick
             test_clauses_literal_params;
+        ] );
+      ( "clause-diagnostics",
+        [
+          Alcotest.test_case "diagnostic preserved" `Quick
+            test_clause_diagnostic_preserved;
+          Alcotest.test_case "diagnostic with args" `Quick
+            test_clause_diagnostic_with_args;
+          Alcotest.test_case "error severity" `Quick
+            test_clause_diagnostic_error_severity;
+          Alcotest.test_case "no diagnostic is None" `Quick
+            test_clause_no_diagnostic;
         ] );
       ( "shadowing",
         [

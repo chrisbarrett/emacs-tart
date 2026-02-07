@@ -26,9 +26,32 @@ type predicate_info = {
 
 (** {1 Loaded Clauses} *)
 
+(** Severity level for clause diagnostics.
+
+    Mirrors [Sig_ast.diagnostic_severity] but lives in the core layer so
+    inference can consume it without depending on the sig library. *)
+type diagnostic_severity =
+  | DiagError  (** Error: the usage is incorrect *)
+  | DiagWarn  (** Warning: the usage is risky *)
+  | DiagNote  (** Note: informational message *)
+
+type loaded_diagnostic = {
+  ld_severity : diagnostic_severity;
+  ld_message : string;  (** Format string with [%s] placeholders *)
+  ld_args : string list;
+      (** Type variable names for [%s] substitution at the call site *)
+}
+(** A diagnostic annotation carried through from a clause in a [.tart] file.
+
+    When a clause with a diagnostic is selected during overload resolution, the
+    diagnostic is emitted at the call site. [%s] placeholders in the message are
+    replaced by the stringified types of the referenced type variables. *)
+
 type loaded_clause = {
   lc_params : Types.param list;  (** Parameter types for this clause *)
   lc_return : Types.typ;  (** Return type for this clause *)
+  lc_diagnostic : loaded_diagnostic option;
+      (** Optional diagnostic emitted when this clause matches *)
 }
 (** A single clause from a multi-clause defun, preserved through loading.
 

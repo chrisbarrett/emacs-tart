@@ -912,10 +912,12 @@ let test_literal_clause_keyword_match () =
            {
              Env.lc_params = [ PPositional plist_string; PLiteral ":name" ];
              lc_return = Prim.string;
+             lc_diagnostic = None;
            };
            {
              Env.lc_params = [ PPositional Prim.any; PPositional Prim.keyword ];
              lc_return = Prim.any;
+             lc_diagnostic = None;
            };
          ]
   in
@@ -939,10 +941,12 @@ let test_literal_clause_no_match_fallback () =
            {
              Env.lc_params = [ PPositional plist_string; PLiteral ":name" ];
              lc_return = Prim.string;
+             lc_diagnostic = None;
            };
            {
              Env.lc_params = [ PPositional Prim.any; PPositional Prim.keyword ];
              lc_return = Prim.int;
+             lc_diagnostic = None;
            };
          ]
   in
@@ -965,10 +969,12 @@ let test_literal_clause_quoted_symbol_match () =
            {
              Env.lc_params = [ PLiteral "name"; PPositional Prim.any ];
              lc_return = Prim.string;
+             lc_diagnostic = None;
            };
            {
              Env.lc_params = [ PPositional Prim.symbol; PPositional Prim.any ];
              lc_return = Prim.any;
+             lc_diagnostic = None;
            };
          ]
   in

@@ -957,11 +957,28 @@ let compute_defun_type ?(scope_tvars : (string * Types.typ) list = [])
       let union_ret = union_of_types returns in
       Types.TArrow (union_params, union_ret)
 
+(** Convert an AST diagnostic severity to the loaded (core) severity. *)
+let convert_diagnostic_severity :
+    diagnostic_severity -> Type_env.diagnostic_severity = function
+  | DiagError -> Type_env.DiagError
+  | DiagWarn -> Type_env.DiagWarn
+  | DiagNote -> Type_env.DiagNote
+
+(** Convert an AST clause diagnostic to a loaded diagnostic. *)
+let convert_clause_diagnostic (d : clause_diagnostic) :
+    Type_env.loaded_diagnostic =
+  {
+    Type_env.ld_severity = convert_diagnostic_severity d.diag_severity;
+    ld_message = d.diag_message;
+    ld_args = d.diag_args;
+  }
+
 (** Convert defun clauses to loaded_clause list for overload resolution.
 
     Each clause's parameters and return type are converted to core types,
-    preserving clause structure for call-site dispatch (Spec 56). Returns
-    [Some clauses] for multi-clause defuns, [None] for single-clause. *)
+    preserving clause structure for call-site dispatch (Spec 56). Clause
+    diagnostics are carried through for emission at call sites (Spec 57).
+    Returns [Some clauses] for multi-clause defuns, [None] for single-clause. *)
 let compute_defun_clauses ?(scope_tvars : (string * Types.typ) list = [])
     (ctx : type_context) (tvar_names : string list)
     (clauses : defun_clause list) : Type_env.loaded_clause list option =
@@ -980,7 +997,10 @@ let compute_defun_clauses ?(scope_tvars : (string * Types.typ) list = [])
                sig_type_to_typ_with_ctx ~scope_tvars ctx tvar_names
                  c.clause_return
              in
-             { Type_env.lc_params; lc_return })
+             let lc_diagnostic =
+               Option.map convert_clause_diagnostic c.clause_diagnostic
+             in
+             { Type_env.lc_params; lc_return; lc_diagnostic })
            clauses)
 
 (** Derive predicate information from multi-clause structure.

@@ -10,9 +10,18 @@
 
 open Types
 
+type diagnostic_severity = DiagError | DiagWarn | DiagNote
+
+type loaded_diagnostic = {
+  ld_severity : diagnostic_severity;
+  ld_message : string;
+  ld_args : string list;
+}
+
 type loaded_clause = {
   lc_params : param list;  (** Parameter types for this clause *)
   lc_return : typ;  (** Return type for this clause *)
+  lc_diagnostic : loaded_diagnostic option;
 }
 (** A single clause from a multi-clause defun, preserved through loading. *)
 
