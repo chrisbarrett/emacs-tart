@@ -64,7 +64,7 @@
 (defun nreverse [a] ((list a)) -> (list a))
 
 ;; (sort SEQ PRED) - destructive sort
-(defun sort [a] ((list a) any) -> (list a))
+(defun sort [a] ((list a) ((a a) -> any)) -> (list a))
 
 ;; ===========================================================================
 ;; List operations
@@ -136,9 +136,11 @@
 ;; ===========================================================================
 
 ;; (get SYM PROP &optional DEFAULT) - get symbol property
+;; Returns dynamically-stored plist value; typed as -> any (see BUGS.md)
 (defun get (symbol symbol &optional any) -> any)
 
 ;; (put SYM PROP VALUE) - set symbol property
+;; Returns VALUE unchanged; typed as -> any (see BUGS.md)
 (defun put (symbol symbol any) -> any)
 
 ;; (plist-get PLIST PROP &optional PREDICATE) - get from plist
@@ -158,7 +160,7 @@
 (defun mapcar [a b] (((a -> b)) (list a)) -> (list b))
 
 ;; (mapc FN SEQ) - apply fn for side effects
-(defun mapc [a] (any (list a)) -> (list a))
+(defun mapc [a] (((a) -> any) (list a)) -> (list a))
 
 ;; (mapcan FN SEQ) - mapcar then nconc results
 (defun mapcan [a b] (((a -> (list b))) (list a)) -> (list b))
@@ -267,7 +269,7 @@
 (defun clrhash [k v] ((hash-table k v)) -> (hash-table k v))
 
 ;; (maphash FN TABLE) - iterate over table
-(defun maphash [k v] (any (hash-table k v)) -> nil)
+(defun maphash [k v] (((k v) -> any) (hash-table k v)) -> nil)
 
 ;; (copy-hash-table TABLE) - shallow copy
 (defun copy-hash-table [k v] ((hash-table k v)) -> (hash-table k v))

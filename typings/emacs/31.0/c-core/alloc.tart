@@ -33,12 +33,12 @@
 ;; ===========================================================================
 
 ;; (record TYPE &rest SLOTS) - create record with type and initial slots
-;; Note: Cannot use 'record' as return type due to name conflict with function.
-;; Records are a special kind of vector with a type tag.
-(defun record (symbol &rest any) -> any)
+;; Returns a record (typed vector with a type tag); no record type exists (see BUGS.md)
+(defun record (symbol &rest any) -> truthy)
 
 ;; (make-record TYPE LENGTH INIT) - create record with length, all slots set to INIT
-(defun make-record (symbol int any) -> any)
+;; Returns a record object; no record type exists (see BUGS.md)
+(defun make-record (symbol int any) -> truthy)
 
 ;; ===========================================================================
 ;; Strings
@@ -76,10 +76,12 @@
 ;; ===========================================================================
 
 ;; (make-byte-code ARGLIST BYTE-CODE CONSTANTS DEPTH &optional DOCSTRING INTERACTIVE-SPEC &rest ELEMENTS)
-(defun make-byte-code (any any any any &optional any any &rest any) -> any)
+;; Returns a compiled-function object (always non-nil)
+(defun make-byte-code (any any any any &optional any any &rest any) -> truthy)
 
 ;; (make-closure PROTOTYPE &rest ENVIRONMENT) - create closure
-(defun make-closure (any &rest any) -> any)
+;; Returns a closure object (always non-nil)
+(defun make-closure (any &rest any) -> truthy)
 
 ;; ===========================================================================
 ;; Finalizers
@@ -87,7 +89,8 @@
 
 ;; (make-finalizer FN) - create weak reference with cleanup function
 ;; FN is called with no arguments when the finalizer is garbage collected.
-(defun make-finalizer (any) -> any)
+;; Returns a finalizer object (always non-nil)
+(defun make-finalizer ((() -> any)) -> truthy)
 
 ;; ===========================================================================
 ;; Garbage collection
