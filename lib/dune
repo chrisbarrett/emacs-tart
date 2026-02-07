@@ -14,6 +14,7 @@
   tart.coverage
   tart.errors
   tart.oracle
+  tart.cache
   tart.log
   tart.timing
   tart.memory_stats)

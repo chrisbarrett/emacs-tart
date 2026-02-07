@@ -116,6 +116,10 @@ module Emacs_coverage = Coverage.Emacs_coverage
 module Emacs_reader = Oracle.Emacs_reader
 module Oracle_compare = Oracle.Compare
 
+(** {1 Cache} *)
+
+module Content_cache = Cache.Content_cache
+
 (** {1 Logging} *)
 
 module Log = Tart_log.Log

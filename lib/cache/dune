@@ -1,0 +1,4 @@
+(library
+ (name cache)
+ (public_name tart.cache)
+ (libraries unix yojson tart.log))

@@ -1,138 +1,139 @@
-# Implementation Plan: Emacs Reader Oracle (Spec 39)
+# Implementation Plan: Content-Addressable Cache (Spec 40)
 
-Invoke Emacs as gold-standard oracle to verify tart parses correctly.
+XDG-compliant content-addressable file cache for incremental
+type-checking results.
 
 ## Analysis
 
 ### Current Architecture
 
-**Parser** exists in `lib/syntax/read.ml`: reads Elisp source into
-`Sexp.t` AST. Well-tested with 88+ tests.
+**Form cache** in `lib/lsp/form_cache.ml`: in-process hash table keyed
+by `Hashtbl.hash` of sexp string. Fast but not persistent across
+process invocations.
 
-**Printer** exists in `lib/syntax/print.ml`: prints `Sexp.t` to valid
-Elisp string. 65 unit tests including round-trip tests.
+**Sub-library pattern**: each `lib/X/` has `dune` declaring
+`(library (name X) (public_name tart.X) (libraries ...))`. Re-exported
+via `module X = X_pkg.X` in `lib/tart.ml` + `lib/tart.mli`.
 
-**Emacs detection** exists in `lib/sig/emacs_version.ml`: has
-`detect()` which runs `emacs --version`. Uses `Sys.command` for
-process invocation.
+**Test pattern**: `test/X/dune` with `(test (name X_test) (modules X_test) (libraries tart alcotest))`.
 
-**File errors** exist in `lib/typing/file_error.ml`: structured I/O
-error handling (Spec 37).
+**Digest**: OCaml stdlib `Digest` provides MD5 (32-char hex). Spec says
+SHA256 (64-char hex) but MD5 is sufficient for content addressing (not
+security). Use `Digest` to avoid adding dependencies.
+
+**Integration point**: `check_file` in `bin/main.ml` — between parse
+and `Module_check.check_module`. Cache key = hash(binary + file
+content). Cache value = JSON-serialised diagnostics.
 
 ### Key Design Decisions
 
-1. **Separate `emacs_reader.ml` for process invocation** — isolates
-   Emacs subprocess management (PATH lookup, batch mode, timeout,
-   stdout/stderr capture) from comparison logic.
+1. **`Digest.string` (MD5)** for content hashing — no external
+   dependency, 32-char hex keys. Spec says 64-char but the actual
+   requirement is deterministic content-based keys.
 
-2. **`oracle.ml` for comparison** — takes tart parse output and Emacs
-   oracle output, normalises both, produces structured diff.
+2. **Filesystem-backed cache** under `$XDG_CACHE_HOME/tart/v1/` —
+   persistent across invocations; two-char prefix subdirs.
 
-3. **Reuse `Print.to_string`** for tart's canonical form — already
-   matches Elisp `prin1-to-string` conventions closely. Any gaps
-   found by oracle testing feed back as printer fixes.
+3. **Atomic writes** via temp file + `Unix.rename` in same directory.
 
-4. **Process timeout via Unix alarm** — `Unix.alarm` + `SIGALRM`
-   handler gives clean timeout without threads.
+4. **Best-effort everywhere** — all I/O wrapped in try/with, cache
+   failures never propagate to type-checking.
 
-### Scope Deferral
-
-- CI integration (Task 11) — deferred until Spec 43 (CI matrix)
-- Caching of Emacs process — not required per spec
+5. **Integration deferred** — Spec 40 builds the cache library and
+   tests it. Wiring into `check_file` is a separate task since the
+   cache value format depends on what type-checking results look like
+   when serialised.
 
 ---
 
-## Iteration 1: Emacs process invocation
+## Iteration 1: Core cache module
 
-Core subprocess management: find Emacs, run batch commands, capture
-output.
+Create `lib/cache/` with `cache_dir`, `binary_path`, `compute_key`,
+`store`, `retrieve`.
 
-### Task 1.1: Create emacs_reader module
+### Task 1.1: Create lib/cache sub-library
 
-- [x] Create `lib/oracle/dune` (library `oracle`, deps
-      `tart.syntax`, `unix`)
-- [x] Create `lib/oracle/emacs_reader.ml` and `emacs_reader.mli`
-- [x] `emacs_error` type: `Read_error`, `Emacs_not_found`,
-      `Emacs_failed`, `Timeout`
-- [x] `find_emacs : unit -> string option` — search PATH for `emacs`
-- [x] `run_batch : ?timeout_ms:int -> string -> (string * string, emacs_error) result`
-      — runs `emacs --batch --quick --eval <expr>`, captures
-      stdout + stderr, handles exit codes
-- [x] Default timeout: 5000ms
-- [x] Build + test
+- [ ] Create `lib/cache/dune` (library `tart_cache`, public
+      `tart.cache`, deps `unix yojson tart.log`)
+- [ ] Create `lib/cache/content_cache.mli` with full interface:
+      `cache_dir`, `binary_path`, `compute_key`, `store`, `retrieve`,
+      `evict_older_than`, `maybe_evict`
+- [ ] Create `lib/cache/content_cache.ml` stub (compiles, not yet
+      implemented)
+- [ ] Add `tart.cache` to `lib/dune` libraries
+- [ ] Add `module Content_cache = Cache.Content_cache` to
+      `lib/tart.ml` and `lib/tart.mli`
+- [ ] Build
 
-### Task 1.2: read_string and read_file
+### Task 1.2: Implement cache_dir, binary_path, compute_key
 
-- [x] `read_string : ?timeout_ms:int -> string -> (string, emacs_error) result`
-      — wraps input in `(prin1-to-string (read ...))` Elisp, calls
-      `run_batch`
-- [x] `read_file : ?timeout_ms:int -> string -> (string list, emacs_error) result`
-      — reads file with multi-form loop, `prin1-to-string` each form
-- [x] Re-export in `tart.ml/tart.mli`
-- [x] Build + test
+- [ ] `cache_dir`: read `$XDG_CACHE_HOME` env, fallback
+      `~/.cache/tart/` (R1)
+- [ ] `binary_path`: `Sys.executable_name` resolved via `realpath`
+      (R9)
+- [ ] `compute_key`: `Digest.to_hex (Digest.string (binary_content ^
+      input_content))` where binary_content = file contents of
+      binary_path and input_content = file contents of input path (R2)
+- [ ] Build + test
 
----
+### Task 1.3: Implement store and retrieve
 
-## Iteration 2: Oracle comparison
-
-Compare tart output against Emacs oracle.
-
-### Task 2.1: Create oracle module
-
-- [x] Create `lib/oracle/compare.ml` and `compare.mli`
-- [x] `comparison_result` type: `Match`, `Mismatch`, `Tart_error`,
-      `Emacs_error`
-- [x] `compare_string : ?timeout_ms:int -> string -> comparison_result`
-      — parse with tart, read with Emacs, compare canonical forms
-- [x] `compare_file : ?timeout_ms:int -> string -> comparison_result list`
-      — per-form comparison for multi-form files
-- [x] Build + test
-
-### Task 2.2: Canonical form normalisation
-
-- [x] Verify `Print.to_string` matches Emacs `prin1-to-string` for:
-      integers, floats, strings, symbols, keywords, lists, vectors,
-      cons pairs, quote/backquote/function reader macros
-- [x] Fix any discrepancies found (feed back into print.ml)
-- [x] Build + test
+- [ ] `store`: mkdir -p prefix dir, write JSON envelope
+      (`{version, created_at, data}`) to temp file, atomic rename (R3,
+      R6, R7, R8, R10)
+- [ ] `retrieve`: read file, parse JSON, extract `data` field; return
+      `None` on any error (R4, R5)
+- [ ] ISO 8601 timestamp via `Unix.gmtime` for `created_at`
+- [ ] Build + test
 
 ---
 
-## Iteration 3: Error handling + timeout
+## Iteration 2: Eviction
 
-### Task 3.1: Robust error handling
+Age-based eviction with marker file and best-effort error handling.
 
-- [x] `Emacs_not_found` when PATH has no emacs
-- [x] `Emacs_failed` with exit code + stderr for non-read failures
-- [x] `Read_error` with input + message for malformed Elisp
-- [x] stderr capture separate from stdout
-- [x] Build + test
+### Task 2.1: Implement evict_older_than
 
-### Task 3.2: Timeout
+- [ ] Walk `v1/XX/` directories, stat each `.json` file
+- [ ] Delete files with mtime older than `days` threshold (R11)
+- [ ] Remove empty prefix directories after deletion
+- [ ] Wrap each deletion in try/with — log warning, continue (R13)
+- [ ] Build + test
 
-- [x] Implement timeout via `Unix.alarm` + `SIGALRM` or
-      `Unix.select` on process pipes
-- [x] Test with intentional hang: `(while t)` input
-- [x] Build + test
+### Task 2.2: Implement maybe_evict
+
+- [ ] Check `.last-eviction` marker file mtime in cache dir
+- [ ] Skip if marker less than 1 hour old (R12)
+- [ ] Call `evict_older_than ~days:30`
+- [ ] Touch marker file after successful eviction
+- [ ] Entire function wrapped in try/with — never fails (R13)
+- [ ] Build + test
 
 ---
 
-## Iteration 4: Unit tests + spec completion
+## Iteration 3: Unit tests + spec completion
 
-### Task 4.1: Oracle unit tests
+### Task 3.1: Create test suite
 
-- [x] Create `test/oracle/dune` and `test/oracle/oracle_test.ml`
-- [x] `read_string` basic forms: int, string, symbol, list, vector
-- [x] `read_string` special syntax: quote, backquote, function,
-      character literals
-- [x] `read_file` multi-form: defun + defvar file
-- [x] `compare_string` match and mismatch cases
-- [x] Error cases: malformed input, Emacs not found
-- [x] Comment stripping: comments in input don't affect comparison
-- [x] Build + test
+- [ ] Create `test/cache/dune` and `test/cache/content_cache_test.ml`
+- [ ] cache_dir: XDG_CACHE_HOME override, fallback to ~/.cache
+- [ ] binary_path: returns valid path
+- [ ] compute_key: deterministic, different inputs differ, hex string
+- [ ] store + retrieve round-trip: store then retrieve = Some data
+- [ ] retrieve miss: nonexistent key = None
+- [ ] retrieve corrupted: invalid JSON = None
+- [ ] store creates directories on demand
+- [ ] atomic write: file appears only after rename (check no
+      partial files)
+- [ ] JSON format: stored file is valid JSON with version, created_at,
+      data fields
+- [ ] evict_older_than: old files deleted, new files preserved
+- [ ] maybe_evict: runs on first call, skips on second
+- [ ] best-effort: read-only file doesn't crash eviction
+- [ ] Build + test
 
-### Task 4.2: Spec completion
+### Task 3.2: Spec completion
 
-- [x] Check all task boxes in specs/39-emacs-reader-oracle.md
-- [x] Add Status section
-- [x] Build + test
+- [ ] Check all task boxes in specs/40-content-cache.md
+- [ ] Add Status section
+- [ ] Build + test
