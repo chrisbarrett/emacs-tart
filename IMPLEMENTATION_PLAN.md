@@ -188,9 +188,9 @@ Recently extracted; validates Spec 54 multi-clause dispatch.
 
 Recently extracted; validates Spec 11 row accessor decision table.
 
-- [ ] Create `test/typing/row_dispatch_test.ml`
-- [ ] Test `get_config` for known accessors (alist-get, plist-get,
+- [x] Create `test/typing/row_dispatch_test.ml`
+- [x] Test `get_config` for known accessors (alist-get, plist-get,
       gethash, map-elt, etc.) and unknown names
-- [ ] Test row extraction functions with constructed types
-- [ ] Test dispatch decision paths (Cases 1–5, R4–R8)
-- [ ] Add to `test/typing/dune`
+- [x] Test row extraction functions with constructed types
+- [x] Test dispatch decision paths (Cases 1–5, R4–R8)
+- [x] Add to `test/typing/dune`
