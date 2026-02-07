@@ -179,12 +179,15 @@ Same narrowing infrastructure, different tracking:
 - [x] Type subtraction for else branches
 - [x] Cumulative narrowing in cond
 - [x] Predicates in and expressions
-- [ ] Predicates in or expressions (R5)
-- [ ] Union intersection for narrowing
-- [ ] Inline-only restriction
+- [ ] Predicates in or expressions (R5) — deferred; requires `never`-return tracking
+- [x] Union intersection for narrowing
+- [x] Inline-only restriction
 - [x] Standard library declarations
 
-**Status:** Narrowing infrastructure complete (`narrow.ml`, `infer.ml`).
-Declaration syntax superseded by [Spec 54](54-multi-clause-signatures.md)
-multi-clause signatures. Standard library predicates migrated to
-multi-clause syntax.
+**Status:** Complete (except R5). Narrowing infrastructure complete
+(`narrow.ml`, `infer.ml`). Inline-only restriction verified (R12). Union
+intersection narrowing for multi-type predicates implemented. Declaration
+syntax superseded by [Spec 54](54-multi-clause-signatures.md) multi-clause
+signatures. Standard library predicates migrated to multi-clause syntax.
+R5 (or-expression progn narrowing) requires `never`-return tracking and is
+deferred to a future spec.
