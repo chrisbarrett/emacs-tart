@@ -63,6 +63,18 @@ let narrow_env_from_analysis (analysis : Narrow.condition_analysis)
         List.fold_left (fun e p -> apply_predicate_else p e) env preds
       in
       (then_env, else_env)
+  | Narrow.Guard _ | Narrow.Guards _ ->
+      (* Guards extend the env with loaded names — wired in Iteration 2 *)
+      (env, env)
+  | Narrow.PredicatesAndGuards (preds, _guards) ->
+      (* Apply predicate narrowing; guard env extension wired in Iteration 2 *)
+      let then_env =
+        List.fold_left (fun e p -> apply_predicate_then p e) env preds
+      in
+      let else_env =
+        List.fold_left (fun e p -> apply_predicate_else p e) env preds
+      in
+      (then_env, else_env)
   | Narrow.NoPredicate -> (env, env)
 
 (** Narrow an env for then-branch only based on condition analysis. *)

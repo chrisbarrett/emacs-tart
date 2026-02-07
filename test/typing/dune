@@ -66,6 +66,11 @@
  (libraries tart alcotest))
 
 (test
+ (name narrow_guard_test)
+ (modules narrow_guard_test)
+ (libraries tart alcotest))
+
+(test
  (name source_excerpt_test)
  (modules source_excerpt_test)
  (libraries tart alcotest str unix))

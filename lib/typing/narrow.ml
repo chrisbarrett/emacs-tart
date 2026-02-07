@@ -1,19 +1,19 @@
-(** Type narrowing for predicate-based occurrence typing.
+(** Type narrowing for predicate-based occurrence typing and feature guards.
 
     This module implements type narrowing as specified in Spec 52 (Type
-    Predicates). When a type predicate like [stringp] is called in a condition,
-    the variable's type is narrowed in the then-branch and subtracted in the
-    else-branch.
+    Predicates) and feature guard recognition as specified in Spec 49 (Feature
+    Guards).
 
-    Example:
-    {[
-      (if (stringp x)
-          (upcase x)    ; x : string
-        (other x))      ; x : (any - string)
-    ]}
+    Predicate narrowing: when a type predicate like [stringp] is called in a
+    condition, the variable's type is narrowed in the then-branch and subtracted
+    in the else-branch.
 
-    Narrowing is inline-only: storing a predicate result in a variable does not
-    enable narrowing (R12). *)
+    Feature guards: when a guard like [(featurep 'json)] is detected in a
+    condition, the then-branch gets names from the corresponding module loaded
+    into the environment.
+
+    Both are inline-only: storing a result in a variable does not enable
+    narrowing or guard unlocking (Spec 52 R12, Spec 49 R17). *)
 
 open Core.Types
 module Env = Core.Type_env
@@ -24,10 +24,23 @@ type predicate_info = {
 }
 (** Predicate info extracted from a condition *)
 
+(** What kind of feature guard was detected in a condition *)
+type guard_info =
+  | FeatureGuard of string
+      (** [(featurep 'X)] — load all names from [X.tart] *)
+  | FboundGuard of string  (** [(fboundp 'f)] — make function [f] available *)
+  | BoundGuard of string  (** [(boundp 'v)] — make variable [v] available *)
+  | BoundTrueGuard of string
+      (** [(bound-and-true-p v)] — variable [v] bound and non-nil *)
+
 (** Result of analyzing a condition for narrowing *)
 type condition_analysis =
   | Predicate of predicate_info  (** A predicate call on a variable *)
   | Predicates of predicate_info list  (** Multiple predicates from [and] *)
+  | Guard of guard_info  (** A single feature guard (Spec 49) *)
+  | Guards of guard_info list  (** Multiple guards from [and] (Spec 49 R16) *)
+  | PredicatesAndGuards of predicate_info list * guard_info list
+      (** Mixed predicates and guards from [and] *)
   | NoPredicate  (** No narrowing applicable *)
 
 (** Narrow a type by intersecting with a target type.
@@ -73,37 +86,95 @@ let analyze_single_predicate (fn_name : string) (args : Syntax.Sexp.t list)
       | _ -> None)
   | None -> None
 
-(** Analyze a condition expression for predicate calls.
+(** Try to extract a feature guard from a call expression.
 
-    Detects the pattern [(predicate_fn arg)] where [predicate_fn] is registered
-    in the type environment's predicates and [arg] is a plain symbol (variable
-    reference). Returns the variable name and narrowed type if found.
+    Recognizes: [(featurep 'X)], [(fboundp 'f)], [(boundp 'v)],
+    [(bound-and-true-p v)]. The first three require a quoted symbol argument;
+    [bound-and-true-p] takes a bare symbol (it's a macro). *)
+let analyze_single_guard (fn_name : string) (args : Syntax.Sexp.t list) :
+    guard_info option =
+  match (fn_name, args) with
+  (* (featurep 'X) — quoted symbol *)
+  | ( "featurep",
+      [
+        Syntax.Sexp.List
+          ( [ Syntax.Sexp.Symbol ("quote", _); Syntax.Sexp.Symbol (feature, _) ],
+            _ );
+      ] ) ->
+      Some (FeatureGuard feature)
+  (* (fboundp 'f) — quoted symbol *)
+  | ( "fboundp",
+      [
+        Syntax.Sexp.List
+          ([ Syntax.Sexp.Symbol ("quote", _); Syntax.Sexp.Symbol (fname, _) ], _);
+      ] ) ->
+      Some (FboundGuard fname)
+  (* (boundp 'v) — quoted symbol *)
+  | ( "boundp",
+      [
+        Syntax.Sexp.List
+          ([ Syntax.Sexp.Symbol ("quote", _); Syntax.Sexp.Symbol (vname, _) ], _);
+      ] ) ->
+      Some (BoundGuard vname)
+  (* (bound-and-true-p v) — bare symbol (macro) *)
+  | "bound-and-true-p", [ Syntax.Sexp.Symbol (vname, _) ] ->
+      Some (BoundTrueGuard vname)
+  | _ -> None
 
-    Also handles [(and pred1 pred2 ...)] conditions by collecting all predicate
-    calls from the [and] arguments (Spec 52 R4).
+(** Analyze a single sexp as either a predicate or a guard.
 
-    Per R12, only inline calls are recognized. Stored results like
-    [(let ((result (stringp x))) (when result ...))] do not narrow. *)
+    Returns [(`Pred p)] or [(`Guard g)] or [None]. *)
+let analyze_single (fn_name : string) (args : Syntax.Sexp.t list) (env : Env.t)
+    : [ `Pred of predicate_info | `Guard of guard_info ] option =
+  match analyze_single_predicate fn_name args env with
+  | Some p -> Some (`Pred p)
+  | None -> (
+      match analyze_single_guard fn_name args with
+      | Some g -> Some (`Guard g)
+      | None -> None)
+
+(** Build a condition_analysis from collected predicates and guards. *)
+let build_analysis (preds : predicate_info list) (guards : guard_info list) :
+    condition_analysis =
+  match (preds, guards) with
+  | [], [] -> NoPredicate
+  | [ p ], [] -> Predicate p
+  | ps, [] -> Predicates ps
+  | [], [ g ] -> Guard g
+  | [], gs -> Guards gs
+  | ps, gs -> PredicatesAndGuards (ps, gs)
+
+(** Analyze a condition expression for predicate calls and feature guards.
+
+    Detects predicate patterns [(predicate_fn arg)] and guard patterns
+    [(featurep 'X)], [(fboundp 'f)], [(boundp 'v)], [(bound-and-true-p v)].
+
+    Handles [(and pred1 guard1 ...)] by collecting all predicates and guards
+    (Spec 52 R4, Spec 49 R16).
+
+    Per inline-only restriction, only direct calls are recognized. Stored
+    results do not enable narrowing or guard unlocking. *)
 let analyze_condition (condition : Syntax.Sexp.t) (env : Env.t) :
     condition_analysis =
   match condition with
-  | Syntax.Sexp.List (Syntax.Sexp.Symbol ("and", _) :: and_args, _) -> (
-      (* Collect all predicate calls from and arguments *)
-      let preds =
-        List.filter_map
-          (fun arg ->
-            match arg with
-            | Syntax.Sexp.List (Syntax.Sexp.Symbol (fn_name, _) :: args, _) ->
-                analyze_single_predicate fn_name args env
-            | _ -> None)
-          and_args
-      in
-      match preds with
-      | [] -> NoPredicate
-      | [ single ] -> Predicate single
-      | _ -> Predicates preds)
+  | Syntax.Sexp.List (Syntax.Sexp.Symbol ("and", _) :: and_args, _) ->
+      (* Collect all predicate calls and guard patterns from and arguments *)
+      let preds = ref [] in
+      let guards = ref [] in
+      List.iter
+        (fun arg ->
+          match arg with
+          | Syntax.Sexp.List (Syntax.Sexp.Symbol (fn_name, _) :: args, _) -> (
+              match analyze_single fn_name args env with
+              | Some (`Pred p) -> preds := p :: !preds
+              | Some (`Guard g) -> guards := g :: !guards
+              | None -> ())
+          | _ -> ())
+        and_args;
+      build_analysis (List.rev !preds) (List.rev !guards)
   | Syntax.Sexp.List (Syntax.Sexp.Symbol (fn_name, _) :: args, _) -> (
-      match analyze_single_predicate fn_name args env with
-      | Some pred -> Predicate pred
+      match analyze_single fn_name args env with
+      | Some (`Pred p) -> Predicate p
+      | Some (`Guard g) -> Guard g
       | None -> NoPredicate)
   | _ -> NoPredicate
