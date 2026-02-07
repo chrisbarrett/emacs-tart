@@ -331,6 +331,18 @@ let check_document ~(config : Typing.Module_check.config)
     ~(cache : Form_cache.t) ~(sig_tracker : Signature_tracker.t) (uri : string)
     (text : string) : Protocol.diagnostic list * Form_cache.check_stats option =
   let filename = filename_of_uri uri in
+  (* Enrich config with Package-Requires declared version from document text *)
+  let config =
+    match Sig.Package_header.parse_package_requires text with
+    | Some v ->
+        Log.debug "Package-Requires: emacs %d.%d for %s" v.major v.minor
+          (Filename.basename filename);
+        let core_v : Core.Type_env.emacs_version =
+          { major = v.major; minor = v.minor }
+        in
+        Typing.Module_check.with_declared_version core_v config
+    | None -> config
+  in
   let parse_result = Syntax.Read.parse_string ~filename text in
   (* Collect parse errors *)
   let parse_diagnostics =

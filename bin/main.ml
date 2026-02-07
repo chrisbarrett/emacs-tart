@@ -209,6 +209,17 @@ let scan_c_source_verbose ~src_dir : Tart.C_scanner.c_definition list =
     Uses [Module_check.check_module] which handles require resolution, sibling
     signature loading, autoload detection, and feature guards. *)
 let check_file ~memory ~config filename : Tart.Error.t list =
+  (* Parse Package-Requires header to determine declared min Emacs version *)
+  let config =
+    match Tart.Package_header.find_package_version filename with
+    | Some v ->
+        Tart.Log.verbose "Package-Requires: emacs %d.%d" v.major v.minor;
+        let core_v : Tart.Type_env.emacs_version =
+          { major = v.major; minor = v.minor }
+        in
+        Tart.Module_check.with_declared_version core_v config
+    | None -> config
+  in
   let mem_before_parse =
     if memory then Some (Tart.Memory_stats.snapshot ()) else None
   in
