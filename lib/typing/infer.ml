@@ -1328,6 +1328,49 @@ and get_expr_source (expr : Syntax.Sexp.t) : string option =
   | List (Symbol (name, _) :: _, _) -> Some name
   | _ -> None
 
+(** Detect when a function expression is a regular-quoted symbol ['name] and
+    produce a hint diagnostic recommending [#'name] instead.
+
+    Sharp-quote is semantically equivalent at runtime but tells the
+    byte-compiler about the function reference. Returns [Some diagnostic] when
+    the expression is a regular quote, [None] otherwise. *)
+and quote_style_diagnostic (fn_expr : Syntax.Sexp.t) :
+    resolved_clause_diagnostic option =
+  let open Syntax.Sexp in
+  match fn_expr with
+  | List ([ Symbol ("quote", _); Symbol (name, span) ], _) ->
+      Some
+        {
+          rcd_severity = Env.DiagNote;
+          rcd_message =
+            Printf.sprintf "use #'%s instead of '%s for function references"
+              name name;
+          rcd_span = span;
+        }
+  | _ -> None
+
+(** Infer the function expression for funcall/apply.
+
+    When [fn_expr] is a regular-quoted symbol ['name], look up [name] in the
+    function namespace (same as [#'name]). This makes ['name] and [#'name]
+    type-equivalent in funcall/apply position per R2/R5. *)
+and infer_fn_expr env fn_expr =
+  let open Syntax.Sexp in
+  match fn_expr with
+  | List ([ Symbol ("quote", _); Symbol (name, span) ], _) -> (
+      match Env.lookup_fn name env with
+      | Some scheme ->
+          let ty = Env.instantiate scheme env in
+          pure ty
+      | None -> (
+          match Env.lookup name env with
+          | Some scheme ->
+              let ty = Env.instantiate scheme env in
+              pure ty
+          | None ->
+              with_undefined (fresh_tvar (Env.current_level env)) name span))
+  | _ -> infer env fn_expr
+
 (** Infer the type of an apply expression.
 
     (apply f arg1 arg2 ... list) applies function f to the fixed args followed
@@ -1339,7 +1382,7 @@ and get_expr_source (expr : Syntax.Sexp.t) : string option =
 
     For fixed-arity functions, we require the total argument count to match. *)
 and infer_apply env fn_expr args span =
-  let fn_result = infer env fn_expr in
+  let fn_result = infer_fn_expr env fn_expr in
 
   (* Split args into fixed args and the final list arg *)
   let fixed_args, list_arg =
@@ -1362,6 +1405,7 @@ and infer_apply env fn_expr args span =
     match fn_expr with
     | Symbol (name, _) -> Some name
     | List ([ Symbol ("function", _); Symbol (name, _) ], _) -> Some name
+    | List ([ Symbol ("quote", _); Symbol (name, _) ], _) -> Some name
     | _ -> None
   in
 
@@ -1439,11 +1483,14 @@ and infer_apply env fn_expr args span =
     @ combine_undefineds fixed_results
   in
 
+  let quote_diag =
+    match quote_style_diagnostic fn_expr with Some d -> [ d ] | None -> []
+  in
   {
     ty = result_ty;
     constraints = all_constraints;
     undefineds = all_undefineds;
-    clause_diagnostics = [];
+    clause_diagnostics = quote_diag;
   }
 
 (** Infer the type of a funcall expression.
@@ -1455,7 +1502,7 @@ and infer_apply env fn_expr args span =
     This provides better type checking than the generic builtin signature
     because we can track the actual function type and argument positions. *)
 and infer_funcall env fn_expr args span =
-  let fn_result = infer env fn_expr in
+  let fn_result = infer_fn_expr env fn_expr in
   let arg_results = List.map (infer env) args in
 
   (* Try to extract a name for error context *)
@@ -1464,6 +1511,7 @@ and infer_funcall env fn_expr args span =
     match fn_expr with
     | Symbol (name, _) -> Some name
     | List ([ Symbol ("function", _); Symbol (name, _) ], _) -> Some name
+    | List ([ Symbol ("quote", _); Symbol (name, _) ], _) -> Some name
     | _ -> None
   in
 
@@ -1531,11 +1579,14 @@ and infer_funcall env fn_expr args span =
   in
   let all_undefineds = fn_result.undefineds @ combine_undefineds arg_results in
 
+  let quote_diag =
+    match quote_style_diagnostic fn_expr with Some d -> [ d ] | None -> []
+  in
   {
     ty = result_ty;
     constraints = all_constraints;
     undefineds = all_undefineds;
-    clause_diagnostics = [];
+    clause_diagnostics = quote_diag;
   }
 
 (** Extract the literal value from a call-site argument expression.
