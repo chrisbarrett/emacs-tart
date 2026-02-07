@@ -401,9 +401,45 @@ Sends `,expand <sexp>' to the tart REPL and displays the result."
 
 ;;; Major Mode for .tart Files
 
+(defvar tart-signature-mode-syntax-table
+  (let ((table (make-syntax-table)))
+    ;; Paired delimiters
+    (modify-syntax-entry ?\( "()" table)
+    (modify-syntax-entry ?\) ")(" table)
+    (modify-syntax-entry ?\[ "(]" table)
+    (modify-syntax-entry ?\] ")[" table)
+    (modify-syntax-entry ?\{ "(}" table)
+    (modify-syntax-entry ?\} "){" table)
+    ;; Comments
+    (modify-syntax-entry ?\; "<" table)
+    (modify-syntax-entry ?\n ">" table)
+    ;; Strings
+    (modify-syntax-entry ?\" "\"" table)
+    (modify-syntax-entry ?\\ "\\" table)
+    ;; Symbol constituents
+    (modify-syntax-entry ?- "_" table)
+    (modify-syntax-entry ?_ "_" table)
+    (modify-syntax-entry ?* "_" table)
+    (modify-syntax-entry ?+ "_" table)
+    (modify-syntax-entry ?/ "_" table)
+    (modify-syntax-entry ?< "_" table)
+    (modify-syntax-entry ?> "_" table)
+    (modify-syntax-entry ?= "_" table)
+    (modify-syntax-entry ?? "_" table)
+    (modify-syntax-entry ?! "_" table)
+    (modify-syntax-entry ?| "_" table)
+    (modify-syntax-entry ?& "_" table)
+    (modify-syntax-entry ?: "_" table)
+    table)
+  "Syntax table for `tart-signature-mode'.
+Modelled on `inferior-tart-mode-syntax-table' with additional
+symbol constituents for `|' (union operator), `&' (`&optional',
+`&rest', `&key'), and `:' (type bounds).")
+
 ;;;###autoload
 (define-derived-mode tart-signature-mode lisp-mode "Tart"
-  "Major mode for editing Tart type signature files.")
+  "Major mode for editing Tart type signature files."
+  :syntax-table tart-signature-mode-syntax-table)
 
 ;;;###autoload
 (add-to-list 'auto-mode-alist `(,(rx ".tart" eos) . tart-signature-mode))

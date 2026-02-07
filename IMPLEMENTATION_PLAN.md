@@ -1,166 +1,225 @@
-# Implementation Plan: Deferred Work Clusters
+# Implementation Plan: Emacs Integration — Signature Mode & Minor Mode
 
-Two blocked clusters of deferred work share a common theme — extending the
-type-checker and LSP server to handle nuanced dispatch and code actions. This
-plan addresses them in dependency order.
+Six specs enhance the Emacs tooling: a proper major mode for `.tart`
+signature files (syntax table, font-lock, indentation, imenu), eglot
+registration for `.tart` buffers, and clean minor-mode lifecycle for
+`tart-mode`.
 
----
-
-## Cluster 1 — Plist↔List Subsumption in Clause Dispatch
-
-**Specs:** [56 R5](./specs/56-plist-type-overloading.md),
-[57 plist-member](./specs/57-clause-diagnostics.md)
-
-**Problem:** `unify.ml:298–303` allows `(plist k v)` to widen to
-`(list (k | v))` during unification. Clause dispatch
-(`clause_dispatch.ml:104–147`) uses that same unification, so a plist clause
-always swallows bare-list arguments — making the bare-list clause unreachable
-and suppressing its diagnostic.
-
-**Approach — context-sensitive unification:** Add a `unify_context` flag
-(`Clause_matching | Constraint_solving`) threaded through `unify`. In
-`Clause_matching` mode, block plist↔list (and list↔plist) cross-constructor
-subsumption so clause dispatch treats them as distinct types. Normal constraint
-solving is unaffected.
-
-### Task 1 — Add `unify_context` to unification
-
-Files:
-- `lib/typing/unify.mli` — export `unify_context` type; update
-  `try_unify_params` signature (or add `try_unify_params_strict`)
-- `lib/typing/unify.ml` — add `~context` parameter to `unify` and
-  `unify_param_lists`; guard plist↔list subsumption branches on
-  `context <> Clause_matching`
-
-Scope: ~25 lines changed.
-
-### Task 2 — Thread context through clause dispatch
-
-Files:
-- `lib/typing/clause_dispatch.ml` — pass `Clause_matching` context in
-  `try_clause_match` when calling `Unify.try_unify_params`
-
-Scope: ~5 lines changed.
-
-### Task 3 — Write `plist-member` multi-clause signature with diagnostic
-
-Files:
-- Appropriate `.tart` signature file (e.g.
-  `typings/emacs/31.0/c-core/fns.tart`) — add multi-clause `plist-member`
-  with a `(warn ...)` on the bare-list clause
-- `test/fixtures/typing/` — add `plist-member-clause.{el,expected}` fixture
-  exercising both the plist path (no warning) and the bare-list path (warning
-  emitted)
-
-### Task 4 — Migrate map accessors to `.tart` signatures (Spec 56 R5)
-
-With subsumption gated in clause matching, migrate each hard-coded row
-inference function to a multi-clause `.tart` signature:
-
-| Function | Hard-coded in | Target `.tart` file |
-|----------|---------------|---------------------|
-| `plist-get` | `row_dispatch.ml` | `typings/emacs/31.0/c-core/fns.tart` |
-| `alist-get` | `row_dispatch.ml` | `typings/emacs/31.0/lisp-core/subr.tart` |
-| `gethash` | `row_dispatch.ml` | `typings/emacs/31.0/c-core/fns.tart` |
-| `map-elt` | `row_dispatch.ml` | `typings/emacs/31.0/lisp-core/map.tart` |
-
-After each migration passes tests, remove the corresponding
-`infer_*_row`/`extract_*_row` function from `row_dispatch.ml`. Goal: delete
-`row_dispatch.ml` entirely (~240 lines) and the dispatch call-site in
-`infer.ml` (~70 lines).
-
-### Task 5 — Validate with existing test suite
-
-Run `dune test --force` after each task. Existing fixtures in
-`test/fixtures/typing/` cover the 7-case decision table from Spec 11 R4–R8 and
-must continue to pass without changes.
-
----
-
-## Cluster 2 — LSP Version-Constraint Code Actions
-
-**Specs:** [50 R13–R15](./specs/50-version-constraints.md),
-[49 R14](./specs/49-feature-guards.md)
-
-**Problem:** Version constraint warnings (E0900/E0901) are emitted but the LSP
-offers no quickfixes. The code action handler receives `context.diagnostics`
-but discards it (`code_action.ml:546`). Three actions are specified in Spec 50.
-
-### Task 6 — Use diagnostic context in code action handler
-
-Files:
-- `lib/lsp/code_action.ml` — stop discarding `context`; filter
-  `cac_diagnostics` by error code to route to version-specific generators
-- `lib/lsp/code_action.mli` — update `handle` signature if needed
-
-### Task 7 — Implement "Bump minimum Emacs version to X.Y"
-
-For E0900 (`VersionTooLow`): edit the `Package-Requires` header in the `.el`
-file to raise the Emacs version floor.
-
-Files:
-- `lib/lsp/code_action.ml` — add `generate_bump_version_action`
-  - Parse `Package-Requires` from document text
-  - Produce a `WorkspaceEdit` replacing the version string
-- Test with a fixture `.el` file containing a `Package-Requires` header
-
-### Task 8 — Implement "Wrap in feature guard"
-
-For E0900: wrap the offending call in `(when (fboundp 'fn) ...)` or
-`(when (featurep 'mod) ...)`.
-
-Files:
-- `lib/lsp/code_action.ml` — add `generate_wrap_guard_action`
-  - Determine guard kind from the diagnostic (function → `fboundp`, module →
-    `featurep`)
-  - Produce a `WorkspaceEdit` wrapping the enclosing form
-
-### Task 9 — Implement "Downgrade minimum version to X.Y"
-
-For E0901 (`VersionTooHigh`): lower the `Package-Requires` Emacs version.
-Same mechanism as Task 7, opposite direction.
-
-### Task 10 — Implement redundant guard lint (Spec 49 R14)
-
-With version constraints (Spec 50) and feature guards (Spec 49) both complete,
-the redundant guard lint compares the guard's target version against the
-declared minimum:
-
-- If `(fboundp 'fn)` guards a function available since Emacs 28.1 and the
-  package declares `(emacs "29.1")`, the guard is redundant
-- Emit a warning diagnostic; optionally offer a "Remove guard" code action
-
-Files:
-- `lib/typing/narrow.ml` or `module_check.ml` — add redundancy check during
-  version constraint analysis
-- `lib/lsp/code_action.ml` — add `generate_remove_guard_action`
+All work targets `lisp/tart-mode.el`.
 
 ---
 
 ## Dependency Graph
 
 ```
-Task 1 ── Task 2 ── Task 3
-                 └── Task 4 ── Task 5
+Task 1 (syntax table) ── Task 2 (font-lock)
+                      ├── Task 3 (indentation)
+                      ├── Task 4 (imenu)
+                      └── Task 5 (eglot registration)
 
-Task 6 ── Task 7
-       ├── Task 8
-       ├── Task 9
-       └── Task 10
+Task 6 (minor-mode lifecycle) — independent
 ```
 
-Clusters 1 and 2 are independent and can be worked in parallel.
+Spec 58 (syntax table) is the foundation — specs 59–62 all depend on it.
+Spec 63 (lifecycle) is independent and can be done in any order.
+
+---
+
+## Task 1 — Signature syntax table ([Spec 58][s58])
+
+**Problem:** `tart-signature-mode` derives from `lisp-mode`, which treats
+`|` as a string-fence character (Common Lisp `|symbol|` escapes). This
+breaks `check-parens` on 60+ `.tart` files. Square brackets `[]` and curly
+braces `{}` are not paired delimiters.
+
+**Approach:** Define `tart-signature-mode-syntax-table` modelled on the
+existing `inferior-tart-mode-syntax-table` (which already solves these
+problems). Set it via `:syntax-table` in the mode definition.
+
+The existing `inferior-tart-mode-syntax-table` defines:
+- `()` as matched parens ✓
+- `[]` as matched brackets ✓
+- `{}` as matched braces ✓
+- `;` as comment-start, `\n` as comment-end ✓
+- `"` as string delimiter, `\` as escape ✓
+- `-_*+/<>=?!` as symbol constituents ✓
+
+Additionally needed for `.tart` (per R5):
+- `|` as symbol constituent (not string-fence)
+- `&` as symbol constituent (for `&optional`, `&rest`)
+- `:` as symbol constituent (for `(a : truthy)` bounds)
+
+Files:
+- `lisp/tart-mode.el` — add `tart-signature-mode-syntax-table`; update
+  `tart-signature-mode` definition to use `:syntax-table`
+
+Scope: ~25 lines added.
+
+---
+
+## Task 2 — Font-lock keywords ([Spec 59][s59])
+
+**Problem:** `tart-signature-mode` inherits `lisp-mode` font-lock, which
+highlights Lisp keywords (`defun`, `defvar`, etc.) but not tart-specific
+constructs (`type`, `open`, `include`, `->`, `warn`).
+
+**Approach:** Define `tart-signature-mode-font-lock-keywords` with matchers
+for:
+- **R1:** Declaration keywords: `defun`, `defvar`, `type`, `open`,
+  `include` → `font-lock-keyword-face`
+- **R2:** Declaration names: the symbol after `defun`/`defvar`/`type` →
+  `font-lock-function-name-face` / `font-lock-variable-name-face` /
+  `font-lock-type-face`
+- **R3:** Arrow operator `->` → `font-lock-keyword-face`
+- **R4:** Type variable quantifier brackets `[a b]` — variables inside →
+  `font-lock-variable-name-face`
+- **R5:** Module names after `open`/`include` →
+  `font-lock-constant-face`
+
+Set `font-lock-defaults` in the mode definition to use these keywords
+instead of `lisp-mode`'s defaults.
+
+Files:
+- `lisp/tart-mode.el` — add font-lock keywords variable; update mode
+  definition
+
+Scope: ~40 lines added.
+
+---
+
+## Task 3 — Indentation ([Spec 60][s60])
+
+**Problem:** `lisp-mode` indentation works for most forms but needs
+tart-specific `lisp-indent-function` properties for `defun`, `defvar`,
+`type`, `open`, and `include`.
+
+**Approach:** Register indent properties in the mode body:
+- `defun` → `defun` (2-space body indent, Lisp special-form style)
+- `defvar` → `defun`
+- `type` → `defun`
+- `open` → 1
+- `include` → 1
+
+These use `put ... 'lisp-indent-function ...` which is the standard
+mechanism for `lisp-mode`-derived modes. Since `tart-signature-mode`
+inherits `lisp-mode`'s indentation engine, this is sufficient.
+
+Files:
+- `lisp/tart-mode.el` — add `put` forms in mode body
+
+Scope: ~10 lines added.
+
+---
+
+## Task 4 — Imenu integration ([Spec 61][s61])
+
+**Problem:** `tart-signature-mode` has no imenu support, so `M-x imenu`
+doesn't list declarations.
+
+**Approach:** Set `imenu-generic-expression` with three categories:
+- `"Functions"` matching `(defun NAME`
+- `"Variables"` matching `(defvar NAME`
+- `"Types"` matching `(type NAME`
+
+For R4 (flat fallback when only one kind), use a custom
+`imenu-create-index-function` that flattens when all entries fall under a
+single category (most c-core files are all `defun`).
+
+Files:
+- `lisp/tart-mode.el` — add imenu configuration in mode body
+
+Scope: ~25 lines added.
+
+---
+
+## Task 5 — Eglot registration for `.tart` buffers ([Spec 62][s62])
+
+**Problem:** Eglot is registered only for `emacs-lisp-mode`. Opening a
+`.tart` file and running `M-x eglot` doesn't know which server to use.
+
+**Approach:** Add `tart-signature-mode` to `eglot-server-programs`
+alongside the existing `emacs-lisp-mode` entry. Both modes share the same
+server command (`tart lsp`).
+
+For R3 (shared workspace), eglot groups buffers by project root — if
+both `.el` and `.tart` files are in the same project, they'll share one
+server connection automatically (no code needed beyond registration).
+
+Files:
+- `lisp/tart-mode.el` — update the `when tart-setup-eglot` block to
+  register both modes
+
+Scope: ~5 lines changed.
+
+---
+
+## Task 6 — Minor-mode lifecycle ([Spec 63][s63])
+
+**Problem:** `tart-mode`'s `define-minor-mode` body is empty — it only
+sets up a keymap and lighter. As features are added (custom font-lock,
+syntax modifications), the enable/disable lifecycle must properly
+install and remove buffer-local modifications.
+
+**Approach:** Currently `tart-mode` makes no buffer-local modifications
+beyond its keymap (which `define-minor-mode` handles automatically). The
+lifecycle concern is about *future* modifications. Audit the current
+body and add a conditional branch:
+
+```elisp
+(if tart-mode
+    ;; Enable: install buffer-local modifications
+    (progn ...)
+  ;; Disable: remove buffer-local modifications
+  (progn ...))
+```
+
+For now this is a no-op scaffold, but it establishes the pattern for
+future additions (e.g., custom `check-parens` advice, additional
+font-lock rules for `.el` buffers).
+
+Files:
+- `lisp/tart-mode.el` — update `tart-mode` body with lifecycle
+  branching
+
+Scope: ~10 lines added.
+
+---
+
+## Task 7 — ERT tests for new features
+
+Add tests for the new functionality to `lisp/tart-mode-tests.el`:
+
+- **Syntax table:** `|` is symbol constituent (not string-fence);
+  `[]` are matched brackets; `{}` are matched braces
+- **Font-lock:** keyword faces applied to `defun`, `type`, `->`;
+  function names get `font-lock-function-name-face`
+- **Imenu:** imenu index contains expected entries from sample content
+- **Indentation:** multi-clause `defun` indents body at 2-space offset
+- **Minor-mode lifecycle:** enable/disable is idempotent
+
+Files:
+- `lisp/tart-mode-tests.el` — add test cases
+
+Scope: ~60 lines added.
 
 ---
 
 ## Risks
 
-- **Subsumption edge cases:** Gating subsumption only for plist↔list may not
-  cover future cross-constructor subsumption rules (e.g. cons-chain ↔ plist at
-  `unify.ml:304–318`). Review all subsumption branches for the same pattern.
-- **Map accessor migration:** Each of the four functions has subtly different
-  decision-table semantics (alist default arg, gethash default, map-elt
-  testfn). Each migration must be validated individually.
-- **Package-Requires parsing:** Elisp `Package-Requires` headers have varied
-  formatting. The code action parser needs to handle common variants without a
-  full reader.
+- **`lisp-mode` indentation internals:** The `lisp-indent-function`
+  property may not cover all multi-clause `defun` forms if `lisp-mode`'s
+  indentation engine treats the first argument specially. Test with real
+  `.tart` files.
+- **Font-lock anchored matchers:** Highlighting type variables inside
+  `[...]` brackets requires anchored font-lock matchers, which can be
+  tricky. Simpler approaches (e.g., highlighting the whole bracket form)
+  may be more robust.
+- **Imenu flat fallback:** Custom `imenu-create-index-function` must
+  handle edge cases (empty files, mixed categories) correctly.
+
+[s58]: ./specs/58-signature-syntax-table.md
+[s59]: ./specs/59-signature-font-lock.md
+[s60]: ./specs/60-signature-indentation.md
+[s61]: ./specs/61-signature-imenu.md
+[s62]: ./specs/62-signature-eglot.md
+[s63]: ./specs/63-tart-minor-mode-lifecycle.md
