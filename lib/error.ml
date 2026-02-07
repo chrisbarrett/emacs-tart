@@ -2,6 +2,7 @@
 
 module Loc = Syntax.Location
 module Diagnostic = Typing.Diagnostic
+module Diagnostic_format = Typing.Diagnostic_format
 
 type t =
   | Type of Diagnostic.t
@@ -57,11 +58,11 @@ let of_diagnostics ds = List.map of_diagnostic ds
 let of_file_error (err : Errors.File_error.t) = File err
 
 (** Format a source span for display *)
-let format_span (span : Loc.span) : string = Diagnostic.format_span span
+let format_span (span : Loc.span) : string = Diagnostic_format.format_span span
 
 (** Format an error as a human-readable string (compact format). *)
 let to_string = function
-  | Type d -> Diagnostic.to_string d
+  | Type d -> Diagnostic_format.to_string d
   | Parse { message; span } ->
       Printf.sprintf "error: parse error: %s\n  --> %s" message
         (format_span span)
@@ -80,7 +81,7 @@ let to_string = function
     Per Spec 45: Shows Elm-style headers, source excerpts with underlines,
     conversational prose, and colored output when TTY is detected. *)
 let to_string_human = function
-  | Type d -> Diagnostic.to_string_human d
+  | Type d -> Diagnostic_format.to_string_human d
   | Parse { message; span } ->
       Printf.sprintf "-- PARSE ERROR %s\n\n%s\n" (format_span span) message
   | Eval { message; span } ->
@@ -106,7 +107,7 @@ let location_to_json (span : Loc.span) : Yojson.Safe.t =
 
 (** Serialize an error to JSON. *)
 let to_json = function
-  | Type d -> Diagnostic.to_json d
+  | Type d -> Diagnostic_format.to_json d
   | Parse { message; span } ->
       `Assoc
         [

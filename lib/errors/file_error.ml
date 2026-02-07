@@ -179,7 +179,7 @@ let to_string = function
       in
       let location =
         match span with
-        | Some s -> Typing.Diagnostic.format_span s
+        | Some s -> Typing.Diagnostic_format.format_span s
         | None -> module_name ^ ".tart"
       in
       let paths_note =

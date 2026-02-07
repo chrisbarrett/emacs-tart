@@ -3,6 +3,7 @@
 module Types = Tart.Types
 module Loc = Tart.Location
 module Diag = Tart.Diagnostic
+module Diag_fmt = Tart.Diagnostic_format
 module Check = Tart.Check
 module Unify = Tart.Unify
 module Constraint = Tart.Constraint
@@ -72,7 +73,7 @@ let test_format_span_same_line () =
   let pos = Loc.make_pos ~file:"test.el" ~line:10 ~col:5 ~offset:100 in
   let end_pos = Loc.make_pos ~file:"test.el" ~line:10 ~col:15 ~offset:110 in
   let span = Loc.make_span ~start_pos:pos ~end_pos in
-  let formatted = Diag.format_span span in
+  let formatted = Diag_fmt.format_span span in
   Alcotest.(check bool)
     "contains file" true
     (contains_pattern (Str.regexp "test\\.el") formatted);
@@ -84,7 +85,7 @@ let test_format_span_multiple_lines () =
   let pos = Loc.make_pos ~file:"test.el" ~line:10 ~col:5 ~offset:100 in
   let end_pos = Loc.make_pos ~file:"test.el" ~line:12 ~col:3 ~offset:150 in
   let span = Loc.make_span ~start_pos:pos ~end_pos in
-  let formatted = Diag.format_span span in
+  let formatted = Diag_fmt.format_span span in
   Alcotest.(check bool)
     "contains start line" true
     (contains_pattern (Str.regexp "10") formatted);
@@ -99,7 +100,7 @@ let test_to_string_includes_location () =
     Diag.type_mismatch ~span ~expected:Types.Prim.int ~actual:Types.Prim.string
       ()
   in
-  let str = Diag.to_string d in
+  let str = Diag_fmt.to_string d in
   Alcotest.(check bool)
     "contains file" true
     (contains_pattern (Str.regexp "test\\.el") str);
@@ -113,7 +114,7 @@ let test_to_string_includes_expected_actual () =
     Diag.type_mismatch ~span ~expected:Types.Prim.int ~actual:Types.Prim.string
       ()
   in
-  let str = Diag.to_string d in
+  let str = Diag_fmt.to_string d in
   Alcotest.(check bool)
     "contains 'expected'" true
     (contains_pattern (Str.regexp_case_fold "expected") str);
@@ -139,7 +140,7 @@ let test_to_string_includes_related_locations () =
     Diag.type_mismatch ~span:span1 ~expected:Types.Prim.int
       ~actual:Types.Prim.string ~related ()
   in
-  let str = Diag.to_string d in
+  let str = Diag_fmt.to_string d in
   Alcotest.(check bool)
     "contains 'note'" true
     (contains_pattern (Str.regexp_case_fold "note") str);
@@ -157,7 +158,7 @@ let test_to_string_compact () =
     Diag.type_mismatch ~span ~expected:Types.Prim.int ~actual:Types.Prim.string
       ()
   in
-  let str = Diag.to_string_compact d in
+  let str = Diag_fmt.to_string_compact d in
   (* Should be a single line *)
   Alcotest.(check bool) "single line" true (not (String.contains str '\n'));
   Alcotest.(check bool)
@@ -175,7 +176,7 @@ let test_to_string_human_has_header () =
     Diag.type_mismatch ~span ~expected:Types.Prim.int ~actual:Types.Prim.string
       ()
   in
-  let str = Diag.to_string_human d in
+  let str = Diag_fmt.to_string_human d in
   (* Should have Elm-style header with error type *)
   Alcotest.(check bool)
     "has TYPE MISMATCH header" true
@@ -197,7 +198,7 @@ let test_to_string_human_has_prose () =
     Diag.type_mismatch ~span ~expected:Types.Prim.int ~actual:Types.Prim.string
       ()
   in
-  let str = Diag.to_string_human d in
+  let str = Diag_fmt.to_string_human d in
   (* Should have introductory prose *)
   Alcotest.(check bool)
     "has intro prose" true
@@ -383,7 +384,7 @@ let test_end_to_end_if_branch_mismatch () =
     "has branch mismatch error" true
     (List.length branch_errors > 0);
   let d = List.hd branch_errors in
-  let str = Diag.to_string d in
+  let str = Diag_fmt.to_string d in
   Alcotest.(check bool)
     "mentions incompatible types" true
     (contains_pattern (Str.regexp_case_fold "incompatible") str)
@@ -396,7 +397,7 @@ let test_if_branch_mismatch_shows_both_types () =
     List.filter (fun d -> d.Diag.code = Some Diag.BranchMismatch) diagnostics
   in
   let d = List.hd branch_errors in
-  let str = Diag.to_string d in
+  let str = Diag_fmt.to_string d in
   (* Should show both branch types - literal 42 and string *)
   Alcotest.(check bool)
     "shows literal" true
@@ -539,7 +540,7 @@ let test_end_to_end_option_nil_error () =
   in
   Alcotest.(check bool) "has nil error" true (List.length nil_errors > 0);
   let d = List.hd nil_errors in
-  let str = Diag.to_string d in
+  let str = Diag_fmt.to_string d in
   (* Should mention the source function *)
   Alcotest.(check bool)
     "mentions get-name" true
@@ -570,7 +571,7 @@ let test_option_nil_variable_source () =
   in
   Alcotest.(check bool) "has nil error" true (List.length nil_errors > 0);
   let d = List.hd nil_errors in
-  let str = Diag.to_string d in
+  let str = Diag_fmt.to_string d in
   (* Should mention the variable name *)
   Alcotest.(check bool)
     "mentions maybe-name" true
@@ -746,7 +747,7 @@ let test_arity_mismatch_shows_signature () =
   in
   let err = Unify.ArityMismatch (2, 1, span, context) in
   let d = Diag.of_unify_error err in
-  let str = Diag.to_string d in
+  let str = Diag_fmt.to_string d in
   (* Should show signature with types *)
   Alcotest.(check bool)
     "shows String type" true
@@ -823,7 +824,7 @@ let test_check_expr_error_diagnostic () =
   Alcotest.(check bool) "has diagnostic" true (List.length diagnostics > 0);
   let d = List.hd diagnostics in
   Alcotest.(check bool) "is error" true (Diag.is_error d);
-  let str = Diag.to_string d in
+  let str = Diag_fmt.to_string d in
   Alcotest.(check bool) "non-empty message" true (String.length str > 0)
 
 let test_diagnostic_has_source_location () =
@@ -924,7 +925,7 @@ let test_signature_mismatch_shows_both_locations () =
     Diag.signature_mismatch ~name:"foo" ~impl_span ~impl_type ~sig_span
       ~sig_type ()
   in
-  let str = Diag.to_string d in
+  let str = Diag_fmt.to_string d in
   (* Primary location should be in lib.el *)
   Alcotest.(check bool)
     "shows lib.el" true
@@ -943,7 +944,7 @@ let test_signature_mismatch_shows_types () =
     Diag.signature_mismatch ~name:"foo" ~impl_span ~impl_type ~sig_span
       ~sig_type ()
   in
-  let str = Diag.to_string d in
+  let str = Diag_fmt.to_string d in
   Alcotest.(check bool)
     "shows expected string" true
     (contains_pattern (Str.regexp "string") str);
@@ -994,7 +995,7 @@ let test_kind_mismatch_shows_expected_found () =
     Diag.kind_mismatch ~span ~expected ~found ~location:"type application (f a)"
       ()
   in
-  let str = Diag.to_string d in
+  let str = Diag_fmt.to_string d in
   (* Verify expected and found kinds are shown *)
   Alcotest.(check bool)
     "shows expected kind" true
@@ -1011,7 +1012,7 @@ let test_kind_mismatch_shows_location () =
     Diag.kind_mismatch ~span ~expected ~found ~location:"type application (f a)"
       ()
   in
-  let str = Diag.to_string d in
+  let str = Diag_fmt.to_string d in
   Alcotest.(check bool)
     "shows location" true
     (contains_pattern (Str.regexp "in type application (f a)") str)
@@ -1063,7 +1064,7 @@ let test_of_kind_error () =
   let d = Diag.of_kind_error span err in
   Alcotest.(check bool) "is error" true (Diag.is_error d);
   Alcotest.(check string) "message is kind mismatch" "kind mismatch" d.message;
-  let str = Diag.to_string d in
+  let str = Diag_fmt.to_string d in
   Alcotest.(check bool)
     "shows expected" true
     (contains_pattern (Str.regexp "expected") str);
@@ -1084,7 +1085,7 @@ let test_kind_arity_mismatch_formatting () =
   Alcotest.(check bool)
     "mentions wrong number" true
     (contains_pattern (Str.regexp "wrong number") d.message);
-  let str = Diag.to_string d in
+  let str = Diag_fmt.to_string d in
   Alcotest.(check bool)
     "shows expected count" true
     (contains_pattern (Str.regexp "expected 1 argument") str);
@@ -1123,7 +1124,7 @@ let test_explicit_instantiation_shows_expected_from_annotation () =
     Unify.TypeMismatch (Types.Prim.string, Types.Prim.int, span, context)
   in
   let d = Diag.of_unify_error err in
-  let str = Diag.to_string d in
+  let str = Diag_fmt.to_string d in
   (* Should show that expected type is from tart instantiation *)
   (* Type names are lowercase for intrinsics *)
   Alcotest.(check bool)
@@ -1143,7 +1144,7 @@ let test_explicit_instantiation_shows_found_type () =
     Unify.TypeMismatch (Types.Prim.string, Types.Prim.int, span, context)
   in
   let d = Diag.of_unify_error err in
-  let str = Diag.to_string d in
+  let str = Diag_fmt.to_string d in
   (* Type names are lowercase for intrinsics *)
   Alcotest.(check bool)
     "shows found int" true
@@ -1177,7 +1178,7 @@ let test_explicit_instantiation_multiple_type_args () =
     Unify.TypeMismatch (Types.Prim.string, Types.Prim.int, span, context)
   in
   let d = Diag.of_unify_error err in
-  let str = Diag.to_string d in
+  let str = Diag_fmt.to_string d in
   (* Should show both type args in context - lowercase for intrinsics *)
   Alcotest.(check bool)
     "shows type args" true

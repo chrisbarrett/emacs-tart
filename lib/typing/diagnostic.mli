@@ -165,74 +165,6 @@ val of_unify_error : Unify.error -> t
 val of_unify_errors : Unify.error list -> t list
 (** Convert a list of unification errors to diagnostics. *)
 
-(** {1 Formatting} *)
-
-val format_pos : Syntax.Location.pos -> string
-(** Format a source position for display. *)
-
-val format_span : Syntax.Location.span -> string
-(** Format a source span for display. *)
-
-val severity_to_int : severity -> int
-(** Map severity to LSP DiagnosticSeverity integer value.
-
-    Error→1, Warning→2, Hint→4. *)
-
-val format_severity : severity -> string
-(** Format severity for display. *)
-
-val to_string : t -> string
-(** Format a diagnostic as a human-readable string.
-
-    Output format (similar to rustc/clang):
-    {v
-      error[E0001]: type mismatch: expected Int but found String
-        --> file.el:10:5
-        |
-        = expected: Int
-        = found: String
-        |
-      note: expected type from function signature
-        --> file.el:5:1
-        |
-      help: convert the integer to a string: (number-to-string ...)
-    v} *)
-
-val to_string_human : t -> string
-(** Format a diagnostic in Elm-style human-readable format with source excerpts.
-
-    Per Spec 45: Shows Elm-style headers, source excerpts with underlines,
-    conversational prose, and colored output when TTY is detected.
-
-    Output format:
-    {v
-      -- TYPE MISMATCH ---------------------------------------- file.el:42:10
-
-      I found a type mismatch in this expression:
-
-      42 |   (upcase count)
-         |           ^^^^^
-
-      The function `upcase` expects argument 1 to be:
-
-          String
-
-      But this expression has type:
-
-          Int
-
-      Hint: convert the integer to a string: (number-to-string ...)
-    v} *)
-
-val to_string_compact : t -> string
-(** Format a diagnostic in a compact single-line format.
-
-    Useful for IDE integration and machine parsing. Format:
-    [file:line:col: severity[CODE]: message [expected: T1, found: T2]] *)
-
-val to_string_list : t list -> string
-(** Format multiple diagnostics. *)
-
 (** {1 Inspection} *)
 
 val span : t -> Syntax.Location.span
@@ -276,23 +208,3 @@ val of_kind_error : Syntax.Location.span -> Kind_infer.kind_error -> t
 (** Convert a kind inference error to a diagnostic.
 
     The span is the location of the declaration that failed kind checking. *)
-
-(** {1 JSON Serialization} *)
-
-val to_json : t -> Yojson.Safe.t
-(** Serialize a diagnostic to JSON.
-
-    Output format:
-    {v
-      {
-        "kind": "type",
-        "code": "E0001",
-        "severity": "error",
-        "message": "type mismatch",
-        "location": { "file": "init.el", "line": 42, "column": 10 },
-        "expected": "String",
-        "actual": "Int",
-        "related": [...],
-        "help": [...]
-      }
-    v} *)

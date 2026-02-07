@@ -433,7 +433,7 @@ let run_eval ~memory expr =
           if errors <> [] then (
             let diagnostics = Tart.Diagnostic.of_unify_errors errors in
             List.iter
-              (fun d -> prerr_endline (Tart.Diagnostic.to_string d))
+              (fun d -> prerr_endline (Tart.Diagnostic_format.to_string d))
               diagnostics;
             exit 1)
           else
@@ -567,7 +567,7 @@ let repl_type state input =
           if errors <> [] then
             let diagnostics = Tart.Diagnostic.of_unify_errors errors in
             List.iter
-              (fun d -> prerr_endline (Tart.Diagnostic.to_string d))
+              (fun d -> prerr_endline (Tart.Diagnostic_format.to_string d))
               diagnostics
           else print_endline (Tart.Types.to_string ty)
       | _ -> prerr_endline ",type: expected single expression"
@@ -648,7 +648,7 @@ let repl_eval state input =
             if all_errors <> [] then
               let diagnostics = Tart.Diagnostic.of_unify_errors all_errors in
               List.iter
-                (fun d -> prerr_endline (Tart.Diagnostic.to_string d))
+                (fun d -> prerr_endline (Tart.Diagnostic_format.to_string d))
                 diagnostics
             else
               let value_str = Tart.Value.to_string value in

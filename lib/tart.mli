@@ -69,6 +69,7 @@ module Generalize = Typing.Generalize
 module Check = Typing.Check
 module Module_check = Typing.Module_check
 module Diagnostic = Typing.Diagnostic
+module Diagnostic_format = Typing.Diagnostic_format
 module Levenshtein = Typing.Levenshtein
 module Exhaustiveness = Typing.Exhaustiveness
 module Kind = Typing.Kind
