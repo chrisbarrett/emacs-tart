@@ -220,15 +220,84 @@ let load_autoload_signatures ~(config : config) ~(el_path : string option)
 
 (** {1 Version Constraint Checking (Spec 50)} *)
 
+(** Detect whether a condition sexp is a feature guard form.
+
+    Recognizes: [(featurep 'X)], [(fboundp 'f)], [(boundp 'v)],
+    [(bound-and-true-p v)], and soft require [(require 'X nil t)].
+
+    Used to exempt calls inside guarded branches from version warnings (Spec 50
+    R11). *)
+let is_guard_condition (sexp : Syntax.Sexp.t) : bool =
+  let open Syntax.Sexp in
+  match sexp with
+  | List (Symbol (name, _) :: args, _) -> (
+      match Narrow.analyze_single_guard name args with
+      | Some _ -> true
+      | None -> false)
+  | _ -> false
+
+(** Check whether a condition is a guard or an [and] containing a guard.
+
+    Returns [true] for [(featurep 'X)], [(and (featurep 'X) ...)], etc. *)
+let condition_has_guard (sexp : Syntax.Sexp.t) : bool =
+  let open Syntax.Sexp in
+  match sexp with
+  | _ when is_guard_condition sexp -> true
+  | List (Symbol ("and", _) :: conjuncts, _) ->
+      List.exists is_guard_condition conjuncts
+  | _ -> false
+
 (** Collect all function call names with their call-site spans.
 
     Returns a list of (name, span) pairs for every function-position symbol
     found in the AST. Used by version constraint checking to locate call sites
-    for version warnings. *)
+    for version warnings.
+
+    Calls inside feature-guarded branches are excluded (Spec 50 R11): the caller
+    used a guard to check availability, so version warnings would be noise. *)
 let rec collect_call_spans (sexp : Syntax.Sexp.t) :
     (string * Syntax.Location.span) list =
   let open Syntax.Sexp in
   match sexp with
+  (* Guard-aware forms: skip guarded branches *)
+  | List (Symbol ("when", _) :: condition :: _body, _)
+    when condition_has_guard condition ->
+      (* Skip body — it's the guarded branch *)
+      collect_call_spans condition
+  | List (Symbol ("unless", _) :: condition :: _body, _)
+    when condition_has_guard condition ->
+      (* unless with guard: body is the else-branch, DO collect;
+         but the condition itself is guarded — skip nothing extra.
+         Actually, unless negates: (unless (featurep 'X) body) means
+         body runs when guard is FALSE. Body calls are NOT guarded. *)
+      collect_call_spans condition @ List.concat_map collect_call_spans _body
+  | List (Symbol ("if", _) :: condition :: _then_branch :: else_branches, _)
+    when condition_has_guard condition ->
+      (* Skip then-branch (guarded), collect from else-branches *)
+      collect_call_spans condition
+      @ List.concat_map collect_call_spans else_branches
+  | List (Symbol ("and", _) :: args, span)
+    when List.exists is_guard_condition args ->
+      (* In (and guard? expr...), exprs after a guard are in guarded scope.
+         Collect from non-guard args before the first guard, skip the rest. *)
+      let rec collect_before_guard = function
+        | [] -> []
+        | arg :: rest ->
+            if is_guard_condition arg then []
+            else collect_call_spans arg @ collect_before_guard rest
+      in
+      ("and", span) :: collect_before_guard args
+  | List (Symbol ("cond", _) :: clauses, _) ->
+      (* For cond, skip clauses whose condition is a guard *)
+      List.concat_map
+        (fun clause ->
+          match clause with
+          | List (condition :: _body, _) when condition_has_guard condition ->
+              (* Skip body of guarded cond clause *)
+              collect_call_spans condition
+          | _ -> collect_call_spans clause)
+        clauses
+  (* Standard recursive cases *)
   | List (Symbol (name, _) :: args, span) ->
       let from_args = List.concat_map collect_call_spans args in
       (name, span) :: from_args

@@ -52,6 +52,16 @@ val narrow_type : typ -> typ -> typ
     For non-union types, returns [original] when it overlaps with [target], or
     [TUnion []] (empty) when disjoint. *)
 
+val analyze_single_guard : string -> Syntax.Sexp.t list -> guard_info option
+(** [analyze_single_guard fn_name args] checks whether a function call is a
+    feature guard form.
+
+    Returns [Some guard] for [(featurep 'X)], [(fboundp 'f)], [(boundp 'v)],
+    [(bound-and-true-p v)], and soft require [(require 'X nil t)].
+
+    Used by version constraint checking to detect guarded branches (Spec 50 R11)
+    and by [analyze_condition] internally. *)
+
 val detect_hard_require : Syntax.Sexp.t -> string option
 (** [detect_hard_require sexp] returns [Some name] when [sexp] is a hard require
     form like [(require 'X)] that unconditionally loads a feature.

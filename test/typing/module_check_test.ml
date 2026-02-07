@@ -909,6 +909,92 @@ let test_version_dedup () =
     "at most one per function" true
     (List.length result.version_diagnostics <= 1)
 
+(** Helper: build an env with a function that requires Emacs 29.1 *)
+let env_with_version_fn name =
+  let env = Env.empty in
+  let range : Env.version_range =
+    { min_version = Some { major = 29; minor = 1 }; max_version = None }
+  in
+  Env.extend_fn_version name range env
+
+let declared_28_1 : Env.emacs_version = { major = 28; minor = 1 }
+
+let test_guard_featurep_exempts_when () =
+  let env = env_with_version_fn "json-parse-string" in
+  let sexps = parse "(when (featurep 'json) (json-parse-string \"{}\"))" in
+  let diags =
+    Module_check.check_version_constraints ~declared:declared_28_1 ~env sexps
+  in
+  Alcotest.(check int)
+    "no version warnings in guarded when" 0 (List.length diags)
+
+let test_guard_featurep_exempts_if_then () =
+  let env = env_with_version_fn "json-parse-string" in
+  let sexps = parse "(if (featurep 'json) (json-parse-string \"{}\") nil)" in
+  let diags =
+    Module_check.check_version_constraints ~declared:declared_28_1 ~env sexps
+  in
+  Alcotest.(check int)
+    "no version warnings in guarded if then" 0 (List.length diags)
+
+let test_guard_if_else_not_exempt () =
+  let env = env_with_version_fn "json-parse-string" in
+  let sexps = parse "(if (featurep 'json) nil (json-parse-string \"{}\"))" in
+  let diags =
+    Module_check.check_version_constraints ~declared:declared_28_1 ~env sexps
+  in
+  Alcotest.(check int) "else-branch NOT exempt" 1 (List.length diags)
+
+let test_guard_fboundp_exempts () =
+  let env = env_with_version_fn "json-parse-string" in
+  let sexps =
+    parse "(when (fboundp 'json-parse-string) (json-parse-string \"{}\"))"
+  in
+  let diags =
+    Module_check.check_version_constraints ~declared:declared_28_1 ~env sexps
+  in
+  Alcotest.(check int)
+    "no version warnings with fboundp guard" 0 (List.length diags)
+
+let test_guard_and_combined_exempts () =
+  let env = env_with_version_fn "json-parse-string" in
+  let sexps =
+    parse "(when (and (featurep 'json) (stringp x)) (json-parse-string \"{}\"))"
+  in
+  let diags =
+    Module_check.check_version_constraints ~declared:declared_28_1 ~env sexps
+  in
+  Alcotest.(check int)
+    "no warnings with and-combined guard" 0 (List.length diags)
+
+let test_guard_cond_clause_exempts () =
+  let env = env_with_version_fn "json-parse-string" in
+  let sexps =
+    parse "(cond ((featurep 'json) (json-parse-string \"{}\")) (t nil))"
+  in
+  let diags =
+    Module_check.check_version_constraints ~declared:declared_28_1 ~env sexps
+  in
+  Alcotest.(check int)
+    "no warnings in guarded cond clause" 0 (List.length diags)
+
+let test_unguarded_still_warns () =
+  let env = env_with_version_fn "json-parse-string" in
+  let sexps = parse "(json-parse-string \"{}\")" in
+  let diags =
+    Module_check.check_version_constraints ~declared:declared_28_1 ~env sexps
+  in
+  Alcotest.(check int) "unguarded call still warns" 1 (List.length diags)
+
+let test_guard_unless_not_exempt () =
+  let env = env_with_version_fn "json-parse-string" in
+  let sexps = parse "(unless (featurep 'json) (json-parse-string \"{}\"))" in
+  let diags =
+    Module_check.check_version_constraints ~declared:declared_28_1 ~env sexps
+  in
+  Alcotest.(check int)
+    "unless body NOT exempt (negated guard)" 1 (List.length diags)
+
 (* =============================================================================
    Test Suite
    ============================================================================= *)
@@ -1037,5 +1123,23 @@ let () =
             test_version_too_high;
           Alcotest.test_case "deduplicate per function" `Quick
             test_version_dedup;
+        ] );
+      ( "guard_exemption",
+        [
+          Alcotest.test_case "featurep when exempts" `Quick
+            test_guard_featurep_exempts_when;
+          Alcotest.test_case "featurep if-then exempts" `Quick
+            test_guard_featurep_exempts_if_then;
+          Alcotest.test_case "if else-branch not exempt" `Quick
+            test_guard_if_else_not_exempt;
+          Alcotest.test_case "fboundp exempts" `Quick test_guard_fboundp_exempts;
+          Alcotest.test_case "and combined exempts" `Quick
+            test_guard_and_combined_exempts;
+          Alcotest.test_case "cond clause exempts" `Quick
+            test_guard_cond_clause_exempts;
+          Alcotest.test_case "unguarded still warns" `Quick
+            test_unguarded_still_warns;
+          Alcotest.test_case "unless not exempt" `Quick
+            test_guard_unless_not_exempt;
         ] );
     ]

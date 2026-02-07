@@ -132,3 +132,17 @@ val clause_diagnostic_to_diagnostic :
 
 val diagnostics_of_result : check_result -> Diagnostic.t list
 (** Get all diagnostics from a check result *)
+
+val check_version_constraints :
+  declared:Core.Type_env.emacs_version ->
+  env:Core.Type_env.t ->
+  Syntax.Sexp.t list ->
+  Diagnostic.t list
+(** Check version constraints for all function calls.
+
+    Given a declared minimum Emacs version (from Package-Requires) and the type
+    environment (with fn_versions from sig loading), produces warnings for calls
+    to functions that require a newer version or were removed.
+
+    Calls inside feature-guarded branches (featurep, fboundp, boundp,
+    bound-and-true-p) are exempt from warnings (Spec 50 R11). *)
