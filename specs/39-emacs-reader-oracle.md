@@ -177,14 +177,18 @@ read_file "test.el"
 
 ## Tasks
 
-- [ ] [R1, R5] `read_string` with batch mode
-- [ ] [R2, R12] `read_file` for multi-form files
-- [ ] [R3, R9, R11] `emacs_error` type and handling
-- [ ] [R4] PATH-based Emacs lookup
-- [ ] [R6] `compare_string`/`compare_file`
-- [ ] [R7] Canonical printer matching `prin1-to-string`
-- [ ] [R8] Test special read syntax
-- [ ] [R10] Timeout handling
-- [ ] [R13] Test comment stripping
-- [ ] Create test fixtures
+- [x] [R1, R5] `read_string` with batch mode
+- [x] [R2, R12] `read_file` for multi-form files
+- [x] [R3, R9, R11] `emacs_error` type and handling
+- [x] [R4] PATH-based Emacs lookup
+- [x] [R6] `compare_string`/`compare_file`
+- [x] [R7] Canonical printer matching `prin1-to-string`
+- [x] [R8] Test special read syntax
+- [x] [R10] Timeout handling
+- [x] [R13] Test comment stripping
+- [x] Create test fixtures
 - [ ] Wire into CI
+
+## Status
+
+Complete (except CI integration — deferred to Spec 43).

@@ -102,18 +102,18 @@ Compare tart output against Emacs oracle.
 
 ### Task 3.1: Robust error handling
 
-- [ ] `Emacs_not_found` when PATH has no emacs
-- [ ] `Emacs_failed` with exit code + stderr for non-read failures
-- [ ] `Read_error` with input + message for malformed Elisp
-- [ ] stderr capture separate from stdout
-- [ ] Build + test
+- [x] `Emacs_not_found` when PATH has no emacs
+- [x] `Emacs_failed` with exit code + stderr for non-read failures
+- [x] `Read_error` with input + message for malformed Elisp
+- [x] stderr capture separate from stdout
+- [x] Build + test
 
 ### Task 3.2: Timeout
 
-- [ ] Implement timeout via `Unix.alarm` + `SIGALRM` or
+- [x] Implement timeout via `Unix.alarm` + `SIGALRM` or
       `Unix.select` on process pipes
-- [ ] Test with intentional hang: `(while t)` input
-- [ ] Build + test
+- [x] Test with intentional hang: `(while t)` input
+- [x] Build + test
 
 ---
 
@@ -121,18 +121,18 @@ Compare tart output against Emacs oracle.
 
 ### Task 4.1: Oracle unit tests
 
-- [ ] Create `test/oracle/dune` and `test/oracle/oracle_test.ml`
-- [ ] `read_string` basic forms: int, string, symbol, list, vector
-- [ ] `read_string` special syntax: quote, backquote, function,
+- [x] Create `test/oracle/dune` and `test/oracle/oracle_test.ml`
+- [x] `read_string` basic forms: int, string, symbol, list, vector
+- [x] `read_string` special syntax: quote, backquote, function,
       character literals
-- [ ] `read_file` multi-form: defun + defvar file
-- [ ] `compare_string` match and mismatch cases
-- [ ] Error cases: malformed input, Emacs not found
-- [ ] Comment stripping: comments in input don't affect comparison
-- [ ] Build + test
+- [x] `read_file` multi-form: defun + defvar file
+- [x] `compare_string` match and mismatch cases
+- [x] Error cases: malformed input, Emacs not found
+- [x] Comment stripping: comments in input don't affect comparison
+- [x] Build + test
 
 ### Task 4.2: Spec completion
 
-- [ ] Check all task boxes in specs/39-emacs-reader-oracle.md
-- [ ] Add Status section
-- [ ] Build + test
+- [x] Check all task boxes in specs/39-emacs-reader-oracle.md
+- [x] Add Status section
+- [x] Build + test

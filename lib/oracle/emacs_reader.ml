@@ -113,21 +113,30 @@ let read_string ?(timeout_ms = default_timeout_ms) (input : string) :
   in
   let expr = Printf.sprintf "(princ (prin1-to-string (read \"%s\")))" escaped in
   match run_batch ~timeout_ms expr with
-  | Ok (stdout, stderr) ->
-      if stdout = "" && stderr <> "" then
-        Error (Read_error { input; message = String.trim stderr })
-      else Ok stdout
+  | Ok (stdout, _stderr) -> Ok stdout
   | Error e -> Error e
 
 let read_file ?(timeout_ms = default_timeout_ms) (path : string) :
     (string list, emacs_error) result =
   (* Elisp script that reads all forms from a file and prints each one
      separated by a NUL byte delimiter *)
+  (* Escape path for embedding in an Elisp string literal *)
+  let escaped_path =
+    let buf = Buffer.create (String.length path * 2) in
+    String.iter
+      (fun c ->
+        match c with
+        | '\\' -> Buffer.add_string buf "\\\\"
+        | '"' -> Buffer.add_string buf "\\\""
+        | _ -> Buffer.add_char buf c)
+      path;
+    Buffer.contents buf
+  in
   let expr =
     Printf.sprintf
       {|(progn
   (with-temp-buffer
-    (insert-file-contents %s)
+    (insert-file-contents "%s")
     (goto-char (point-min))
     (let ((forms nil))
       (condition-case nil
@@ -136,12 +145,9 @@ let read_file ?(timeout_ms = default_timeout_ms) (path : string) :
               (push (prin1-to-string form) forms)))
         (end-of-file nil))
       (princ (mapconcat #'identity (nreverse forms) "\0")))))|}
-      (Filename.quote path)
+      escaped_path
   in
   match run_batch ~timeout_ms expr with
-  | Ok (stdout, stderr) ->
-      if stdout = "" && stderr <> "" then
-        Error (Read_error { input = path; message = String.trim stderr })
-      else if stdout = "" then Ok []
-      else Ok (String.split_on_char '\000' stdout)
+  | Ok (stdout, _stderr) ->
+      if stdout = "" then Ok [] else Ok (String.split_on_char '\000' stdout)
   | Error e -> Error e

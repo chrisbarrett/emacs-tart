@@ -1,0 +1,4 @@
+(test
+ (name oracle_test)
+ (modules oracle_test)
+ (libraries tart alcotest unix))

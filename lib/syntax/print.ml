@@ -133,7 +133,7 @@ let rec to_string (sexp : Sexp.t) : string =
       | [ Sexp.Symbol ("function", _); x ] -> "#'" ^ to_string x
       | _ -> "(" ^ String.concat " " (List.map to_string elts) ^ ")")
   | Sexp.Vector (elts, _) ->
-      "#(" ^ String.concat " " (List.map to_string elts) ^ ")"
+      "[" ^ String.concat " " (List.map to_string elts) ^ "]"
   | Sexp.Curly (elts, _) ->
       "{" ^ String.concat " " (List.map to_string elts) ^ "}"
   | Sexp.Cons (car, cdr, _) ->

@@ -259,10 +259,10 @@ let test_print_nested_list () =
 
 let test_print_vector () =
   let sexp = Sexp.Vector ([ Sexp.Int (1, s); Sexp.Int (2, s) ], s) in
-  Alcotest.(check string) "#(1 2)" "#(1 2)" (Print.to_string sexp)
+  Alcotest.(check string) "[1 2]" "[1 2]" (Print.to_string sexp)
 
 let test_print_empty_vector () =
-  Alcotest.(check string) "#()" "#()" (Print.to_string (Sexp.Vector ([], s)))
+  Alcotest.(check string) "[]" "[]" (Print.to_string (Sexp.Vector ([], s)))
 
 let test_print_curly () =
   let sexp = Sexp.Curly ([ Sexp.Keyword ("a", s); Sexp.Int (1, s) ], s) in
