@@ -61,7 +61,28 @@ val extract_function_name : string -> string option
 val diagnostics_match : Protocol.diagnostic -> Protocol.diagnostic -> bool
 (** Check whether two diagnostics match by error code and start line. *)
 
+val find_package_requires_version : string -> (int * int * int) option
+(** [find_package_requires_version doc_text] locates the emacs version string
+    inside the Package-Requires header.
+
+    Returns [Some (line, col_start, col_end)] where [line] is the 0-based line
+    number and [col_start]/[col_end] are byte offsets within the line delimiting
+    the version string (excluding quotes). Returns [None] if no header is found.
+*)
+
+val generate_bump_version_action :
+  uri:string ->
+  doc_text:string ->
+  required_version:string ->
+  diagnostic:Protocol.diagnostic ->
+  Protocol.code_action option
+(** Generate a "Bump minimum Emacs version to X.Y" quickfix for E0900.
+
+    Edits the Package-Requires header to raise the Emacs version floor. *)
+
 val generate_version_actions :
+  uri:string ->
+  doc_text:string ->
   range_of_span:(Syntax.Location.span -> Protocol.range) ->
   context:Protocol.code_action_context ->
   version_diagnostics:Typing.Diagnostic.t list ->

@@ -539,13 +539,103 @@ let diagnostics_match (client_diag : Protocol.diagnostic)
   client_diag.code = version_diag.code
   && client_diag.range.start.line = version_diag.range.start.line
 
+(** Find the Package-Requires header line in document text.
+
+    Returns the 0-based line number, the byte offset of the start of the quoted
+    version string, and the byte offset of the end of the quoted version string
+    (both relative to the start of the line). For example, in:
+
+    {v ;; Package-Requires: ((emacs "28.1")) v}
+
+    returns [Some (line, start_of_28.1, end_of_28.1)]. *)
+let find_package_requires_version (doc_text : string) : (int * int * int) option
+    =
+  let lines = String.split_on_char '\n' doc_text in
+  let max_lines = 50 in
+  let rec scan lines n =
+    if n >= max_lines then None
+    else
+      match lines with
+      | [] -> None
+      | line :: rest -> (
+          match Sig.Package_header.extract_requires_value line with
+          | Some _ ->
+              (* Found the Package-Requires line; now find the emacs version
+                 string within it. Look for: emacs "X.Y" *)
+              let lower = String.lowercase_ascii line in
+              let emacs_pat = "emacs" in
+              let emacs_len = String.length emacs_pat in
+              let line_len = String.length lower in
+              let rec find_emacs i =
+                if i + emacs_len > line_len then None
+                else if String.sub lower i emacs_len = emacs_pat then
+                  find_quote (i + emacs_len)
+                else find_emacs (i + 1)
+              and find_quote i =
+                if i >= line_len then None
+                else
+                  match lower.[i] with
+                  | '"' -> find_end_quote (i + 1)
+                  | ' ' | '\t' -> find_quote (i + 1)
+                  | _ -> None
+              and find_end_quote start =
+                let rec go j =
+                  if j >= line_len then None
+                  else if line.[j] = '"' then Some (n, start, j)
+                  else go (j + 1)
+                in
+                go start
+              in
+              find_emacs 0
+          | None -> scan rest (n + 1))
+  in
+  scan lines 0
+
+(** Generate "Bump minimum Emacs version to X.Y" code action for E0900.
+
+    Edits the Package-Requires header in the document to raise the Emacs version
+    floor to the required version. *)
+let generate_bump_version_action ~(uri : string) ~(doc_text : string)
+    ~(required_version : string) ~(diagnostic : Protocol.diagnostic) :
+    Protocol.code_action option =
+  match find_package_requires_version doc_text with
+  | None ->
+      Log.debug "No Package-Requires header found for bump action";
+      None
+  | Some (line, col_start, col_end) ->
+      let edit : Protocol.text_edit =
+        {
+          te_range =
+            {
+              start = { line; character = col_start };
+              end_ = { line; character = col_end };
+            };
+          new_text = required_version;
+        }
+      in
+      let doc_edit : Protocol.text_document_edit =
+        { tde_uri = uri; tde_version = None; edits = [ edit ] }
+      in
+      let workspace_edit : Protocol.workspace_edit =
+        { document_changes = [ doc_edit ] }
+      in
+      Some
+        {
+          Protocol.ca_title =
+            Printf.sprintf "Bump minimum Emacs version to %s" required_version;
+          ca_kind = Some Protocol.QuickFix;
+          ca_diagnostics = [ diagnostic ];
+          ca_is_preferred = false;
+          ca_edit = Some workspace_edit;
+        }
+
 (** Generate version constraint code actions for diagnostics in the request
     context.
 
     Filters [context.cac_diagnostics] for E0900/E0901 codes and matches them
     against the type-checker's [version_diagnostics] to produce quickfix
     actions. *)
-let generate_version_actions
+let generate_version_actions ~(uri : string) ~(doc_text : string)
     ~(range_of_span : Syntax.Location.span -> Protocol.range)
     ~(context : Protocol.code_action_context)
     ~(version_diagnostics : Typing.Diagnostic.t list) :
@@ -588,9 +678,24 @@ let generate_version_actions
           with
           | Some (internal_diag, _) ->
               Log.debug "Matched version diagnostic: %s" internal_diag.message;
-              (* Actions will be generated in Tasks 7-9 *)
-              let (_ : Typing.Diagnostic.t) = internal_diag in
-              []
+              let actions = ref [] in
+              (* Task 7: "Bump minimum Emacs version to X.Y" for E0900 *)
+              (match internal_diag.code with
+              | Some Typing.Diagnostic.VersionTooLow -> (
+                  match extract_required_version internal_diag.message with
+                  | Some required_version -> (
+                      match
+                        generate_bump_version_action ~uri ~doc_text
+                          ~required_version ~diagnostic:client_diag
+                      with
+                      | Some action -> actions := action :: !actions
+                      | None -> ())
+                  | None ->
+                      Log.debug "Could not extract version from: %s"
+                        internal_diag.message)
+              | _ -> ());
+              (* Tasks 8-9 will add more actions here *)
+              List.rev !actions
           | None ->
               Log.debug "No matching internal diagnostic for %s"
                 client_diag.message;
@@ -674,7 +779,7 @@ let handle ~(range_of_span : Syntax.Location.span -> Protocol.range)
 
     (* Generate version constraint code actions from diagnostic context *)
     let version_actions =
-      generate_version_actions ~range_of_span ~context
+      generate_version_actions ~uri ~doc_text ~range_of_span ~context
         ~version_diagnostics:check_result.version_diagnostics
     in
 

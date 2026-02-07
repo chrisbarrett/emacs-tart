@@ -6,6 +6,12 @@
 
     This implements R4-R7 of Spec 50 (version constraints). *)
 
+val extract_requires_value : string -> string option
+(** [extract_requires_value line] checks if [line] is a Package-Requires header
+    comment and returns the value portion (everything after the colon).
+
+    Matches lines like [;; Package-Requires: ((emacs "28.1"))]. *)
+
 val parse_package_requires : string -> Emacs_version.version option
 (** [parse_package_requires content] extracts the Emacs version from a
     Package-Requires header in [content].

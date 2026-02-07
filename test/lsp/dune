@@ -39,3 +39,8 @@
  (name signature_tracker_test)
  (modules signature_tracker_test)
  (libraries tart alcotest))
+
+(test
+ (name code_action_test)
+ (modules code_action_test)
+ (libraries tart.lsp alcotest))
