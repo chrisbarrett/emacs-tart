@@ -55,6 +55,9 @@ type error_code =
   | NonExhaustive  (** E0400: Pattern match doesn't cover all cases *)
   (* Module Errors (E0700–E0799) *)
   | SignatureNotFound  (** E0702: No .tart signature file found *)
+  (* Version Errors (E0900–E0999) *)
+  | VersionTooLow  (** E0900: Feature requires newer Emacs version *)
+  | VersionTooHigh  (** E0901: Feature removed in declared Emacs version *)
 
 (** Format an error code for display. *)
 let error_code_to_string = function
@@ -83,6 +86,9 @@ let error_code_to_string = function
   | NonExhaustive -> "E0400"
   (* Module Errors *)
   | SignatureNotFound -> "E0702"
+  (* Version Errors *)
+  | VersionTooLow -> "E0900"
+  | VersionTooHigh -> "E0901"
 
 (** Severity level for diagnostics *)
 type severity = Error | Warning | Hint
@@ -824,3 +830,68 @@ let of_kind_error span (err : Kind_infer.kind_error) : t =
           ];
         help = [];
       }
+
+module Env = Core.Type_env
+
+(** Create a version-too-low diagnostic (E0900).
+
+    Used when code calls a function that requires a newer Emacs version than the
+    package declares. *)
+let version_too_low ~span ~name ~required ~declared () =
+  let required_str = Env.version_to_string required in
+  let declared_str = Env.version_to_string declared in
+  let message = Printf.sprintf "`%s` requires Emacs %s+" name required_str in
+  let related =
+    [
+      {
+        span = Loc.dummy_span;
+        message =
+          Printf.sprintf "package declares minimum Emacs %s" declared_str;
+      };
+    ]
+  in
+  {
+    severity = Warning;
+    code = Some VersionTooLow;
+    span;
+    message;
+    expected = None;
+    actual = None;
+    related;
+    help =
+      [
+        Printf.sprintf
+          "bump Package-Requires to (emacs \"%s\"), or add a feature guard"
+          required_str;
+      ];
+  }
+
+(** Create a version-too-high diagnostic (E0901).
+
+    Used when code calls a function that was removed after a certain Emacs
+    version, but the package declares a higher minimum. *)
+let version_too_high ~span ~name ~removed_after ~declared () =
+  let removed_str = Env.version_to_string removed_after in
+  let declared_str = Env.version_to_string declared in
+  let message =
+    Printf.sprintf "`%s` was removed after Emacs %s" name removed_str
+  in
+  let related =
+    [
+      {
+        span = Loc.dummy_span;
+        message =
+          Printf.sprintf "package declares minimum Emacs %s" declared_str;
+      };
+    ]
+  in
+  {
+    severity = Warning;
+    code = Some VersionTooHigh;
+    span;
+    message;
+    expected = None;
+    actual = None;
+    related;
+    help = [];
+  }

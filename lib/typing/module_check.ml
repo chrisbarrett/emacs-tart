@@ -19,14 +19,17 @@ module Loader = Sig.Sig_loader
 type config = {
   search_path : Search.t;  (** Search path for finding `.tart` files *)
   stdlib_dir : string option;  (** Path to bundled stdlib *)
+  declared_version : Env.emacs_version option;
+      (** Minimum Emacs version declared in Package-Requires *)
 }
 (** Configuration for module-aware type checking *)
 
-let default_config () = { search_path = Search.empty; stdlib_dir = None }
+let default_config () =
+  { search_path = Search.empty; stdlib_dir = None; declared_version = None }
 
 let with_stdlib stdlib_dir config =
   let search_path = Search.with_stdlib stdlib_dir config.search_path in
-  { search_path; stdlib_dir = Some stdlib_dir }
+  { config with search_path; stdlib_dir = Some stdlib_dir }
 
 let with_search_dirs dirs config =
   let search_path = Search.of_dirs dirs in
@@ -39,6 +42,9 @@ let with_search_dirs dirs config =
 
 let search_path config = config.search_path
 let with_search_path search_path config = { config with search_path }
+
+let with_declared_version version config =
+  { config with declared_version = Some version }
 
 (** {1 Signature Mismatch Errors} *)
 
@@ -79,6 +85,8 @@ type check_result = {
       (** Kind mismatch errors in signatures *)
   clause_diagnostics : Infer.resolved_clause_diagnostic list;
       (** Diagnostics emitted from multi-clause dispatch *)
+  version_diagnostics : Diagnostic.t list;
+      (** Version constraint warnings (E0900/E0901) *)
   signature_env : Env.t option;
       (** Environment from loaded signature, if any *)
   final_env : Env.t;  (** Final type environment after checking *)
@@ -209,6 +217,84 @@ let load_autoload_signatures ~(config : config) ~(el_path : string option)
           | Some env' -> env'
           | None -> env))
     env call_symbols
+
+(** {1 Version Constraint Checking (Spec 50)} *)
+
+(** Collect all function call names with their call-site spans.
+
+    Returns a list of (name, span) pairs for every function-position symbol
+    found in the AST. Used by version constraint checking to locate call sites
+    for version warnings. *)
+let rec collect_call_spans (sexp : Syntax.Sexp.t) :
+    (string * Syntax.Location.span) list =
+  let open Syntax.Sexp in
+  match sexp with
+  | List (Symbol (name, _) :: args, span) ->
+      let from_args = List.concat_map collect_call_spans args in
+      (name, span) :: from_args
+  | List (fn :: args, _) ->
+      let from_fn = collect_call_spans fn in
+      let from_args = List.concat_map collect_call_spans args in
+      from_fn @ from_args
+  | List ([], _) -> []
+  | Vector (elems, _) -> List.concat_map collect_call_spans elems
+  | Cons (car, cdr, _) -> collect_call_spans car @ collect_call_spans cdr
+  | _ -> []
+
+(** Collect call spans from a list of top-level forms. *)
+let collect_all_call_spans (sexps : Syntax.Sexp.t list) :
+    (string * Syntax.Location.span) list =
+  List.concat_map collect_call_spans sexps
+
+(** Compare two emacs versions. Returns negative if a < b, 0 if equal, positive
+    if a > b. *)
+let compare_version (a : Env.emacs_version) (b : Env.emacs_version) : int =
+  let c = Int.compare a.major b.major in
+  if c <> 0 then c else Int.compare a.minor b.minor
+
+(** Check version constraints for all function calls.
+
+    Given a declared minimum Emacs version (from Package-Requires) and the type
+    environment (with fn_versions from sig loading), produces warnings for calls
+    to functions that require a newer version or were removed. *)
+let check_version_constraints ~(declared : Env.emacs_version) ~(env : Env.t)
+    (sexps : Syntax.Sexp.t list) : Diagnostic.t list =
+  let call_spans = collect_all_call_spans sexps in
+  (* Deduplicate by name: only report the first call site per function *)
+  let seen = Hashtbl.create 32 in
+  List.filter_map
+    (fun (name, span) ->
+      if Hashtbl.mem seen name then None
+      else (
+        Hashtbl.replace seen name ();
+        match Env.lookup_fn_version name env with
+        | None -> None
+        | Some range -> (
+            (* Check min_version: function requires newer Emacs than declared *)
+            let too_low =
+              match range.min_version with
+              | Some required when compare_version required declared > 0 ->
+                  Some
+                    (Diagnostic.version_too_low ~span ~name ~required ~declared
+                       ())
+              | _ -> None
+            in
+            (* Check max_version: function removed in older Emacs than declared *)
+            let too_high =
+              match range.max_version with
+              | Some removed_after
+                when compare_version declared removed_after > 0 ->
+                  Some
+                    (Diagnostic.version_too_high ~span ~name ~removed_after
+                       ~declared ())
+              | _ -> None
+            in
+            (* Prefer too_low if both (more actionable); report first found *)
+            match (too_low, too_high) with
+            | Some d, _ -> Some d
+            | _, Some d -> Some d
+            | None, None -> None)))
+    call_spans
 
 (** {1 Signature Loading} *)
 
@@ -622,6 +708,14 @@ let check_module ~(config : config) ~(filename : string)
     | None -> []
   in
 
+  (* Step 10: Check version constraints (Spec 50 R8-R10) *)
+  let version_diagnostics =
+    match config.declared_version with
+    | Some declared ->
+        check_version_constraints ~declared ~env:check_result.Check.env sexps
+    | None -> []
+  in
+
   {
     type_errors = check_result.Check.errors;
     mismatch_errors;
@@ -630,6 +724,7 @@ let check_module ~(config : config) ~(filename : string)
     exhaustiveness_warnings;
     kind_errors;
     clause_diagnostics = check_result.Check.clause_diagnostics;
+    version_diagnostics;
     signature_env =
       (match sibling_result with Some (env, _) -> Some env | None -> None);
     final_env = check_result.Check.env;
@@ -707,4 +802,4 @@ let diagnostics_of_result (result : check_result) : Diagnostic.t list =
   in
   type_diagnostics @ mismatch_diagnostics @ missing_sig_diagnostics
   @ undefined_diagnostics @ exhaustiveness_diagnostics @ kind_diagnostics
-  @ clause_diags
+  @ clause_diags @ result.version_diagnostics

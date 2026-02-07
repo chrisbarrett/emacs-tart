@@ -201,6 +201,7 @@ let test_diagnostics_empty () =
       exhaustiveness_warnings = [];
       kind_errors = [];
       clause_diagnostics = [];
+      version_diagnostics = [];
       signature_env = None;
       final_env = Core.Type_env.empty;
     }
@@ -794,6 +795,121 @@ let test_hk_type_scope_cross_module () =
       Alcotest.(check int) "no type errors" 0 (List.length result.type_errors))
 
 (* =============================================================================
+   Version Constraint Tests (Spec 50)
+   ============================================================================= *)
+
+module Diag = Tart.Diagnostic
+module Loc = Tart.Location
+
+let test_version_too_low () =
+  let sexps = parse "(json-parse-string \"{}\")" in
+  let span = Tart.Sexp.span_of (List.hd sexps) in
+  let diag_result =
+    {
+      Module_check.type_errors = [];
+      mismatch_errors = [];
+      missing_signature_warnings = [];
+      undefined_errors = [];
+      exhaustiveness_warnings = [];
+      kind_errors = [];
+      clause_diagnostics = [];
+      version_diagnostics =
+        [
+          Diag.version_too_low ~span ~name:"json-parse-string"
+            ~required:Env.{ major = 29; minor = 1 }
+            ~declared:Env.{ major = 28; minor = 1 }
+            ();
+        ];
+      signature_env = None;
+      final_env = Env.empty;
+    }
+  in
+  let diagnostics = Module_check.diagnostics_of_result diag_result in
+  let version_diags =
+    List.filter
+      (fun (d : Diag.t) -> d.code = Some Diag.VersionTooLow)
+      diagnostics
+  in
+  Alcotest.(check int) "one version warning" 1 (List.length version_diags);
+  let d = List.hd version_diags in
+  Alcotest.(check bool) "is warning not error" true (d.severity = Diag.Warning)
+
+let test_version_ok_no_warning () =
+  let diag_result =
+    {
+      Module_check.type_errors = [];
+      mismatch_errors = [];
+      missing_signature_warnings = [];
+      undefined_errors = [];
+      exhaustiveness_warnings = [];
+      kind_errors = [];
+      clause_diagnostics = [];
+      version_diagnostics = [];
+      signature_env = None;
+      final_env = Env.empty;
+    }
+  in
+  let diagnostics = Module_check.diagnostics_of_result diag_result in
+  let version_diags =
+    List.filter
+      (fun (d : Diag.t) ->
+        d.code = Some Diag.VersionTooLow || d.code = Some Diag.VersionTooHigh)
+      diagnostics
+  in
+  Alcotest.(check int) "no version warnings" 0 (List.length version_diags)
+
+let test_no_declared_version () =
+  let config = Module_check.default_config () in
+  let sexps = parse "(json-parse-string \"{}\")" in
+  let result = Module_check.check_module ~config ~filename:"test.el" sexps in
+  Alcotest.(check int)
+    "no version warnings" 0
+    (List.length result.version_diagnostics)
+
+let test_version_too_high () =
+  let sexps = parse "(old-api)" in
+  let span = Tart.Sexp.span_of (List.hd sexps) in
+  let diag_result =
+    {
+      Module_check.type_errors = [];
+      mismatch_errors = [];
+      missing_signature_warnings = [];
+      undefined_errors = [];
+      exhaustiveness_warnings = [];
+      kind_errors = [];
+      clause_diagnostics = [];
+      version_diagnostics =
+        [
+          Diag.version_too_high ~span ~name:"old-api"
+            ~removed_after:Env.{ major = 30; minor = 1 }
+            ~declared:Env.{ major = 31; minor = 0 }
+            ();
+        ];
+      signature_env = None;
+      final_env = Env.empty;
+    }
+  in
+  let diagnostics = Module_check.diagnostics_of_result diag_result in
+  let version_diags =
+    List.filter
+      (fun (d : Diag.t) -> d.code = Some Diag.VersionTooHigh)
+      diagnostics
+  in
+  Alcotest.(check int)
+    "one version-too-high warning" 1
+    (List.length version_diags)
+
+let test_version_dedup () =
+  let config = Module_check.default_config () in
+  let sexps =
+    parse "(progn (json-parse-string \"a\") (json-parse-string \"b\"))"
+  in
+  let result = Module_check.check_module ~config ~filename:"test.el" sexps in
+  Alcotest.(check bool)
+    "at most one per function" true
+    (List.length result.version_diagnostics <= 1)
+
+(* =============================================================================
    Test Suite
    ============================================================================= *)
 
@@ -908,5 +1024,18 @@ let () =
             test_type_scope_cross_module_type_error;
           Alcotest.test_case "HK cross-module" `Quick
             test_hk_type_scope_cross_module;
+        ] );
+      ( "version_constraints",
+        [
+          Alcotest.test_case "version too low emits warning" `Quick
+            test_version_too_low;
+          Alcotest.test_case "version ok no warning" `Quick
+            test_version_ok_no_warning;
+          Alcotest.test_case "no declared version no warnings" `Quick
+            test_no_declared_version;
+          Alcotest.test_case "version too high emits warning" `Quick
+            test_version_too_high;
+          Alcotest.test_case "deduplicate per function" `Quick
+            test_version_dedup;
         ] );
     ]

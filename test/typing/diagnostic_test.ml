@@ -1219,7 +1219,10 @@ let test_error_code_stability () =
   (* Pattern Errors E0400–E0499 *)
   check "NonExhaustive" "E0400" Diag.NonExhaustive;
   (* Module Errors E0700–E0799 *)
-  check "SignatureNotFound" "E0702" Diag.SignatureNotFound
+  check "SignatureNotFound" "E0702" Diag.SignatureNotFound;
+  (* Version Errors E0900–E0999 *)
+  check "VersionTooLow" "E0900" Diag.VersionTooLow;
+  check "VersionTooHigh" "E0901" Diag.VersionTooHigh
 
 (** Verify that every constructor is covered by the stability test. This
     function uses an exhaustive match — if a new constructor is added and not
@@ -1230,8 +1233,116 @@ let _exhaustiveness_guard (code : Diag.error_code) =
   | AnnotationMismatch | ReturnMismatch | UnificationFailed | DisjointEquality
   | UndefinedVariable | UndefinedFunction | UndefinedType | MissingSignature
   | WrongArity | WrongTypeArity | KindMismatch | InfiniteKind
-  | TypeArityMismatch | NonExhaustive | SignatureNotFound ->
+  | TypeArityMismatch | NonExhaustive | SignatureNotFound | VersionTooLow
+  | VersionTooHigh ->
       ()
+
+(* =============================================================================
+   Version Diagnostic Tests (Spec 50)
+   ============================================================================= *)
+
+module Env = Tart.Type_env
+
+let test_version_too_low_diagnostic () =
+  let span = Loc.dummy_span in
+  let required = Env.{ major = 29; minor = 1 } in
+  let declared = Env.{ major = 28; minor = 1 } in
+  let d =
+    Diag.version_too_low ~span ~name:"json-parse-string" ~required ~declared ()
+  in
+  Alcotest.(check bool) "is warning" false (Diag.is_error d);
+  Alcotest.(
+    check
+      (option
+         (of_pp (fun fmt c ->
+              Format.fprintf fmt "%s" (Diag.error_code_to_string c)))))
+    "code is E0900" (Some Diag.VersionTooLow) d.code;
+  Alcotest.(check bool)
+    "message mentions function" true
+    (contains_pattern (Str.regexp "json-parse-string") d.message);
+  Alcotest.(check bool)
+    "message mentions required version" true
+    (contains_pattern (Str.regexp "29\\.1") d.message)
+
+let test_version_too_low_has_help () =
+  let span = Loc.dummy_span in
+  let required = Env.{ major = 29; minor = 1 } in
+  let declared = Env.{ major = 28; minor = 1 } in
+  let d =
+    Diag.version_too_low ~span ~name:"json-parse-string" ~required ~declared ()
+  in
+  Alcotest.(check bool) "has help" true (List.length d.help > 0);
+  let help_combined = String.concat " " d.help in
+  Alcotest.(check bool)
+    "suggests version bump" true
+    (contains_pattern (Str.regexp "29\\.1") help_combined);
+  Alcotest.(check bool)
+    "suggests feature guard" true
+    (contains_pattern (Str.regexp_case_fold "feature guard") help_combined)
+
+let test_version_too_low_has_related () =
+  let span = Loc.dummy_span in
+  let required = Env.{ major = 29; minor = 1 } in
+  let declared = Env.{ major = 28; minor = 1 } in
+  let d =
+    Diag.version_too_low ~span ~name:"json-parse-string" ~required ~declared ()
+  in
+  Alcotest.(check bool) "has related" true (List.length d.related > 0);
+  let related_msg = (List.hd d.related).message in
+  Alcotest.(check bool)
+    "related mentions declared version" true
+    (contains_pattern (Str.regexp "28\\.1") related_msg)
+
+let test_version_too_high_diagnostic () =
+  let span = Loc.dummy_span in
+  let removed_after = Env.{ major = 30; minor = 1 } in
+  let declared = Env.{ major = 31; minor = 0 } in
+  let d =
+    Diag.version_too_high ~span ~name:"old-api" ~removed_after ~declared ()
+  in
+  Alcotest.(check bool) "is warning" false (Diag.is_error d);
+  Alcotest.(
+    check
+      (option
+         (of_pp (fun fmt c ->
+              Format.fprintf fmt "%s" (Diag.error_code_to_string c)))))
+    "code is E0901" (Some Diag.VersionTooHigh) d.code;
+  Alcotest.(check bool)
+    "message mentions function" true
+    (contains_pattern (Str.regexp "old-api") d.message);
+  Alcotest.(check bool)
+    "message mentions removed version" true
+    (contains_pattern (Str.regexp "30\\.1") d.message)
+
+let test_version_too_low_formatting () =
+  let span = Loc.dummy_span in
+  let required = Env.{ major = 29; minor = 1 } in
+  let declared = Env.{ major = 28; minor = 1 } in
+  let d =
+    Diag.version_too_low ~span ~name:"json-parse-string" ~required ~declared ()
+  in
+  let str = Diag_fmt.to_string d in
+  Alcotest.(check bool)
+    "has warning prefix" true
+    (contains_pattern (Str.regexp "warning\\[E0900\\]") str);
+  Alcotest.(check bool)
+    "has function name" true
+    (contains_pattern (Str.regexp "json-parse-string") str);
+  Alcotest.(check bool)
+    "has required version" true
+    (contains_pattern (Str.regexp "29\\.1") str)
+
+let test_version_too_low_human_header () =
+  let span = Loc.dummy_span in
+  let required = Env.{ major = 29; minor = 1 } in
+  let declared = Env.{ major = 28; minor = 1 } in
+  let d =
+    Diag.version_too_low ~span ~name:"json-parse-string" ~required ~declared ()
+  in
+  let str = Diag_fmt.to_string_human d in
+  Alcotest.(check bool)
+    "has VERSION TOO LOW header" true
+    (contains_pattern (Str.regexp "VERSION TOO LOW") str)
 
 (* =============================================================================
    Test Suite
@@ -1395,5 +1506,20 @@ let () =
         [
           Alcotest.test_case "all codes match spec 47" `Quick
             test_error_code_stability;
+        ] );
+      ( "version_diagnostics",
+        [
+          Alcotest.test_case "version too low" `Quick
+            test_version_too_low_diagnostic;
+          Alcotest.test_case "version too low help" `Quick
+            test_version_too_low_has_help;
+          Alcotest.test_case "version too low related" `Quick
+            test_version_too_low_has_related;
+          Alcotest.test_case "version too high" `Quick
+            test_version_too_high_diagnostic;
+          Alcotest.test_case "version too low formatting" `Quick
+            test_version_too_low_formatting;
+          Alcotest.test_case "version too low human header" `Quick
+            test_version_too_low_human_header;
         ] );
     ]

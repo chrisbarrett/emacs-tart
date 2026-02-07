@@ -48,6 +48,9 @@ type error_code =
   | NonExhaustive  (** E0400: Pattern match doesn't cover all cases *)
   (* Module Errors (E0700–E0799) *)
   | SignatureNotFound  (** E0702: No .tart signature file found *)
+  (* Version Errors (E0900–E0999) *)
+  | VersionTooLow  (** E0900: Feature requires newer Emacs version *)
+  | VersionTooHigh  (** E0901: Feature removed in declared Emacs version *)
 
 val error_code_to_string : error_code -> string
 (** Format an error code for display. *)
@@ -208,3 +211,28 @@ val of_kind_error : Syntax.Location.span -> Kind_infer.kind_error -> t
 (** Convert a kind inference error to a diagnostic.
 
     The span is the location of the declaration that failed kind checking. *)
+
+val version_too_low :
+  span:Syntax.Location.span ->
+  name:string ->
+  required:Core.Type_env.emacs_version ->
+  declared:Core.Type_env.emacs_version ->
+  unit ->
+  t
+(** Create a version-too-low warning (E0900).
+
+    Used when code calls a function that requires a newer Emacs version than the
+    package declares via Package-Requires. Includes help text suggesting a
+    version bump or feature guard. *)
+
+val version_too_high :
+  span:Syntax.Location.span ->
+  name:string ->
+  removed_after:Core.Type_env.emacs_version ->
+  declared:Core.Type_env.emacs_version ->
+  unit ->
+  t
+(** Create a version-too-high warning (E0901).
+
+    Used when code calls a function that was removed after a certain Emacs
+    version, but the package declares a higher minimum. *)

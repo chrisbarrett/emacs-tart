@@ -29,6 +29,9 @@ val search_path : config -> Sig.Search_path.t
 val with_search_path : Sig.Search_path.t -> config -> config
 (** Set the search path in a config *)
 
+val with_declared_version : Core.Type_env.emacs_version -> config -> config
+(** Set the declared minimum Emacs version (from Package-Requires) *)
+
 (** {1 Errors} *)
 
 type mismatch_error = {
@@ -68,6 +71,8 @@ type check_result = {
       (** Kind mismatch errors in signatures *)
   clause_diagnostics : Infer.resolved_clause_diagnostic list;
       (** Diagnostics emitted from multi-clause dispatch *)
+  version_diagnostics : Diagnostic.t list;
+      (** Version constraint warnings (E0900/E0901) *)
   signature_env : Core.Type_env.t option;
       (** Environment from loaded signature, if any *)
   final_env : Core.Type_env.t;  (** Final type environment after checking *)

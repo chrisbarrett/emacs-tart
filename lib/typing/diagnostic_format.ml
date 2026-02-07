@@ -57,6 +57,8 @@ let error_type_of_code = function
   | Some TypeArityMismatch -> "TYPE ARITY MISMATCH"
   | Some NonExhaustive -> "NON-EXHAUSTIVE MATCH"
   | Some SignatureNotFound -> "SIGNATURE NOT FOUND"
+  | Some VersionTooLow -> "VERSION TOO LOW"
+  | Some VersionTooHigh -> "VERSION TOO HIGH"
   | None -> "ERROR"
 
 (** Format a diagnostic as a human-readable string.
@@ -174,6 +176,8 @@ let to_string_human (d : Diagnostic.t) : string =
     | Some TypeArityMismatch
     | Some NonExhaustive
     | Some SignatureNotFound
+    | Some VersionTooLow
+    | Some VersionTooHigh
     | None ->
         Source_excerpt.NoContext
   in
