@@ -152,11 +152,15 @@ Macros expand before checking; expanded guards recognized automatically.
 
 ## Tasks
 
-- [ ] [R1-R4] Guard pattern recognition
-- [ ] [R5-R6] Require handling (hard/soft)
-- [ ] [R7-R11] Feature env through control flow
-- [ ] [R12] Negated guards
-- [ ] [R13] Filename resolution
-- [ ] [R14] Redundant guard lint
-- [ ] [R16] Combined guards
-- [ ] [R17] Document inline-only limitation
+- [x] [R1-R4] Guard pattern recognition
+- [x] [R5-R6] Require handling (hard/soft)
+- [x] [R7-R11] Feature env through control flow
+- [x] [R12] Negated guards
+- [x] [R13] Filename resolution
+- [ ] [R14] Redundant guard lint (deferred — needs Spec 50 version constraints)
+- [x] [R16] Combined guards
+- [x] [R17] Document inline-only limitation
+
+## Status
+
+Complete (except R14, which requires Spec 50 version constraints).
