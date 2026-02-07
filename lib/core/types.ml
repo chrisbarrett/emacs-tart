@@ -434,22 +434,29 @@ let validation_error_to_string = function
 
 (** Subtract a type from another type.
 
-    For union types, removes all occurrences of the subtrahend from the union.
-    For non-union types, returns the minuend unchanged if it's not equal to the
-    subtrahend, otherwise returns an empty union (TUnion []).
+    For union types, removes members that appear in the subtrahend. When the
+    subtrahend is itself a union, each member of the minuend is removed if it
+    equals any member of the subtrahend.
 
     Examples:
     - (int | string) - int => string
     - (truthy | nil) - nil => truthy
+    - (string | int | (list any)) - (string | (list any) | (vector any)) => int
     - (cons a (list a)) | nil) - nil => (cons a (list a)) *)
 let subtract_type (minuend : typ) (subtrahend : typ) : typ =
   let minuend = repr minuend in
   let subtrahend = repr subtrahend in
+  (* Check if a type is a member of the subtrahend (handles union subtrahends) *)
+  let is_subtracted m =
+    match repr subtrahend with
+    | TUnion sub_members -> List.exists (fun s -> equal m (repr s)) sub_members
+    | _ -> equal m subtrahend
+  in
   match minuend with
   | TUnion members -> (
-      let remaining = List.filter (fun m -> not (equal m subtrahend)) members in
+      let remaining = List.filter (fun m -> not (is_subtracted m)) members in
       match remaining with
       | [] -> TUnion []
       | [ single ] -> single
       | _ -> TUnion remaining)
-  | _ -> if equal minuend subtrahend then TUnion [] else minuend
+  | _ -> if is_subtracted minuend then TUnion [] else minuend

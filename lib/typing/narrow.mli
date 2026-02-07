@@ -24,10 +24,13 @@ val narrow_type : typ -> typ -> typ
 
     For unions, filters members to those that overlap with [target]:
     - [(string | int | nil) ∩ string] → [string]
+    - [(string | int | (list any)) ∩ ((list any) | (vector any) | string)] →
+      [(string | (list any))]
     - [(string | nil) ∩ truthy] → [string]
     - [any ∩ T] → [T]
 
-    For non-union types, returns [original] when it overlaps with [target]. *)
+    For non-union types, returns [original] when it overlaps with [target], or
+    [TUnion []] (empty) when disjoint. *)
 
 val analyze_condition : Syntax.Sexp.t -> Core.Type_env.t -> condition_analysis
 (** [analyze_condition condition env] examines a condition for predicate calls.

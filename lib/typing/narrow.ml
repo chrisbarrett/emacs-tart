@@ -37,7 +37,7 @@ type condition_analysis =
     - [T ∩ T] → [T]
     - [(A | B | C) ∩ T] → members of the union that overlap with [T]
     - [T ∩ truthy] → [T] when [T] is truthy (filters out nil)
-    - Fallback → [target] (conservative but sound) *)
+    - [T ∩ U] → [T] when [T] overlaps with [U], [TUnion []] when disjoint *)
 let narrow_type (original : typ) (target : typ) : typ =
   let original = repr original in
   let target = repr target in
@@ -57,8 +57,9 @@ let narrow_type (original : typ) (target : typ) : typ =
         | _ -> TUnion overlapping)
     | _ ->
         (* Non-union original: if not disjoint with target, keep original;
-           otherwise return target as conservative fallback *)
-        if not (Unify.types_disjoint original target) then original else target
+           otherwise empty (the type cannot satisfy the predicate) *)
+        if not (Unify.types_disjoint original target) then original
+        else TUnion []
 
 (** Try to extract a single predicate from a call expression. *)
 let analyze_single_predicate (fn_name : string) (args : Syntax.Sexp.t list)

@@ -250,8 +250,13 @@ val validation_error_to_string : validation_error -> string
 val subtract_type : typ -> typ -> typ
 (** [subtract_type minuend subtrahend] returns [minuend - subtrahend].
 
-    For unions, removes matching members: [(int | string) - int => string]. For
-    non-union types, returns [TUnion []] (empty/never type) when equal. Returns
-    [minuend] unchanged if types are not equal.
+    For unions, removes members that appear in the subtrahend:
+    - [(int | string) - int => string]
+    - [(string | int | (list any)) - (string | (list any) | (vector any)) =>
+       int]
+
+    When the subtrahend is itself a union, each member of the minuend is removed
+    if it equals any member of the subtrahend. For non-union minuends, returns
+    [TUnion []] (empty/never type) when matched, or [minuend] unchanged.
 
     Uses structural equality after following type variable links. *)

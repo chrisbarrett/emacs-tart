@@ -101,12 +101,12 @@ let test_nonunion_overlapping () =
   let result = Narrow.narrow_type Prim.int Prim.num in
   Alcotest.(check string) "int ∩ num = int" "int" (to_string result)
 
-let test_nonunion_disjoint_fallback () =
+let test_nonunion_disjoint_empty () =
   setup ();
-  (* string ∩ int → int (disjoint, fallback to target) *)
+  (* string ∩ int → empty (disjoint types, contradiction) *)
   let result = Narrow.narrow_type Prim.string Prim.int in
   Alcotest.(check string)
-    "string ∩ int = int (fallback)" "int" (to_string result)
+    "string ∩ int = empty (disjoint)" "(Or)" (to_string result)
 
 let test_truthy_nonunion () =
   setup ();
@@ -116,10 +116,80 @@ let test_truthy_nonunion () =
 
 let test_nil_truthy () =
   setup ();
-  (* nil ∩ truthy → truthy (nil is disjoint with truthy, fallback) *)
+  (* nil ∩ truthy → empty (nil is disjoint with truthy, contradiction) *)
   let result = Narrow.narrow_type Prim.nil Prim.truthy in
   Alcotest.(check string)
-    "nil ∩ truthy = truthy (fallback)" "truthy" (to_string result)
+    "nil ∩ truthy = empty (disjoint)" "(Or)" (to_string result)
+
+(* =============================================================================
+   narrow_type: union target (multi-type predicates)
+   ============================================================================= *)
+
+let test_union_intersect_partial_overlap () =
+  setup ();
+  (* (string | int | (list any)) ∩ ((list any) | (vector any) | string) →
+     (string | (list any)) — only members overlapping with target union kept *)
+  let original = TUnion [ Prim.string; Prim.int; list_of Prim.any ] in
+  let target = TUnion [ list_of Prim.any; vector_of Prim.any; Prim.string ] in
+  let result = Narrow.narrow_type original target in
+  Alcotest.(check string)
+    "partial overlap with union target" "(Or string (list (Or truthy nil)))"
+    (to_string result)
+
+let test_union_intersect_no_overlap () =
+  setup ();
+  (* (int | symbol) ∩ ((list any) | string) → empty *)
+  let original = TUnion [ Prim.int; Prim.symbol ] in
+  let target = TUnion [ list_of Prim.any; Prim.string ] in
+  let result = Narrow.narrow_type original target in
+  Alcotest.(check string)
+    "no overlap with union target" "(Or)" (to_string result)
+
+let test_union_intersect_full_overlap () =
+  setup ();
+  (* (string | int) ∩ (string | int | symbol) → (string | int) *)
+  let original = TUnion [ Prim.string; Prim.int ] in
+  let target = TUnion [ Prim.string; Prim.int; Prim.symbol ] in
+  let result = Narrow.narrow_type original target in
+  Alcotest.(check string)
+    "full overlap with union target" "(Or string int)" (to_string result)
+
+(* =============================================================================
+   subtract_type: union subtrahend
+   ============================================================================= *)
+
+let test_subtract_union_from_union () =
+  setup ();
+  (* (string | int | (list any)) - ((list any) | (vector any) | string) → int *)
+  let minuend = TUnion [ Prim.string; Prim.int; list_of Prim.any ] in
+  let subtrahend =
+    TUnion [ list_of Prim.any; vector_of Prim.any; Prim.string ]
+  in
+  let result = subtract_type minuend subtrahend in
+  Alcotest.(check string) "subtract union from union" "int" (to_string result)
+
+let test_subtract_union_single_type () =
+  setup ();
+  (* string - (string | int) → empty *)
+  let result = subtract_type Prim.string (TUnion [ Prim.string; Prim.int ]) in
+  Alcotest.(check string)
+    "subtract union from single type" "(Or)" (to_string result)
+
+let test_subtract_union_no_match () =
+  setup ();
+  (* (string | int) - ((list any) | symbol) → (string | int) *)
+  let minuend = TUnion [ Prim.string; Prim.int ] in
+  let subtrahend = TUnion [ list_of Prim.any; Prim.symbol ] in
+  let result = subtract_type minuend subtrahend in
+  Alcotest.(check string)
+    "subtract union no match" "(Or string int)" (to_string result)
+
+let test_subtract_single_not_in_union () =
+  setup ();
+  (* symbol - (string | int) → symbol *)
+  let result = subtract_type Prim.symbol (TUnion [ Prim.string; Prim.int ]) in
+  Alcotest.(check string)
+    "single type not in union subtrahend" "symbol" (to_string result)
 
 (* =============================================================================
    narrow_type: linked type variables
@@ -171,10 +241,29 @@ let () =
         [
           Alcotest.test_case "overlapping (int ∩ num)" `Quick
             test_nonunion_overlapping;
-          Alcotest.test_case "disjoint fallback" `Quick
-            test_nonunion_disjoint_fallback;
+          Alcotest.test_case "disjoint empty" `Quick
+            test_nonunion_disjoint_empty;
           Alcotest.test_case "truthy non-union" `Quick test_truthy_nonunion;
           Alcotest.test_case "nil ∩ truthy" `Quick test_nil_truthy;
+        ] );
+      ( "union target",
+        [
+          Alcotest.test_case "partial overlap" `Quick
+            test_union_intersect_partial_overlap;
+          Alcotest.test_case "no overlap" `Quick test_union_intersect_no_overlap;
+          Alcotest.test_case "full overlap" `Quick
+            test_union_intersect_full_overlap;
+        ] );
+      ( "subtract union",
+        [
+          Alcotest.test_case "union from union" `Quick
+            test_subtract_union_from_union;
+          Alcotest.test_case "union from single" `Quick
+            test_subtract_union_single_type;
+          Alcotest.test_case "union no match" `Quick
+            test_subtract_union_no_match;
+          Alcotest.test_case "single not in union" `Quick
+            test_subtract_single_not_in_union;
         ] );
       ( "linked tvars",
         [ Alcotest.test_case "linked tvar narrows" `Quick test_linked_tvar ] );

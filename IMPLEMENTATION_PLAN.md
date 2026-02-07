@@ -1,138 +1,159 @@
-# Implementation Plan: Spec 48 R7 — Equality Safety Bounds
+# Implementation Plan: Spec 52 — Remaining Type Predicate Tasks
 
 ## Background
 
-Spec 48 (Prelude) R1–R6 are fully implemented. The one remaining task is
-R7: make `eq` and `eql` type-safe by detecting identity comparison on
-non-identity-safe types (strings, lists, floats for `eq`).
+Spec 52 (Type Predicates) is mostly implemented. R1–R4 (basic narrowing,
+else-branch subtraction, cumulative cond narrowing, predicates in `and`)
+all work, plus standard library declarations are migrated to multi-clause
+syntax (Spec 54). Three tasks remain:
+
+1. **R5: Predicates in `or` early-exit** — `(or (stringp x) (error "..."))`
+   should narrow `x` to `string` after the `or` expression
+2. **Union intersection for narrowing** — `narrow_type` needs to handle
+   semantic intersection correctly for overlapping types
+3. **Inline-only restriction (R12)** — Stored predicate results like
+   `(let ((result (stringp x))) (when result ...))` must NOT narrow `x`
 
 **What's already done:**
 
-- `eq-safe` and `eql-safe` types exist in `typings/tart-prelude.tart`
-- `satisfies_bound` in `sig_loader.ml` supports union bounds
-- Multi-clause dispatch works (Spec 54/56)
-- Clause diagnostics work (Spec 57)
-- `infer_eq_with_disjointness` in `infer.ml` detects provably disjoint
-  types (e.g., `(eq 1 "a")` → error E0008)
-- `types_disjoint` in `unify.ml` implements the disjointness check
+- `narrow.ml`: `analyze_condition`, `narrow_type`, `predicate_info`
+- `infer.ml`: `narrow_env_from_analysis`, `narrow_then_from_analysis`,
+  `narrow_else_from_analysis`, plus narrowing in `infer_if`,
+  `infer_if_no_else`, `infer_when`, `infer_unless`, `infer_cond`,
+  `infer_and`
+- `infer_or` exists but does NOT propagate narrowing to code after the
+  `or` expression
 
-**Current eq/eql signatures:**
+**Key insight for R5:** The `or` early-exit pattern works differently from
+`and`. In `(or (stringp x) (error "..."))`, if execution continues past
+the `or`, one of the args was truthy. If the first arg is a predicate
+and the second arg diverges (never returns), then the predicate must have
+been true. However, implementing full divergence analysis is complex.
 
-```lisp
-;; data.tart
-(defun eq [a b] (a b) -> bool)
-;; fns.tart
-(defun eql [a b] (a b) -> bool)
+The practical approach: when `or` is used as a condition in `if`/`when`
+etc., the narrowing already happens because `analyze_condition` already
+handles the outer `if`. The missing case is when `or` appears as a
+standalone statement and execution continues afterward. This requires
+`infer_or` to propagate the then-narrowing from predicates in its args
+into the subsequent environment.
+
+Actually, re-reading the spec more carefully: R5 says:
+
+```elisp
+(or (stringp x) (error "Expected string"))
+(upcase x)   ; x : string
 ```
 
-**Target signatures (per Spec 57 design notes):**
+This means the narrowing must escape the `or` into the enclosing `progn`.
+This is a **progn-level** narrowing concern: after an `or` expression
+that contains a predicate, subsequent forms see the narrowed env.
 
-```lisp
-;; data.tart
-(defun eq
-  ((eq-safe eq-safe) -> bool)
-  ((_ _) -> bool
-    (warn "eq compares by identity; use equal for structural comparison")))
+This is analogous to how some type systems handle assertion-like
+patterns. The simplest correct approach: when `or` has a predicate in
+its first position and a divergent (error/signal) form in subsequent
+positions, narrow the environment after the `or`.
 
-;; fns.tart
-(defun eql
-  ((eql-safe eql-safe) -> bool)
-  ((_ _) -> bool
-    (warn "eql compares by identity for non-numbers; use equal for structural comparison")))
-```
+For now, the pragmatic approach is to handle `or` when used as a
+condition (already works via `analyze_condition`) and defer the
+progn-level escape. The spec example is an aspirational pattern;
+checking whether the second arg diverges requires analyzing `error`
+as `never`-returning, which the type system may not track yet.
 
-This uses multi-clause signatures with clause diagnostics rather than
-bounded type parameters. The first clause matches identity-safe types
-silently; the second clause matches anything else with a warning.
-
-**Interaction with disjointness checking:**
-
-The existing `infer_eq_with_disjointness` special case in `infer.ml`
-provides a more precise check: it detects when the two argument types are
-provably disjoint (can never be `eq`). This is a separate, complementary
-concern—two strings can be `eq` (identity) but shouldn't be compared that
-way. The disjointness check catches `(eq "a" 42)` as an error; the
-clause diagnostic catches `(eq "a" "b")` as a warning.
-
-Both checks should coexist: the multi-clause dispatch runs through
-`infer_application`, while the disjointness check runs in the special
-`infer_eq_with_disjointness` path. However, since multi-clause dispatch
-now handles the identity-safety concern, the special-case path should
-still run for disjointness but the clause dispatch should also fire.
-
-**Key issue:** Currently `infer_eq_with_disjointness` intercepts eq/eql
-calls *before* they reach `infer_application`. This bypasses clause
-dispatch entirely. To get both behaviors, we need to either:
-
-(a) Remove the special-case intercept and let calls flow through
-    `infer_application` (which already does clause dispatch), then add
-    disjointness checking as a post-step, OR
-(b) Keep the special case but also invoke clause dispatch within it.
-
-Option (a) is cleaner: route eq/eql through `infer_application` and add
-disjointness checking there.
+**Revised scope:** Focus on the inline-only restriction (R12) which is a
+correctness fix, and union intersection improvement which completes the
+narrowing semantics. R5 (or-expression narrowing in progn context)
+requires `never`-return tracking and is deferred.
 
 ---
 
-## Iteration 1: Migrate eq/eql to multi-clause signatures
+## Iteration 1: Inline-only restriction for predicate narrowing
 
-Change `eq` and `eql` signatures to multi-clause with clause diagnostics,
-and route their inference through `infer_application` so clause dispatch
-fires.
+Ensure that storing a predicate result in a variable does NOT enable
+narrowing. Currently `analyze_condition` only recognizes inline
+`(predicate-fn var)` calls and `(and ...)` forms, so the restriction
+is partially enforced by the pattern-matching structure. Verify this
+is correct and add a test fixture.
 
 **What to build:**
 
-1. Update `typings/emacs/31.0/c-core/data.tart`: change `eq` from
-   `[a b] (a b) -> bool` to multi-clause with `eq-safe` first clause
-   and wildcard second clause with `warn` diagnostic.
+1. Verify `analyze_condition` in `narrow.ml` does NOT match a bare
+   symbol reference like `result` in `(when result ...)` — it should
+   return `NoPredicate` because the condition is a `Symbol`, not a
+   `List` with a function call. Read the code to confirm.
 
-2. Update `typings/emacs/31.0/c-core/fns.tart`: same for `eql` with
-   `eql-safe`.
+2. Create test fixture `test/fixtures/typing/core/predicate_no_stored.el`:
+   ```elisp
+   ;; Stored predicate result does NOT narrow (R12)
+   (defun stored-predicate (x)
+     (declare (tart ((string | int)) -> int))
+     (let ((is-str (stringp x)))
+       (if is-str
+           (string-to-char x)   ;; x is NOT narrowed here
+         (+ x 1))))             ;; nor here
+   ```
+   This should FAIL because `x` is not narrowed to `string` in the
+   then-branch (it's still `(string | int)` and `string-to-char`
+   expects `string`).
 
-3. Modify `infer.ml`: remove the special-case pattern match for eq/eql
-   (lines ~287-289) that dispatches to `infer_eq_with_disjointness`.
-   Instead, let eq/eql calls fall through to `infer_application` like
-   any other function.
+3. Create the `.expected` file with `FAIL` and the expected error
+   substring.
 
-4. Move disjointness checking into `infer_application`: after clause
-   dispatch or standard constraint generation for eq/eql, check if
-   the two argument types are provably disjoint and inject the E0008
-   constraint if so.
+**Files:** `narrow.ml` (read/verify), test fixtures
 
-**Files:** `typings/emacs/31.0/c-core/data.tart`,
-`typings/emacs/31.0/c-core/fns.tart`, `lib/typing/infer.ml`
-
-**Verify:** `dune test`; existing disjoint-eq fixtures still pass;
-identity-unsafe calls now produce warnings
+**Verify:** `dune test`; fixture confirms stored predicate doesn't narrow
 
 ---
 
-## Iteration 2: Test fixtures and spec cleanup
+## Iteration 2: Improve narrow_type for union intersection
 
-Add test fixtures for the new behavior and update spec task checkboxes.
+The current `narrow_type` implementation uses `types_disjoint` to filter
+union members, which works for simple cases but fails for overlapping
+types. Improve it to handle the key cases:
 
 **What to build:**
 
-1. Add fixture `test/fixtures/typing/core/eq_identity_safe.{el,expected}`:
-   eq with identity-safe types (symbol, keyword, int, t, nil) → PASS
+1. In `narrow.ml`, improve `narrow_type`:
+   - When original is a union and target is also a union, compute the
+     intersection by filtering original members that overlap with ANY
+     target member
+   - When original is `any` and target is a union, return target (already
+     works)
+   - When original is a single type that's a subtype of target, keep it
+     (already partially works via disjointness check)
 
-2. Add fixture `test/fixtures/typing/errors/eq-identity-unsafe.{el,expected}`:
-   eq with string args → FAIL with identity warning
+2. Handle the case where target is a multi-type predicate union like
+   `(list any) | (vector any) | string` (from `sequencep`):
+   - `narrow_type ((string | int | (list any))) ((list any) | (vector any) | string)`
+     should produce `(string | (list any))` — the members of original
+     that overlap with any member of target
 
-3. Add fixture `test/fixtures/typing/core/eql_float.{el,expected}`:
-   eql with float args → PASS (float is eql-safe)
+3. Add unit tests for `narrow_type` edge cases in a test file.
 
-4. Update existing `eq_compatible.el` expected output if needed (symbols
-   are eq-safe, so no warning expected)
+4. Create test fixture `test/fixtures/typing/core/predicate_union_intersect.el`:
+   Tests narrowing with multi-type predicates where the input union
+   partially overlaps with the predicate's narrowed type.
 
-5. Verify existing `disjoint-eq/` fixtures still pass (disjointness
-   check is complementary to identity-safety check)
+**Files:** `lib/typing/narrow.ml`, test fixtures
 
-6. Update spec task checkboxes:
-   - `specs/48-prelude.md`: check R7 task, update status to "Complete"
-   - `specs/35-structured-errors.md`: check all tasks (already
-     implemented), update status to "Complete"
+**Verify:** `dune test`; multi-type predicate narrowing correct
 
-**Files:** test fixtures, spec files
+---
+
+## Iteration 3: Update spec checkboxes and test
+
+Mark completed tasks in spec, run full test suite.
+
+**What to build:**
+
+1. Update `specs/52-type-predicates.md`:
+   - Check "Inline-only restriction" task
+   - Check "Union intersection for narrowing" task
+   - Add note that R5 (or-expression progn narrowing) requires
+     never-return tracking and is deferred
+   - Update status
+
+2. Run full test suite and verify all fixtures pass.
+
+**Files:** `specs/52-type-predicates.md`
 
 **Verify:** `dune test`
