@@ -91,10 +91,10 @@ let check_file path =
                     diff;
                   }
             | Ok reparsed ->
-                if Sexp.equal sexp reparsed then check_forms (i + 1) rest
+                let expected = Print.to_string sexp in
+                let actual = Print.to_string reparsed in
+                if String.equal expected actual then check_forms (i + 1) rest
                 else
-                  let expected = Print.to_string sexp in
-                  let actual = Print.to_string reparsed in
                   let diff = make_diff ~expected ~actual in
                   Mismatch { path; form_index = i; expected; actual; diff })
       in

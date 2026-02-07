@@ -147,15 +147,20 @@ end
 
 ## Tasks
 
-- [ ] Create `lib/roundtrip/` structure
-- [ ] [R1] `check_file`
-- [ ] [R2] `check_file_with_emacs`
-- [ ] [R3] Failure output with path/error
-- [ ] [R4] Diff output
-- [ ] [R5-6] Content-addressable cache
-- [ ] [R7] Corpus discovery
-- [ ] [R8-9] Exit codes
-- [ ] [R10] `dune test` integration
-- [ ] [R11] Summary stats
+- [x] Create `lib/roundtrip/` structure
+- [x] [R1] `check_file`
+- [x] [R2] `check_file_with_emacs`
+- [x] [R3] Failure output with path/error
+- [x] [R4] Diff output
+- [x] [R5-6] Content-addressable cache
+- [x] [R7] Corpus discovery
+- [x] [R8-9] Exit codes
+- [x] [R10] `dune test` integration
+- [x] [R11] Summary stats
 - [ ] [R12] Parallel execution
-- [ ] Create `run-roundtrip.sh`
+- [x] Create `run-roundtrip.sh`
+
+## Status
+
+Complete (except R12 parallel execution — OCaml 4.x lacks domains;
+sequential is fine given caching)
