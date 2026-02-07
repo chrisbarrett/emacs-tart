@@ -4,7 +4,8 @@
     variable scoping and resolving type references.
 
     Validation is implemented in {!Sig_validation} and re-exported here for
-    backward compatibility. *)
+    backward compatibility. Type conversion is implemented in {!Sig_convert} and
+    re-exported here for backward compatibility. *)
 
 (** {1 Load Errors} *)
 
@@ -69,19 +70,19 @@ val validate_signature_all :
 
 (** {1 Type Alias Context} *)
 
-type alias_param = {
+type alias_param = Sig_convert.alias_param = {
   ap_name : string;  (** Parameter name (e.g., "a") *)
   ap_bound : Sig_ast.sig_type option;  (** Upper bound (e.g., truthy) *)
 }
 (** A type parameter with optional bound *)
 
-type type_alias = {
+type type_alias = Sig_convert.type_alias = {
   alias_params : alias_param list;  (** Type parameters with optional bounds *)
   alias_body : Sig_ast.sig_type;  (** The definition body *)
 }
 (** A type alias definition with optional parameters *)
 
-type alias_context
+type alias_context = Sig_convert.alias_context
 (** Context for type alias expansion *)
 
 val empty_aliases : alias_context
@@ -96,20 +97,23 @@ val add_alias : string -> type_alias -> alias_context -> alias_context
 val alias_names : alias_context -> string list
 (** Get all alias names from the context *)
 
+val binder_to_alias_param : Sig_ast.tvar_binder -> alias_param
+(** Convert a tvar_binder to an alias_param *)
+
 val build_alias_context : Sig_ast.signature -> alias_context
 (** Build alias context from signature declarations. Only includes type
     declarations with bodies (aliases, not opaque types). *)
 
 (** {1 Opaque Type Context} *)
 
-type opaque_type = {
+type opaque_type = Sig_convert.opaque_type = {
   opaque_params : string list;
       (** Phantom type parameters (e.g., [a] in tagged) *)
   opaque_con : string;  (** The generated type constructor name *)
 }
 (** An opaque type declaration with its parameters *)
 
-type opaque_context
+type opaque_context = Sig_convert.opaque_context
 (** Context for opaque type lookup *)
 
 val empty_opaques : opaque_context
@@ -134,7 +138,10 @@ val build_opaque_context : string -> Sig_ast.signature -> opaque_context
     Combined context for type resolution during signature loading. Contains both
     aliases and opaque types. *)
 
-type type_context = { tc_aliases : alias_context; tc_opaques : opaque_context }
+type type_context = Sig_convert.type_context = {
+  tc_aliases : alias_context;
+  tc_opaques : opaque_context;
+}
 
 val empty_type_context : type_context
 (** Empty type context with no aliases or opaques *)

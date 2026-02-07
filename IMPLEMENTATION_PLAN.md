@@ -96,10 +96,10 @@ Lines 424–805 contain type conversion: `canonicalize_type_name`,
 `sig_name_to_prim`, `substitute_sig_type`, `substitute_sig_param`,
 `sig_type_to_typ_with_ctx` and the simplified interfaces.
 
-- [ ] Create `lib/sig/sig_convert.ml` + `.mli`
-- [ ] Move type conversion functions (~380 lines)
-- [ ] Wire into `sig_loader.ml`
-- [ ] Build + test
+- [x] Create `lib/sig/sig_convert.ml` + `.mli`
+- [x] Move type conversion functions (~380 lines)
+- [x] Wire into `sig_loader.ml`
+- [x] Build + test
 
 ---
 
