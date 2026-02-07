@@ -266,16 +266,20 @@ Error.report errors
 
 ## Tasks
 
-- [ ] [R1] Define `Error.t` variant type in `lib/core/error.ml`
-- [ ] [R2] Implement `is_fatal` classification
-- [ ] [R3] Implement `location` accessor
-- [ ] [R4] Implement `to_string` for all variants
-- [ ] [R7] Add `to_json` to `Diagnostic.t`
-- [ ] [R5] Implement `to_json` for `Error.t`
-- [ ] [R10] Implement `Error.Acc` accumulator module
-- [ ] [R11] Add `of_diagnostics` conversion
-- [ ] [R6] Implement `Error.report` with summary
-- [ ] [R9] Add `io_error` wrapper function
-- [ ] [R8] Migrate CLI errors in `bin/main.ml` to use `Error.t`
-- [ ] Add `--format=json` flag to `tart check` command
-- [ ] Update tests to verify JSON output
+- [x] [R1] Define `Error.t` variant type in `lib/core/error.ml`
+- [x] [R2] Implement `is_fatal` classification
+- [x] [R3] Implement `location` accessor
+- [x] [R4] Implement `to_string` for all variants
+- [x] [R7] Add `to_json` to `Diagnostic.t`
+- [x] [R5] Implement `to_json` for `Error.t`
+- [x] [R10] Implement `Error.Acc` accumulator module
+- [x] [R11] Add `of_diagnostics` conversion
+- [x] [R6] Implement `Error.report` with summary
+- [x] [R9] Add `io_error` wrapper function
+- [x] [R8] Migrate CLI errors in `bin/main.ml` to use `Error.t`
+- [x] Add `--format=json` flag to `tart check` command
+- [x] Update tests to verify JSON output
+
+**Status:** Complete. All requirements R1–R11 implemented. Unified `Error.t` in
+`lib/error.ml` with JSON serialization, Elm-style human formatting,
+`--format=json` CLI flag, and `File_error` structured errors.

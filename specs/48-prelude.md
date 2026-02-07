@@ -307,8 +307,9 @@ with float args succeeds
 - [x] [R4] Covered by Spec 07 R17 (no-shadowing rule)
 - [x] [R5] Ensure type aliases expand correctly
 - [x] [R6] Validate bounded quantifier on `option`
-- [ ] [R7] Add `eq-safe` and `eql-safe` types; generalize `satisfies_bound`
+- [x] [R7] Add `eq-safe` and `eql-safe` types; generalize `satisfies_bound`
 
-**Status:** R1–R6 fully implemented. Prelude at `typings/tart-prelude.tart`
-with management via `lib/sig/prelude.mli`. R7 (`eq-safe`, `eql-safe`) specified
-but not yet implemented.
+**Status:** Complete. All requirements R1–R7 implemented. Prelude at
+`typings/tart-prelude.tart` with management via `lib/sig/prelude.mli`.
+`eq-safe` and `eql-safe` types bound `eq`/`eql` signatures via multi-clause
+dispatch with clause diagnostics (Spec 54/57).

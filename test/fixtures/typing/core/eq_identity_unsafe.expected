@@ -1,0 +1,3 @@
+PASS
+eq compares by identity; use equal for structural comparison
+eql compares by identity for non-numbers; use equal for structural comparison
