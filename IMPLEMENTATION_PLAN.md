@@ -64,10 +64,10 @@ Lines 1996–2264 contain defun inference: `infer_defun_as_expr`,
 `infer_defun`, `infer_defun_with_declaration`, `infer_defun_inferred`,
 plus the `(declare (tart TYPE))` extraction helper.
 
-- [ ] Create `lib/typing/defun_infer.ml` + `.mli`
-- [ ] Move the defun inference cluster (~270 lines)
-- [ ] Wire into `infer.ml`
-- [ ] Build + test
+- [x] Create `lib/typing/defun_infer.ml` + `.mli`
+- [x] Move the defun inference cluster (~270 lines)
+- [x] Wire into `infer.ml`
+- [x] Build + test
 
 ---
 
