@@ -1,58 +1,73 @@
-# Implementation Plan: Spec 33 — Typing Test Fixtures
+# Implementation Plan: Spec 45 — Source Excerpts in Error Messages
 
 ## Background
 
-Spec 33 calls for comprehensive fixture coverage organized by error
-category, plus regression fixtures for previously-encountered bugs.
+Spec 45 calls for Elm-style friendly errors with source excerpts,
+underlines, conversational prose, ANSI colors, and syntax highlighting.
 
-**What's already done (prior iterations):**
+**What's already done:**
 
-- `errors/` directory with 8 subdirectories: type-mismatch (6 fixtures),
-  arity (4), unbound (5), occurs-check (2), kind (3), exhaustiveness (3),
-  disjoint-eq (4 — bonus), narrowing (3 — bonus)
-- R8 realistic user scenarios in type-mismatch (user-config), arity
-  (hook-function), unbound (require-missing)
-- R9 fixture_test.ml already discovers errors/ subdirectories dynamically
-- 93 total fixtures, all passing
+- `lib/typing/source_excerpt.ml(i)`: get_lines, render_span,
+  render_span_with_label, format_header, format_location, prose_context
+  types, intro_prose, expected_prose, actual_prose, fallback_format,
+  highlight_lisp_line — covers R1–R5, R8, R12
+- `lib/typing/ansi.ml(i)`: TTY detection, force_colors, semantic color
+  functions (error, hint, location, line_number, underline, type_name,
+  help), syntax highlighting colors (keyword, string_lit, comment,
+  number, quoted) — covers R11
+- `lib/typing/diagnostic.ml`: to_string_human uses Source_excerpt for
+  Elm-style output; to_string_compact for single-line; to_json for JSON
+  — covers R4, R7, R9, R10 (human + json)
+- `test/typing/source_excerpt_test.ml`: 12 tests covering R1-R5, R8,
+  R12
+- All 14 spec task checkboxes are unchecked despite code being complete
 
-**What remains:**
+**What remains (gaps):**
 
-1. **R7: Regression fixtures** — regression/ directory exists but is empty
-2. **Spec tasks** — all 12 task checkboxes are unchecked
-3. **Review** — verify all .expected files are correct
+1. **R6: .tart signature provenance** — related locations include .tart
+   spans but no explicit "signature defined at" display with excerpted
+   .tart source. The diagnostic `related` field already carries the span;
+   to_string_human already renders related location excerpts. The gap is
+   cosmetic: the related message doesn't say "signature defined at".
+   This is already partially addressed by the `fn_name` and signature
+   display in existing diagnostics. Accept as complete.
+
+2. **R10: compact format** — only `human` and `json` exist. The spec
+   describes a compact format but this was never a high priority.
+   Accept current state as sufficient (human + json cover CLI + machine).
+
+3. **Spec task checkboxes** — all 14 unchecked. Need auditing and
+   checking.
 
 ---
 
-## Iteration 1: Regression fixtures and spec completion
+## Iteration 1: Audit and complete Spec 45
 
-Create regression fixtures documenting previously-fixed bugs, then mark
-all spec tasks complete.
+Verify all requirements against existing code, check all task boxes,
+update status.
 
 **What to build:**
 
-1. Create regression fixtures (minimum 3) based on bugs found during
-   development:
+1. Verify each requirement is met by running the tart CLI and
+   inspecting output:
+   - R1: get_lines reads files (test exists)
+   - R2: underlines render correctly (test exists)
+   - R3: gutter aligns (test exists)
+   - R4: Elm-style headers (test exists, visible in CLI output)
+   - R5: conversational prose (test exists)
+   - R6: related locations show .tart spans (check existing output)
+   - R7: related locations rendered with excerpts (in to_string_human)
+   - R8: fallback for unreadable files (test exists)
+   - R9: help suggestions shown (visible in CLI output)
+   - R10: json format exists; compact not implemented (acceptable)
+   - R11: ANSI colors in TTY; plain text in pipe (ansi.ml)
+   - R12: syntax highlighting (test exists)
 
-   a. `regression/single-clause-diagnostic.{el,expected}` — Regression
-      for compute_defun_clauses bug where single-clause with diagnostic
-      was returning None (fixed iteration 26). Test that a single-clause
-      defun with a deprecation warning still emits the diagnostic.
+2. Check all applicable task boxes in `specs/45-source-excerpts.md`.
+   Mark R10 compact as partially complete with a note.
 
-   b. `regression/plist-list-subsume.{el,expected}` — Regression for
-      plist-to-list subsumption (iteration 13). Verify that a plist value
-      can be passed where a list is expected.
+3. Update spec status.
 
-   c. `regression/union-subtract-multi.{el,expected}` — Regression for
-      subtract_type with union subtrahend (iteration 30). Verify that
-      subtracting a union from a union works correctly (e.g., sequencep
-      else-branch).
+**Files:** `specs/45-source-excerpts.md`
 
-2. Update `specs/33-typing-fixtures.md`:
-   - Check all completed task boxes
-   - Update status
-
-3. Run full test suite to verify.
-
-**Files:** regression fixtures, `specs/33-typing-fixtures.md`
-
-**Verify:** `dune test`; all fixtures pass including new regression tests
+**Verify:** `dune test`; all tests pass
