@@ -119,5 +119,11 @@ val mismatch_to_diagnostic : mismatch_error -> Diagnostic.t
 val missing_signature_to_diagnostic : missing_signature_warning -> Diagnostic.t
 (** Convert a missing signature warning to a diagnostic *)
 
+val clause_diagnostic_to_diagnostic :
+  Infer.resolved_clause_diagnostic -> Diagnostic.t
+(** Convert a resolved clause diagnostic to a [Diagnostic.t].
+
+    Maps severity: DiagError → Error, DiagWarn → Warning, DiagNote → Hint. *)
+
 val diagnostics_of_result : check_result -> Diagnostic.t list
 (** Get all diagnostics from a check result *)

@@ -26,6 +26,12 @@ val is_fatal : t -> bool
     Fatal errors (Io, File, Cli) prevent further processing. Recoverable errors
     (Type, Parse, Eval) allow collecting more errors. *)
 
+val is_error : t -> bool
+(** [is_error err] returns [true] if this is an error-severity diagnostic.
+
+    Returns [true] for Parse, Eval, Io, File, Cli errors. For Type diagnostics,
+    returns [true] only for Error severity (not Warning or Hint). *)
+
 (** {1 Location Access} *)
 
 val location : t -> Syntax.Location.span option

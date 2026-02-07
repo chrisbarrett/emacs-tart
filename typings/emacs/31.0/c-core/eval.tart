@@ -97,7 +97,8 @@
 ;; (functionp OBJ) - test if callable
 (defun functionp
   (((((&rest any) -> any))) -> t)
-  ((_) -> nil))
+  ((_) -> nil
+    (note "argument is not a function type; this always returns nil")))
 
 ;; (commandp FN &optional FOR-CALL-INTERACTIVELY) - test if command
 (defun commandp (any &optional any) -> bool)
@@ -107,7 +108,8 @@
 (defun called-interactively-p (symbol) -> bool)
 
 ;; (interactive-p) - legacy test for interactive call (deprecated)
-(defun interactive-p () -> bool)
+(defun interactive-p () -> bool
+  (warn "interactive-p is deprecated; use called-interactively-p"))
 
 ;; ===========================================================================
 ;; Macros

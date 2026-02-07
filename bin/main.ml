@@ -219,7 +219,13 @@ let check_file env filename : Tart.Type_env.t * Tart.Error.t list =
             ~candidates ())
         check_result.undefineds
     in
-    let diagnostics = type_diagnostics @ undefined_diagnostics in
+    let clause_diag_list =
+      List.map Tart.Module_check.clause_diagnostic_to_diagnostic
+        check_result.clause_diagnostics
+    in
+    let diagnostics =
+      type_diagnostics @ undefined_diagnostics @ clause_diag_list
+    in
     let type_errors = Tart.Error.of_diagnostics diagnostics in
     (check_result.env, parse_errors @ type_errors)
 
@@ -277,7 +283,7 @@ let run_check format emacs_version files =
   (match format with
   | Human -> Tart.Error.report_human all_errors
   | Json -> Tart.Error.report_json all_errors);
-  if all_errors <> [] then exit 1
+  if List.exists Tart.Error.is_error all_errors then exit 1
 
 (** Eval subcommand: evaluate expression *)
 let run_eval expr =

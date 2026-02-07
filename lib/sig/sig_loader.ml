@@ -978,12 +978,17 @@ let convert_clause_diagnostic (d : clause_diagnostic) :
     Each clause's parameters and return type are converted to core types,
     preserving clause structure for call-site dispatch (Spec 56). Clause
     diagnostics are carried through for emission at call sites (Spec 57).
-    Returns [Some clauses] for multi-clause defuns, [None] for single-clause. *)
+    Returns [Some clauses] for multi-clause defuns or single-clause defuns with
+    a diagnostic annotation, [None] otherwise. *)
 let compute_defun_clauses ?(scope_tvars : (string * Types.typ) list = [])
     (ctx : type_context) (tvar_names : string list)
     (clauses : defun_clause list) : Type_env.loaded_clause list option =
+  let has_diagnostic =
+    List.exists (fun c -> Option.is_some c.clause_diagnostic) clauses
+  in
   match clauses with
-  | [] | [ _ ] -> None
+  | [] -> None
+  | [ _ ] when not has_diagnostic -> None
   | _ ->
       Some
         (List.map

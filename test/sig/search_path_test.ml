@@ -545,12 +545,12 @@ let test_load_data_tart () =
       (match Type_env.lookup "eq" env with
       | None -> Alcotest.fail "eq not found in env"
       | Some _ -> ());
-      (* Verify type checking works with a predicate (uses Any, avoids num/int subtyping) *)
+      (* Verify type checking works with a predicate (uses Any, avoids num/int subtyping).
+         With clause dispatch (Spec 56), (null nil) matches the first clause
+         ((nil) -> t), so the return type is t, not the merged (Or t nil). *)
       let ty, errors = check_expr_str ~env "(null nil)" in
       Alcotest.(check int) "null no errors" 0 (List.length errors);
-      (* null returns Prim.bool which is (Or t nil) *)
-      Alcotest.(check string)
-        "null returns bool" "(Or t nil)" (Types.to_string ty)
+      Alcotest.(check string) "null returns t" "t" (Types.to_string ty)
 
 (** Test that fns.tart parses successfully (Spec 24 R5) *)
 let test_parse_fns_tart () =

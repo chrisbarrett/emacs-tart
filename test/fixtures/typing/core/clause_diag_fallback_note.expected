@@ -1,0 +1,2 @@
+PASS
+argument is not a function type; this always returns nil

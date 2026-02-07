@@ -335,17 +335,19 @@ diagnostics.
 
 ## Tasks
 
-- [ ] [R1] Add `clause_diagnostic` and `diagnostic_severity` to `sig_ast.mli`
-- [ ] [R1] Update `defun_clause` with optional diagnostic field
-- [ ] [R2] Parse `(warn ...)`, `(note ...)`, `(error ...)` forms in
+- [x] [R1] Add `clause_diagnostic` and `diagnostic_severity` to `sig_ast.mli`
+- [x] [R1] Update `defun_clause` with optional diagnostic field
+- [x] [R2] Parse `(warn ...)`, `(note ...)`, `(error ...)` forms in
       `sig_parser.ml`
-- [ ] [R3] Validate `%s` count matches argument count
-- [ ] [R3] Validate arguments are bound type variables
-- [ ] [R4] Emit diagnostics during clause matching in `infer.ml`
-- [ ] [R4] Substitute type variable bindings into format strings
-- [ ] [R5] Wire severity: warn/note non-blocking, error blocks
-- [ ] [R6] Map to Spec 51 severity; verify CLI flag interaction
-- [ ] [R7] Add test fixtures for clause diagnostics
+- [x] [R3] Validate `%s` count matches argument count
+- [x] [R3] Validate arguments are bound type variables
+- [x] [R4] Emit diagnostics during clause matching in `infer.ml`
+- [x] [R4] Substitute type variable bindings into format strings
+- [x] [R5] Wire severity: warn/note non-blocking, error blocks
+- [x] [R6] Map to Spec 51 severity; verify CLI flag interaction
+- [x] [R7] Add test fixtures for clause diagnostics
 - [ ] Write `plist-member` signature using clause diagnostics
 
-**Status:** Spec written. Implementation not started.
+**Status:** Complete. `plist-member` deferred: plist→list subsumption means
+the bare-list clause is unreachable (the plist clause always matches via
+widening).

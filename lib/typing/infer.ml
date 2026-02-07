@@ -438,7 +438,9 @@ and infer_if env cond then_branch else_branch _span =
     ty = result_ty;
     constraints = all_constraints;
     undefineds = all_undefineds;
-    clause_diagnostics = [];
+    clause_diagnostics =
+      cond_result.clause_diagnostics @ then_result.clause_diagnostics
+      @ else_result.clause_diagnostics;
   }
 
 (** Infer the type of an if expression without else branch.
@@ -479,7 +481,8 @@ and infer_if_no_else env cond then_branch span =
     ty = result_ty;
     constraints = all_constraints;
     undefineds = all_undefineds;
-    clause_diagnostics = [];
+    clause_diagnostics =
+      cond_result.clause_diagnostics @ then_result.clause_diagnostics;
   }
 
 (** Infer the type of a when expression with predicate narrowing.
@@ -510,7 +513,8 @@ and infer_when env cond body span =
     ty = result_ty;
     constraints = all_constraints;
     undefineds = all_undefineds;
-    clause_diagnostics = [];
+    clause_diagnostics =
+      cond_result.clause_diagnostics @ body_result.clause_diagnostics;
   }
 
 (** Infer the type of an unless expression with predicate narrowing.
@@ -542,7 +546,8 @@ and infer_unless env cond body span =
     ty = result_ty;
     constraints = all_constraints;
     undefineds = all_undefineds;
-    clause_diagnostics = [];
+    clause_diagnostics =
+      cond_result.clause_diagnostics @ body_result.clause_diagnostics;
   }
 
 (** Infer the type of a let expression with generalization.
@@ -568,33 +573,41 @@ and infer_let env bindings body span =
             let _ = Unify.solve result.constraints in
             (* Generalize if it's a syntactic value *)
             let scheme = G.generalize_if_value outer_level result.ty expr in
-            (name, scheme, result.constraints, result.undefineds)
+            ( name,
+              scheme,
+              result.constraints,
+              result.undefineds,
+              result.clause_diagnostics )
         | List ([ Symbol (name, _) ], _) ->
             (* Binding without value: nil (not generalizable) *)
-            (name, Env.Mono Prim.nil, C.empty, [])
+            (name, Env.Mono Prim.nil, C.empty, [], [])
         | _ ->
             (* Malformed binding *)
             ( "_",
               Env.Mono (fresh_tvar (Env.current_level inner_env)),
               C.empty,
+              [],
               [] ))
       bindings
   in
 
-  (* Collect constraints and undefineds from all bindings *)
+  (* Collect constraints, undefineds, and clause diagnostics from bindings *)
   let binding_constraints =
     List.fold_left
-      (fun acc (_, _, constraints, _) -> C.combine acc constraints)
+      (fun acc (_, _, constraints, _, _) -> C.combine acc constraints)
       C.empty binding_schemes
   in
   let binding_undefineds =
-    List.concat_map (fun (_, _, _, undefs) -> undefs) binding_schemes
+    List.concat_map (fun (_, _, _, undefs, _) -> undefs) binding_schemes
+  in
+  let binding_clause_diags =
+    List.concat_map (fun (_, _, _, _, cdiags) -> cdiags) binding_schemes
   in
 
   (* Extend environment with all bindings (now potentially polymorphic) *)
   let body_env =
     List.fold_left
-      (fun env (name, scheme, _, _) -> Env.extend name scheme env)
+      (fun env (name, scheme, _, _, _) -> Env.extend name scheme env)
       env binding_schemes
   in
 
@@ -605,7 +618,7 @@ and infer_let env bindings body span =
     ty = body_result.ty;
     constraints = C.combine binding_constraints body_result.constraints;
     undefineds = binding_undefineds @ body_result.undefineds;
-    clause_diagnostics = body_result.clause_diagnostics;
+    clause_diagnostics = binding_clause_diags @ body_result.clause_diagnostics;
   }
 
 (** Infer the type of a let* expression with generalization.
@@ -617,9 +630,9 @@ and infer_let_star env bindings body span =
   let outer_level = Env.current_level env in
 
   (* Process bindings sequentially, each in the extended environment *)
-  let rec process_bindings env bindings constraints undefineds =
+  let rec process_bindings env bindings constraints undefineds cdiags =
     match bindings with
-    | [] -> (env, constraints, undefineds)
+    | [] -> (env, constraints, undefineds, cdiags)
     | binding :: rest -> (
         let inner_env = Env.enter_level env in
         match binding with
@@ -633,14 +646,15 @@ and infer_let_star env bindings body span =
             process_bindings env' rest
               (C.combine constraints result.constraints)
               (undefineds @ result.undefineds)
+              (cdiags @ result.clause_diagnostics)
         | List ([ Symbol (name, _) ], _) ->
             let env' = Env.extend_mono name Prim.nil env in
-            process_bindings env' rest constraints undefineds
-        | _ -> process_bindings env rest constraints undefineds)
+            process_bindings env' rest constraints undefineds cdiags
+        | _ -> process_bindings env rest constraints undefineds cdiags)
   in
 
-  let body_env, binding_constraints, binding_undefineds =
-    process_bindings env bindings C.empty []
+  let body_env, binding_constraints, binding_undefineds, binding_cdiags =
+    process_bindings env bindings C.empty [] []
   in
   let body_result = infer_progn body_env body span in
 
@@ -648,7 +662,7 @@ and infer_let_star env bindings body span =
     ty = body_result.ty;
     constraints = C.combine binding_constraints body_result.constraints;
     undefineds = binding_undefineds @ body_result.undefineds;
-    clause_diagnostics = body_result.clause_diagnostics;
+    clause_diagnostics = binding_cdiags @ body_result.clause_diagnostics;
   }
 
 (** Infer the type of a progn expression.
@@ -1830,6 +1844,10 @@ and infer_application env fn args span =
             match Env.lookup_fn name env with
             | Some (Env.Poly (vars, _)) ->
                 try_clause_dispatch env vars clauses arg_types arg_literals span
+            | Some (Env.Mono _) ->
+                (* Monomorphic function with clauses (e.g. single-clause with
+                   diagnostic) — dispatch with empty tvar list *)
+                try_clause_dispatch env [] clauses arg_types arg_literals span
             | _ -> None)
         | None -> None)
     | None -> None

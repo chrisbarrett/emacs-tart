@@ -831,7 +831,13 @@ let to_string_human (d : t) : string =
   let buf = Buffer.create 512 in
 
   (* R4: Elm-style header with dashes *)
-  let error_type = error_type_of_code d.code in
+  let error_type =
+    match d.code with
+    | None ->
+        (* Clause diagnostics and other code-less diagnostics use severity *)
+        String.uppercase_ascii (format_severity d.severity)
+    | _ -> error_type_of_code d.code
+  in
   Buffer.add_string buf (Source_excerpt.format_header ~error_type d.span);
   Buffer.add_string buf "\n\n";
 
@@ -865,7 +871,11 @@ let to_string_human (d : t) : string =
     | None ->
         Source_excerpt.NoContext
   in
-  Buffer.add_string buf (Source_excerpt.intro_prose prose_ctx);
+  (* Clause diagnostics (no error code) use the message directly as the
+     intro prose; other diagnostics use the structured prose context. *)
+  (match d.code with
+  | None when d.message <> "" -> Buffer.add_string buf d.message
+  | _ -> Buffer.add_string buf (Source_excerpt.intro_prose prose_ctx));
   Buffer.add_string buf "\n\n";
 
   (* R1-R3: Source excerpt for primary location *)

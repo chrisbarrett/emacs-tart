@@ -19,6 +19,10 @@ let is_fatal = function
   | File _ -> true (* Fatal: cannot proceed without file *)
   | Cli _ -> true (* Fatal: invalid invocation *)
 
+let is_error = function
+  | Type d -> Diagnostic.is_error d
+  | Parse _ | Eval _ | Io _ | File _ | Cli _ -> true
+
 let location = function
   | Type d -> Some (Diagnostic.span d)
   | Parse { span; _ } -> Some span
@@ -195,11 +199,25 @@ let report (errors : t list) : unit =
       Found 1 error
     v} *)
 let report_human (errors : t list) : unit =
-  let count = List.length errors in
+  let error_count = List.length (List.filter is_error errors) in
+  let warning_count = List.length errors - error_count in
   List.iter (fun err -> prerr_endline (to_string_human err)) errors;
-  if count > 0 then
-    let plural = if count = 1 then "error" else "errors" in
-    prerr_endline (Printf.sprintf "\nFound %d %s" count plural)
+  if error_count > 0 || warning_count > 0 then
+    let parts = [] in
+    let parts =
+      if error_count > 0 then
+        let plural = if error_count = 1 then "error" else "errors" in
+        Printf.sprintf "%d %s" error_count plural :: parts
+      else parts
+    in
+    let parts =
+      if warning_count > 0 then
+        let plural = if warning_count = 1 then "warning" else "warnings" in
+        Printf.sprintf "%d %s" warning_count plural :: parts
+      else parts
+    in
+    prerr_endline
+      (Printf.sprintf "\nFound %s" (String.concat ", " (List.rev parts)))
 
 let report_json (errors : t list) : unit =
   let json_array = `List (List.map to_json errors) in

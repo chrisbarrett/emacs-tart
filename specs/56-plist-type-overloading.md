@@ -360,16 +360,17 @@ Where `infer_application` now:
 
 ## Tasks
 
-- [ ] [R1] Add literal value matching to clause dispatch in `infer.ml`
-- [ ] [R2] Verify row unification during clause matching
-- [ ] [R3] Test closed row rejection in clause matching
-- [ ] [R4] Verify fallthrough to generic clause
+- [x] [R1] Add literal value matching to clause dispatch in `infer.ml`
+- [x] [R2] Verify row unification during clause matching
+- [x] [R3] Test closed row rejection in clause matching
+- [x] [R4] Verify fallthrough to generic clause
 - [ ] [R5] Migrate `plist-get`, `alist-get`, `gethash`, `map-elt` to
       multi-clause `.tart` signatures
 - [ ] [R5] Remove hard-coded row inference functions from `infer.ml`
-- [ ] [R6] Run all existing row-typed test fixtures; verify decision table
+- [x] [R6] Run all existing row-typed test fixtures; verify decision table
       semantics preserved
-- [ ] [R7] Document literal matching in clause selection
+- [x] [R7] Document literal matching in clause selection
 
-**Status:** Spec written. Implementation not started. Depends on Spec 54
-completion.
+**Status:** Core dispatch implemented. R5 (signature migration and intrinsic
+removal) deferred—requires resolving plist↔list subsumption interaction with
+clause dispatch.
