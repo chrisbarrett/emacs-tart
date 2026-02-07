@@ -286,17 +286,17 @@ This is a deliberate strengthening—it catches real misuse.
 
 ## Tasks
 
-- [ ] [R1] Add `plist_of` constructor to `types.ml` / `types.mli`
-- [ ] [R1] Add `"Plist"` case to `intrinsic_display_name`
-- [ ] [R2] Add `"Plist"` to `is_truthy` intrinsic cases
-- [ ] [R3] Update `typings/tart-prelude.tart` plist definition
-- [ ] [R4] Add `"plist"` canonicalization to `sig_loader.ml`
-- [ ] [R5] Update `expand_map_row` in `sig_loader.ml`
-- [ ] [R6] Update `extract_plist_row` in `infer.ml`
-- [ ] [R7] Update `extract_concrete_map_row` in `unify.ml`
-- [ ] [R8] Add plist-to-list subsumption rule in `unify.ml`
-- [ ] [R9] Add cons-chain-to-plist structural promotion in `unify.ml`
-- [ ] Add test fixtures for plist intrinsic behavior
-- [ ] Verify existing plist tests still pass
+- [x] [R1] Add `plist_of` constructor to `types.ml` / `types.mli`
+- [x] [R1] Add `"Plist"` case to `intrinsic_display_name`
+- [x] [R2] Add `"Plist"` to `is_truthy` intrinsic cases
+- [x] [R3] Update `typings/tart-prelude.tart` plist definition
+- [x] [R4] Add `"plist"` canonicalization to `sig_loader.ml`
+- [x] [R5] Update `expand_map_row` in `sig_loader.ml`
+- [x] [R6] Update `extract_plist_row` in `infer.ml`
+- [x] [R7] Update `extract_concrete_map_row` in `unify.ml`
+- [x] [R8] Add plist-to-list subsumption rule in `unify.ml`
+- [x] [R9] Add cons-chain-to-plist structural promotion in `unify.ml`
+- [x] Add test fixtures for plist intrinsic behavior
+- [x] Verify existing plist tests still pass
 
-**Status:** Spec written. Implementation not started.
+**Status:** Complete
