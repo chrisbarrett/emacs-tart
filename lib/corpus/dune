@@ -1,0 +1,4 @@
+(library
+ (name corpus)
+ (public_name tart.corpus)
+ (libraries unix tart.cache tart.sig tart.log))

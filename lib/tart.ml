@@ -86,6 +86,9 @@ module Oracle_compare = Oracle.Compare
 module Content_cache = Cache.Content_cache
 (** Re-export content-addressable cache module *)
 
+module Emacs_corpus = Corpus.Emacs_corpus
+(** Re-export Emacs source corpus module *)
+
 module Log = Tart_log.Log
 (** Re-export structured logging module *)
 

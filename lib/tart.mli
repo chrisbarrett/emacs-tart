@@ -120,6 +120,10 @@ module Oracle_compare = Oracle.Compare
 
 module Content_cache = Cache.Content_cache
 
+(** {1 Corpus} *)
+
+module Emacs_corpus = Corpus.Emacs_corpus
+
 (** {1 Logging} *)
 
 module Log = Tart_log.Log

@@ -1,112 +1,101 @@
-# Implementation Plan: Content-Addressable Cache (Spec 40)
+# Implementation Plan: Emacs Source Corpus (Spec 41)
 
-XDG-compliant content-addressable file cache for incremental
-type-checking results.
+Lazy-cloned Emacs source in XDG cache for testing against real
+Elisp files.
 
 ## Analysis
 
 ### Current Architecture
 
-**Form cache** in `lib/lsp/form_cache.ml`: in-process hash table keyed
-by `Hashtbl.hash` of sexp string. Fast but not persistent across
-process invocations.
+**XDG path**: `Content_cache.cache_dir()` returns
+`$XDG_CACHE_HOME/tart/` or `~/.cache/tart/`. Corpus goes under
+`emacs-src/` subdirectory.
 
-**Sub-library pattern**: each `lib/X/` has `dune` declaring
-`(library (name X) (public_name tart.X) (libraries ...))`. Re-exported
-via `module X = X_pkg.X` in `lib/tart.ml` + `lib/tart.mli`.
+**Version detection**: `Emacs_version` module in `lib/sig/` provides
+`detect`, `parse_version`, `version_to_string`. Already used by
+`bin/main.ml` for typings version selection.
 
-**Test pattern**: `test/X/dune` with `(test (name X_test) (modules X_test) (libraries tart alcotest))`.
+**Sub-library pattern**: `lib/X/dune` →
+`(library (name X) (public_name tart.X))`, re-exported in
+`lib/tart.ml`/`lib/tart.mli`.
 
-**Digest**: OCaml stdlib `Digest` provides MD5 (32-char hex). Spec says
-SHA256 (64-char hex) but MD5 is sufficient for content addressing (not
-security). Use `Digest` to avoid adding dependencies.
+**CLI pattern**: `bin/main.ml` uses Cmdliner. Subcommands defined
+as `Cmd.v info Term.(...)`, grouped in `Cmd.group` at bottom.
 
-**Integration point**: `check_file` in `bin/main.ml` — between parse
-and `Module_check.check_module`. Cache key = hash(binary + file
-content). Cache value = JSON-serialised diagnostics.
+**Process invocation**: `Emacs_reader.run_batch` shells out to
+emacs. For git operations, use `Unix.open_process_full` similarly.
 
 ### Key Design Decisions
 
-1. **`Digest.string` (MD5)** for content hashing — no external
-   dependency, 32-char hex keys. Spec says 64-char but the actual
-   requirement is deterministic content-based keys.
+1. **Reuse `Content_cache.cache_dir`** for XDG path — already handles
+   `$XDG_CACHE_HOME` and fallback. Corpus path =
+   `cache_dir() ^ "/emacs-src"`.
 
-2. **Filesystem-backed cache** under `$XDG_CACHE_HOME/tart/v1/` —
-   persistent across invocations; two-char prefix subdirs.
+2. **Shell out to git** via `Unix.open_process_full` — simpler than
+   FFI, git is universally available.
 
-3. **Atomic writes** via temp file + `Unix.rename` in same directory.
+3. **Shallow clone + shallow fetch** — `--depth 1` for clone,
+   `--depth 1 origin tag <tag>` for fetch. Minimises disk/network.
 
-4. **Best-effort everywhere** — all I/O wrapped in try/with, cache
-   failures never propagate to type-checking.
+4. **Version auto-detection reuses `Emacs_version.detect`** — already
+   parses `emacs --version` output.
 
-5. **Integration deferred** — Spec 40 builds the cache library and
-   tests it. Wiring into `check_file` is a separate task since the
-   cache value format depends on what type-checking results look like
-   when serialised.
-
----
-
-## Iteration 1: Core cache module
-
-Create `lib/cache/` with `cache_dir`, `binary_path`, `compute_key`,
-`store`, `retrieve`.
-
-### Task 1.1: Create lib/cache sub-library
-
-- [ ] Create `lib/cache/dune` (library `tart_cache`, public
-      `tart.cache`, deps `unix yojson tart.log`)
-- [ ] Create `lib/cache/content_cache.mli` with full interface:
-      `cache_dir`, `binary_path`, `compute_key`, `store`, `retrieve`,
-      `evict_older_than`, `maybe_evict`
-- [ ] Create `lib/cache/content_cache.ml` stub (compiles, not yet
-      implemented)
-- [ ] Add `tart.cache` to `lib/dune` libraries
-- [ ] Add `module Content_cache = Cache.Content_cache` to
-      `lib/tart.ml` and `lib/tart.mli`
-- [ ] Build
-
-### Task 1.2: Implement cache_dir, binary_path, compute_key
-
-- [ ] `cache_dir`: read `$XDG_CACHE_HOME` env, fallback
-      `~/.cache/tart/` (R1)
-- [ ] `binary_path`: `Sys.executable_name` resolved via `realpath`
-      (R9)
-- [ ] `compute_key`: `Digest.to_hex (Digest.string (binary_content ^
-      input_content))` where binary_content = file contents of
-      binary_path and input_content = file contents of input path (R2)
-- [ ] Build + test
-
-### Task 1.3: Implement store and retrieve
-
-- [ ] `store`: mkdir -p prefix dir, write JSON envelope
-      (`{version, created_at, data}`) to temp file, atomic rename (R3,
-      R6, R7, R8, R10)
-- [ ] `retrieve`: read file, parse JSON, extract `data` field; return
-      `None` on any error (R4, R5)
-- [ ] ISO 8601 timestamp via `Unix.gmtime` for `created_at`
-- [ ] Build + test
+5. **`corpus` subcommand group** — `tart corpus checkout`,
+   `tart corpus list`, `tart corpus path`, `tart corpus clean`.
 
 ---
 
-## Iteration 2: Eviction
+## Iteration 1: Core corpus library
 
-Age-based eviction with marker file and best-effort error handling.
+Create `lib/corpus/` with path resolution, clone, checkout, list.
 
-### Task 2.1: Implement evict_older_than
+### Task 1.1: Create lib/corpus sub-library
 
-- [ ] Walk `v1/XX/` directories, stat each `.json` file
-- [ ] Delete files with mtime older than `days` threshold (R11)
-- [ ] Remove empty prefix directories after deletion
-- [ ] Wrap each deletion in try/with — log warning, continue (R13)
-- [ ] Build + test
+- [x] Create `lib/corpus/dune` (library `corpus`, public
+      `tart.corpus`, deps `unix tart.cache tart.sig tart.log`)
+- [x] Create `lib/corpus/emacs_corpus.mli` with full interface
+- [x] Create `lib/corpus/emacs_corpus.ml` implementation
+- [x] Add `tart.corpus` to `lib/dune` libraries
+- [x] Re-export as `Tart.Emacs_corpus` in `tart.ml`/`tart.mli`
+- [x] Build
 
-### Task 2.2: Implement maybe_evict
+### Task 1.2: Implement core functions
 
-- [ ] Check `.last-eviction` marker file mtime in cache dir
-- [ ] Skip if marker less than 1 hour old (R12)
-- [ ] Call `evict_older_than ~days:30`
-- [ ] Touch marker file after successful eviction
-- [ ] Entire function wrapped in try/with — never fails (R13)
+- [x] `corpus_error` type: `Clone_failed`, `Fetch_failed`,
+      `Checkout_failed`, `No_emacs`, `Invalid_ref`
+- [x] `corpus_dir`: `Content_cache.cache_dir() ^ "/emacs-src"` (R3, R4)
+- [x] `run_git`: helper to shell out to git, capture stdout/stderr,
+      return result
+- [x] `ensure_clone`: if dir missing, `git clone --depth 1 --branch
+      <tag> <url> <path>` (R1); if exists, no-op (R2)
+- [x] `checkout`: `git fetch --depth 1 origin tag <tag> --no-tags`
+      then `git checkout <tag>` (R5); for SHA, `git fetch --depth 1
+      origin <sha>` then checkout (R6)
+- [x] `detect_tag`: uses `Emacs_version.detect` → `emacs-M.N` tag
+      (R7, R8); returns error if no Emacs found
+- [x] `list_el_files`: recursive `.el` discovery in corpus dir,
+      returns absolute paths (R10, R11)
+- [x] `clean`: `rm -rf` corpus dir, return bytes freed (R15)
+- [x] Build + test
+
+---
+
+## Iteration 2: CLI subcommands
+
+Wire corpus operations into `tart corpus` command group.
+
+### Task 2.1: Add corpus subcommand group
+
+- [ ] `corpus_checkout_cmd`: `tart corpus checkout [REF]`
+      with optional `--emacs-version` override (R9);
+      auto-detects if no ref given (R7)
+- [ ] `corpus_list_cmd`: `tart corpus list` prints `.el` paths
+- [ ] `corpus_path_cmd`: `tart corpus path` prints corpus dir (R14)
+- [ ] `corpus_clean_cmd`: `tart corpus clean` removes corpus (R15)
+- [ ] `corpus_cmd`: `Cmd.group` combining subcommands
+- [ ] Wire `corpus_cmd` into `main_cmd` group
+- [ ] Error handling: network failures → exit 1 with message (R12,
+      R13); invalid version → exit 2; no Emacs → exit 3
 - [ ] Build + test
 
 ---
@@ -115,25 +104,18 @@ Age-based eviction with marker file and best-effort error handling.
 
 ### Task 3.1: Create test suite
 
-- [ ] Create `test/cache/dune` and `test/cache/content_cache_test.ml`
-- [ ] cache_dir: XDG_CACHE_HOME override, fallback to ~/.cache
-- [ ] binary_path: returns valid path
-- [ ] compute_key: deterministic, different inputs differ, hex string
-- [ ] store + retrieve round-trip: store then retrieve = Some data
-- [ ] retrieve miss: nonexistent key = None
-- [ ] retrieve corrupted: invalid JSON = None
-- [ ] store creates directories on demand
-- [ ] atomic write: file appears only after rename (check no
-      partial files)
-- [ ] JSON format: stored file is valid JSON with version, created_at,
-      data fields
-- [ ] evict_older_than: old files deleted, new files preserved
-- [ ] maybe_evict: runs on first call, skips on second
-- [ ] best-effort: read-only file doesn't crash eviction
+- [ ] Create `test/corpus/dune` and
+      `test/corpus/emacs_corpus_test.ml`
+- [ ] `corpus_dir`: XDG override, fallback
+- [ ] `run_git`: captures stdout/stderr
+- [ ] `detect_tag`: parses version to tag string
+- [ ] `list_el_files`: discovers .el in temp dir
+- [ ] `clean`: removes directory
+- [ ] Error types: all constructors tested
 - [ ] Build + test
 
 ### Task 3.2: Spec completion
 
-- [ ] Check all task boxes in specs/40-content-cache.md
+- [ ] Check all task boxes in specs/41-emacs-corpus.md
 - [ ] Add Status section
 - [ ] Build + test

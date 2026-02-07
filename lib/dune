@@ -15,6 +15,7 @@
   tart.errors
   tart.oracle
   tart.cache
+  tart.corpus
   tart.log
   tart.timing
   tart.memory_stats)
