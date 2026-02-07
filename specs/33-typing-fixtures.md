@@ -152,15 +152,17 @@ Examples:
 
 ## Tasks
 
-- [ ] Create `errors/` directory structure
-- [ ] Implement type-mismatch fixtures (R1)
-- [ ] Implement arity fixtures (R2)
-- [ ] Implement unbound fixtures (R3)
-- [ ] Implement occurs-check fixtures (R4)
-- [ ] Implement kind fixtures (R5)
-- [ ] Implement exhaustiveness fixtures (R6)
-- [ ] Create regression directory with initial fixtures (R7)
-- [ ] Add realistic user scenario fixtures to each category (R8)
-- [ ] Update `fixture_test.ml` to discover `errors/` subdirectories (R9)
-- [ ] Generate `.expected` files via `tart check`
-- [ ] Review all `.expected` output for correctness
+- [x] Create `errors/` directory structure
+- [x] Implement type-mismatch fixtures (R1)
+- [x] Implement arity fixtures (R2)
+- [x] Implement unbound fixtures (R3)
+- [x] Implement occurs-check fixtures (R4)
+- [x] Implement kind fixtures (R5)
+- [x] Implement exhaustiveness fixtures (R6)
+- [x] Create regression directory with initial fixtures (R7)
+- [x] Add realistic user scenario fixtures to each category (R8)
+- [x] Update `fixture_test.ml` to discover `errors/` subdirectories (R9)
+- [x] Generate `.expected` files via `tart check`
+- [x] Review all `.expected` output for correctness
+
+**Status: Complete.**

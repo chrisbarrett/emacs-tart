@@ -1,0 +1,2 @@
+PASS
+interactive-p is deprecated; use called-interactively-p
