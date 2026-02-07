@@ -13,6 +13,7 @@
   tart.graph
   tart.coverage
   tart.errors
+  tart.oracle
   tart.log
   tart.timing
   tart.memory_stats)

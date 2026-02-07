@@ -49,27 +49,27 @@ output.
 
 ### Task 1.1: Create emacs_reader module
 
-- [ ] Create `lib/oracle/dune` (library `tart_oracle`, deps
-      `tart_syntax`, `unix`)
-- [ ] Create `lib/oracle/emacs_reader.ml` and `emacs_reader.mli`
-- [ ] `emacs_error` type: `ReadError`, `EmacsNotFound`,
-      `EmacsFailed`, `Timeout`
-- [ ] `find_emacs : unit -> string option` — search PATH for `emacs`
-- [ ] `run_batch : ?timeout_ms:int -> string -> (string * string, emacs_error) result`
+- [x] Create `lib/oracle/dune` (library `oracle`, deps
+      `tart.syntax`, `unix`)
+- [x] Create `lib/oracle/emacs_reader.ml` and `emacs_reader.mli`
+- [x] `emacs_error` type: `Read_error`, `Emacs_not_found`,
+      `Emacs_failed`, `Timeout`
+- [x] `find_emacs : unit -> string option` — search PATH for `emacs`
+- [x] `run_batch : ?timeout_ms:int -> string -> (string * string, emacs_error) result`
       — runs `emacs --batch --quick --eval <expr>`, captures
       stdout + stderr, handles exit codes
-- [ ] Default timeout: 5000ms
-- [ ] Build + test
+- [x] Default timeout: 5000ms
+- [x] Build + test
 
 ### Task 1.2: read_string and read_file
 
-- [ ] `read_string : ?timeout_ms:int -> string -> (string, emacs_error) result`
+- [x] `read_string : ?timeout_ms:int -> string -> (string, emacs_error) result`
       — wraps input in `(prin1-to-string (read ...))` Elisp, calls
       `run_batch`
-- [ ] `read_file : ?timeout_ms:int -> string -> (string list, emacs_error) result`
+- [x] `read_file : ?timeout_ms:int -> string -> (string list, emacs_error) result`
       — reads file with multi-form loop, `prin1-to-string` each form
-- [ ] Re-export in `tart.ml/tart.mli`
-- [ ] Build + test
+- [x] Re-export in `tart.ml/tart.mli`
+- [x] Build + test
 
 ---
 

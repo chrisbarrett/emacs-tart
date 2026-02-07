@@ -1,0 +1,4 @@
+(library
+ (name oracle)
+ (public_name tart.oracle)
+ (libraries tart.syntax unix))
