@@ -45,7 +45,7 @@ let test_initialize () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -100,7 +100,7 @@ let test_initialize_already_initialized () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -119,7 +119,7 @@ let test_shutdown_not_initialized () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -140,7 +140,7 @@ let test_exit_without_shutdown () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -165,7 +165,7 @@ let test_initialized_notification () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -187,7 +187,7 @@ let test_unknown_method () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -241,7 +241,7 @@ let test_did_open () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -315,7 +315,7 @@ let test_did_change_incremental () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -367,7 +367,7 @@ let test_did_close () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -452,7 +452,7 @@ let test_diagnostics_on_open () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -528,7 +528,7 @@ let test_diagnostics_on_change () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -588,7 +588,7 @@ let test_diagnostics_cleared_on_close () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -651,7 +651,7 @@ let test_diagnostics_valid_document () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -700,7 +700,7 @@ let test_diagnostics_parse_error () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -770,7 +770,7 @@ let test_hover_on_literal () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -838,7 +838,7 @@ let test_hover_on_function_call () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -904,7 +904,7 @@ let test_hover_outside_code () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -963,7 +963,7 @@ let test_hover_has_range () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -1031,7 +1031,7 @@ let test_hover_instantiated_type () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -1106,7 +1106,7 @@ let test_hover_with_errors_elsewhere () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -1175,7 +1175,7 @@ let test_hover_at_error_site () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -1236,7 +1236,7 @@ let test_diagnostic_has_error_code () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let _ = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -1290,7 +1290,7 @@ let test_diagnostic_has_help_suggestions () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let _ = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -1386,7 +1386,7 @@ let test_definition_on_function_call () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -1451,7 +1451,7 @@ let test_definition_on_defvar_call () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -1516,7 +1516,7 @@ let test_definition_not_found () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -1576,7 +1576,7 @@ let test_definition_outside_code () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -1635,7 +1635,7 @@ let test_definition_has_uri () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -1711,7 +1711,7 @@ let test_definition_cross_file () =
     let ic = In_channel.open_bin in_file in
     let out_file = Filename.temp_file "lsp_out" ".json" in
     let oc = Out_channel.open_bin out_file in
-    let server = Server.create ~log_level:Quiet ~ic ~oc () in
+    let server = Server.create ~ic ~oc () in
     let exit_code = Server.run server in
     In_channel.close ic;
     Out_channel.close oc;
@@ -1791,7 +1791,7 @@ let test_definition_cross_file_defvar () =
     let ic = In_channel.open_bin in_file in
     let out_file = Filename.temp_file "lsp_out" ".json" in
     let oc = Out_channel.open_bin out_file in
-    let server = Server.create ~log_level:Quiet ~ic ~oc () in
+    let server = Server.create ~ic ~oc () in
     let exit_code = Server.run server in
     In_channel.close ic;
     Out_channel.close oc;
@@ -1864,7 +1864,7 @@ let test_references_all_occurrences () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -1928,7 +1928,7 @@ let test_references_on_unknown_symbol () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -1992,7 +1992,7 @@ let test_references_not_on_symbol () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -2052,7 +2052,7 @@ let test_references_have_uris () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -2121,7 +2121,7 @@ let test_references_defvar () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -2191,7 +2191,7 @@ let test_code_action_returns_empty_list () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -2288,7 +2288,7 @@ let test_code_action_parses_context () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -2321,7 +2321,7 @@ let test_code_action_capability_advertised () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -2411,7 +2411,7 @@ let test_code_action_missing_signature_quickfix () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -2507,7 +2507,7 @@ let test_code_action_quickfix_has_edit () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -2620,7 +2620,7 @@ let test_code_action_respects_range () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -2705,7 +2705,7 @@ let test_extract_function_appears_on_selection () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -2780,7 +2780,7 @@ let test_extract_function_has_edit () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -2861,7 +2861,7 @@ let test_extract_function_captures_free_vars () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -2949,7 +2949,7 @@ let test_document_symbol_defun () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -3015,7 +3015,7 @@ let test_document_symbol_defvar () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -3077,7 +3077,7 @@ let test_document_symbol_defconst () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -3139,7 +3139,7 @@ let test_document_symbol_defmacro () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -3178,7 +3178,7 @@ let test_document_symbol_capability () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -3237,7 +3237,7 @@ let test_document_symbol_empty () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -3304,7 +3304,7 @@ let test_extract_function_no_cursor () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -3373,7 +3373,7 @@ let test_completion_returns_local_defun () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -3439,7 +3439,7 @@ let test_completion_returns_defvar () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -3507,7 +3507,7 @@ let test_completion_has_type_info () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -3547,7 +3547,7 @@ let test_completion_capability_advertised () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -3615,7 +3615,7 @@ let test_completion_filters_by_prefix () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -3687,7 +3687,7 @@ let test_signature_help_shows_function_signature () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -3754,7 +3754,7 @@ let test_signature_help_highlights_active_parameter () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -3791,7 +3791,7 @@ let test_signature_help_capability_advertised () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -3853,7 +3853,7 @@ let test_signature_help_not_in_call () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -3911,7 +3911,7 @@ let test_signature_help_has_parameters () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -3976,7 +3976,7 @@ let test_rename_all_occurrences () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -4040,7 +4040,7 @@ let test_rename_has_new_name () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -4075,7 +4075,7 @@ let test_rename_capability_advertised () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -4137,7 +4137,7 @@ let test_rename_not_on_symbol () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;
@@ -4196,7 +4196,7 @@ let test_rename_has_correct_uri () =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~log_level:Quiet ~ic ~oc () in
+  let server = Server.create ~ic ~oc () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;

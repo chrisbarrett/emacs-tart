@@ -595,12 +595,11 @@ let run_repl () =
   done
 
 (** LSP subcommand: start language server *)
-let run_lsp log_level port =
+let run_lsp port =
   match port with
   | None ->
       let server =
-        Tart.Server.create ~log_level ~ic:In_channel.stdin
-          ~oc:Out_channel.stdout ()
+        Tart.Server.create ~ic:In_channel.stdin ~oc:Out_channel.stdout ()
       in
       let exit_code = Tart.Server.run server in
       exit exit_code
@@ -615,7 +614,7 @@ let run_lsp log_level port =
       prerr_endline "[tart-lsp] Client connected";
       let ic = Unix.in_channel_of_descr client_socket in
       let oc = Unix.out_channel_of_descr client_socket in
-      let server = Tart.Server.create ~log_level ~ic ~oc () in
+      let server = Tart.Server.create ~ic ~oc () in
       let exit_code = Tart.Server.run server in
       Unix.close client_socket;
       Unix.close socket;
@@ -966,14 +965,7 @@ let lsp_cmd =
   let info = Cmd.info "lsp" ~doc ~man in
   let run log_level log_format verbose_flag port =
     setup_logging ~log_level ~log_format ~verbose_flag;
-    (* Map global log level to server's log_level until LSP migration *)
-    let server_log_level =
-      match Tart.Log.level () with
-      | Tart.Log.Quiet -> Tart.Server.Quiet
-      | Tart.Log.Normal -> Tart.Server.Normal
-      | Tart.Log.Verbose | Tart.Log.Debug -> Tart.Server.Debug
-    in
-    run_lsp server_log_level port
+    run_lsp port
   in
   Cmd.v info
     Term.(

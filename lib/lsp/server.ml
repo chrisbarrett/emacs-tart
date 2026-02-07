@@ -12,7 +12,6 @@ type t = {
   ic : In_channel.t;
   oc : Out_channel.t;
   mutable state : state;
-  mutable log_level : log_level;
   documents : Document.t;
   form_cache : Form_cache.t;
   dependency_graph : Graph.Dependency_graph.t;
@@ -23,7 +22,7 @@ type t = {
       (** Detected Emacs version, if any *)
 }
 
-and log_level = Quiet | Normal | Debug
+module Log = Tart_log.Log
 
 (** Detect Emacs version and build module config.
 
@@ -87,13 +86,12 @@ let detect_emacs_and_build_config () :
   (config, emacs_version)
 
 (** Create a new server on the given channels *)
-let create ?(log_level = Normal) ~ic ~oc () : t =
+let create ~ic ~oc () : t =
   let module_config, emacs_version = detect_emacs_and_build_config () in
   {
     ic;
     oc;
     state = Uninitialized;
-    log_level;
     documents = Document.create ();
     form_cache = Form_cache.create ();
     dependency_graph = Graph.Dependency_graph.create ();
@@ -119,23 +117,6 @@ let signature_tracker (server : t) : Signature_tracker.t =
 (** Get the detected Emacs version (for testing) *)
 let emacs_version (server : t) : Sig.Emacs_version.version option =
   server.emacs_version
-
-(** Log a message to stderr *)
-let log (server : t) (level : log_level) (msg : string) : unit =
-  let should_log =
-    match (server.log_level, level) with
-    | Quiet, _ -> false
-    | Normal, Quiet -> false
-    | Normal, _ -> true
-    | Debug, _ -> true
-  in
-  if should_log then prerr_endline ("[tart-lsp] " ^ msg)
-
-(** Log a debug message *)
-let debug (server : t) (msg : string) : unit = log server Debug msg
-
-(** Log an info message *)
-let info (server : t) (msg : string) : unit = log server Normal msg
 
 (** Get server capabilities *)
 let capabilities () : Protocol.server_capabilities =
@@ -402,15 +383,12 @@ let publish_diagnostics (server : t) (uri : string) (version : int option) :
       (* Log cache statistics at debug level *)
       (match stats with
       | Some s ->
-          debug server
-            (Printf.sprintf
-               "Type check: %d forms total, %d cached, %d re-checked"
-               s.total_forms s.cached_forms s.checked_forms)
+          Log.debug "Type check: %d forms total, %d cached, %d re-checked"
+            s.total_forms s.cached_forms s.checked_forms
       | None -> ());
-      debug server
-        (Printf.sprintf "Publishing %d diagnostics for %s"
-           (List.length all_diagnostics)
-           uri);
+      Log.debug "Publishing %d diagnostics for %s"
+        (List.length all_diagnostics)
+        uri;
       Rpc.write_notification server.oc
         ~method_:"textDocument/publishDiagnostics"
         ~params:(Protocol.publish_diagnostics_params_to_json params)
@@ -437,16 +415,14 @@ let handle_initialize (server : t) (params : Yojson.Safe.t option) :
               capabilities = { text_document = None };
             }
       in
-      info server
-        (Printf.sprintf "Initializing (root: %s)"
-           (Option.value init_params.root_uri ~default:"<none>"));
+      Log.info "Initializing (root: %s)"
+        (Option.value init_params.root_uri ~default:"<none>");
       (* Log detected Emacs version at debug level (R7 of Spec 24) *)
       (match server.emacs_version with
       | Some v ->
-          debug server
-            (Printf.sprintf "Detected Emacs version: %s"
-               (Sig.Emacs_version.version_to_string v))
-      | None -> debug server "Emacs version not detected, using latest typings");
+          Log.debug "Detected Emacs version: %s"
+            (Sig.Emacs_version.version_to_string v)
+      | None -> Log.debug "Emacs version not detected, using latest typings");
       server.state <- Initialized { root_uri = init_params.root_uri };
       let result : Protocol.initialize_result =
         { capabilities = capabilities () }
@@ -457,8 +433,8 @@ let handle_initialize (server : t) (params : Yojson.Safe.t option) :
       Ok (Protocol.initialize_response_to_json ~result ~server_info)
 
 (** Handle initialized notification *)
-let handle_initialized (server : t) : unit =
-  info server "Client confirmed initialization"
+let handle_initialized (_server : t) : unit =
+  Log.info "Client confirmed initialization"
 
 (** Handle shutdown request *)
 let handle_shutdown (server : t) : (Yojson.Safe.t, Rpc.response_error) result =
@@ -472,7 +448,7 @@ let handle_shutdown (server : t) : (Yojson.Safe.t, Rpc.response_error) result =
         }
   | ShuttingDown -> Ok `Null
   | Initialized _ ->
-      info server "Shutting down";
+      Log.info "Shutting down";
       server.state <- ShuttingDown;
       Ok `Null
 
@@ -480,16 +456,16 @@ let handle_shutdown (server : t) : (Yojson.Safe.t, Rpc.response_error) result =
 let handle_exit (server : t) : [ `Exit of int ] =
   match server.state with
   | ShuttingDown ->
-      info server "Exiting (clean shutdown)";
+      Log.info "Exiting (clean shutdown)";
       `Exit 0
   | _ ->
-      info server "Exiting (no shutdown request)";
+      Log.info "Exiting (no shutdown request)";
       `Exit 1
 
 (** Handle textDocument/didOpen notification *)
 let handle_did_open (server : t) (params : Yojson.Safe.t option) : unit =
   match params with
-  | None -> debug server "didOpen missing params"
+  | None -> Log.debug "didOpen missing params"
   | Some json ->
       let open Yojson.Safe.Util in
       let text_document = json |> member "textDocument" in
@@ -502,15 +478,14 @@ let handle_did_open (server : t) (params : Yojson.Safe.t option) : unit =
       (* Track .tart files in signature tracker *)
       if Signature_tracker.is_tart_file uri then
         Signature_tracker.set server.signature_tracker ~uri ~text;
-      debug server
-        (Printf.sprintf "Opened document: %s (version %d)" uri version);
+      Log.debug "Opened document: %s (version %d)" uri version;
       (* Publish diagnostics for the newly opened document *)
       publish_diagnostics server uri (Some version)
 
 (** Handle textDocument/didChange notification *)
 let handle_did_change (server : t) (params : Yojson.Safe.t option) : unit =
   match params with
-  | None -> debug server "didChange missing params"
+  | None -> Log.debug "didChange missing params"
   | Some json -> (
       let open Yojson.Safe.Util in
       let text_document = json |> member "textDocument" in
@@ -523,8 +498,7 @@ let handle_did_change (server : t) (params : Yojson.Safe.t option) : unit =
       in
       match Document.apply_changes server.documents ~uri ~version changes with
       | Ok () ->
-          debug server
-            (Printf.sprintf "Changed document: %s (version %d)" uri version);
+          Log.debug "Changed document: %s (version %d)" uri version;
           (* Update dependency graph with new document content *)
           (match Document.get_doc server.documents uri with
           | Some doc ->
@@ -545,10 +519,9 @@ let handle_did_change (server : t) (params : Yojson.Safe.t option) : unit =
               ~open_uris
           in
           if dependent_uris <> [] then (
-            debug server
-              (Printf.sprintf "Invalidating %d dependents of %s"
-                 (List.length dependent_uris)
-                 module_id);
+            Log.debug "Invalidating %d dependents of %s"
+              (List.length dependent_uris)
+              module_id;
             List.iter
               (fun dep_uri ->
                 (* Invalidate the cache for this dependent *)
@@ -559,13 +532,12 @@ let handle_did_change (server : t) (params : Yojson.Safe.t option) : unit =
                     publish_diagnostics server dep_uri (Some dep_doc.version)
                 | None -> ())
               dependent_uris)
-      | Error e ->
-          info server (Printf.sprintf "Error applying changes to %s: %s" uri e))
+      | Error e -> Log.info "Error applying changes to %s: %s" uri e)
 
 (** Handle textDocument/didClose notification *)
 let handle_did_close (server : t) (params : Yojson.Safe.t option) : unit =
   match params with
-  | None -> debug server "didClose missing params"
+  | None -> Log.debug "didClose missing params"
   | Some json ->
       let open Yojson.Safe.Util in
       let text_document = json |> member "textDocument" in
@@ -594,7 +566,7 @@ let handle_did_close (server : t) (params : Yojson.Safe.t option) : unit =
       Form_cache.remove_document server.form_cache uri;
       (* Keep graph entry on close - file still exists on disk (R4) *)
       Graph_tracker.close_document server.dependency_graph ~uri;
-      debug server (Printf.sprintf "Closed document: %s" uri);
+      Log.debug "Closed document: %s" uri;
       (* Clear diagnostics for the closed document *)
       let params : Protocol.publish_diagnostics_params =
         { uri; version = None; diagnostics = [] }
@@ -696,16 +668,16 @@ let handle_hover (server : t) (params : Yojson.Safe.t option) :
       let uri = hover_params.text_document in
       let line = hover_params.position.line in
       let col = hover_params.position.character in
-      debug server (Printf.sprintf "Hover request at %s:%d:%d" uri line col);
+      Log.debug "Hover request at %s:%d:%d" uri line col;
       match Document.get_doc server.documents uri with
       | None ->
-          debug server (Printf.sprintf "Document not found: %s" uri);
+          Log.debug "Document not found: %s" uri;
           Ok `Null
       | Some doc -> (
           let filename = filename_of_uri uri in
           let parse_result = Syntax.Read.parse_string ~filename doc.text in
           if parse_result.sexps = [] then (
-            debug server "No S-expressions parsed";
+            Log.debug "No S-expressions parsed";
             Ok `Null)
           else
             match
@@ -713,24 +685,23 @@ let handle_hover (server : t) (params : Yojson.Safe.t option) :
                 parse_result.sexps
             with
             | None ->
-                debug server "No S-expression at position";
+                Log.debug "No S-expression at position";
                 Ok `Null
             | Some ctx -> (
-                debug server
-                  (Printf.sprintf "Found sexp: %s (in application: %b)"
-                     (Syntax.Sexp.to_string ctx.target)
-                     (Option.is_some ctx.enclosing_application));
+                Log.debug "Found sexp: %s (in application: %b)"
+                  (Syntax.Sexp.to_string ctx.target)
+                  (Option.is_some ctx.enclosing_application);
                 (* Type-check the document to get the environment *)
                 let check_result =
                   Typing.Check.check_program parse_result.sexps
                 in
                 match type_at_sexp check_result ctx with
                 | None ->
-                    debug server "Could not infer type";
+                    Log.debug "Could not infer type";
                     Ok `Null
                 | Some ty ->
                     let type_str = Core.Types.to_string ty in
-                    debug server (Printf.sprintf "Type: %s" type_str);
+                    Log.debug "Type: %s" type_str;
                     let hover : Protocol.hover =
                       {
                         contents =
@@ -880,17 +851,16 @@ let handle_definition (server : t) (params : Yojson.Safe.t option) :
       let uri = def_params.def_text_document in
       let line = def_params.def_position.line in
       let col = def_params.def_position.character in
-      debug server
-        (Printf.sprintf "Definition request at %s:%d:%d" uri line col);
+      Log.debug "Definition request at %s:%d:%d" uri line col;
       match Document.get_doc server.documents uri with
       | None ->
-          debug server (Printf.sprintf "Document not found: %s" uri);
+          Log.debug "Document not found: %s" uri;
           Ok (Protocol.definition_result_to_json Protocol.DefNull)
       | Some doc -> (
           let filename = filename_of_uri uri in
           let parse_result = Syntax.Read.parse_string ~filename doc.text in
           if parse_result.sexps = [] then (
-            debug server "No S-expressions parsed";
+            Log.debug "No S-expressions parsed";
             Ok (Protocol.definition_result_to_json Protocol.DefNull))
           else
             match
@@ -898,53 +868,47 @@ let handle_definition (server : t) (params : Yojson.Safe.t option) :
                 parse_result.sexps
             with
             | None ->
-                debug server "No S-expression at position";
+                Log.debug "No S-expression at position";
                 Ok (Protocol.definition_result_to_json Protocol.DefNull)
             | Some ctx -> (
                 (* Extract symbol name from the target sexp *)
                 match symbol_name_of_sexp ctx.target with
                 | None ->
-                    debug server "Target is not a symbol";
+                    Log.debug "Target is not a symbol";
                     Ok (Protocol.definition_result_to_json Protocol.DefNull)
                 | Some name -> (
-                    debug server
-                      (Printf.sprintf "Looking for definition of: %s" name);
+                    Log.debug "Looking for definition of: %s" name;
                     (* Look up definition in the current document first *)
                     let definitions = extract_definitions parse_result.sexps in
                     match List.assoc_opt name definitions with
                     | Some span ->
-                        debug server
-                          (Printf.sprintf "Found local definition at %s:%d:%d"
-                             span.start_pos.file span.start_pos.line
-                             span.start_pos.col);
+                        Log.debug "Found local definition at %s:%d:%d"
+                          span.start_pos.file span.start_pos.line
+                          span.start_pos.col;
                         let loc = location_of_span span in
                         Ok
                           (Protocol.definition_result_to_json
                              (Protocol.DefLocation loc))
                     | None -> (
                         (* Not found locally - try signature lookup (R14) *)
-                        debug server
-                          (Printf.sprintf
-                             "Not found locally, trying signature lookup for: \
-                              %s"
-                             name);
+                        Log.debug
+                          "Not found locally, trying signature lookup for: %s"
+                          name;
                         match
                           find_definition_in_signatures
                             ~config:server.module_config ~filename name
                         with
                         | Some span ->
-                            debug server
-                              (Printf.sprintf
-                                 "Found definition in signature at %s:%d:%d"
-                                 span.start_pos.file span.start_pos.line
-                                 span.start_pos.col);
+                            Log.debug
+                              "Found definition in signature at %s:%d:%d"
+                              span.start_pos.file span.start_pos.line
+                              span.start_pos.col;
                             let loc = location_of_span span in
                             Ok
                               (Protocol.definition_result_to_json
                                  (Protocol.DefLocation loc))
                         | None ->
-                            debug server
-                              (Printf.sprintf "No definition found for: %s" name);
+                            Log.debug "No definition found for: %s" name;
                             Ok
                               (Protocol.definition_result_to_json
                                  Protocol.DefNull))))))
@@ -965,17 +929,16 @@ let handle_references (server : t) (params : Yojson.Safe.t option) :
       let uri = ref_params.ref_text_document in
       let line = ref_params.ref_position.line in
       let col = ref_params.ref_position.character in
-      debug server
-        (Printf.sprintf "References request at %s:%d:%d" uri line col);
+      Log.debug "References request at %s:%d:%d" uri line col;
       match Document.get_doc server.documents uri with
       | None ->
-          debug server (Printf.sprintf "Document not found: %s" uri);
+          Log.debug "Document not found: %s" uri;
           Ok (Protocol.references_result_to_json None)
       | Some doc -> (
           let filename = filename_of_uri uri in
           let parse_result = Syntax.Read.parse_string ~filename doc.text in
           if parse_result.sexps = [] then (
-            debug server "No S-expressions parsed";
+            Log.debug "No S-expressions parsed";
             Ok (Protocol.references_result_to_json None))
           else
             match
@@ -983,22 +946,19 @@ let handle_references (server : t) (params : Yojson.Safe.t option) :
                 parse_result.sexps
             with
             | None ->
-                debug server "No S-expression at position";
+                Log.debug "No S-expression at position";
                 Ok (Protocol.references_result_to_json None)
             | Some ctx -> (
                 (* Extract symbol name from the target sexp *)
                 match symbol_name_of_sexp ctx.target with
                 | None ->
-                    debug server "Target is not a symbol";
+                    Log.debug "Target is not a symbol";
                     Ok (Protocol.references_result_to_json None)
                 | Some name ->
-                    debug server
-                      (Printf.sprintf "Finding references to: %s" name);
+                    Log.debug "Finding references to: %s" name;
                     (* Find all references in the document *)
                     let ref_spans = find_references name parse_result.sexps in
-                    debug server
-                      (Printf.sprintf "Found %d references"
-                         (List.length ref_spans));
+                    Log.debug "Found %d references" (List.length ref_spans);
                     (* Convert spans to locations *)
                     let locations = List.map location_of_span ref_spans in
                     Ok (Protocol.references_result_to_json (Some locations)))))
@@ -1490,17 +1450,14 @@ let handle_code_action (server : t) (params : Yojson.Safe.t option) :
       let uri = ca_params.ca_text_document in
       let range = ca_params.ca_range in
       let context = ca_params.ca_context in
-      debug server
-        (Printf.sprintf "Code action request at %s:%d:%d-%d:%d" uri
-           range.start.line range.start.character range.end_.line
-           range.end_.character);
-      debug server
-        (Printf.sprintf "Context has %d diagnostics"
-           (List.length context.cac_diagnostics));
+      Log.debug "Code action request at %s:%d:%d-%d:%d" uri range.start.line
+        range.start.character range.end_.line range.end_.character;
+      Log.debug "Context has %d diagnostics"
+        (List.length context.cac_diagnostics);
 
       match Document.get_doc server.documents uri with
       | None ->
-          debug server (Printf.sprintf "Document not found: %s" uri);
+          Log.debug "Document not found: %s" uri;
           Ok (Protocol.code_action_result_to_json (Some []))
       | Some doc ->
           let filename = filename_of_uri uri in
@@ -1529,9 +1486,7 @@ let handle_code_action (server : t) (params : Yojson.Safe.t option) :
                     && warn_range.end_.line >= range.start.line
                   in
                   if overlaps then (
-                    debug server
-                      (Printf.sprintf "Found missing signature for: %s"
-                         warn.name);
+                    Log.debug "Found missing signature for: %s" warn.name;
                     (* Look up the inferred type from the environment *)
                     match
                       Core.Type_env.lookup warn.name check_result.final_env
@@ -1546,8 +1501,7 @@ let handle_code_action (server : t) (params : Yojson.Safe.t option) :
                         generate_add_signature_action ~name:warn.name ~ty
                           ~tart_path ~tart_content
                     | None ->
-                        debug server
-                          (Printf.sprintf "No type found for: %s" warn.name);
+                        Log.debug "No type found for: %s" warn.name;
                         None)
                   else None)
                 check_result.missing_signature_warnings
@@ -1557,9 +1511,8 @@ let handle_code_action (server : t) (params : Yojson.Safe.t option) :
             let extract_actions =
               match find_sexp_at_range range parse_result.sexps with
               | Some sexp -> (
-                  debug server
-                    (Printf.sprintf "Found sexp for extraction: %s"
-                       (Syntax.Sexp.to_string sexp));
+                  Log.debug "Found sexp for extraction: %s"
+                    (Syntax.Sexp.to_string sexp);
                   match
                     generate_extract_function_action ~uri ~doc_text:doc.text
                       ~sexp
@@ -1570,9 +1523,7 @@ let handle_code_action (server : t) (params : Yojson.Safe.t option) :
             in
 
             let all_actions = missing_sig_actions @ extract_actions in
-            debug server
-              (Printf.sprintf "Generated %d code actions"
-                 (List.length all_actions));
+            Log.debug "Generated %d code actions" (List.length all_actions);
             Ok (Protocol.code_action_result_to_json (Some all_actions)))
 
 (** {1 Document Symbols} *)
@@ -1742,23 +1693,22 @@ let handle_document_symbol (server : t) (params : Yojson.Safe.t option) :
   | Some json -> (
       let dsp_params = Protocol.parse_document_symbol_params json in
       let uri = dsp_params.dsp_text_document in
-      debug server (Printf.sprintf "Document symbol request for %s" uri);
+      Log.debug "Document symbol request for %s" uri;
       match Document.get_doc server.documents uri with
       | None ->
-          debug server (Printf.sprintf "Document not found: %s" uri);
+          Log.debug "Document not found: %s" uri;
           Ok (Protocol.document_symbol_result_to_json None)
       | Some doc ->
           let filename = filename_of_uri uri in
           let parse_result = Syntax.Read.parse_string ~filename doc.text in
           if parse_result.sexps = [] then (
-            debug server "No S-expressions parsed";
+            Log.debug "No S-expressions parsed";
             Ok (Protocol.document_symbol_result_to_json (Some [])))
           else
             let symbols =
               List.filter_map extract_symbol_from_def parse_result.sexps
             in
-            debug server
-              (Printf.sprintf "Found %d symbols" (List.length symbols));
+            Log.debug "Found %d symbols" (List.length symbols);
             Ok (Protocol.document_symbol_result_to_json (Some symbols)))
 
 (** {1 Completion} *)
@@ -1928,24 +1878,21 @@ let handle_completion (server : t) (params : Yojson.Safe.t option) :
       let uri = cp_params.cp_text_document in
       let line = cp_params.cp_position.line in
       let col = cp_params.cp_position.character in
-      debug server
-        (Printf.sprintf "Completion request at %s:%d:%d" uri line col);
+      Log.debug "Completion request at %s:%d:%d" uri line col;
       match Document.get_doc server.documents uri with
       | None ->
-          debug server (Printf.sprintf "Document not found: %s" uri);
+          Log.debug "Document not found: %s" uri;
           Ok (Protocol.completion_result_to_json None)
       | Some doc ->
           let filename = filename_of_uri uri in
           let prefix, _ = extract_prefix_at_position doc.text line col in
-          debug server (Printf.sprintf "Completion prefix: '%s'" prefix);
+          Log.debug "Completion prefix: '%s'" prefix;
 
           let parse_result = Syntax.Read.parse_string ~filename doc.text in
 
           (* Collect local definitions *)
           let local_items = collect_local_completions parse_result.sexps in
-          debug server
-            (Printf.sprintf "Found %d local completions"
-               (List.length local_items));
+          Log.debug "Found %d local completions" (List.length local_items);
 
           (* Type-check to get environment with signatures *)
           let check_result =
@@ -1959,21 +1906,17 @@ let handle_completion (server : t) (params : Yojson.Safe.t option) :
             | Some env -> collect_env_completions env
             | None -> []
           in
-          debug server
-            (Printf.sprintf "Found %d signature completions"
-               (List.length sig_items));
+          Log.debug "Found %d signature completions" (List.length sig_items);
 
           (* Collect items from final environment (includes builtins) *)
           let env_items = collect_env_completions check_result.final_env in
-          debug server
-            (Printf.sprintf "Found %d env completions" (List.length env_items));
+          Log.debug "Found %d env completions" (List.length env_items);
 
           (* Combine, deduplicate, and filter *)
           let all_items = local_items @ sig_items @ env_items in
           let filtered = filter_by_prefix prefix all_items in
           let deduped = deduplicate_completions filtered in
-          debug server
-            (Printf.sprintf "Returning %d completions" (List.length deduped));
+          Log.debug "Returning %d completions" (List.length deduped);
 
           Ok (Protocol.completion_result_to_json (Some deduped)))
 
@@ -2117,28 +2060,26 @@ let handle_signature_help (server : t) (params : Yojson.Safe.t option) :
       let uri = sh_params.shp_text_document in
       let line = sh_params.shp_position.line in
       let col = sh_params.shp_position.character in
-      debug server
-        (Printf.sprintf "Signature help request at %s:%d:%d" uri line col);
+      Log.debug "Signature help request at %s:%d:%d" uri line col;
       match Document.get_doc server.documents uri with
       | None ->
-          debug server (Printf.sprintf "Document not found: %s" uri);
+          Log.debug "Document not found: %s" uri;
           Ok (Protocol.signature_help_result_to_json None)
       | Some doc -> (
           let filename = filename_of_uri uri in
           let parse_result = Syntax.Read.parse_string ~filename doc.text in
           if parse_result.sexps = [] then (
-            debug server "No S-expressions parsed";
+            Log.debug "No S-expressions parsed";
             Ok (Protocol.signature_help_result_to_json None))
           else
             (* Find the enclosing function call and argument position *)
             match find_call_context ~line ~col parse_result.sexps with
             | None ->
-                debug server "No function call at position";
+                Log.debug "No function call at position";
                 Ok (Protocol.signature_help_result_to_json None)
             | Some (fn_name, arg_index) -> (
-                debug server
-                  (Printf.sprintf "Found call to '%s' at arg position %d"
-                     fn_name arg_index);
+                Log.debug "Found call to '%s' at arg position %d" fn_name
+                  arg_index;
                 (* Type-check to get the environment with function types *)
                 let check_result =
                   Typing.Module_check.check_module ~config:server.module_config
@@ -2147,9 +2088,7 @@ let handle_signature_help (server : t) (params : Yojson.Safe.t option) :
                 (* Look up the function's type in the environment *)
                 match Core.Type_env.lookup fn_name check_result.final_env with
                 | None ->
-                    debug server
-                      (Printf.sprintf "Function '%s' not found in environment"
-                         fn_name);
+                    Log.debug "Function '%s' not found in environment" fn_name;
                     Ok (Protocol.signature_help_result_to_json None)
                 | Some scheme ->
                     let ty =
@@ -2158,9 +2097,7 @@ let handle_signature_help (server : t) (params : Yojson.Safe.t option) :
                       | Core.Type_env.Poly (vars, t) ->
                           Core.Types.TForall (vars, t)
                     in
-                    debug server
-                      (Printf.sprintf "Function type: %s"
-                         (Core.Types.to_string ty));
+                    Log.debug "Function type: %s" (Core.Types.to_string ty);
                     let result =
                       signature_of_function_type fn_name ty arg_index
                     in
@@ -2189,18 +2126,16 @@ let handle_rename (server : t) (params : Yojson.Safe.t option) :
       let line = rename_params.rp_position.line in
       let col = rename_params.rp_position.character in
       let new_name = rename_params.rp_new_name in
-      debug server
-        (Printf.sprintf "Rename request at %s:%d:%d -> '%s'" uri line col
-           new_name);
+      Log.debug "Rename request at %s:%d:%d -> '%s'" uri line col new_name;
       match Document.get_doc server.documents uri with
       | None ->
-          debug server (Printf.sprintf "Document not found: %s" uri);
+          Log.debug "Document not found: %s" uri;
           Ok (Protocol.rename_result_to_json None)
       | Some doc -> (
           let filename = filename_of_uri uri in
           let parse_result = Syntax.Read.parse_string ~filename doc.text in
           if parse_result.sexps = [] then (
-            debug server "No S-expressions parsed";
+            Log.debug "No S-expressions parsed";
             Ok (Protocol.rename_result_to_json None))
           else
             match
@@ -2208,22 +2143,20 @@ let handle_rename (server : t) (params : Yojson.Safe.t option) :
                 parse_result.sexps
             with
             | None ->
-                debug server "No S-expression at position";
+                Log.debug "No S-expression at position";
                 Ok (Protocol.rename_result_to_json None)
             | Some ctx -> (
                 (* Extract symbol name from the target sexp *)
                 match symbol_name_of_sexp ctx.target with
                 | None ->
-                    debug server "Target is not a symbol";
+                    Log.debug "Target is not a symbol";
                     Ok (Protocol.rename_result_to_json None)
                 | Some name ->
-                    debug server
-                      (Printf.sprintf "Renaming '%s' to '%s'" name new_name);
+                    Log.debug "Renaming '%s' to '%s'" name new_name;
                     (* Find all references in the document *)
                     let ref_spans = find_references name parse_result.sexps in
-                    debug server
-                      (Printf.sprintf "Found %d occurrences to rename"
-                         (List.length ref_spans));
+                    Log.debug "Found %d occurrences to rename"
+                      (List.length ref_spans);
                     if ref_spans = [] then
                       Ok (Protocol.rename_result_to_json None)
                     else
@@ -2249,7 +2182,7 @@ let handle_rename (server : t) (params : Yojson.Safe.t option) :
 (** Dispatch a request to its handler *)
 let dispatch_request (server : t) (msg : Rpc.message) :
     (Yojson.Safe.t, Rpc.response_error) result =
-  debug server (Printf.sprintf "Request: %s" msg.method_);
+  Log.debug "Request: %s" msg.method_;
   match msg.method_ with
   | "initialize" -> handle_initialize server msg.params
   | "shutdown" -> handle_shutdown server
@@ -2272,7 +2205,7 @@ let dispatch_request (server : t) (msg : Rpc.message) :
 (** Dispatch a notification to its handler *)
 let dispatch_notification (server : t) (msg : Rpc.message) :
     [ `Continue | `Exit of int ] =
-  debug server (Printf.sprintf "Notification: %s" msg.method_);
+  Log.debug "Notification: %s" msg.method_;
   match msg.method_ with
   | "initialized" ->
       handle_initialized server;
@@ -2292,8 +2225,7 @@ let dispatch_notification (server : t) (msg : Rpc.message) :
       `Continue
   | _ ->
       (* Ignore unknown notifications per LSP spec *)
-      debug server
-        (Printf.sprintf "Ignoring unknown notification: %s" msg.method_);
+      Log.debug "Ignoring unknown notification: %s" msg.method_;
       `Continue
 
 (** Process a single message and optionally send a response *)
@@ -2307,8 +2239,7 @@ let process_message (server : t) (msg : Rpc.message) :
         | Ok result -> Rpc.success_response ~id ~result
         | Error err -> { Rpc.id; result = None; error = Some err }
       in
-      debug server
-        (Printf.sprintf "Response: %s" (Rpc.response_to_string response));
+      Log.debug "Response: %s" (Rpc.response_to_string response);
       Rpc.write_response server.oc response;
       `Continue
   | None ->
@@ -2317,21 +2248,20 @@ let process_message (server : t) (msg : Rpc.message) :
 
 (** Main server loop *)
 let run (server : t) : int =
-  info server "Starting LSP server";
+  Log.info "Starting LSP server";
   let rec loop () =
     match Rpc.read_message server.ic with
     | Error Rpc.Eof -> (
-        info server "Client disconnected";
+        Log.info "Client disconnected";
         (* Exit with code 1 if we didn't get proper shutdown *)
         match server.state with
         | ShuttingDown -> 0
         | _ -> 1)
     | Error err ->
-        info server
-          (Printf.sprintf "Read error: %s" (Rpc.read_error_to_string err));
+        Log.info "Read error: %s" (Rpc.read_error_to_string err);
         1
     | Ok msg -> (
-        debug server (Printf.sprintf "Received: %s" (Rpc.message_to_string msg));
+        Log.debug "Received: %s" (Rpc.message_to_string msg);
         match process_message server msg with
         | `Continue -> loop ()
         | `Exit code -> code)
