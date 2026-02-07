@@ -1,7 +1,8 @@
 (** Code action generation for the LSP server.
 
-    Provides quickfixes (missing signature annotation) and refactorings (extract
-    function) triggered by textDocument/codeAction requests. *)
+    Provides quickfixes (missing signature annotation, version constraint
+    violations) and refactorings (extract function) triggered by
+    textDocument/codeAction requests. *)
 
 val type_to_sig_string : Core.Types.typ -> string
 (** Convert a type to .tart signature format string. *)
@@ -37,6 +38,41 @@ val generate_add_signature_action :
   tart_content:string option ->
   Protocol.code_action option
 (** Generate an "Add type annotation" quickfix for a missing signature. *)
+
+(** {1 Version Constraint Helpers} *)
+
+val extract_required_version : string -> string option
+(** Extract the required version string from an E0900 diagnostic message.
+
+    Returns the version from messages like [`` `name` requires Emacs X.Y+ ``].
+*)
+
+val extract_removed_version : string -> string option
+(** Extract the removed-after version from an E0901 diagnostic message.
+
+    Returns the version from messages like
+    [`` `name` was removed after Emacs X.Y ``]. *)
+
+val extract_function_name : string -> string option
+(** Extract the function name from a version diagnostic message.
+
+    Returns the name from messages like [`` `name` requires... ``]. *)
+
+val diagnostics_match : Protocol.diagnostic -> Protocol.diagnostic -> bool
+(** Check whether two diagnostics match by error code and start line. *)
+
+val generate_version_actions :
+  range_of_span:(Syntax.Location.span -> Protocol.range) ->
+  context:Protocol.code_action_context ->
+  version_diagnostics:Typing.Diagnostic.t list ->
+  Protocol.code_action list
+(** Generate version constraint code actions for diagnostics in the request
+    context.
+
+    Filters the context's diagnostics for E0900/E0901 codes and matches them
+    against the type-checker's version diagnostics. *)
+
+(** {1 Request Handler} *)
 
 val handle :
   range_of_span:(Syntax.Location.span -> Protocol.range) ->

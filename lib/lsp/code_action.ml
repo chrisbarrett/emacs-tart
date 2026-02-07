@@ -473,12 +473,141 @@ let generate_add_signature_action ~(name : string) ~(ty : Core.Types.typ)
       ca_edit = Some workspace_edit;
     }
 
+(** {1 Version Constraint Code Actions} *)
+
+(** Extract the required version string from an E0900 diagnostic message.
+
+    Matches the pattern: [`` `name` requires Emacs X.Y+ ``] and returns ["X.Y"].
+*)
+let extract_required_version (message : string) : string option =
+  (* Pattern: `name` requires Emacs X.Y+ *)
+  match String.split_on_char '+' message with
+  | [] -> None
+  | parts ->
+      let before_plus = List.hd parts in
+      (* Find "Emacs " and take the version after it *)
+      let prefix = "Emacs " in
+      let prefix_len = String.length prefix in
+      let rec find_emacs i =
+        if i + prefix_len > String.length before_plus then None
+        else if String.sub before_plus i prefix_len = prefix then
+          Some
+            (String.sub before_plus (i + prefix_len)
+               (String.length before_plus - i - prefix_len))
+        else find_emacs (i + 1)
+      in
+      find_emacs 0
+
+(** Extract the removed-after version from an E0901 diagnostic message.
+
+    Matches the pattern: [`` `name` was removed after Emacs X.Y ``] and returns
+    ["X.Y"]. *)
+let extract_removed_version (message : string) : string option =
+  let prefix = "Emacs " in
+  let prefix_len = String.length prefix in
+  let rec find_emacs i =
+    if i + prefix_len > String.length message then None
+    else if String.sub message i prefix_len = prefix then
+      Some
+        (String.sub message (i + prefix_len)
+           (String.length message - i - prefix_len))
+    else find_emacs (i + 1)
+  in
+  find_emacs 0
+
+(** Extract the function name from a version diagnostic message.
+
+    Matches the pattern: [`` `name` requires... ``] or
+    [`` `name` was removed... ``] and returns [name]. *)
+let extract_function_name (message : string) : string option =
+  if String.length message > 0 && message.[0] = '`' then
+    match String.index_opt message '`' with
+    | Some 0 -> (
+        match String.index_from_opt message 1 '`' with
+        | Some end_idx -> Some (String.sub message 1 (end_idx - 1))
+        | None -> None)
+    | _ -> None
+  else None
+
+(** Check whether an LSP diagnostic from the client context matches a version
+    diagnostic produced by the type-checker.
+
+    Diagnostics match when they share the same error code and their ranges have
+    the same start line. *)
+let diagnostics_match (client_diag : Protocol.diagnostic)
+    (version_diag : Protocol.diagnostic) : bool =
+  client_diag.code = version_diag.code
+  && client_diag.range.start.line = version_diag.range.start.line
+
+(** Generate version constraint code actions for diagnostics in the request
+    context.
+
+    Filters [context.cac_diagnostics] for E0900/E0901 codes and matches them
+    against the type-checker's [version_diagnostics] to produce quickfix
+    actions. *)
+let generate_version_actions
+    ~(range_of_span : Syntax.Location.span -> Protocol.range)
+    ~(context : Protocol.code_action_context)
+    ~(version_diagnostics : Typing.Diagnostic.t list) :
+    Protocol.code_action list =
+  (* Convert internal version diagnostics to Protocol diagnostics for matching *)
+  let proto_version_diags =
+    List.filter_map
+      (fun (d : Typing.Diagnostic.t) ->
+        match d.code with
+        | Some
+            (Typing.Diagnostic.VersionTooLow | Typing.Diagnostic.VersionTooHigh)
+          ->
+            let range = range_of_span d.span in
+            let code =
+              Option.map Typing.Diagnostic.error_code_to_string d.code
+            in
+            Some
+              ( d,
+                {
+                  Protocol.range;
+                  severity = None;
+                  code;
+                  message = d.message;
+                  source = None;
+                  related_information = [];
+                } )
+        | _ -> None)
+      version_diagnostics
+  in
+  (* For each client diagnostic with a version error code, find the matching
+     internal diagnostic and generate actions *)
+  List.concat_map
+    (fun (client_diag : Protocol.diagnostic) ->
+      match client_diag.code with
+      | Some ("E0900" | "E0901") -> (
+          match
+            List.find_opt
+              (fun (_, proto_diag) -> diagnostics_match client_diag proto_diag)
+              proto_version_diags
+          with
+          | Some (internal_diag, _) ->
+              Log.debug "Matched version diagnostic: %s" internal_diag.message;
+              (* Actions will be generated in Tasks 7-9 *)
+              let (_ : Typing.Diagnostic.t) = internal_diag in
+              []
+          | None ->
+              Log.debug "No matching internal diagnostic for %s"
+                client_diag.message;
+              [])
+      | _ -> [])
+    context.cac_diagnostics
+
+(** {1 Code Action Generation} *)
+
 (** Handle textDocument/codeAction request.
 
     Returns code actions available for the given range and context. Generates
     quickfixes for:
     - Missing signature warnings: offers to add the function signature to the
-      .tart file *)
+      .tart file
+    - Version constraint violations: offers to bump version or add feature guard
+*)
 let handle ~(range_of_span : Syntax.Location.span -> Protocol.range)
     ~(config : Typing.Module_check.config) ~(uri : string) ~(doc_text : string)
     ~(range : Protocol.range) ~(context : Protocol.code_action_context) :
@@ -543,7 +672,12 @@ let handle ~(range_of_span : Syntax.Location.span -> Protocol.range)
       | None -> []
     in
 
-    let _ = context in
-    let all_actions = missing_sig_actions @ extract_actions in
+    (* Generate version constraint code actions from diagnostic context *)
+    let version_actions =
+      generate_version_actions ~range_of_span ~context
+        ~version_diagnostics:check_result.version_diagnostics
+    in
+
+    let all_actions = missing_sig_actions @ extract_actions @ version_actions in
     Log.debug "Generated %d code actions" (List.length all_actions);
     Ok (Protocol.code_action_result_to_json (Some all_actions))
