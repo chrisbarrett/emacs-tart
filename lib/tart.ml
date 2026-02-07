@@ -40,6 +40,8 @@ module Diagnostic = Typing.Diagnostic
 module Diagnostic_format = Typing.Diagnostic_format
 module Levenshtein = Typing.Levenshtein
 module Exhaustiveness = Typing.Exhaustiveness
+module Clause_dispatch = Typing.Clause_dispatch
+module Row_dispatch = Typing.Row_dispatch
 module Kind = Typing.Kind
 module Kind_infer = Typing.Kind_infer
 

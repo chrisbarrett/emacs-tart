@@ -161,28 +161,28 @@ Pure algorithm with well-defined interface — highest test value.
 
 Output correctness is critical; escape sequences and modifiers are subtle.
 
-- [ ] Create `test/syntax/print_test.ml`
-- [ ] Test `escape_string_char`: all special escapes (\n, \t, \\, \")
-- [ ] Test `escape_string`: strings with mixed escaping needs
-- [ ] Test `print_char`: plain chars, control chars, modifier combos
+- [x] Create `test/syntax/print_test.ml`
+- [x] Test `escape_string_char`: all special escapes (\n, \t, \\, \")
+- [x] Test `escape_string`: strings with mixed escaping needs
+- [x] Test `print_char`: plain chars, control chars, modifier combos
       (Meta, Control, Shift, Hyper, Super, Alt)
-- [ ] Test `Modifiers.extract`: round-trip modifier encoding
-- [ ] Test `to_string`: quote/backquote/unquote reader macros,
+- [x] Test `Modifiers.extract`: round-trip modifier encoding
+- [x] Test `to_string`: quote/backquote/unquote reader macros,
       cons cells, vectors, keywords, nested lists
-- [ ] Test round-trip: `to_string` then `parse_one` yields same AST
-- [ ] Add to `test/syntax/dune`
+- [x] Test round-trip: `to_string` then `parse_one` yields same AST
+- [x] Add to `test/syntax/dune`
 
 ### Task 5.3: Add unit tests for `clause_dispatch.ml`
 
 Recently extracted; validates Spec 54 multi-clause dispatch.
 
-- [ ] Create `test/typing/clause_dispatch_test.ml`
-- [ ] Test `extract_arg_literal` for keyword and quoted symbol params
-- [ ] Test `substitute_tvar_names` with various type shapes
-- [ ] Test `try_dispatch` with single-clause, multi-clause,
+- [x] Create `test/typing/clause_dispatch_test.ml`
+- [x] Test `extract_arg_literal` for keyword and quoted symbol params
+- [x] Test `substitute_tvar_names` with various type shapes
+- [x] Test `try_dispatch` with single-clause, multi-clause,
       literal-matching, and no-match scenarios
-- [ ] Test diagnostic resolution with format string placeholders
-- [ ] Add to `test/typing/dune`
+- [x] Test diagnostic resolution with format string placeholders
+- [x] Add to `test/typing/dune`
 
 ### Task 5.4: Add unit tests for `row_dispatch.ml`
 

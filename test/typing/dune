@@ -74,3 +74,8 @@
  (name levenshtein_test)
  (modules levenshtein_test)
  (libraries tart alcotest))
+
+(test
+ (name clause_dispatch_test)
+ (modules clause_dispatch_test)
+ (libraries tart alcotest))
