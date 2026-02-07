@@ -365,8 +365,30 @@ let run_check ~memory format warn_as_error ignore_warnings ignore_hints
   if List.exists Tart.Error.is_error all_errors then exit 1
 
 (** Eval subcommand: evaluate expression *)
-let run_eval expr =
+let run_eval ~memory expr =
+  let t_total = Tart.Timing.start () in
+
+  let mem_snap () =
+    if memory then Some (Tart.Memory_stats.snapshot ()) else None
+  in
+  let mem_delta_str before =
+    match before with
+    | Some b ->
+        let a = Tart.Memory_stats.snapshot () in
+        " ("
+        ^ Tart.Memory_stats.format_delta
+            (Tart.Memory_stats.diff ~before:b ~after:a)
+        ^ ")"
+    | None -> ""
+  in
+
+  let m0 = mem_snap () in
+  let t_parse = Tart.Timing.start () in
   let parse_result = Tart.Read.parse_string expr in
+  let parse_elapsed = Tart.Timing.elapsed_s t_parse in
+  Tart.Log.verbose "Parsing... %s%s"
+    (Tart.Timing.format_duration parse_elapsed)
+    (mem_delta_str m0);
 
   if parse_result.errors <> [] then (
     List.iter
@@ -378,6 +400,8 @@ let run_eval expr =
       prerr_endline "tart eval: empty expression";
       exit 1
   | [ sexp ] -> (
+      let m1 = mem_snap () in
+      let t_eval = Tart.Timing.start () in
       let global = Tart.Eval.make_interpreter () in
       match Tart.Eval.eval_toplevel global sexp with
       | Error eval_err ->
@@ -387,7 +411,25 @@ let run_eval expr =
                (pos.col + 1) eval_err.message);
           exit 1
       | Ok value ->
+          let eval_elapsed = Tart.Timing.elapsed_s t_eval in
+          Tart.Log.verbose "Evaluation... %s%s"
+            (Tart.Timing.format_duration eval_elapsed)
+            (mem_delta_str m1);
+
+          let m2 = mem_snap () in
+          let t_infer = Tart.Timing.start () in
           let ty, errors = Tart.Check.check_expr sexp in
+          let infer_elapsed = Tart.Timing.elapsed_s t_infer in
+          Tart.Log.verbose "Type inference... %s%s"
+            (Tart.Timing.format_duration infer_elapsed)
+            (mem_delta_str m2);
+
+          let total_elapsed = Tart.Timing.elapsed_s t_total in
+          Tart.Log.verbose "Total: %s"
+            (Tart.Timing.format_duration total_elapsed);
+          if memory then
+            Printf.eprintf "[memory] %s\n" (Tart.Memory_stats.format_summary ());
+
           if errors <> [] then (
             let diagnostics = Tart.Diagnostic.of_unify_errors errors in
             List.iter
@@ -403,10 +445,26 @@ let run_eval expr =
       exit 1
 
 (** Expand subcommand: macro-expand and print *)
-let run_expand load_files file =
+let run_expand ~memory load_files file =
+  let t_total = Tart.Timing.start () in
+
+  let mem_snap () =
+    if memory then Some (Tart.Memory_stats.snapshot ()) else None
+  in
+  let mem_delta_str before =
+    match before with
+    | Some b ->
+        let a = Tart.Memory_stats.snapshot () in
+        " ("
+        ^ Tart.Memory_stats.format_delta
+            (Tart.Memory_stats.diff ~before:b ~after:a)
+        ^ ")"
+    | None -> ""
+  in
+
   let global = Tart.Eval.make_interpreter () in
 
-  (* Validate --load files first *)
+  (* Validate and load --load files *)
   List.iter
     (fun load_file ->
       match validate_file load_file with
@@ -414,7 +472,14 @@ let run_expand load_files file =
           prerr_endline (Tart.File_error.to_string file_err);
           exit 1
       | Ok () ->
+          let m = mem_snap () in
+          let t = Tart.Timing.start () in
           let parse_result = Tart.Read.parse_file load_file in
+          let elapsed = Tart.Timing.elapsed_s t in
+          Tart.Log.verbose "Loading %s... %s%s"
+            (Filename.basename load_file)
+            (Tart.Timing.format_duration elapsed)
+            (mem_delta_str m);
           if parse_result.errors <> [] then (
             List.iter
               (fun err -> prerr_endline (format_parse_error err))
@@ -430,12 +495,22 @@ let run_expand load_files file =
       exit 1
   | Ok () -> ());
 
+  let m_parse = mem_snap () in
+  let t_parse = Tart.Timing.start () in
   let parse_result = Tart.Read.parse_file file in
+  let parse_elapsed = Tart.Timing.elapsed_s t_parse in
+  Tart.Log.verbose "Parsing %s... %s%s" (Filename.basename file)
+    (Tart.Timing.format_duration parse_elapsed)
+    (mem_delta_str m_parse);
+
   if parse_result.errors <> [] then (
     List.iter
       (fun err -> prerr_endline (format_parse_error err))
       parse_result.errors;
     exit 1);
+
+  let m_expand = mem_snap () in
+  let t_expand = Tart.Timing.start () in
   let expand_error = ref false in
   List.iter
     (fun sexp ->
@@ -449,6 +524,16 @@ let run_expand load_files file =
                (pos.col + 1) message);
           expand_error := true)
     parse_result.sexps;
+  let expand_elapsed = Tart.Timing.elapsed_s t_expand in
+  Tart.Log.verbose "Expansion... %s%s"
+    (Tart.Timing.format_duration expand_elapsed)
+    (mem_delta_str m_expand);
+
+  let total_elapsed = Tart.Timing.elapsed_s t_total in
+  Tart.Log.verbose "Total: %s" (Tart.Timing.format_duration total_elapsed);
+  if memory then
+    Printf.eprintf "[memory] %s\n" (Tart.Memory_stats.format_summary ());
+
   if !expand_error then exit 1
 
 (* REPL helpers *)
@@ -921,9 +1006,9 @@ let eval_cmd =
     ]
   in
   let info = Cmd.info "eval" ~doc ~man in
-  let run log_level log_format verbose_flag _memory expr =
+  let run log_level log_format verbose_flag memory expr =
     setup_logging ~log_level ~log_format ~verbose_flag;
-    run_eval expr
+    run_eval ~memory expr
   in
   Cmd.v info
     Term.(
@@ -952,9 +1037,9 @@ let expand_cmd =
     ]
   in
   let info = Cmd.info "expand" ~doc ~man in
-  let run log_level log_format verbose_flag _memory load_files file =
+  let run log_level log_format verbose_flag memory load_files file =
     setup_logging ~log_level ~log_format ~verbose_flag;
-    run_expand load_files file
+    run_expand ~memory load_files file
   in
   Cmd.v info
     Term.(
