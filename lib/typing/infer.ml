@@ -111,6 +111,30 @@ let narrow_else_from_analysis (analysis : Narrow.condition_analysis)
 (** Which row-typed accessor is being called. *)
 type accessor_kind = PlistGet | AlistGet | Gethash | MapElt
 
+type row_accessor_config = {
+  rac_kind : accessor_kind;
+  rac_container_arg : int;  (** Index of the container argument (0-based) *)
+  rac_key_arg : int;  (** Index of the key argument (0-based) *)
+}
+(** Configuration for a row-typed accessor function.
+
+    Describes the parameter layout and behavior of each accessor so that virtual
+    clause generation can handle all four accessors uniformly. *)
+
+(** Look up whether a function name is a row-typed accessor.
+
+    Returns the accessor configuration if recognized, [None] otherwise. *)
+let get_row_accessor_config = function
+  | "plist-get" ->
+      Some { rac_kind = PlistGet; rac_container_arg = 0; rac_key_arg = 1 }
+  | "alist-get" ->
+      Some { rac_kind = AlistGet; rac_container_arg = 1; rac_key_arg = 0 }
+  | "gethash" ->
+      Some { rac_kind = Gethash; rac_container_arg = 1; rac_key_arg = 0 }
+  | "map-elt" ->
+      Some { rac_kind = MapElt; rac_container_arg = 0; rac_key_arg = 1 }
+  | _ -> None
+
 (** Infer the type of an S-expression.
 
     This generates constraints but does not solve them. Call [Unify.solve] on
@@ -227,33 +251,6 @@ let rec infer (env : Env.t) (sexp : Syntax.Sexp.t) : result =
   (* === Apply: (apply f arg1 arg2 ... list) === *)
   | List (Symbol ("apply", _) :: fn_expr :: args, span) when args <> [] ->
       infer_apply env fn_expr args span
-  (* === Row-typed accessor calls with literal keys (Spec 11 R4–R8, Spec 56) === *)
-  | List
-      ( Symbol ("alist-get", _)
-        :: List ([ Symbol ("quote", _); Symbol (key_name, _) ], _)
-        :: alist_expr :: rest_args,
-        _span ) ->
-      infer_row_accessor env AlistGet key_name alist_expr rest_args
-  | List
-      ( Symbol ("plist-get", _)
-        :: plist_expr
-        :: Keyword (key_name, _)
-        :: rest_args,
-        _span ) ->
-      infer_row_accessor env PlistGet (":" ^ key_name) plist_expr rest_args
-  | List
-      ( Symbol ("map-elt", _)
-        :: map_expr
-        :: List ([ Symbol ("quote", _); Symbol (key_name, _) ], _)
-        :: rest_args,
-        _span ) ->
-      infer_row_accessor env MapElt key_name map_expr rest_args
-  | List
-      ( Symbol ("gethash", _)
-        :: List ([ Symbol ("quote", _); Symbol (key_name, _) ], _)
-        :: table_expr :: rest_args,
-        _span ) ->
-      infer_row_accessor env Gethash key_name table_expr rest_args
   (* === eq/eql with disjointness checking (Spec 11 R14) === *)
   | List ([ Symbol ((("eq" | "eql") as fn_name), _); arg1; arg2 ], span) ->
       infer_eq_with_disjointness env fn_name arg1 arg2 span
@@ -1544,18 +1541,131 @@ and try_clause_dispatch (env : Env.t) (tvar_names : string list)
   in
   try_clauses clauses
 
+(** Try row accessor dispatch for a known row-typed accessor function.
+
+    When a call is to a known row accessor ([plist-get], [alist-get], etc.) and
+    the key argument is a literal, this implements the decision table from Spec
+    11 R4–R8:
+
+    - Cases 1–2: literal key found in row → [field_type]
+    - Case 3: literal key absent, closed row, no default → [nil]
+    - Case 4: literal key absent, closed row, with default → default type
+    - Case 5: literal key absent, open row → [(α | nil)]
+    - R8: container type unknown → constrain to open row, return [field_ty]
+
+    Returns [Some (result_ty, container_constraint)] if the call was dispatched,
+    [None] if the function is not a row accessor or the key is not a literal
+    (caller should try clause dispatch or fall back to constraint path). *)
+and try_row_accessor_dispatch (env : Env.t) (config : row_accessor_config)
+    (arg_types : typ list) (arg_literals : string option list)
+    (args : Syntax.Sexp.t list) (rest_results : result list) :
+    (typ * Constraint.t option) option =
+  let kind = config.rac_kind in
+  let key_literal =
+    if config.rac_key_arg < List.length arg_literals then
+      List.nth arg_literals config.rac_key_arg
+    else None
+  in
+  match key_literal with
+  | None -> None (* Non-literal key — fall through to generic dispatch *)
+  | Some key_name -> (
+      let container_ty =
+        if config.rac_container_arg < List.length arg_types then
+          Some (List.nth arg_types config.rac_container_arg)
+        else None
+      in
+      let container_expr =
+        if config.rac_container_arg < List.length args then
+          Some (List.nth args config.rac_container_arg)
+        else None
+      in
+      (* Compute rest args: arguments after both container and key *)
+      let min_idx = min config.rac_container_arg config.rac_key_arg in
+      let max_idx = max config.rac_container_arg config.rac_key_arg in
+      let rest_arg_results =
+        List.filteri (fun i _ -> i <> min_idx && i <> max_idx) rest_results
+      in
+      let rest_args_exprs = List.filteri (fun i _ -> i > max_idx) args in
+      match container_ty with
+      | None -> None
+      | Some cty ->
+          let result_ty, container_constraint =
+            match extract_row_for_accessor kind cty with
+            | Some row -> (
+                match row_lookup row key_name with
+                | Some field_ty ->
+                    (* Cases 1–2: key is in the row → return field_type *)
+                    (field_ty, None)
+                | None -> (
+                    match row.row_var with
+                    | None ->
+                        (* Cases 3–4: key absent from closed row *)
+                        let result_ty =
+                          if accessor_has_default kind then
+                            match rest_args_exprs with
+                            | _ :: _ ->
+                                (* Has default arg — use its type *)
+                                let default_result = List.hd rest_arg_results in
+                                default_result.ty
+                            | [] -> Prim.nil
+                          else Prim.nil
+                        in
+                        (result_ty, None)
+                    | Some _ -> (
+                        match container_expr with
+                        | Some cexpr ->
+                            (* Case 5: key absent from open row →
+                                constrain and return (α | nil) *)
+                            let field_ty = fresh_tvar (Env.current_level env) in
+                            let row_var = fresh_tvar (Env.current_level env) in
+                            let expected_row =
+                              open_row [ (key_name, field_ty) ] row_var
+                            in
+                            let expected_ty =
+                              build_expected_container kind expected_row
+                            in
+                            let c =
+                              C.equal expected_ty cty
+                                (Syntax.Sexp.span_of cexpr)
+                            in
+                            (option_of field_ty, Some c)
+                        | None -> (Prim.nil, None))))
+            | None -> (
+                match container_expr with
+                | Some cexpr ->
+                    (* R8: Type not yet known — infer row from field access *)
+                    let field_ty = fresh_tvar (Env.current_level env) in
+                    let row_var = fresh_tvar (Env.current_level env) in
+                    let expected_row =
+                      open_row [ (key_name, field_ty) ] row_var
+                    in
+                    let expected_ty =
+                      build_expected_container kind expected_row
+                    in
+                    let c =
+                      C.equal expected_ty cty (Syntax.Sexp.span_of cexpr)
+                    in
+                    (field_ty, Some c)
+                | None ->
+                    let field_ty = fresh_tvar (Env.current_level env) in
+                    (field_ty, None))
+          in
+          Some (result_ty, container_constraint))
+
 (** Infer the type of a function application.
 
     Generates constraint: fn_type = (arg_types...) -> result_type.
 
     When the function has multi-clause signatures (from .tart files), attempts
-    clause-by-clause dispatch first. If a clause matches, uses that clause's
-    return type directly for more precise typing. Falls back to the merged
+    clause-by-clause dispatch first. For known row-typed accessors with literal
+    keys, generates virtual dispatch from row fields. Falls back to the merged
     union-type constraint path when no clause matches or no clauses exist. *)
 and infer_application env fn args span =
   let fn_result = infer env fn in
   let arg_results = List.map (infer env) args in
   let fn_name = get_fn_name fn in
+  let arg_types = List.map (fun r -> r.ty) arg_results in
+  let arg_literals = List.map extract_arg_literal args in
 
   (* Try clause-by-clause dispatch for multi-clause functions *)
   let clause_result =
@@ -1566,16 +1676,32 @@ and infer_application env fn args span =
             (* Get the tvar names from the function's scheme *)
             match Env.lookup_fn name env with
             | Some (Env.Poly (vars, _)) ->
-                let arg_types = List.map (fun r -> r.ty) arg_results in
-                let arg_literals = List.map extract_arg_literal args in
                 try_clause_dispatch env vars clauses arg_types arg_literals span
             | _ -> None)
         | None -> None)
     | None -> None
   in
 
-  match clause_result with
-  | Some clause_ret_ty ->
+  (* Try row accessor dispatch for known row-typed accessors with literal keys.
+     This implements the decision table from Spec 11 R4–R8 for plist-get,
+     alist-get, gethash, and map-elt. Only attempted when clause dispatch
+     didn't already match. *)
+  let row_accessor_result =
+    match clause_result with
+    | Some _ -> None (* Clause dispatch already succeeded *)
+    | None -> (
+        match fn_name with
+        | Some name -> (
+            match get_row_accessor_config name with
+            | Some config ->
+                try_row_accessor_dispatch env config arg_types arg_literals args
+                  arg_results
+            | None -> None)
+        | None -> None)
+  in
+
+  match (clause_result, row_accessor_result) with
+  | Some clause_ret_ty, _ ->
       (* Clause matched — use the clause's return type directly.
          Still need to emit fn_result constraints and arg constraints for
          the sub-expressions, but the return type is determined by the clause
@@ -1590,8 +1716,26 @@ and infer_application env fn args span =
         constraints = all_constraints;
         undefineds = all_undefineds;
       }
-  | None ->
-      (* No clause dispatch — fall back to standard constraint-based path *)
+  | None, Some (row_ret_ty, row_constraint) ->
+      (* Row accessor dispatch matched — use the row-derived return type.
+         Emit any container constraint plus sub-expression constraints. *)
+      let arg_constraints = combine_results arg_results in
+      let base_constraints =
+        match row_constraint with
+        | Some c -> C.add c arg_constraints
+        | None -> arg_constraints
+      in
+      let all_constraints = C.combine fn_result.constraints base_constraints in
+      let all_undefineds =
+        fn_result.undefineds @ combine_undefineds arg_results
+      in
+      {
+        ty = row_ret_ty;
+        constraints = all_constraints;
+        undefineds = all_undefineds;
+      }
+  | None, None ->
+      (* No clause or row dispatch — fall back to standard constraint path *)
 
       (* Fresh type variable for the result *)
       let result_ty = fresh_tvar (Env.current_level env) in
@@ -1826,82 +1970,6 @@ and build_expected_container kind row =
     plist-get has no default (only an optional predicate); the others do. *)
 and accessor_has_default kind =
   match kind with PlistGet -> false | AlistGet | Gethash | MapElt -> true
-
-(** Unified row-typed accessor inference for literal keys (Spec 56).
-
-    Implements the decision table from Spec 11 R4–R8 for [plist-get],
-    [alist-get], [gethash], and [map-elt]:
-
-    - Cases 1–2: literal key found in row → [field_type]
-    - Case 3: literal key absent, closed row, no default → [nil]
-    - Case 4: literal key absent, closed row, with default → default type
-    - Case 5: literal key absent, open row → [(α | nil)]
-    - R8: container type unknown → constrain to open row, return [field_ty] *)
-and infer_row_accessor env kind key_name container_expr rest_args =
-  let container_result = infer env container_expr in
-  let rest_results = List.map (infer env) rest_args in
-
-  let result_ty, container_constraint =
-    match extract_row_for_accessor kind container_result.ty with
-    | Some row -> (
-        match row_lookup row key_name with
-        | Some field_ty ->
-            (* Cases 1–2: key is in the row → return field_type directly *)
-            (field_ty, None)
-        | None -> (
-            match row.row_var with
-            | None ->
-                (* Cases 3–4: key absent from closed row *)
-                let result_ty =
-                  if accessor_has_default kind then
-                    match rest_args with
-                    | _default_expr :: _ -> (List.hd rest_results).ty
-                    | [] -> Prim.nil
-                  else Prim.nil
-                in
-                (result_ty, None)
-            | Some _ ->
-                (* Case 5: key absent from open row → constrain and return
-                   (α | nil) *)
-                let field_ty = fresh_tvar (Env.current_level env) in
-                let row_var = fresh_tvar (Env.current_level env) in
-                let expected_row = open_row [ (key_name, field_ty) ] row_var in
-                let expected_ty = build_expected_container kind expected_row in
-                let c =
-                  C.equal expected_ty container_result.ty
-                    (Syntax.Sexp.span_of container_expr)
-                in
-                (option_of field_ty, Some c)))
-    | None ->
-        (* R8: Type not yet known — infer row from field access.
-           Constrain container to have an open row containing this key.
-           Return field_ty directly (not option_of) since our constraint
-           guarantees presence. *)
-        let field_ty = fresh_tvar (Env.current_level env) in
-        let row_var = fresh_tvar (Env.current_level env) in
-        let expected_row = open_row [ (key_name, field_ty) ] row_var in
-        let expected_ty = build_expected_container kind expected_row in
-        let c =
-          C.equal expected_ty container_result.ty
-            (Syntax.Sexp.span_of container_expr)
-        in
-        (field_ty, Some c)
-  in
-
-  let rest_constraints = combine_results rest_results in
-  let base_constraints =
-    match container_constraint with
-    | Some c -> C.add c rest_constraints
-    | None -> rest_constraints
-  in
-  let all_constraints =
-    C.combine container_result.constraints base_constraints
-  in
-  let all_undefineds =
-    container_result.undefineds @ combine_undefineds rest_results
-  in
-
-  { ty = result_ty; constraints = all_constraints; undefineds = all_undefineds }
 
 (** Extract (declare (tart TYPE)) from a defun body.
 
