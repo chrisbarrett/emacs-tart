@@ -338,17 +338,20 @@ Keep highlighting minimal—goal is readability, not full IDE colors.
 
 ## Tasks
 
-- [ ] [R1] Implement `Source_excerpt.get_lines`
-- [ ] [R2] Implement underline rendering with caret alignment
-- [ ] [R3] Implement line number gutter formatting
-- [ ] [R4] Add Elm-style header formatting
-- [ ] [R5] Add conversational prose per constraint context
-- [ ] [R6] Track and display .tart signature provenance
-- [ ] [R7] Render excerpts for related locations
-- [ ] [R8] Add fallback for unreadable sources
-- [ ] [R9] Format help suggestions with context
-- [ ] [R10] Ensure compact and JSON formats unchanged
-- [ ] [R11] Implement `Ansi` module with color codes and TTY detection
-- [ ] [R11] Add colored output to diagnostic formatting
-- [ ] [R12] Add minimal Lisp syntax highlighting for excerpts
-- [ ] Write tests for excerpt rendering
+- [x] [R1] Implement `Source_excerpt.get_lines`
+- [x] [R2] Implement underline rendering with caret alignment
+- [x] [R3] Implement line number gutter formatting
+- [x] [R4] Add Elm-style header formatting
+- [x] [R5] Add conversational prose per constraint context
+- [x] [R6] Track and display .tart signature provenance
+- [x] [R7] Render excerpts for related locations
+- [x] [R8] Add fallback for unreadable sources
+- [x] [R9] Format help suggestions with context
+- [x] [R10] Ensure compact and JSON formats unchanged
+- [x] [R11] Implement `Ansi` module with color codes and TTY detection
+- [x] [R11] Add colored output to diagnostic formatting
+- [x] [R12] Add minimal Lisp syntax highlighting for excerpts
+- [x] Write tests for excerpt rendering
+
+**Status: Complete.** All requirements implemented in `source_excerpt.ml(i)`,
+`ansi.ml(i)`, and `diagnostic.ml`. 12 unit tests in `source_excerpt_test.ml`.
