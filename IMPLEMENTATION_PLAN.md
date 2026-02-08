@@ -1,124 +1,172 @@
-# Implementation Plan — Type Definition
+# Implementation Plan — Server Handler Boilerplate Extraction
 
-> Source: [Spec 71](./specs/71-lsp-server.md) §Type Definition, task 15
-> from [specs/IMPLEMENTATION\_PLAN.md](./specs/IMPLEMENTATION_PLAN.md)
+> Source: Tidy pass after completing [Spec 71](./specs/71-lsp-server.md) tasks
+> 12–16
 
 ## Problem
 
-The LSP server has no `textDocument/typeDefinition` handler. Editors
-cannot navigate from a value to the source of its type — e.g., jumping
-from a variable of type `person` to the `(import-struct person …)`
-declaration in its `.tart` file.
+The 13 request handlers in `server.ml` repeat three identical patterns:
 
-The spec (§Type Definition) calls for:
+1. **Missing-params error** — 7 lines each × 13 handlers = ~91 lines of
+   identical `Error { code = invalid_params; … }` blocks.
+2. **Parse-params + get-document** — parse the JSON, extract URI, look up
+   document, return a null/empty result when absent.
+3. **Find-sexp-at-cursor** — parse the doc, check for empty sexps, call
+   `find_with_context_in_forms`, return null when nothing found.
 
-- Infer the type at the cursor. If it resolves to a named type defined
-  in a `.tart` file, return the location of that type's declaration.
-- Return `null` for primitive types (`integer`, `string`, `symbol`,
-  etc.) that have no user-visible definition.
+Patterns 1 and 2 appear in all 13 handlers. Pattern 3 appears in 7 of
+them (hover, definition, type-definition, references, prepare-rename,
+rename, and partially code-action).
 
 ## Current State
 
-- `type_at_sexp` in `server.ml` infers the type at a cursor position
-  and returns a `Core.Types.typ option`.
-- Named types appear as `TCon "module/name"` (e.g., `TCon "mymod/person"`
-  from `opaque_con_name` which formats as `module ^ "/" ^ type`).
-- Prelude opaque types use `TCon "prelude.buffer"`, `TCon "prelude.window"`,
-  etc. (dot-separated, built-in — no source location).
-- Intrinsic primitives use `TCon "%tart-intrinsic%Int"` etc.
-- `.tart` signature ASTs carry `DType { type_name; type_loc; … }`,
-  `DData { data_name; data_loc; … }`, and
-  `DImportStruct { struct_name; struct_loc; … }` — all with spans.
-- `find_definition_in_signature` searches `DDefun`/`DDefvar` but not
-  type declarations. `find_definition_in_signatures` resolves module
-  prefixes to `.tart` files via the search path.
-- `definition_params` / `definition_result` protocol types already
-  exist and can be reused (same request/response shape).
+`server.ml` is 1734 lines. Each handler starts with:
+
+```ocaml
+let handle_X (server : t) (params : Yojson.Safe.t option) =
+  match params with
+  | None ->
+      Error { Rpc.code = Rpc.invalid_params;
+              message = "Missing X params"; data = None }
+  | Some json ->
+      let p = Protocol.parse_X_params json in
+      let uri = p.X_text_document in
+      …
+      match Document.get_doc server.documents uri with
+      | None -> Ok (null_result)
+      | Some doc -> (* handler-specific logic *)
+```
+
+The handlers that additionally find a sexp at cursor then repeat:
+
+```ocaml
+let parse_result = Syntax.Read.parse_string ~filename doc.text in
+if parse_result.sexps = [] then Ok null_result
+else
+  match Syntax.Sexp.find_with_context_in_forms ~line ~col
+          parse_result.sexps with
+  | None -> Ok null_result
+  | Some ctx -> (* handler-specific logic *)
+```
 
 ## Design
 
-### Extracting the type name
+### `require_params` — eliminate pattern 1
 
-Given the inferred `typ`:
-1. Follow `TVar` links via `repr`.
-2. For `TCon name` — use `name` directly.
-3. For `TApp (TCon name, _)` — use `name` (parameterised type).
-4. For `TArrow`, `TForall`, `TUnion`, `TLiteral`, etc. — return null
-   (no single named type to navigate to).
+A one-liner that wraps the `None → invalid_params` match:
 
-### Resolving to a source location
+```ocaml
+let require_params (label : string)
+    (params : Yojson.Safe.t option)
+    (f : Yojson.Safe.t -> (Yojson.Safe.t, Rpc.response_error) result) =
+  match params with
+  | None ->
+      Error { Rpc.code = Rpc.invalid_params;
+              message = "Missing " ^ label ^ " params"; data = None }
+  | Some json -> f json
+```
 
-Given a TCon name like `"mymod/person"`:
-1. If it starts with `%tart-intrinsic%` → null (primitive).
-2. If it starts with `prelude.` → null (built-in opaque, no source).
-3. Split on `/` to get `(module_name, type_name)`.
-4. Search for the module's `.tart` file via `Sig.Search_path.find_signature`.
-5. Parse the signature and find the `DType`, `DData`, or `DImportStruct`
-   declaration matching `type_name`.
-6. Return the location span.
+Every handler becomes `require_params "hover" params (fun json -> …)`.
 
-### New helper: `find_type_definition_in_signature`
+### `with_document` — eliminate pattern 2
 
-Like `find_definition_in_signature` but matches `DType`, `DData`, and
-`DImportStruct` by their name fields instead of `DDefun`/`DDefvar`.
+Given a URI, look up the document and invoke the handler, or return
+the provided null result:
 
-### Reuse of protocol types
+```ocaml
+let with_document (server : t) ~(uri : string)
+    ~(not_found : Yojson.Safe.t)
+    (f : Document.doc -> (Yojson.Safe.t, Rpc.response_error) result) =
+  match Document.get_doc server.documents uri with
+  | None ->
+      Log.debug "Document not found: %s" uri;
+      Ok not_found
+  | Some doc -> f doc
+```
 
-`textDocument/typeDefinition` has the same params and result shape as
-`textDocument/definition`. Reuse `definition_params` / `definition_result`
-and their parsers/encoders. Add `type_definition_provider : bool` to
-`server_capabilities`.
+### `with_sexp_at_cursor` — eliminate pattern 3
+
+Given a doc, position, and null result, parse + find sexp:
+
+```ocaml
+let with_sexp_at_cursor ~(doc : Document.doc) ~(uri : string)
+    ~(line : int) ~(col : int) ~(not_found : Yojson.Safe.t)
+    (f : Syntax.Read.parse_result ->
+         Syntax.Sexp.find_context ->
+         (Yojson.Safe.t, Rpc.response_error) result) =
+  let filename = Uri.to_filename uri in
+  let parse_result = Syntax.Read.parse_string ~filename doc.text in
+  if parse_result.sexps = [] then (
+    Log.debug "No S-expressions parsed";
+    Ok not_found)
+  else
+    match Syntax.Sexp.find_with_context_in_forms ~line ~col
+            parse_result.sexps with
+    | None ->
+        Log.debug "No S-expression at position";
+        Ok not_found
+    | Some ctx -> f parse_result ctx
+```
+
+### Composition
+
+A handler like `handle_hover` goes from 67 lines to roughly:
+
+```ocaml
+let handle_hover server params =
+  require_params "hover" params @@ fun json ->
+  let hp = Protocol.parse_hover_params json in
+  let uri = hp.text_document in
+  Log.debug "Hover request at %s:%d:%d" uri hp.position.line
+    hp.position.character;
+  with_document server ~uri ~not_found:`Null @@ fun doc ->
+  let col = Document.utf16_col_to_byte … in
+  with_sexp_at_cursor ~doc ~uri ~line ~col ~not_found:`Null
+    @@ fun parse_result ctx ->
+  (* handler-specific logic — unchanged *)
+```
+
+### What *not* to extract
+
+Each handler's core logic (what it does after finding the sexp) is
+different enough that further abstraction would hurt readability. The
+three helpers above target only the mechanical scaffolding.
 
 ## Tasks
 
-### Task 1 — Protocol type and capability
-
-**Files:** `lib/lsp/protocol.ml`, `lib/lsp/protocol.mli`, `lib/lsp/server.ml`
-
-- Add `type_definition_provider : bool` to `server_capabilities`.
-- Encode it as `"typeDefinitionProvider": true` in
-  `server_capabilities_to_json`.
-- Set `type_definition_provider = true` in `server.ml` `capabilities()`.
-- Add `parse_type_definition_params` (alias for `parse_definition_params`
-  since the JSON shape is identical).
-
-### Task 2 — Handler and type lookup
+### Task 1 — Add `require_params` helper and adopt in all handlers
 
 **Files:** `lib/lsp/server.ml`
 
-- Add `find_type_definition_in_signature`: match `DType`, `DData`,
-  `DImportStruct` by name in a `Sig_ast.signature`.
-- Add `find_type_definition_in_signatures`: given a `TCon` name,
-  split `module/type`, resolve the module via the search path, delegate
-  to `find_type_definition_in_signature`.
-- Add `handle_type_definition`:
-  1. Parse params, get doc, parse sexps, find sexp at cursor.
-  2. Type-check, call `type_at_sexp`.
-  3. Extract `TCon` name from result type (follow `TVar`, handle `TApp`).
-  4. Skip intrinsics and prelude types → null.
-  5. Call `find_type_definition_in_signatures` → location or null.
-- Add `"textDocument/typeDefinition"` to `dispatch_request`.
+- Add `require_params` helper (5 lines).
+- Rewrite all 13 `match params with | None → Error …` blocks to use
+  `require_params`.
+- No .mli change needed (helper is internal).
 
-### Task 3 — Tests
+### Task 2 — Add `with_document` helper and adopt in all handlers
 
-**Files:** `test/lsp_support/lsp_client.{ml,mli}`,
-`test/lsp/server_test.ml`
+**Files:** `lib/lsp/server.ml`
 
-- Add `type_definition_msg` to `lsp_client.{ml,mli}` (same shape as
-  `definition_msg`).
-- Add tests in "type-definition" group:
-  - `test_type_definition_capability_advertised`: check initialize
-    response has `typeDefinitionProvider: true`.
-  - `test_type_definition_returns_null_for_primitive`: cursor on `42`
-    (type is int) → null.
-  - `test_type_definition_returns_null_for_symbol`: cursor on a plain
-    symbol with no named type → null.
-  - `test_type_definition_empty_file`: empty doc → null.
+- Add `with_document` helper (7 lines).
+- Rewrite all 13 `match Document.get_doc … with | None → …` blocks
+  to use `with_document`.
+
+### Task 3 — Add `with_sexp_at_cursor` helper and adopt in applicable handlers
+
+**Files:** `lib/lsp/server.ml`
+
+- Add `with_sexp_at_cursor` helper (~15 lines).
+- Rewrite the 7 handlers that parse + find sexp (hover, definition,
+  type-definition, references, prepare-rename, rename, and the sexp
+  portion of code-action if structurally compatible) to use it.
+- `handle_document_symbol`, `handle_completion`, `handle_signature_help`,
+  `handle_folding_range`, `handle_semantic_tokens`, and
+  `handle_inlay_hints` do not use sexp-at-cursor and are unaffected.
 
 ## Checklist
 
 | # | Task | Status |
 |---|------|--------|
-| 1 | Protocol type and capability | Done |
-| 2 | Handler and type lookup | Done |
-| 3 | Tests | Done |
+| 1 | `require_params` helper | Done |
+| 2 | `with_document` helper | Not started |
+| 3 | `with_sexp_at_cursor` helper | Not started |

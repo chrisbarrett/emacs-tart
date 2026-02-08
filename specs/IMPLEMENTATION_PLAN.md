@@ -408,5 +408,5 @@ any order, interleaved with other work.
 | 12 | Semantic tokens | `lib/lsp/semantic_tokens.{ml,mli}` | `server.ml`, `protocol.ml` | Done |
 | 13 | Inlay hints | `lib/lsp/inlay_hints.{ml,mli}` | `server.ml`, `protocol.ml` | Done |
 | 14 | Prepare rename | — | `server.ml`, `protocol.ml` | Done |
-| 15 | Type definition | — | `server.ml`, `protocol.ml` | Not started |
+| 15 | Type definition | — | `server.ml`, `protocol.ml` | Done |
 | 16 | Folding ranges | `lib/lsp/folding.{ml,mli}` | `server.ml`, `protocol.ml` | Done |

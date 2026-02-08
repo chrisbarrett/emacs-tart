@@ -142,6 +142,20 @@ let capabilities () : Protocol.server_capabilities =
     type_definition_provider = true;
   }
 
+(** Require non-None params, returning an invalid-params error otherwise. *)
+let require_params (label : string) (params : Yojson.Safe.t option)
+    (f : Yojson.Safe.t -> (Yojson.Safe.t, Rpc.response_error) result) :
+    (Yojson.Safe.t, Rpc.response_error) result =
+  match params with
+  | None ->
+      Error
+        {
+          Rpc.code = Rpc.invalid_params;
+          message = "Missing " ^ label ^ " params";
+          data = None;
+        }
+  | Some json -> f json
+
 (** Convert a source location span to an LSP range. Loc.span has 1-based lines
     and byte-offset columns. LSP uses 0-based lines and UTF-16 code-unit
     characters. *)
@@ -701,71 +715,59 @@ let type_at_sexp (env : Typing.Check.check_result)
 (** Handle textDocument/hover request *)
 let handle_hover (server : t) (params : Yojson.Safe.t option) :
     (Yojson.Safe.t, Rpc.response_error) result =
-  match params with
+  require_params "hover" params @@ fun json ->
+  let hover_params = Protocol.parse_hover_params json in
+  let uri = hover_params.text_document in
+  let line = hover_params.position.line in
+  Log.debug "Hover request at %s:%d:%d" uri line hover_params.position.character;
+  match Document.get_doc server.documents uri with
   | None ->
-      Error
-        {
-          Rpc.code = Rpc.invalid_params;
-          message = "Missing hover params";
-          data = None;
-        }
-  | Some json -> (
-      let hover_params = Protocol.parse_hover_params json in
-      let uri = hover_params.text_document in
-      let line = hover_params.position.line in
-      Log.debug "Hover request at %s:%d:%d" uri line
-        hover_params.position.character;
-      match Document.get_doc server.documents uri with
-      | None ->
-          Log.debug "Document not found: %s" uri;
-          Ok `Null
-      | Some doc -> (
-          let col =
-            Document.utf16_col_to_byte ~text:doc.text ~line
-              ~col:hover_params.position.character
-          in
-          let filename = Uri.to_filename uri in
-          let parse_result = Syntax.Read.parse_string ~filename doc.text in
-          if parse_result.sexps = [] then (
-            Log.debug "No S-expressions parsed";
-            Ok `Null)
-          else
-            match
-              Syntax.Sexp.find_with_context_in_forms ~line ~col
-                parse_result.sexps
-            with
+      Log.debug "Document not found: %s" uri;
+      Ok `Null
+  | Some doc -> (
+      let col =
+        Document.utf16_col_to_byte ~text:doc.text ~line
+          ~col:hover_params.position.character
+      in
+      let filename = Uri.to_filename uri in
+      let parse_result = Syntax.Read.parse_string ~filename doc.text in
+      if parse_result.sexps = [] then (
+        Log.debug "No S-expressions parsed";
+        Ok `Null)
+      else
+        match
+          Syntax.Sexp.find_with_context_in_forms ~line ~col parse_result.sexps
+        with
+        | None ->
+            Log.debug "No S-expression at position";
+            Ok `Null
+        | Some ctx -> (
+            Log.debug "Found sexp: %s (in application: %b)"
+              (Syntax.Sexp.to_string ctx.target)
+              (Option.is_some ctx.enclosing_application);
+            (* Type-check the document to get the environment *)
+            let check_result = Typing.Check.check_program parse_result.sexps in
+            match type_at_sexp check_result ctx with
             | None ->
-                Log.debug "No S-expression at position";
+                Log.debug "Could not infer type";
                 Ok `Null
-            | Some ctx -> (
-                Log.debug "Found sexp: %s (in application: %b)"
-                  (Syntax.Sexp.to_string ctx.target)
-                  (Option.is_some ctx.enclosing_application);
-                (* Type-check the document to get the environment *)
-                let check_result =
-                  Typing.Check.check_program parse_result.sexps
-                in
-                match type_at_sexp check_result ctx with
-                | None ->
-                    Log.debug "Could not infer type";
-                    Ok `Null
-                | Some ty ->
-                    let type_str = Core.Types.to_string ty in
-                    Log.debug "Type: %s" type_str;
-                    let hover : Protocol.hover =
+            | Some ty ->
+                let type_str = Core.Types.to_string ty in
+                Log.debug "Type: %s" type_str;
+                let hover : Protocol.hover =
+                  {
+                    contents =
                       {
-                        contents =
-                          {
-                            kind = Protocol.Markdown;
-                            value = Printf.sprintf "```elisp\n%s\n```" type_str;
-                          };
-                        range =
-                          Some
-                            (range_of_span ~text:doc.text
-                               (Syntax.Sexp.span_of ctx.target));
-                      }
-                    in
-                    Ok (Protocol.hover_to_json hover))))
+                        kind = Protocol.Markdown;
+                        value = Printf.sprintf "```elisp\n%s\n```" type_str;
+                      };
+                    range =
+                      Some
+                        (range_of_span ~text:doc.text
+                           (Syntax.Sexp.span_of ctx.target));
+                  }
+                in
+                Ok (Protocol.hover_to_json hover)))
 
 (** Extract definition locations (defun, defvar, defconst) from parsed sexps.
 
@@ -936,95 +938,80 @@ let find_references (name : string) (sexps : Syntax.Sexp.t list) :
 (** Handle textDocument/definition request *)
 let handle_definition (server : t) (params : Yojson.Safe.t option) :
     (Yojson.Safe.t, Rpc.response_error) result =
-  match params with
+  require_params "definition" params @@ fun json ->
+  let def_params = Protocol.parse_definition_params json in
+  let uri = def_params.def_text_document in
+  let line = def_params.def_position.line in
+  Log.debug "Definition request at %s:%d:%d" uri line
+    def_params.def_position.character;
+  match Document.get_doc server.documents uri with
   | None ->
-      Error
-        {
-          Rpc.code = Rpc.invalid_params;
-          message = "Missing definition params";
-          data = None;
-        }
-  | Some json -> (
-      let def_params = Protocol.parse_definition_params json in
-      let uri = def_params.def_text_document in
-      let line = def_params.def_position.line in
-      Log.debug "Definition request at %s:%d:%d" uri line
-        def_params.def_position.character;
-      match Document.get_doc server.documents uri with
-      | None ->
-          Log.debug "Document not found: %s" uri;
-          Ok (Protocol.definition_result_to_json Protocol.DefNull)
-      | Some doc -> (
-          let col =
-            Document.utf16_col_to_byte ~text:doc.text ~line
-              ~col:def_params.def_position.character
-          in
-          let filename = Uri.to_filename uri in
-          let parse_result = Syntax.Read.parse_string ~filename doc.text in
-          if parse_result.sexps = [] then (
-            Log.debug "No S-expressions parsed";
-            Ok (Protocol.definition_result_to_json Protocol.DefNull))
-          else
-            match
-              Syntax.Sexp.find_with_context_in_forms ~line ~col
-                parse_result.sexps
-            with
+      Log.debug "Document not found: %s" uri;
+      Ok (Protocol.definition_result_to_json Protocol.DefNull)
+  | Some doc -> (
+      let col =
+        Document.utf16_col_to_byte ~text:doc.text ~line
+          ~col:def_params.def_position.character
+      in
+      let filename = Uri.to_filename uri in
+      let parse_result = Syntax.Read.parse_string ~filename doc.text in
+      if parse_result.sexps = [] then (
+        Log.debug "No S-expressions parsed";
+        Ok (Protocol.definition_result_to_json Protocol.DefNull))
+      else
+        match
+          Syntax.Sexp.find_with_context_in_forms ~line ~col parse_result.sexps
+        with
+        | None ->
+            Log.debug "No S-expression at position";
+            Ok (Protocol.definition_result_to_json Protocol.DefNull)
+        | Some ctx -> (
+            (* Extract symbol name from the target sexp *)
+            match symbol_name_of_sexp ctx.target with
             | None ->
-                Log.debug "No S-expression at position";
+                Log.debug "Target is not a symbol";
                 Ok (Protocol.definition_result_to_json Protocol.DefNull)
-            | Some ctx -> (
-                (* Extract symbol name from the target sexp *)
-                match symbol_name_of_sexp ctx.target with
-                | None ->
-                    Log.debug "Target is not a symbol";
-                    Ok (Protocol.definition_result_to_json Protocol.DefNull)
-                | Some name -> (
-                    Log.debug "Looking for definition of: %s" name;
-                    (* Look up definition in the current document first *)
-                    let definitions = extract_definitions parse_result.sexps in
-                    match List.assoc_opt name definitions with
+            | Some name -> (
+                Log.debug "Looking for definition of: %s" name;
+                (* Look up definition in the current document first *)
+                let definitions = extract_definitions parse_result.sexps in
+                match List.assoc_opt name definitions with
+                | Some span ->
+                    Log.debug "Found local definition at %s:%d:%d"
+                      span.start_pos.file span.start_pos.line span.start_pos.col;
+                    let loc = location_of_span ~text:doc.text span in
+                    Ok
+                      (Protocol.definition_result_to_json
+                         (Protocol.DefLocation loc))
+                | None -> (
+                    (* Not found locally - try signature lookup (R14) *)
+                    Log.debug
+                      "Not found locally, trying signature lookup for: %s" name;
+                    match
+                      find_definition_in_signatures ~config:server.module_config
+                        ~filename name
+                    with
                     | Some span ->
-                        Log.debug "Found local definition at %s:%d:%d"
+                        Log.debug "Found definition in signature at %s:%d:%d"
                           span.start_pos.file span.start_pos.line
                           span.start_pos.col;
-                        let loc = location_of_span ~text:doc.text span in
+                        (* Read the target file's text for UTF-16 conversion *)
+                        let target_text =
+                          try
+                            let ic = In_channel.open_text span.start_pos.file in
+                            let content = In_channel.input_all ic in
+                            In_channel.close ic;
+                            content
+                          with _ -> ""
+                        in
+                        let loc = location_of_span ~text:target_text span in
                         Ok
                           (Protocol.definition_result_to_json
                              (Protocol.DefLocation loc))
-                    | None -> (
-                        (* Not found locally - try signature lookup (R14) *)
-                        Log.debug
-                          "Not found locally, trying signature lookup for: %s"
-                          name;
-                        match
-                          find_definition_in_signatures
-                            ~config:server.module_config ~filename name
-                        with
-                        | Some span ->
-                            Log.debug
-                              "Found definition in signature at %s:%d:%d"
-                              span.start_pos.file span.start_pos.line
-                              span.start_pos.col;
-                            (* Read the target file's text for UTF-16 conversion *)
-                            let target_text =
-                              try
-                                let ic =
-                                  In_channel.open_text span.start_pos.file
-                                in
-                                let content = In_channel.input_all ic in
-                                In_channel.close ic;
-                                content
-                              with _ -> ""
-                            in
-                            let loc = location_of_span ~text:target_text span in
-                            Ok
-                              (Protocol.definition_result_to_json
-                                 (Protocol.DefLocation loc))
-                        | None ->
-                            Log.debug "No definition found for: %s" name;
-                            Ok
-                              (Protocol.definition_result_to_json
-                                 Protocol.DefNull))))))
+                    | None ->
+                        Log.debug "No definition found for: %s" name;
+                        Ok (Protocol.definition_result_to_json Protocol.DefNull)
+                    ))))
 
 (** Handle textDocument/typeDefinition request.
 
@@ -1033,201 +1020,167 @@ let handle_definition (server : t) (params : Yojson.Safe.t option) :
     primitive, prelude, and non-named types. *)
 let handle_type_definition (server : t) (params : Yojson.Safe.t option) :
     (Yojson.Safe.t, Rpc.response_error) result =
-  match params with
+  require_params "type definition" params @@ fun json ->
+  let def_params = Protocol.parse_type_definition_params json in
+  let uri = def_params.def_text_document in
+  let line = def_params.def_position.line in
+  Log.debug "Type definition request at %s:%d:%d" uri line
+    def_params.def_position.character;
+  match Document.get_doc server.documents uri with
   | None ->
-      Error
-        {
-          Rpc.code = Rpc.invalid_params;
-          message = "Missing type definition params";
-          data = None;
-        }
-  | Some json -> (
-      let def_params = Protocol.parse_type_definition_params json in
-      let uri = def_params.def_text_document in
-      let line = def_params.def_position.line in
-      Log.debug "Type definition request at %s:%d:%d" uri line
-        def_params.def_position.character;
-      match Document.get_doc server.documents uri with
-      | None ->
-          Log.debug "Document not found: %s" uri;
-          Ok (Protocol.definition_result_to_json Protocol.DefNull)
-      | Some doc -> (
-          let col =
-            Document.utf16_col_to_byte ~text:doc.text ~line
-              ~col:def_params.def_position.character
-          in
-          let filename = Uri.to_filename uri in
-          let parse_result = Syntax.Read.parse_string ~filename doc.text in
-          if parse_result.sexps = [] then (
-            Log.debug "No S-expressions parsed";
-            Ok (Protocol.definition_result_to_json Protocol.DefNull))
-          else
-            match
-              Syntax.Sexp.find_with_context_in_forms ~line ~col
-                parse_result.sexps
-            with
+      Log.debug "Document not found: %s" uri;
+      Ok (Protocol.definition_result_to_json Protocol.DefNull)
+  | Some doc -> (
+      let col =
+        Document.utf16_col_to_byte ~text:doc.text ~line
+          ~col:def_params.def_position.character
+      in
+      let filename = Uri.to_filename uri in
+      let parse_result = Syntax.Read.parse_string ~filename doc.text in
+      if parse_result.sexps = [] then (
+        Log.debug "No S-expressions parsed";
+        Ok (Protocol.definition_result_to_json Protocol.DefNull))
+      else
+        match
+          Syntax.Sexp.find_with_context_in_forms ~line ~col parse_result.sexps
+        with
+        | None ->
+            Log.debug "No S-expression at position";
+            Ok (Protocol.definition_result_to_json Protocol.DefNull)
+        | Some ctx -> (
+            (* Type-check the document to get the environment *)
+            let check_result = Typing.Check.check_program parse_result.sexps in
+            match type_at_sexp check_result ctx with
             | None ->
-                Log.debug "No S-expression at position";
+                Log.debug "Could not infer type";
                 Ok (Protocol.definition_result_to_json Protocol.DefNull)
-            | Some ctx -> (
-                (* Type-check the document to get the environment *)
-                let check_result =
-                  Typing.Check.check_program parse_result.sexps
+            | Some ty -> (
+                (* Extract TCon name from the inferred type *)
+                let extract_tcon_name (t : Core.Types.typ) : string option =
+                  match Core.Types.repr t with
+                  | Core.Types.TCon name -> Some name
+                  | Core.Types.TApp (Core.Types.TCon name, _) -> Some name
+                  | _ -> None
                 in
-                match type_at_sexp check_result ctx with
+                match extract_tcon_name ty with
                 | None ->
-                    Log.debug "Could not infer type";
+                    Log.debug "Type is not a named type: %s"
+                      (Core.Types.to_string ty);
                     Ok (Protocol.definition_result_to_json Protocol.DefNull)
-                | Some ty -> (
-                    (* Extract TCon name from the inferred type *)
-                    let extract_tcon_name (t : Core.Types.typ) : string option =
-                      match Core.Types.repr t with
-                      | Core.Types.TCon name -> Some name
-                      | Core.Types.TApp (Core.Types.TCon name, _) -> Some name
-                      | _ -> None
-                    in
-                    match extract_tcon_name ty with
+                | Some tcon_name -> (
+                    Log.debug "Looking for type definition of: %s" tcon_name;
+                    match
+                      find_type_definition_in_signatures
+                        ~config:server.module_config tcon_name
+                    with
+                    | Some span ->
+                        Log.debug "Found type definition at %s:%d:%d"
+                          span.start_pos.file span.start_pos.line
+                          span.start_pos.col;
+                        (* Read the target file's text for UTF-16 conversion *)
+                        let target_text =
+                          try
+                            let ic = In_channel.open_text span.start_pos.file in
+                            let content = In_channel.input_all ic in
+                            In_channel.close ic;
+                            content
+                          with _ -> ""
+                        in
+                        let loc = location_of_span ~text:target_text span in
+                        Ok
+                          (Protocol.definition_result_to_json
+                             (Protocol.DefLocation loc))
                     | None ->
-                        Log.debug "Type is not a named type: %s"
-                          (Core.Types.to_string ty);
+                        Log.debug "No type definition found for: %s" tcon_name;
                         Ok (Protocol.definition_result_to_json Protocol.DefNull)
-                    | Some tcon_name -> (
-                        Log.debug "Looking for type definition of: %s" tcon_name;
-                        match
-                          find_type_definition_in_signatures
-                            ~config:server.module_config tcon_name
-                        with
-                        | Some span ->
-                            Log.debug "Found type definition at %s:%d:%d"
-                              span.start_pos.file span.start_pos.line
-                              span.start_pos.col;
-                            (* Read the target file's text for UTF-16 conversion *)
-                            let target_text =
-                              try
-                                let ic =
-                                  In_channel.open_text span.start_pos.file
-                                in
-                                let content = In_channel.input_all ic in
-                                In_channel.close ic;
-                                content
-                              with _ -> ""
-                            in
-                            let loc = location_of_span ~text:target_text span in
-                            Ok
-                              (Protocol.definition_result_to_json
-                                 (Protocol.DefLocation loc))
-                        | None ->
-                            Log.debug "No type definition found for: %s"
-                              tcon_name;
-                            Ok
-                              (Protocol.definition_result_to_json
-                                 Protocol.DefNull))))))
+                    ))))
 
 (** Handle textDocument/references request *)
 let handle_references (server : t) (params : Yojson.Safe.t option) :
     (Yojson.Safe.t, Rpc.response_error) result =
-  match params with
+  require_params "references" params @@ fun json ->
+  let ref_params = Protocol.parse_references_params json in
+  let uri = ref_params.ref_text_document in
+  let line = ref_params.ref_position.line in
+  Log.debug "References request at %s:%d:%d" uri line
+    ref_params.ref_position.character;
+  match Document.get_doc server.documents uri with
   | None ->
-      Error
-        {
-          Rpc.code = Rpc.invalid_params;
-          message = "Missing references params";
-          data = None;
-        }
-  | Some json -> (
-      let ref_params = Protocol.parse_references_params json in
-      let uri = ref_params.ref_text_document in
-      let line = ref_params.ref_position.line in
-      Log.debug "References request at %s:%d:%d" uri line
-        ref_params.ref_position.character;
-      match Document.get_doc server.documents uri with
-      | None ->
-          Log.debug "Document not found: %s" uri;
-          Ok (Protocol.references_result_to_json None)
-      | Some doc -> (
-          let col =
-            Document.utf16_col_to_byte ~text:doc.text ~line
-              ~col:ref_params.ref_position.character
-          in
-          let filename = Uri.to_filename uri in
-          let parse_result = Syntax.Read.parse_string ~filename doc.text in
-          if parse_result.sexps = [] then (
-            Log.debug "No S-expressions parsed";
-            Ok (Protocol.references_result_to_json None))
-          else
-            match
-              Syntax.Sexp.find_with_context_in_forms ~line ~col
-                parse_result.sexps
-            with
+      Log.debug "Document not found: %s" uri;
+      Ok (Protocol.references_result_to_json None)
+  | Some doc -> (
+      let col =
+        Document.utf16_col_to_byte ~text:doc.text ~line
+          ~col:ref_params.ref_position.character
+      in
+      let filename = Uri.to_filename uri in
+      let parse_result = Syntax.Read.parse_string ~filename doc.text in
+      if parse_result.sexps = [] then (
+        Log.debug "No S-expressions parsed";
+        Ok (Protocol.references_result_to_json None))
+      else
+        match
+          Syntax.Sexp.find_with_context_in_forms ~line ~col parse_result.sexps
+        with
+        | None ->
+            Log.debug "No S-expression at position";
+            Ok (Protocol.references_result_to_json None)
+        | Some ctx -> (
+            (* Extract symbol name from the target sexp *)
+            match symbol_name_of_sexp ctx.target with
             | None ->
-                Log.debug "No S-expression at position";
+                Log.debug "Target is not a symbol";
                 Ok (Protocol.references_result_to_json None)
-            | Some ctx -> (
-                (* Extract symbol name from the target sexp *)
-                match symbol_name_of_sexp ctx.target with
-                | None ->
-                    Log.debug "Target is not a symbol";
-                    Ok (Protocol.references_result_to_json None)
-                | Some name ->
-                    Log.debug "Finding references to: %s" name;
-                    (* Find all references in the document *)
-                    let ref_spans = find_references name parse_result.sexps in
-                    Log.debug "Found %d references" (List.length ref_spans);
-                    (* Convert spans to locations *)
-                    let locations =
-                      List.map (location_of_span ~text:doc.text) ref_spans
-                    in
-                    Ok (Protocol.references_result_to_json (Some locations)))))
+            | Some name ->
+                Log.debug "Finding references to: %s" name;
+                (* Find all references in the document *)
+                let ref_spans = find_references name parse_result.sexps in
+                Log.debug "Found %d references" (List.length ref_spans);
+                (* Convert spans to locations *)
+                let locations =
+                  List.map (location_of_span ~text:doc.text) ref_spans
+                in
+                Ok (Protocol.references_result_to_json (Some locations))))
 
 (** Handle textDocument/codeAction request.
 
     Delegates to {!Code_action} module for quickfixes and refactorings. *)
 let handle_code_action (server : t) (params : Yojson.Safe.t option) :
     (Yojson.Safe.t, Rpc.response_error) result =
-  match params with
-  | None ->
-      Error
-        {
-          Rpc.code = Rpc.invalid_params;
-          message = "Missing code action params";
-          data = None;
-        }
-  | Some json -> (
-      let ca_params = Protocol.parse_code_action_params json in
-      let uri = ca_params.ca_text_document in
-      let range = ca_params.ca_range in
-      let context = ca_params.ca_context in
-      Log.debug "Code action request at %s:%d:%d-%d:%d" uri range.start.line
-        range.start.character range.end_.line range.end_.character;
-      Log.debug "Context has %d diagnostics"
-        (List.length context.cac_diagnostics);
+  require_params "code action" params @@ fun json ->
+  let ca_params = Protocol.parse_code_action_params json in
+  let uri = ca_params.ca_text_document in
+  let range = ca_params.ca_range in
+  let context = ca_params.ca_context in
+  Log.debug "Code action request at %s:%d:%d-%d:%d" uri range.start.line
+    range.start.character range.end_.line range.end_.character;
+  Log.debug "Context has %d diagnostics" (List.length context.cac_diagnostics);
 
-      match Document.get_doc server.documents uri with
-      | None ->
-          Log.debug "Document not found: %s" uri;
-          Ok (Protocol.code_action_result_to_json (Some []))
-      | Some doc ->
-          let to_byte line col =
-            Document.utf16_col_to_byte ~text:doc.text ~line ~col
-          in
-          let range : Protocol.range =
+  match Document.get_doc server.documents uri with
+  | None ->
+      Log.debug "Document not found: %s" uri;
+      Ok (Protocol.code_action_result_to_json (Some []))
+  | Some doc ->
+      let to_byte line col =
+        Document.utf16_col_to_byte ~text:doc.text ~line ~col
+      in
+      let range : Protocol.range =
+        {
+          start =
             {
-              start =
-                {
-                  line = range.start.line;
-                  character = to_byte range.start.line range.start.character;
-                };
-              end_ =
-                {
-                  line = range.end_.line;
-                  character = to_byte range.end_.line range.end_.character;
-                };
-            }
-          in
-          Code_action.handle
-            ~range_of_span:(range_of_span ~text:doc.text)
-            ~config:server.module_config ~uri ~doc_text:doc.text ~range ~context
-      )
+              line = range.start.line;
+              character = to_byte range.start.line range.start.character;
+            };
+          end_ =
+            {
+              line = range.end_.line;
+              character = to_byte range.end_.line range.end_.character;
+            };
+        }
+      in
+      Code_action.handle
+        ~range_of_span:(range_of_span ~text:doc.text)
+        ~config:server.module_config ~uri ~doc_text:doc.text ~range ~context
 
 (** {1 Document Symbols} *)
 
@@ -1334,144 +1287,104 @@ let rec extract_symbol_from_def ~(text : string) (sexp : Syntax.Sexp.t) :
     in the document, with their types as details when available. *)
 let handle_document_symbol (server : t) (params : Yojson.Safe.t option) :
     (Yojson.Safe.t, Rpc.response_error) result =
-  match params with
+  require_params "document symbol" params @@ fun json ->
+  let dsp_params = Protocol.parse_document_symbol_params json in
+  let uri = dsp_params.dsp_text_document in
+  Log.debug "Document symbol request for %s" uri;
+  match Document.get_doc server.documents uri with
   | None ->
-      Error
-        {
-          Rpc.code = Rpc.invalid_params;
-          message = "Missing document symbol params";
-          data = None;
-        }
-  | Some json -> (
-      let dsp_params = Protocol.parse_document_symbol_params json in
-      let uri = dsp_params.dsp_text_document in
-      Log.debug "Document symbol request for %s" uri;
-      match Document.get_doc server.documents uri with
-      | None ->
-          Log.debug "Document not found: %s" uri;
-          Ok (Protocol.document_symbol_result_to_json None)
-      | Some doc ->
-          let filename = Uri.to_filename uri in
-          let parse_result = Syntax.Read.parse_string ~filename doc.text in
-          if parse_result.sexps = [] then (
-            Log.debug "No S-expressions parsed";
-            Ok (Protocol.document_symbol_result_to_json (Some [])))
-          else
-            let symbols =
-              List.filter_map
-                (extract_symbol_from_def ~text:doc.text)
-                parse_result.sexps
-            in
-            Log.debug "Found %d symbols" (List.length symbols);
-            Ok (Protocol.document_symbol_result_to_json (Some symbols)))
+      Log.debug "Document not found: %s" uri;
+      Ok (Protocol.document_symbol_result_to_json None)
+  | Some doc ->
+      let filename = Uri.to_filename uri in
+      let parse_result = Syntax.Read.parse_string ~filename doc.text in
+      if parse_result.sexps = [] then (
+        Log.debug "No S-expressions parsed";
+        Ok (Protocol.document_symbol_result_to_json (Some [])))
+      else
+        let symbols =
+          List.filter_map
+            (extract_symbol_from_def ~text:doc.text)
+            parse_result.sexps
+        in
+        Log.debug "Found %d symbols" (List.length symbols);
+        Ok (Protocol.document_symbol_result_to_json (Some symbols))
 
 (** Handle textDocument/completion request.
 
     Delegates to {!Completion} module. *)
 let handle_completion (server : t) (params : Yojson.Safe.t option) :
     (Yojson.Safe.t, Rpc.response_error) result =
-  match params with
+  require_params "completion" params @@ fun json ->
+  let cp_params = Protocol.parse_completion_params json in
+  let uri = cp_params.cp_text_document in
+  let line = cp_params.cp_position.line in
+  Log.debug "Completion request at %s:%d:%d" uri line
+    cp_params.cp_position.character;
+  match Document.get_doc server.documents uri with
   | None ->
-      Error
-        {
-          Rpc.code = Rpc.invalid_params;
-          message = "Missing completion params";
-          data = None;
-        }
-  | Some json -> (
-      let cp_params = Protocol.parse_completion_params json in
-      let uri = cp_params.cp_text_document in
-      let line = cp_params.cp_position.line in
-      Log.debug "Completion request at %s:%d:%d" uri line
-        cp_params.cp_position.character;
-      match Document.get_doc server.documents uri with
-      | None ->
-          Log.debug "Document not found: %s" uri;
-          Ok (Protocol.completion_result_to_json None)
-      | Some doc ->
-          let col =
-            Document.utf16_col_to_byte ~text:doc.text ~line
-              ~col:cp_params.cp_position.character
-          in
-          Completion.handle ~config:server.module_config ~uri ~doc_text:doc.text
-            ~line ~col)
+      Log.debug "Document not found: %s" uri;
+      Ok (Protocol.completion_result_to_json None)
+  | Some doc ->
+      let col =
+        Document.utf16_col_to_byte ~text:doc.text ~line
+          ~col:cp_params.cp_position.character
+      in
+      Completion.handle ~config:server.module_config ~uri ~doc_text:doc.text
+        ~line ~col
 
 (** Handle textDocument/signatureHelp request.
 
     Delegates to {!Signature_help} module. *)
 let handle_signature_help (server : t) (params : Yojson.Safe.t option) :
     (Yojson.Safe.t, Rpc.response_error) result =
-  match params with
+  require_params "signature help" params @@ fun json ->
+  let sh_params = Protocol.parse_signature_help_params json in
+  let uri = sh_params.shp_text_document in
+  let line = sh_params.shp_position.line in
+  Log.debug "Signature help request at %s:%d:%d" uri line
+    sh_params.shp_position.character;
+  match Document.get_doc server.documents uri with
   | None ->
-      Error
-        {
-          Rpc.code = Rpc.invalid_params;
-          message = "Missing signature help params";
-          data = None;
-        }
-  | Some json -> (
-      let sh_params = Protocol.parse_signature_help_params json in
-      let uri = sh_params.shp_text_document in
-      let line = sh_params.shp_position.line in
-      Log.debug "Signature help request at %s:%d:%d" uri line
-        sh_params.shp_position.character;
-      match Document.get_doc server.documents uri with
-      | None ->
-          Log.debug "Document not found: %s" uri;
-          Ok (Protocol.signature_help_result_to_json None)
-      | Some doc ->
-          let col =
-            Document.utf16_col_to_byte ~text:doc.text ~line
-              ~col:sh_params.shp_position.character
-          in
-          Signature_help.handle ~config:server.module_config ~uri
-            ~doc_text:doc.text ~line ~col)
+      Log.debug "Document not found: %s" uri;
+      Ok (Protocol.signature_help_result_to_json None)
+  | Some doc ->
+      let col =
+        Document.utf16_col_to_byte ~text:doc.text ~line
+          ~col:sh_params.shp_position.character
+      in
+      Signature_help.handle ~config:server.module_config ~uri ~doc_text:doc.text
+        ~line ~col
 
 (** Handle textDocument/foldingRange request.
 
     Delegates to {!Folding} module. *)
 let handle_folding_range (server : t) (params : Yojson.Safe.t option) :
     (Yojson.Safe.t, Rpc.response_error) result =
-  match params with
+  require_params "folding range" params @@ fun json ->
+  let frp = Protocol.parse_folding_range_params json in
+  let uri = frp.frp_text_document in
+  Log.debug "Folding range request for %s" uri;
+  match Document.get_doc server.documents uri with
   | None ->
-      Error
-        {
-          Rpc.code = Rpc.invalid_params;
-          message = "Missing folding range params";
-          data = None;
-        }
-  | Some json -> (
-      let frp = Protocol.parse_folding_range_params json in
-      let uri = frp.frp_text_document in
-      Log.debug "Folding range request for %s" uri;
-      match Document.get_doc server.documents uri with
-      | None ->
-          Log.debug "Document not found: %s" uri;
-          Ok (Protocol.folding_range_result_to_json None)
-      | Some doc -> Folding.handle ~uri ~doc_text:doc.text)
+      Log.debug "Document not found: %s" uri;
+      Ok (Protocol.folding_range_result_to_json None)
+  | Some doc -> Folding.handle ~uri ~doc_text:doc.text
 
 (** Handle textDocument/semanticTokens/full request.
 
     Delegates to {!Semantic_tokens} module. *)
 let handle_semantic_tokens (server : t) (params : Yojson.Safe.t option) :
     (Yojson.Safe.t, Rpc.response_error) result =
-  match params with
+  require_params "semantic tokens" params @@ fun json ->
+  let stp = Protocol.parse_semantic_tokens_params json in
+  let uri = stp.stp_text_document in
+  Log.debug "Semantic tokens request for %s" uri;
+  match Document.get_doc server.documents uri with
   | None ->
-      Error
-        {
-          Rpc.code = Rpc.invalid_params;
-          message = "Missing semantic tokens params";
-          data = None;
-        }
-  | Some json -> (
-      let stp = Protocol.parse_semantic_tokens_params json in
-      let uri = stp.stp_text_document in
-      Log.debug "Semantic tokens request for %s" uri;
-      match Document.get_doc server.documents uri with
-      | None ->
-          Log.debug "Document not found: %s" uri;
-          Ok (Protocol.semantic_tokens_result_to_json None)
-      | Some doc -> Semantic_tokens.handle ~uri ~doc_text:doc.text)
+      Log.debug "Document not found: %s" uri;
+      Ok (Protocol.semantic_tokens_result_to_json None)
+  | Some doc -> Semantic_tokens.handle ~uri ~doc_text:doc.text
 
 (** Handle textDocument/inlayHint request.
 
@@ -1479,24 +1392,15 @@ let handle_semantic_tokens (server : t) (params : Yojson.Safe.t option) :
     bindings within the requested range. *)
 let handle_inlay_hints (server : t) (params : Yojson.Safe.t option) :
     (Yojson.Safe.t, Rpc.response_error) result =
-  match params with
+  require_params "inlay hint" params @@ fun json ->
+  let ihp = Protocol.parse_inlay_hint_params json in
+  let uri = ihp.ihp_text_document in
+  Log.debug "Inlay hint request for %s" uri;
+  match Document.get_doc server.documents uri with
   | None ->
-      Error
-        {
-          Rpc.code = Rpc.invalid_params;
-          message = "Missing inlay hint params";
-          data = None;
-        }
-  | Some json -> (
-      let ihp = Protocol.parse_inlay_hint_params json in
-      let uri = ihp.ihp_text_document in
-      Log.debug "Inlay hint request for %s" uri;
-      match Document.get_doc server.documents uri with
-      | None ->
-          Log.debug "Document not found: %s" uri;
-          Ok (Protocol.inlay_hint_result_to_json None)
-      | Some doc ->
-          Inlay_hints.handle ~uri ~doc_text:doc.text ~range:ihp.ihp_range)
+      Log.debug "Document not found: %s" uri;
+      Ok (Protocol.inlay_hint_result_to_json None)
+  | Some doc -> Inlay_hints.handle ~uri ~doc_text:doc.text ~range:ihp.ihp_range
 
 (** {1 Rename} *)
 
@@ -1507,58 +1411,48 @@ let handle_inlay_hints (server : t) (params : Yojson.Safe.t option) :
     or null for builtins, keywords, literals, and comments. *)
 let handle_prepare_rename (server : t) (params : Yojson.Safe.t option) :
     (Yojson.Safe.t, Rpc.response_error) result =
-  match params with
+  require_params "prepare rename" params @@ fun json ->
+  let prp = Protocol.parse_prepare_rename_params json in
+  let uri = prp.prp_text_document in
+  let line = prp.prp_position.line in
+  Log.debug "Prepare rename request at %s:%d:%d" uri line
+    prp.prp_position.character;
+  match Document.get_doc server.documents uri with
   | None ->
-      Error
-        {
-          Rpc.code = Rpc.invalid_params;
-          message = "Missing prepare rename params";
-          data = None;
-        }
-  | Some json -> (
-      let prp = Protocol.parse_prepare_rename_params json in
-      let uri = prp.prp_text_document in
-      let line = prp.prp_position.line in
-      Log.debug "Prepare rename request at %s:%d:%d" uri line
-        prp.prp_position.character;
-      match Document.get_doc server.documents uri with
-      | None ->
-          Log.debug "Document not found: %s" uri;
-          Ok `Null
-      | Some doc -> (
-          let col =
-            Document.utf16_col_to_byte ~text:doc.text ~line
-              ~col:prp.prp_position.character
-          in
-          let filename = Uri.to_filename uri in
-          let parse_result = Syntax.Read.parse_string ~filename doc.text in
-          if parse_result.sexps = [] then (
-            Log.debug "No S-expressions parsed";
-            Ok `Null)
-          else
-            match
-              Syntax.Sexp.find_with_context_in_forms ~line ~col
-                parse_result.sexps
-            with
-            | None ->
-                Log.debug "No S-expression at position";
-                Ok `Null
-            | Some ctx -> (
-                match ctx.target with
-                | Syntax.Sexp.Symbol (name, span)
-                  when not (Code_action.is_builtin_symbol name) ->
-                    Log.debug "Prepare rename: symbol '%s' is renameable" name;
-                    let result : Protocol.prepare_rename_result =
-                      {
-                        prr_range = range_of_span ~text:doc.text span;
-                        prr_placeholder = name;
-                      }
-                    in
-                    Ok (Protocol.prepare_rename_result_to_json (Some result))
-                | _ ->
-                    Log.debug
-                      "Prepare rename: target is not a renameable symbol";
-                    Ok (Protocol.prepare_rename_result_to_json None))))
+      Log.debug "Document not found: %s" uri;
+      Ok `Null
+  | Some doc -> (
+      let col =
+        Document.utf16_col_to_byte ~text:doc.text ~line
+          ~col:prp.prp_position.character
+      in
+      let filename = Uri.to_filename uri in
+      let parse_result = Syntax.Read.parse_string ~filename doc.text in
+      if parse_result.sexps = [] then (
+        Log.debug "No S-expressions parsed";
+        Ok `Null)
+      else
+        match
+          Syntax.Sexp.find_with_context_in_forms ~line ~col parse_result.sexps
+        with
+        | None ->
+            Log.debug "No S-expression at position";
+            Ok `Null
+        | Some ctx -> (
+            match ctx.target with
+            | Syntax.Sexp.Symbol (name, span)
+              when not (Code_action.is_builtin_symbol name) ->
+                Log.debug "Prepare rename: symbol '%s' is renameable" name;
+                let result : Protocol.prepare_rename_result =
+                  {
+                    prr_range = range_of_span ~text:doc.text span;
+                    prr_placeholder = name;
+                  }
+                in
+                Ok (Protocol.prepare_rename_result_to_json (Some result))
+            | _ ->
+                Log.debug "Prepare rename: target is not a renameable symbol";
+                Ok (Protocol.prepare_rename_result_to_json None)))
 
 (** Handle textDocument/rename request.
 
@@ -1567,76 +1461,65 @@ let handle_prepare_rename (server : t) (params : Yojson.Safe.t option) :
     replace each one with the new name. *)
 let handle_rename (server : t) (params : Yojson.Safe.t option) :
     (Yojson.Safe.t, Rpc.response_error) result =
-  match params with
+  require_params "rename" params @@ fun json ->
+  let rename_params = Protocol.parse_rename_params json in
+  let uri = rename_params.rp_text_document in
+  let line = rename_params.rp_position.line in
+  let new_name = rename_params.rp_new_name in
+  Log.debug "Rename request at %s:%d:%d -> '%s'" uri line
+    rename_params.rp_position.character new_name;
+  match Document.get_doc server.documents uri with
   | None ->
-      Error
-        {
-          Rpc.code = Rpc.invalid_params;
-          message = "Missing rename params";
-          data = None;
-        }
-  | Some json -> (
-      let rename_params = Protocol.parse_rename_params json in
-      let uri = rename_params.rp_text_document in
-      let line = rename_params.rp_position.line in
-      let new_name = rename_params.rp_new_name in
-      Log.debug "Rename request at %s:%d:%d -> '%s'" uri line
-        rename_params.rp_position.character new_name;
-      match Document.get_doc server.documents uri with
-      | None ->
-          Log.debug "Document not found: %s" uri;
-          Ok (Protocol.rename_result_to_json None)
-      | Some doc -> (
-          let col =
-            Document.utf16_col_to_byte ~text:doc.text ~line
-              ~col:rename_params.rp_position.character
-          in
-          let filename = Uri.to_filename uri in
-          let parse_result = Syntax.Read.parse_string ~filename doc.text in
-          if parse_result.sexps = [] then (
-            Log.debug "No S-expressions parsed";
-            Ok (Protocol.rename_result_to_json None))
-          else
-            match
-              Syntax.Sexp.find_with_context_in_forms ~line ~col
-                parse_result.sexps
-            with
+      Log.debug "Document not found: %s" uri;
+      Ok (Protocol.rename_result_to_json None)
+  | Some doc -> (
+      let col =
+        Document.utf16_col_to_byte ~text:doc.text ~line
+          ~col:rename_params.rp_position.character
+      in
+      let filename = Uri.to_filename uri in
+      let parse_result = Syntax.Read.parse_string ~filename doc.text in
+      if parse_result.sexps = [] then (
+        Log.debug "No S-expressions parsed";
+        Ok (Protocol.rename_result_to_json None))
+      else
+        match
+          Syntax.Sexp.find_with_context_in_forms ~line ~col parse_result.sexps
+        with
+        | None ->
+            Log.debug "No S-expression at position";
+            Ok (Protocol.rename_result_to_json None)
+        | Some ctx -> (
+            (* Extract symbol name from the target sexp *)
+            match symbol_name_of_sexp ctx.target with
             | None ->
-                Log.debug "No S-expression at position";
+                Log.debug "Target is not a symbol";
                 Ok (Protocol.rename_result_to_json None)
-            | Some ctx -> (
-                (* Extract symbol name from the target sexp *)
-                match symbol_name_of_sexp ctx.target with
-                | None ->
-                    Log.debug "Target is not a symbol";
-                    Ok (Protocol.rename_result_to_json None)
-                | Some name ->
-                    Log.debug "Renaming '%s' to '%s'" name new_name;
-                    (* Find all references in the document *)
-                    let ref_spans = find_references name parse_result.sexps in
-                    Log.debug "Found %d occurrences to rename"
-                      (List.length ref_spans);
-                    if ref_spans = [] then
-                      Ok (Protocol.rename_result_to_json None)
-                    else
-                      (* Generate text edits for each occurrence *)
-                      let edits =
-                        List.map
-                          (fun span : Protocol.text_edit ->
-                            {
-                              te_range = range_of_span ~text:doc.text span;
-                              new_text = new_name;
-                            })
-                          ref_spans
-                      in
-                      let doc_edit : Protocol.text_document_edit =
-                        { tde_uri = uri; tde_version = None; edits }
-                      in
-                      let workspace_edit : Protocol.workspace_edit =
-                        { document_changes = [ doc_edit ] }
-                      in
-                      Ok (Protocol.rename_result_to_json (Some workspace_edit)))
-          ))
+            | Some name ->
+                Log.debug "Renaming '%s' to '%s'" name new_name;
+                (* Find all references in the document *)
+                let ref_spans = find_references name parse_result.sexps in
+                Log.debug "Found %d occurrences to rename"
+                  (List.length ref_spans);
+                if ref_spans = [] then Ok (Protocol.rename_result_to_json None)
+                else
+                  (* Generate text edits for each occurrence *)
+                  let edits =
+                    List.map
+                      (fun span : Protocol.text_edit ->
+                        {
+                          te_range = range_of_span ~text:doc.text span;
+                          new_text = new_name;
+                        })
+                      ref_spans
+                  in
+                  let doc_edit : Protocol.text_document_edit =
+                    { tde_uri = uri; tde_version = None; edits }
+                  in
+                  let workspace_edit : Protocol.workspace_edit =
+                    { document_changes = [ doc_edit ] }
+                  in
+                  Ok (Protocol.rename_result_to_json (Some workspace_edit))))
 
 (** Dispatch a request to its handler *)
 let dispatch_request (server : t) (msg : Rpc.message) :
