@@ -46,6 +46,11 @@ val byte_offset_of_utf16 : line_text:string -> utf16_offset:int -> int
 (** Convert a UTF-16 code-unit offset within a line to a byte offset. Clamps to
     the end of the line if [utf16_offset] exceeds the line length. *)
 
+val line_text_at : string -> int -> string option
+(** [line_text_at text line_number] returns the text of the 0-based
+    [line_number] from [text], or [None] if [line_number] is out of range. The
+    returned string does not include the trailing newline. *)
+
 (** {1 Incremental Changes} *)
 
 type content_change = {

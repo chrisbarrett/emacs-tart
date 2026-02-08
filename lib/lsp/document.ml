@@ -72,6 +72,26 @@ let byte_offset_of_utf16 ~(line_text : string) ~(utf16_offset : int) : int =
   in
   walk 0 0
 
+let line_text_at (text : string) (line_number : int) : string option =
+  if line_number < 0 then None
+  else
+    let len = String.length text in
+    let rec find_line current_line pos =
+      if current_line = line_number then
+        (* Find the end of this line *)
+        let end_pos =
+          match String.index_from_opt text pos '\n' with
+          | Some nl -> nl
+          | None -> len
+        in
+        Some (String.sub text pos (end_pos - pos))
+      else
+        match String.index_from_opt text pos '\n' with
+        | Some nl -> find_line (current_line + 1) (nl + 1)
+        | None -> None
+    in
+    if len = 0 && line_number = 0 then Some "" else find_line 0 0
+
 (** {1 Incremental Changes} *)
 
 type content_change = { range : range option; text : string }

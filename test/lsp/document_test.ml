@@ -292,6 +292,66 @@ let test_text_document_item () =
   Alcotest.(check int) "version" 1 version;
   Alcotest.(check string) "text" "(defun foo () t)" text
 
+(** {1 line_text_at Tests} *)
+
+let test_line_text_at_single_line () =
+  let text = "hello world" in
+  Alcotest.(check (option string))
+    "line 0" (Some "hello world")
+    (Document.line_text_at text 0);
+  Alcotest.(check (option string)) "line 1" None (Document.line_text_at text 1)
+
+let test_line_text_at_multiline () =
+  let text = "line 0\nline 1\nline 2" in
+  Alcotest.(check (option string))
+    "line 0" (Some "line 0")
+    (Document.line_text_at text 0);
+  Alcotest.(check (option string))
+    "line 1" (Some "line 1")
+    (Document.line_text_at text 1);
+  Alcotest.(check (option string))
+    "line 2" (Some "line 2")
+    (Document.line_text_at text 2);
+  Alcotest.(check (option string)) "line 3" None (Document.line_text_at text 3)
+
+let test_line_text_at_trailing_newline () =
+  let text = "hello\n" in
+  Alcotest.(check (option string))
+    "line 0" (Some "hello")
+    (Document.line_text_at text 0);
+  Alcotest.(check (option string))
+    "line 1 (empty after newline)" (Some "")
+    (Document.line_text_at text 1);
+  Alcotest.(check (option string)) "line 2" None (Document.line_text_at text 2)
+
+let test_line_text_at_empty () =
+  let text = "" in
+  Alcotest.(check (option string))
+    "line 0 of empty" (Some "")
+    (Document.line_text_at text 0);
+  Alcotest.(check (option string))
+    "line 1 of empty" None
+    (Document.line_text_at text 1)
+
+let test_line_text_at_negative () =
+  let text = "hello" in
+  Alcotest.(check (option string))
+    "line -1" None
+    (Document.line_text_at text (-1))
+
+let test_line_text_at_multibyte () =
+  (* Line with multi-byte UTF-8 content *)
+  let text = "abc\n\xE4\xB8\xAD\xE6\x96\x87\n\xF0\x9F\x98\x80" in
+  Alcotest.(check (option string))
+    "line 0 ascii" (Some "abc")
+    (Document.line_text_at text 0);
+  Alcotest.(check (option string))
+    "line 1 CJK" (Some "\xE4\xB8\xAD\xE6\x96\x87")
+    (Document.line_text_at text 1);
+  Alcotest.(check (option string))
+    "line 2 emoji" (Some "\xF0\x9F\x98\x80")
+    (Document.line_text_at text 2)
+
 (** {1 UTF-16 Encoding Tests} *)
 
 let test_utf16_ascii_round_trip () =
@@ -418,6 +478,17 @@ let () =
           Alcotest.test_case "versioned text document identifier" `Quick
             test_versioned_text_document_identifier;
           Alcotest.test_case "text document item" `Quick test_text_document_item;
+        ] );
+      ( "line_text_at",
+        [
+          Alcotest.test_case "single line" `Quick test_line_text_at_single_line;
+          Alcotest.test_case "multiline" `Quick test_line_text_at_multiline;
+          Alcotest.test_case "trailing newline" `Quick
+            test_line_text_at_trailing_newline;
+          Alcotest.test_case "empty string" `Quick test_line_text_at_empty;
+          Alcotest.test_case "negative line" `Quick test_line_text_at_negative;
+          Alcotest.test_case "multibyte content" `Quick
+            test_line_text_at_multibyte;
         ] );
       ( "utf16",
         [
