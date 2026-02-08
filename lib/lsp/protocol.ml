@@ -59,6 +59,7 @@ type server_capabilities = {
   rename_provider : bool;
   folding_range_provider : bool;
   semantic_tokens_provider : bool;
+  inlay_hint_provider : bool;
 }
 (** Server capabilities *)
 
@@ -264,6 +265,10 @@ let server_capabilities_to_json (caps : server_capabilities) : Yojson.Safe.t =
             ("legend", semantic_tokens_legend_to_json semantic_tokens_legend);
           ] )
       :: fields
+    else fields
+  in
+  let fields =
+    if caps.inlay_hint_provider then ("inlayHintProvider", `Bool true) :: fields
     else fields
   in
   `Assoc fields
@@ -1181,4 +1186,56 @@ let semantic_tokens_result_to_json (result : semantic_tokens_result option) :
     Yojson.Safe.t =
   match result with
   | Some r -> `Assoc [ ("data", `List (List.map (fun i -> `Int i) r.str_data)) ]
+  | None -> `Null
+
+(** {1 Inlay Hints} *)
+
+type inlay_hint_kind = IHType | IHParameter
+
+type inlay_hint = {
+  ih_position : position;
+  ih_label : string;
+  ih_kind : inlay_hint_kind option;
+  ih_padding_left : bool;
+  ih_padding_right : bool;
+}
+
+type inlay_hint_params = { ihp_text_document : string; ihp_range : range }
+
+let inlay_hint_kind_to_int = function IHType -> 1 | IHParameter -> 2
+
+let parse_inlay_hint_params (json : Yojson.Safe.t) : inlay_hint_params =
+  let open Yojson.Safe.Util in
+  {
+    ihp_text_document =
+      json |> member "textDocument" |> member "uri" |> to_string;
+    ihp_range = json |> member "range" |> parse_range;
+  }
+
+let inlay_hint_to_json (hint : inlay_hint) : Yojson.Safe.t =
+  let fields =
+    [
+      ("position", position_to_json hint.ih_position);
+      ("label", `String hint.ih_label);
+    ]
+  in
+  let fields =
+    match hint.ih_kind with
+    | Some k -> ("kind", `Int (inlay_hint_kind_to_int k)) :: fields
+    | None -> fields
+  in
+  let fields =
+    if hint.ih_padding_left then ("paddingLeft", `Bool true) :: fields
+    else fields
+  in
+  let fields =
+    if hint.ih_padding_right then ("paddingRight", `Bool true) :: fields
+    else fields
+  in
+  `Assoc fields
+
+let inlay_hint_result_to_json (result : inlay_hint list option) : Yojson.Safe.t
+    =
+  match result with
+  | Some hints -> `List (List.map inlay_hint_to_json hints)
   | None -> `Null

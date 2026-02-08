@@ -55,6 +55,7 @@ type server_capabilities = {
   rename_provider : bool;
   folding_range_provider : bool;
   semantic_tokens_provider : bool;
+  inlay_hint_provider : bool;
 }
 (** Server capabilities *)
 
@@ -494,3 +495,29 @@ val semantic_tokens_legend_to_json : semantic_tokens_legend -> Yojson.Safe.t
 val semantic_tokens_result_to_json :
   semantic_tokens_result option -> Yojson.Safe.t
 (** Encode semantic tokens result to JSON *)
+
+(** {1 Inlay Hints} *)
+
+(** Inlay hint kind *)
+type inlay_hint_kind = IHType | IHParameter
+
+type inlay_hint = {
+  ih_position : position;
+  ih_label : string;
+  ih_kind : inlay_hint_kind option;
+  ih_padding_left : bool;
+  ih_padding_right : bool;
+}
+(** An inlay hint displayed inline in the editor *)
+
+type inlay_hint_params = { ihp_text_document : string; ihp_range : range }
+(** Inlay hint request params *)
+
+val parse_inlay_hint_params : Yojson.Safe.t -> inlay_hint_params
+(** Parse inlay hint params from JSON *)
+
+val inlay_hint_to_json : inlay_hint -> Yojson.Safe.t
+(** Encode an inlay hint to JSON *)
+
+val inlay_hint_result_to_json : inlay_hint list option -> Yojson.Safe.t
+(** Encode inlay hint result to JSON *)

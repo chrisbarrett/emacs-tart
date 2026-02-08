@@ -186,6 +186,6 @@ obvious and suppresses the hint.
 
 | # | Task | Status |
 |---|------|--------|
-| 1 | Protocol types for inlay hints | Not started |
+| 1 | Protocol types for inlay hints | Done |
 | 2 | Inlay hints module | Not started |
 | 3 | Wire into server | Not started |
