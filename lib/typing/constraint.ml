@@ -4,6 +4,7 @@
     Constraints are collected and then solved by unification. *)
 
 open Core.Types
+module Log = Tart_log.Log
 
 (** Context about where a constraint originated.
 
@@ -58,7 +59,9 @@ type set = t list
 (** A set of constraints to be solved *)
 
 (** Create an equality constraint *)
-let equal ?(context = NoContext) lhs rhs loc = { lhs; rhs; loc; context }
+let equal ?(context = NoContext) lhs rhs loc =
+  Log.debug "Constraint: %s = %s" (to_string lhs) (to_string rhs);
+  { lhs; rhs; loc; context }
 
 (** Empty constraint set *)
 let empty : set = []

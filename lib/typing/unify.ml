@@ -8,6 +8,7 @@
 
 open Core.Types
 module C = Constraint
+module Log = Tart_log.Log
 
 (** Controls context-sensitive unification rules. *)
 type unify_context = Constraint_solving | Clause_matching
@@ -65,7 +66,9 @@ let rec occurs_check tv_id tv_level ty loc : (unit, occurs_error) Result.t =
   | TVar tv -> (
       match !tv with
       | Unbound (id, level) ->
-          if id = tv_id then Error (tv_id, ty, loc)
+          if id = tv_id then (
+            Log.debug "Occurs check failed: '_%d in %s" tv_id (to_string ty);
+            Error (tv_id, ty, loc))
           else (
             (* Level adjustment: if the type variable is at a higher level,
                lower it to the current level. This is essential for
@@ -225,6 +228,7 @@ let rec unify ?(invariant = false) ?(context = Constraint_solving) t1 t2 loc :
     unit internal_result =
   let t1 = repr t1 in
   let t2 = repr t2 in
+  Log.debug "Unify: %s ~ %s" (to_string t1) (to_string t2);
   if t1 == t2 then
     (* Physical equality - already unified *)
     Ok ()
@@ -247,6 +251,7 @@ let rec unify ?(invariant = false) ?(context = Constraint_solving) t1 t2 loc :
             match occurs_check id level link_ty loc with
             | Error (tv_id, ty, loc) -> Error (IOccursCheck (tv_id, ty, loc))
             | Ok () ->
+                Log.debug "Link: '_%d = %s" id (to_string link_ty);
                 tv := Link link_ty;
                 Ok ()))
     (* Never is the bottom type - subtype of every type.
@@ -496,6 +501,12 @@ and unify_rows ?(invariant = false) ?(context = Constraint_solving) r1 r2 loc =
 
   (* Find common fields and unify their types *)
   let common_names = List.filter (fun n -> List.mem n names2) names1 in
+  let extra1_names = List.filter (fun n -> not (List.mem n names2)) names1 in
+  let extra2_names = List.filter (fun n -> not (List.mem n names1)) names2 in
+  Log.debug "Rows: common=[%s] left-only=[%s] right-only=[%s]"
+    (String.concat ", " common_names)
+    (String.concat ", " extra1_names)
+    (String.concat ", " extra2_names);
   let* () =
     List.fold_left
       (fun acc name ->
@@ -569,11 +580,14 @@ and is_rest_param = function PRest _ -> true | _ -> false
     an arity mismatch *)
 and unify_param_lists ?(invariant = false) ?(context = Constraint_solving) ps1
     ps2 loc =
+  Log.debug "Params: %d vs %d" (List.length ps1) (List.length ps2);
   match (ps1, ps2) with
   (* Both empty - success *)
   | [], [] -> Ok ()
   (* Left side has rest param at end - consume all remaining from right *)
   | [ PRest elem_ty1 ], params2 ->
+      Log.debug "Params: left &rest consuming %d right params"
+        (List.length params2);
       (* Unify each remaining param's type with the rest element type *)
       List.fold_left
         (fun acc p2 ->
@@ -586,6 +600,8 @@ and unify_param_lists ?(invariant = false) ?(context = Constraint_solving) ps1
         (Ok ()) params2
   (* Right side has rest param at end - consume all remaining from left *)
   | params1, [ PRest elem_ty2 ] ->
+      Log.debug "Params: right &rest consuming %d left params"
+        (List.length params1);
       List.fold_left
         (fun acc p1 ->
           let* () = acc in
@@ -700,6 +716,7 @@ let to_external_error (ctx : C.context) : internal_error -> error = function
 
     Returns Ok () if all constraints can be satisfied, or the first error. *)
 let solve (constraints : C.set) : unit result =
+  Log.debug "Solve: %d constraints" (List.length constraints);
   List.fold_left
     (fun acc (c : C.t) ->
       let* () = acc in
@@ -764,10 +781,14 @@ let restore_tvars snapshot = List.iter (fun (tv, saved) -> tv := saved) snapshot
     [Error] on failure. On success, the unification side-effects are committed
     (tvars remain linked). *)
 let try_unify t1 t2 loc : unit result =
+  Log.debug "Try-unify: %s ~ %s" (to_string t1) (to_string t2);
   let snapshot = collect_tvar_refs (collect_tvar_refs [] t1) t2 in
   match unify t1 t2 loc with
-  | Ok () -> Ok ()
+  | Ok () ->
+      Log.debug "Try-unify: success";
+      Ok ()
   | Error e ->
+      Log.debug "Try-unify: rollback";
       restore_tvars snapshot;
       Error (to_external_error C.NoContext e)
 
