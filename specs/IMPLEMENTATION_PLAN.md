@@ -399,7 +399,7 @@ any order, interleaved with other work.
 | 3 | Incremental sync recovery | — | `document.ml`, `server.ml` | Done |
 | 4 | Concurrent requests | `lib/lsp/worker.{ml,mli}` | `server.ml` | Not started |
 | 5 | Request cancellation | — | `server.ml` | Stub only |
-| 6 | Debounce & coalescing | — | `server.ml` | Not started |
+| 6 | Debounce & coalescing | — | `server.ml` | Partial (dedup + version staleness done; timer debounce needs task 4) |
 | 7 | Progress reporting | — | `server.ml`, `protocol.ml` | Not started |
 | 8 | File watching | — | `server.ml`, `protocol.ml` | Not started |
 | 9 | Workspace configuration | — | `server.ml`, `protocol.ml` | Not started |
@@ -409,4 +409,4 @@ any order, interleaved with other work.
 | 13 | Inlay hints | `lib/lsp/inlay_hints.{ml,mli}` | `server.ml`, `protocol.ml` | Not started |
 | 14 | Prepare rename | — | `server.ml`, `protocol.ml` | Not started |
 | 15 | Type definition | — | `server.ml`, `protocol.ml` | Not started |
-| 16 | Folding ranges | `lib/lsp/folding.{ml,mli}` | `server.ml`, `protocol.ml` | Not started |
+| 16 | Folding ranges | `lib/lsp/folding.{ml,mli}` | `server.ml`, `protocol.ml` | Done |
