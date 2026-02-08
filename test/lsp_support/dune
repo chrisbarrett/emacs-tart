@@ -1,0 +1,15 @@
+(library
+ (name lsp_client)
+ (modules lsp_client)
+ (libraries tart str yojson))
+
+(test
+ (name lsp_client_test)
+ (modules lsp_client_test)
+ (libraries lsp_client alcotest)
+ (deps
+  (source_tree %{project_root}/typings))
+ (action
+  (chdir
+   %{project_root}
+   (run %{test}))))
