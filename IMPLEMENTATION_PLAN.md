@@ -1,191 +1,125 @@
-# Implementation Plan — Inlay Hints
+# Implementation Plan — Prepare Rename
 
-> Source: [Spec 71](./specs/71-lsp-server.md) §Inlay Hints, task 13
+> Source: [Spec 71](./specs/71-lsp-server.md) §Prepare Rename, task 14
 > from [specs/IMPLEMENTATION_PLAN.md](./specs/IMPLEMENTATION_PLAN.md)
 
 ## Problem
 
-The LSP server does not implement `textDocument/inlayHint`. Editors use
-inlay hints to display inline type annotations and parameter names
-without modifying the document text. Without this, users cannot see
-inferred types for `let` bindings, function parameters at call sites,
-or `defun` return types unless they hover over each expression
-individually.
+The LSP server supports `textDocument/rename` but not
+`textDocument/prepareRename`. Without prepare-rename, editors cannot
+pre-validate whether a symbol at the cursor is renameable — they either
+attempt the rename blindly (resulting in a confusing error or no-op for
+builtins, keywords, literals, and comments) or disable the rename UI
+entirely until the user invokes it.
 
-The spec (§Inlay Hints) calls for:
+The spec (§Prepare Rename) calls for:
 
-- **`let`/`let*` binding types** — shows inferred type after the
-  variable name.
-- **Parameter names at call sites** — shows parameter name when the
-  argument is a literal or complex expression.
-- **`defun` return types** — shows inferred return type when no `.tart`
-  signature already provides the info.
-- **Suppression** — hints are hidden when a `.tart` signature provides
-  the type, or when the type is trivially obvious (e.g., a string
-  literal bound to a variable).
+- Return `{ range, placeholder }` for user-defined symbols.
+- Return `null` for keywords (`:foo`), string literals, comments,
+  numbers, chars, and builtin symbols (`t`, `nil`, `+`, `car`, etc.).
+- Advertise `renameProvider: { prepareProvider: true }` instead of
+  `renameProvider: true` in server capabilities.
 
 ## Current State
 
-- No inlay hint types in `protocol.{ml,mli}`.
-- No `inlay_hint_provider` in `server_capabilities`.
-- No handler for `textDocument/inlayHint` in `server.ml`.
-- `Typing.Check.check_program` returns `check_result` with an `env`
-  (type environment) and `forms` list. `Typing.Infer.infer` can infer
-  the type of any sexp. `Typing.Infer.infer_defun` returns the
-  function type for defun forms.
-- `Core.Types.to_string` pretty-prints types.
-- The existing hover handler (`type_at_sexp`) demonstrates the pattern
-  of inferring types for individual expressions.
-- `range_of_span` in `server.ml` converts `Syntax.Location.span` to
-  LSP ranges with UTF-16 positions.
+- `handle_rename` in `server.ml` parses the document, finds the sexp
+  at the cursor via `Syntax.Sexp.find_with_context_in_forms`, and uses
+  `symbol_name_of_sexp` to extract the name. Returns `null` for
+  non-`Symbol` nodes but does not reject builtins.
+- `code_action.ml` has `is_builtin_symbol` with a comprehensive
+  deny-list of ~70 builtins + all binding forms.
+- `rename_provider` is `bool` in `server_capabilities`.
+- `range_of_span` converts spans to LSP ranges with UTF-16 positions.
+- `lsp_client.ml` uses `position_params` for position-based request
+  builders (hover, definition, etc.).
 
 ## Design
 
-Follow the delegation pattern used by `folding.ml`, `completion.ml`,
-and `semantic_tokens.ml`: a standalone `inlay_hints.{ml,mli}` module
-exposes a `handle` function that `server.ml` dispatches to.
+The logic is simple enough to live inline in `server.ml` (like
+`handle_rename`) rather than a separate module.
 
-### Hint Categories
+### Handler Flow
 
-1. **`defun` return types** — After the parameter list of each `defun`,
-   show `: return-type`. Use `Typing.Infer.infer_defun` to get the
-   function type, extract the return type from the `TArrow`. Skip if a
-   sibling `.tart` signature declares the function (check
-   `check_result.forms` for `TartDeclareForm`).
+1. Parse params (same shape as hover: text document + position).
+2. Look up document, parse, find sexp at cursor.
+3. If the target is not a `Symbol` node → return `null`.
+4. If the symbol name is a builtin (reuse `Code_action.is_builtin_symbol`)
+   → return `null`.
+5. Otherwise, return `{ range, placeholder }` where `range` is the
+   symbol's span converted via `range_of_span` and `placeholder` is
+   the symbol name.
 
-2. **`let`/`let*` binding types** — After each binding variable in
-   `(let ((x EXPR)) ...)`, show `: type`. Use `Typing.Infer.infer` on
-   the init expression. Skip when the type is trivially obvious: the
-   init is a string/number/char literal whose type matches the variable
-   type exactly.
+### Capability Change
 
-3. **Parameter names at call sites** — At `(fn ARG1 ARG2)`, when `fn`
-   resolves to a typed function, show parameter names before each
-   argument. Only show when the argument is a literal or a complex
-   expression (not a plain variable name that already acts as
-   documentation). Deferred to a future iteration — the infrastructure
-   for resolving parameter names from signatures is not yet in place,
-   and this is the least impactful of the three categories.
+`rename_provider : bool` → `rename_provider : rename_options option`
+where `rename_options = { prepare_provider : bool }`. The JSON encoding
+changes from `"renameProvider": true` to
+`"renameProvider": { "prepareProvider": true }`. The existing rename
+capability test must be updated.
 
-### Trivial-Type Suppression
+### Exposing `is_builtin_symbol`
 
-A type is "trivially obvious" when:
-
-- A `let` binding's init expression is a string literal and the
-  inferred type is `String`.
-- A `let` binding's init expression is an integer literal and the
-  inferred type is `Int`.
-- A `let` binding's init expression is a float literal and the
-  inferred type is `Float`.
-- A `let` binding's init expression is `nil` and the type is `Nil`.
-- A `let` binding's init expression is `t` and the type is `T`.
-
-### Position Placement
-
-- **`defun` return type hint:** Position at the end of the parameter
-  list (closing paren of arglist). Kind = `Type`.
-- **`let` binding type hint:** Position at the end of the variable
-  symbol span. Kind = `Type`.
-
-### UTF-16 Considerations
-
-Hint positions use the negotiated position encoding (UTF-16 by
-default). Use `Document.line_text_at` + `Document.utf16_offset_of_byte`
-for the position character offset.
+`Code_action.is_builtin_symbol` is currently not in `code_action.mli`.
+It needs to be exposed so `server.ml` can call it for prepare-rename.
+Alternatively, move it to a shared module, but exposing it is simpler
+since `server.ml` already depends on `Code_action`.
 
 ## Tasks
 
-### Task 1 — Protocol types for inlay hints
+### Task 1 — Protocol types and capability change
 
 **Files:** `lib/lsp/protocol.ml`, `lib/lsp/protocol.mli`
 
-Add types and JSON encoders:
+- Add `rename_options = { prepare_provider : bool }`.
+- Change `rename_provider : bool` to `rename_provider : rename_options option`.
+- Update `server_capabilities_to_json` to emit
+  `{ "prepareProvider": true }` when `prepare_provider = true`.
+- Add `prepare_rename_result = { prr_range : range; prr_placeholder : string }`.
+- Add `prepare_rename_result_to_json : prepare_rename_result option -> Yojson.Safe.t`.
+- Add `prepare_rename_params` type and parser (same structure as
+  hover — can reuse the pattern from `parse_hover_params`).
 
-```ocaml
-type inlay_hint_kind = IHType | IHParameter
+Update `server.ml` `capabilities()` to set
+`rename_provider = Some { prepare_provider = true }`.
 
-type inlay_hint = {
-  ih_position : position;
-  ih_label : string;
-  ih_kind : inlay_hint_kind option;
-  ih_padding_left : bool;
-  ih_padding_right : bool;
-}
+**Tests:** Update `test_rename_capability_advertised` in
+`server_test.ml` to expect `{ "prepareProvider": true }` object
+instead of `true`.
 
-type inlay_hint_params = {
-  ihp_text_document : string;
-  ihp_range : range;
-}
+### Task 2 — Expose `is_builtin_symbol` and add handler
 
-val parse_inlay_hint_params : Yojson.Safe.t -> inlay_hint_params
-val inlay_hint_to_json : inlay_hint -> Yojson.Safe.t
-val inlay_hint_result_to_json : inlay_hint list option -> Yojson.Safe.t
-```
+**Files:** `lib/lsp/code_action.mli`, `lib/lsp/server.ml`
 
-Add `inlay_hint_provider : bool` to `server_capabilities` and encode
-in `server_capabilities_to_json`.
+- Expose `is_builtin_symbol : string -> bool` in `code_action.mli`.
+- Add `handle_prepare_rename` to `server.ml`:
+  1. Parse prepare rename params.
+  2. Get document, parse sexps.
+  3. Find sexp at cursor with `find_with_context_in_forms`.
+  4. Match `ctx.target`: if `Symbol (name, span)` and not
+     `Code_action.is_builtin_symbol name`, return
+     `{ range = range_of_span ~text span; placeholder = name }`.
+  5. Otherwise return `null`.
+- Add `"textDocument/prepareRename"` to `dispatch_request`.
 
-**Tests:** None needed — pure type definitions + JSON encoding.
+### Task 3 — Tests
 
-### Task 2 — Inlay hints module (defun + let bindings)
+**Files:** `test/lsp_support/lsp_client.{ml,mli}`,
+`test/lsp/server_test.ml`
 
-**Files:** `lib/lsp/inlay_hints.ml`, `lib/lsp/inlay_hints.mli`
-
-Create the module:
-
-```ocaml
-val handle :
-  uri:string -> doc_text:string ->
-  range:Protocol.range ->
-  (Yojson.Safe.t, Rpc.response_error) result
-```
-
-`handle` parses the document, type-checks with `Typing.Check.check_program`,
-then collects hints:
-
-- Walk top-level forms for `defun` return types (via `infer_defun`).
-- Walk all forms recursively for `let`/`let*` binding types (via
-  `infer` on init expressions).
-- Filter hints to the requested range.
-- Convert positions to UTF-16.
-
-`is_trivial_type` checks whether the init expression makes the type
-obvious and suppresses the hint.
-
-**Tests:** Add `test/lsp/inlay_hints_test.ml` with unit tests:
-
-- `defun` produces return type hint after param list.
-- `defvar` produces no hint (it's not a let binding).
-- `let` binding produces type hint after variable name.
-- `let*` binding produces type hints.
-- String literal binding suppressed (trivially obvious).
-- Number literal binding suppressed.
-- Empty document returns no hints.
-- Range filtering works (hints outside range excluded).
-
-### Task 3 — Wire into server
-
-**Files:** `lib/lsp/server.ml`
-
-1. Set `inlay_hint_provider = true` in `capabilities()`.
-2. Add `handle_inlay_hints` that extracts URI, gets doc text, and
-   delegates to `Inlay_hints.handle`.
-3. Add `"textDocument/inlayHint"` to `dispatch_request`.
-
-**Tests:** Add to `test/lsp/server_test.ml`:
-
-- `test_inlay_hint_capability_advertised`: verify the initialize
-  response includes `inlayHintProvider: true`.
-- `test_inlay_hint_defun_return_type`: open a file with a defun, send
-  an inlay hint request, verify a type hint exists.
-- `test_inlay_hint_let_binding`: open a file with a let form, verify
-  binding type hints.
-- `test_inlay_hint_empty_file`: verify empty result.
+- Add `prepare_rename_msg` to `lsp_client.{ml,mli}` (same shape as
+  `hover_msg`).
+- Add tests in "prepare-rename" group:
+  - `test_prepare_rename_symbol`: cursor on user-defined symbol →
+    returns range and placeholder matching the symbol name.
+  - `test_prepare_rename_builtin`: cursor on `+` → returns `null`.
+  - `test_prepare_rename_keyword`: cursor on `:foo` keyword → `null`.
+  - `test_prepare_rename_number`: cursor on `42` → `null`.
+  - `test_prepare_rename_string`: cursor on `"hello"` → `null`.
 
 ## Checklist
 
 | # | Task | Status |
 |---|------|--------|
-| 1 | Protocol types for inlay hints | Done |
-| 2 | Inlay hints module | Done |
-| 3 | Wire into server | Done |
+| 1 | Protocol types and capability change | Not started |
+| 2 | Expose is_builtin_symbol and add handler | Not started |
+| 3 | Tests | Not started |

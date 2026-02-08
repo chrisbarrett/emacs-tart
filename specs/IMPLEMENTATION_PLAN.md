@@ -406,7 +406,7 @@ any order, interleaved with other work.
 | 10 | Document save events | — | `server.ml`, `protocol.ml` | Not started |
 | 11 | Workspace symbols | — | `server.ml`, `protocol.ml` | Not started |
 | 12 | Semantic tokens | `lib/lsp/semantic_tokens.{ml,mli}` | `server.ml`, `protocol.ml` | Done |
-| 13 | Inlay hints | `lib/lsp/inlay_hints.{ml,mli}` | `server.ml`, `protocol.ml` | Not started |
+| 13 | Inlay hints | `lib/lsp/inlay_hints.{ml,mli}` | `server.ml`, `protocol.ml` | Done |
 | 14 | Prepare rename | — | `server.ml`, `protocol.ml` | Not started |
 | 15 | Type definition | — | `server.ml`, `protocol.ml` | Not started |
 | 16 | Folding ranges | `lib/lsp/folding.{ml,mli}` | `server.ml`, `protocol.ml` | Done |
