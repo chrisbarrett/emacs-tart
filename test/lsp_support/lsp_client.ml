@@ -266,7 +266,7 @@ let run_session (msgs : string list) : session_result =
   let ic = In_channel.open_bin in_file in
   let out_file = Filename.temp_file "lsp_out" ".json" in
   let oc = Out_channel.open_bin out_file in
-  let server = Server.create ~ic ~oc () in
+  let server = Server.create ~ic ~oc ~debounce_ms:0 () in
   let exit_code = Server.run server in
   In_channel.close ic;
   Out_channel.close oc;

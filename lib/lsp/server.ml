@@ -26,7 +26,31 @@ type t = {
   last_diagnostics : (string, Protocol.diagnostic list) Hashtbl.t;
       (** Last published diagnostics per URI, for deduplication *)
   worker : Worker.t;  (** Background domain for async type checking *)
+  mutable debounce_ms : int;
+      (** Debounce delay in milliseconds before enqueuing type checks.
+          Configurable via [tart.diagnostics.debounceMs]. Default 200. *)
+  pending_checks : (string, float) Hashtbl.t;
+      (** Pending debounced checks: URI → earliest-allowed-enqueue timestamp *)
+  pending_requests : (string, bool Atomic.t) Hashtbl.t;
+      (** In-flight request cancellation flags, keyed by JSON-serialised ID. Set
+          to [true] by [$/cancelRequest]; checked by long-running handlers. *)
+  mutable cancel_flag : bool Atomic.t;
+      (** Cancellation flag for the currently-executing request. Set before
+          dispatching each request; handlers call {!check_cancelled} to poll. *)
+  mutable supports_work_done_progress : bool;
+      (** Whether the client supports [window/workDoneProgress]. Parsed from
+          [capabilities.window.workDoneProgress] during initialization. *)
 }
+
+exception Cancelled
+
+(** Raise {!Cancelled} if the current request has been cancelled.
+
+    Intended for periodic checks inside long-running request handlers so that
+    [$/cancelRequest] can abort in-flight work. Reads the server's [cancel_flag]
+    which is set before each request dispatch. *)
+let check_cancelled (server : t) : unit =
+  if Atomic.get server.cancel_flag then raise Cancelled
 
 module Log = Tart_log.Log
 
@@ -99,7 +123,7 @@ let detect_emacs_and_build_config () :
   (config, emacs_version)
 
 (** Create a new server on the given channels *)
-let create ~ic ~oc () : t =
+let create ~ic ~oc ?(debounce_ms = 200) () : t =
   let module_config, emacs_version = detect_emacs_and_build_config () in
   {
     ic;
@@ -115,6 +139,11 @@ let create ~ic ~oc () : t =
     emacs_version;
     last_diagnostics = Hashtbl.create 16;
     worker = Worker.create ();
+    debounce_ms;
+    pending_checks = Hashtbl.create 16;
+    pending_requests = Hashtbl.create 8;
+    cancel_flag = Atomic.make false;
+    supports_work_done_progress = false;
   }
 
 (** Get the server's current state *)
@@ -268,25 +297,9 @@ let handle_worker_results (server : t) : unit =
   let results = Worker.poll_results server.worker in
   List.iter (publish_diagnostics server) results
 
-(** Block until the worker has no more pending or in-flight items, publishing
-    results as they arrive. Called before shutdown to ensure all enqueued
-    diagnostics are delivered. *)
-let drain_worker (server : t) : unit =
-  let worker_fd = Worker.signal_fd server.worker in
-  while Worker.pending_count server.worker > 0 do
-    (* Wait for the signal pipe with a short timeout to avoid deadlock *)
-    let readable, _, _ = Unix.select [ worker_fd ] [] [] 0.1 in
-    if readable <> [] then handle_worker_results server
-  done;
-  (* One final poll to pick up any results posted between the last
-     pending_count check and now *)
-  handle_worker_results server
-
-(** Schedule a diagnostic check for the given URI.
-
-    Enqueues a work item to the background worker domain. The main loop will
-    pick up the result via [handle_worker_results] once the check completes. *)
-let schedule_check (server : t) (uri : string) : unit =
+(** Immediately enqueue a diagnostic check for the given URI, bypassing the
+    debounce timer. Used by [flush_pending_checks] once the deadline expires. *)
+let enqueue_check (server : t) (uri : string) : unit =
   match Document.get_doc server.documents uri with
   | None -> ()
   | Some doc ->
@@ -303,6 +316,94 @@ let schedule_check (server : t) (uri : string) : unit =
         }
       in
       Worker.enqueue server.worker item
+
+(** Force-enqueue all pending checks regardless of deadline. Called at shutdown
+    so debounced items are not lost. *)
+let force_flush_pending_checks (server : t) : unit =
+  let uris =
+    Hashtbl.fold (fun uri _deadline acc -> uri :: acc) server.pending_checks []
+  in
+  Hashtbl.clear server.pending_checks;
+  List.iter (enqueue_check server) uris
+
+(** Block until the worker has no more pending or in-flight items, publishing
+    results as they arrive. Called before shutdown to ensure all enqueued
+    diagnostics are delivered. *)
+let drain_worker (server : t) : unit =
+  force_flush_pending_checks server;
+  let worker_fd = Worker.signal_fd server.worker in
+  while Worker.pending_count server.worker > 0 do
+    (* Wait for the signal pipe with a short timeout to avoid deadlock *)
+    let readable, _, _ = Unix.select [ worker_fd ] [] [] 0.1 in
+    if readable <> [] then handle_worker_results server
+  done;
+  (* One final poll to pick up any results posted between the last
+     pending_count check and now *)
+  handle_worker_results server
+
+(** Generate a unique progress token. *)
+let next_progress_token (server : t) : string =
+  let id = server.next_request_id in
+  server.next_request_id <- id + 1;
+  Printf.sprintf "tart-progress-%d" id
+
+(** Send progress begin notification (no-op if client doesn't support it). *)
+let send_progress_begin (server : t) ~(token : string) ~(title : string)
+    ?(message : string option) () : unit =
+  if server.supports_work_done_progress then (
+    (* Create the progress token via window/workDoneProgress/create *)
+    let create_id = server.next_request_id in
+    server.next_request_id <- create_id + 1;
+    Rpc.write_request server.oc ~id:create_id
+      ~method_:"window/workDoneProgress/create"
+      ~params:(Protocol.work_done_progress_create_json ~token);
+    (* Send begin notification *)
+    Rpc.write_notification server.oc ~method_:"$/progress"
+      ~params:(Protocol.progress_begin_json ~token ~title ?message ()))
+
+(** Send progress report notification (no-op if client doesn't support it). *)
+let send_progress_report (server : t) ~(token : string)
+    ?(message : string option) ?(percentage : int option) () : unit =
+  if server.supports_work_done_progress then
+    Rpc.write_notification server.oc ~method_:"$/progress"
+      ~params:(Protocol.progress_report_json ~token ?message ?percentage ())
+
+(** Send progress end notification (no-op if client doesn't support it). *)
+let send_progress_end (server : t) ~(token : string) ?(message : string option)
+    () : unit =
+  if server.supports_work_done_progress then
+    Rpc.write_notification server.oc ~method_:"$/progress"
+      ~params:(Protocol.progress_end_json ~token ?message ())
+
+(** Schedule a diagnostic check for the given URI.
+
+    Records a debounce deadline; the check is enqueued by [flush_pending_checks]
+    once the deadline expires. Each new call for the same URI resets the
+    deadline so that rapid keystrokes produce only one check after the pause. *)
+let schedule_check (server : t) (uri : string) : unit =
+  let delay = Float.of_int server.debounce_ms /. 1000.0 in
+  let deadline = Unix.gettimeofday () +. delay in
+  Hashtbl.replace server.pending_checks uri deadline
+
+(** Enqueue any pending checks whose debounce deadline has expired. Returns the
+    time until the next deadline (in seconds), or [None] when no checks are
+    pending. *)
+let flush_pending_checks (server : t) : float option =
+  let now = Unix.gettimeofday () in
+  let ready = ref [] in
+  let soonest = ref infinity in
+  Hashtbl.iter
+    (fun uri deadline ->
+      if deadline <= now then ready := uri :: !ready
+      else soonest := Float.min !soonest deadline)
+    server.pending_checks;
+  List.iter
+    (fun uri ->
+      Hashtbl.remove server.pending_checks uri;
+      enqueue_check server uri)
+    !ready;
+  if Hashtbl.length server.pending_checks = 0 then None
+  else Some (Float.max 0.001 (!soonest -. Unix.gettimeofday ()))
 
 (** Apply user settings, rebuilding the module config and rechecking all open
     documents.
@@ -323,6 +424,11 @@ let apply_settings (server : t) (settings : Protocol.tart_settings) : unit =
             server.emacs_version)
     | None -> server.emacs_version
   in
+  (match settings.ts_debounce_ms with
+  | Some ms ->
+      Log.info "Settings: diagnostic debounce set to %d ms" ms;
+      server.debounce_ms <- ms
+  | None -> ());
   let extra_search_dirs = settings.ts_search_path in
   if extra_search_dirs <> [] then
     Log.info "Settings: prepending %d search path dirs"
@@ -337,7 +443,30 @@ let apply_settings (server : t) (settings : Protocol.tart_settings) : unit =
   (* Invalidate all caches and re-publish diagnostics for every open document *)
   Form_cache.invalidate_all server.form_cache;
   let open_uris = Document.list_uris server.documents in
-  List.iter (fun uri -> schedule_check server uri) open_uris
+  let n = List.length open_uris in
+  let token =
+    if n > 0 then (
+      let tok = next_progress_token server in
+      send_progress_begin server ~token:tok ~title:"Checking"
+        ~message:(Printf.sprintf "Rechecking %d files" n)
+        ();
+      Some tok)
+    else None
+  in
+  List.iteri
+    (fun i uri ->
+      (match token with
+      | Some tok ->
+          let pct = (i + 1) * 100 / n in
+          let basename = Filename.basename (Uri.to_filename uri) in
+          send_progress_report server ~token:tok ~message:basename
+            ~percentage:pct ()
+      | None -> ());
+      schedule_check server uri)
+    open_uris;
+  match token with
+  | Some tok -> send_progress_end server ~token:tok ()
+  | None -> ()
 
 (** Handle initialize request *)
 let handle_initialize (server : t) (params : Yojson.Safe.t option) :
@@ -358,7 +487,8 @@ let handle_initialize (server : t) (params : Yojson.Safe.t option) :
             {
               Protocol.process_id = None;
               root_uri = None;
-              capabilities = { text_document = None; general = None };
+              capabilities =
+                { text_document = None; general = None; window = None };
               initialization_options = None;
             }
       in
@@ -370,6 +500,10 @@ let handle_initialize (server : t) (params : Yojson.Safe.t option) :
           Log.debug "Detected Emacs version: %s"
             (Sig.Emacs_version.version_to_string v)
       | None -> Log.debug "Emacs version not detected, using latest typings");
+      (* Parse work-done progress support *)
+      (match init_params.capabilities.window with
+      | Some w -> server.supports_work_done_progress <- w.work_done_progress
+      | None -> ());
       (* Negotiate position encoding *)
       let encoding =
         Protocol.negotiate_position_encoding init_params.capabilities
@@ -440,15 +574,33 @@ let invalidate_dependents (server : t) ~uri : unit =
   let dependent_uris =
     Graph_tracker.dependent_uris server.dependency_graph ~module_id ~open_uris
   in
-  if dependent_uris <> [] then (
-    Log.debug "Invalidating %d dependents of %s"
-      (List.length dependent_uris)
-      module_id;
-    List.iter
-      (fun dep_uri ->
+  let n = List.length dependent_uris in
+  if n > 0 then (
+    Log.debug "Invalidating %d dependents of %s" n module_id;
+    let token =
+      if n >= 3 then (
+        let tok = next_progress_token server in
+        send_progress_begin server ~token:tok ~title:"Checking dependents"
+          ~message:(Printf.sprintf "%d files" n)
+          ();
+        Some tok)
+      else None
+    in
+    List.iteri
+      (fun i dep_uri ->
+        (match token with
+        | Some tok ->
+            let pct = (i + 1) * 100 / n in
+            let basename = Filename.basename (Uri.to_filename dep_uri) in
+            send_progress_report server ~token:tok ~message:basename
+              ~percentage:pct ()
+        | None -> ());
         Form_cache.invalidate_document server.form_cache dep_uri;
         schedule_check server dep_uri)
-      dependent_uris)
+      dependent_uris;
+    match token with
+    | Some tok -> send_progress_end server ~token:tok ()
+    | None -> ())
 
 (** Handle textDocument/didOpen notification *)
 let handle_did_open (server : t) (params : Yojson.Safe.t option) : unit =
@@ -689,6 +841,7 @@ let handle_hover (server : t) (params : Yojson.Safe.t option) :
   Log.debug "Found sexp: %s (in application: %b)"
     (Syntax.Sexp.to_string ctx.target)
     (Option.is_some ctx.enclosing_application);
+  check_cancelled server;
   (* Type-check the document to get the environment *)
   let check_result = Typing.Check.check_program parse_result.sexps in
   match type_at_sexp check_result ctx with
@@ -1395,7 +1548,17 @@ let dispatch_notification (server : t) (msg : Rpc.message) :
       handle_did_change_configuration server msg.params;
       `Continue
   | "$/cancelRequest" ->
-      (* Ignore cancellation for now *)
+      (match msg.params with
+      | Some json -> (
+          let open Yojson.Safe.Util in
+          let id = json |> member "id" in
+          let key = Yojson.Safe.to_string id in
+          match Hashtbl.find_opt server.pending_requests key with
+          | Some flag ->
+              Atomic.set flag true;
+              Log.debug "Cancelled request %s" key
+          | None -> Log.debug "Cancel request for unknown id %s" key)
+      | None -> Log.debug "$/cancelRequest missing params");
       `Continue
   | _ ->
       (* Ignore unknown notifications per LSP spec *)
@@ -1407,12 +1570,44 @@ let process_message (server : t) (msg : Rpc.message) :
     [ `Continue | `Exit of int ] =
   match msg.id with
   | Some id ->
-      (* Request - must send response *)
+      (* Request - register cancellation flag *)
+      let key = Yojson.Safe.to_string id in
+      let cancel_flag = Atomic.make false in
+      server.cancel_flag <- cancel_flag;
+      Hashtbl.replace server.pending_requests key cancel_flag;
       let response =
-        match dispatch_request server msg with
-        | Ok result -> Rpc.success_response ~id ~result
-        | Error err -> { Rpc.id; result = None; error = Some err }
+        (* Check if already cancelled before dispatching *)
+        if Atomic.get cancel_flag then
+          {
+            Rpc.id;
+            result = None;
+            error =
+              Some
+                {
+                  Rpc.code = Rpc.request_cancelled;
+                  message = "Request cancelled";
+                  data = None;
+                };
+          }
+        else
+          try
+            match dispatch_request server msg with
+            | Ok result -> Rpc.success_response ~id ~result
+            | Error err -> { Rpc.id; result = None; error = Some err }
+          with Cancelled ->
+            {
+              Rpc.id;
+              result = None;
+              error =
+                Some
+                  {
+                    Rpc.code = Rpc.request_cancelled;
+                    message = "Request cancelled";
+                    data = None;
+                  };
+            }
       in
+      Hashtbl.remove server.pending_requests key;
       Log.debug "Response: %s" (Rpc.response_to_string response);
       Rpc.write_response server.oc response;
       `Continue
@@ -1482,7 +1677,11 @@ let run (server : t) : int =
   in
 
   let rec loop () =
-    let readable, _, _ = Unix.select [ msg_pipe_r; worker_fd ] [] [] (-1.0) in
+    (* Flush any expired debounced checks and compute timeout for select *)
+    let timeout =
+      match flush_pending_checks server with Some t -> t | None -> -1.0
+    in
+    let readable, _, _ = Unix.select [ msg_pipe_r; worker_fd ] [] [] timeout in
     (* Process worker results *)
     if List.mem worker_fd readable then handle_worker_results server;
     (* Process stdin messages *)

@@ -13,7 +13,7 @@ module Dep_graph = Tart.Dependency_graph
 let make_test_server () =
   let ic = In_channel.stdin in
   let oc = Out_channel.stdout in
-  Tart.Server.create ~ic ~oc ()
+  Tart.Server.create ~ic ~oc ~debounce_ms:0 ()
 
 (* =============================================================================
    Module ID Extraction Tests

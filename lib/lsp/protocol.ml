@@ -12,9 +12,13 @@ type position_encoding = UTF16 | UTF32
 type general_client_capabilities = { position_encodings : string list option }
 (** General client capabilities, including position encoding support *)
 
+type window_client_capabilities = { work_done_progress : bool }
+(** Window-related client capabilities *)
+
 type client_capabilities = {
   text_document : text_document_client_capabilities option;
   general : general_client_capabilities option;
+  window : window_client_capabilities option;
 }
 (** Client capabilities. We parse just what we need and ignore the rest. *)
 
@@ -120,7 +124,18 @@ let parse_client_capabilities (json : Yojson.Safe.t) : client_capabilities =
         in
         Some { position_encodings }
   in
-  { text_document; general }
+  let window =
+    match json |> member "window" with
+    | `Null -> None
+    | win ->
+        let work_done_progress =
+          match win |> member "workDoneProgress" with
+          | `Bool b -> b
+          | _ -> false
+        in
+        Some { work_done_progress }
+  in
+  { text_document; general; window }
 
 (** Parse initialize params from JSON *)
 let parse_initialize_params (json : Yojson.Safe.t) : initialize_params =
@@ -139,7 +154,7 @@ let parse_initialize_params (json : Yojson.Safe.t) : initialize_params =
   in
   let capabilities =
     match json |> member "capabilities" with
-    | `Null -> { text_document = None; general = None }
+    | `Null -> { text_document = None; general = None; window = None }
     | caps -> parse_client_capabilities caps
   in
   let initialization_options =
@@ -1414,6 +1429,7 @@ let register_file_watchers_json ~(id : string) : Yojson.Safe.t =
 type tart_settings = {
   ts_emacs_version : string option;
   ts_search_path : string list;
+  ts_debounce_ms : int option;
 }
 (** User-configurable settings *)
 
@@ -1429,7 +1445,12 @@ let parse_tart_settings (json : Yojson.Safe.t) : tart_settings =
     | `List items -> List.filter_map to_string_option items
     | _ -> []
   in
-  { ts_emacs_version; ts_search_path }
+  let ts_debounce_ms =
+    match json |> member "tart.diagnostics.debounceMs" with
+    | `Int n when n >= 0 -> Some n
+    | _ -> None
+  in
+  { ts_emacs_version; ts_search_path; ts_debounce_ms }
 
 type did_change_configuration_params = { dcc_settings : Yojson.Safe.t }
 (** Parameters for workspace/didChangeConfiguration notification *)
@@ -1438,3 +1459,43 @@ let parse_did_change_configuration_params (json : Yojson.Safe.t) :
     did_change_configuration_params =
   let open Yojson.Safe.Util in
   { dcc_settings = json |> member "settings" }
+
+(** {1 Work-Done Progress} *)
+
+let work_done_progress_create_json ~(token : string) : Yojson.Safe.t =
+  `Assoc [ ("token", `String token) ]
+
+let progress_begin_json ~(token : string) ~(title : string)
+    ?(message : string option) () : Yojson.Safe.t =
+  let value_fields = [ ("kind", `String "begin"); ("title", `String title) ] in
+  let value_fields =
+    match message with
+    | Some m -> value_fields @ [ ("message", `String m) ]
+    | None -> value_fields
+  in
+  `Assoc [ ("token", `String token); ("value", `Assoc value_fields) ]
+
+let progress_report_json ~(token : string) ?(message : string option)
+    ?(percentage : int option) () : Yojson.Safe.t =
+  let value_fields = [ ("kind", `String "report") ] in
+  let value_fields =
+    match message with
+    | Some m -> value_fields @ [ ("message", `String m) ]
+    | None -> value_fields
+  in
+  let value_fields =
+    match percentage with
+    | Some p -> value_fields @ [ ("percentage", `Int p) ]
+    | None -> value_fields
+  in
+  `Assoc [ ("token", `String token); ("value", `Assoc value_fields) ]
+
+let progress_end_json ~(token : string) ?(message : string option) () :
+    Yojson.Safe.t =
+  let value_fields = [ ("kind", `String "end") ] in
+  let value_fields =
+    match message with
+    | Some m -> value_fields @ [ ("message", `String m) ]
+    | None -> value_fields
+  in
+  `Assoc [ ("token", `String token); ("value", `Assoc value_fields) ]

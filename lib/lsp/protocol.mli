@@ -13,9 +13,13 @@ type position_encoding = UTF16 | UTF32
 type general_client_capabilities = { position_encodings : string list option }
 (** General client capabilities, including position encoding support *)
 
+type window_client_capabilities = { work_done_progress : bool }
+(** Window-related client capabilities *)
+
 type client_capabilities = {
   text_document : text_document_client_capabilities option;
   general : general_client_capabilities option;
+  window : window_client_capabilities option;
 }
 (** Client capabilities *)
 
@@ -597,19 +601,22 @@ val register_file_watchers_json : id:string -> Yojson.Safe.t
 type tart_settings = {
   ts_emacs_version : string option;
   ts_search_path : string list;
+  ts_debounce_ms : int option;
 }
 (** User-configurable settings for the tart language server.
 
     [ts_emacs_version] overrides the auto-detected Emacs version for typings
     lookup. [ts_search_path] provides additional directories to prepend to the
-    signature search path. *)
+    signature search path. [ts_debounce_ms] overrides the diagnostic debounce
+    delay in milliseconds (default 200). *)
 
 val parse_tart_settings : Yojson.Safe.t -> tart_settings
 (** Parse tart settings from JSON.
 
-    Expects an object with optional [tart.emacsVersion] (string or null) and
-    optional [tart.searchPath] (string array). Missing keys or unexpected types
-    are tolerated gracefully with defaults. *)
+    Expects an object with optional [tart.emacsVersion] (string or null),
+    optional [tart.searchPath] (string array), and optional
+    [tart.diagnostics.debounceMs] (non-negative integer). Missing keys or
+    unexpected types are tolerated gracefully with defaults. *)
 
 type did_change_configuration_params = { dcc_settings : Yojson.Safe.t }
 (** Parameters for [workspace/didChangeConfiguration] notification *)
@@ -617,3 +624,19 @@ type did_change_configuration_params = { dcc_settings : Yojson.Safe.t }
 val parse_did_change_configuration_params :
   Yojson.Safe.t -> did_change_configuration_params
 (** Parse [workspace/didChangeConfiguration] params from JSON *)
+
+(** {1 Work-Done Progress} *)
+
+val work_done_progress_create_json : token:string -> Yojson.Safe.t
+(** Build the params for [window/workDoneProgress/create] request. *)
+
+val progress_begin_json :
+  token:string -> title:string -> ?message:string -> unit -> Yojson.Safe.t
+(** Build the params for a [$/progress] notification with [kind=begin]. *)
+
+val progress_report_json :
+  token:string -> ?message:string -> ?percentage:int -> unit -> Yojson.Safe.t
+(** Build the params for a [$/progress] notification with [kind=report]. *)
+
+val progress_end_json : token:string -> ?message:string -> unit -> Yojson.Safe.t
+(** Build the params for a [$/progress] notification with [kind=end]. *)

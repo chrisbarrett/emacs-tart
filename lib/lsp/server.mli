@@ -13,11 +13,20 @@ type state =
 type t
 (** Server instance *)
 
-val create : ic:In_channel.t -> oc:Out_channel.t -> unit -> t
+exception Cancelled
+(** Raised by request handlers when the current request has been cancelled via
+    [$/cancelRequest]. Caught by {!run}, which responds with error code −32800.
+*)
+
+val create :
+  ic:In_channel.t -> oc:Out_channel.t -> ?debounce_ms:int -> unit -> t
 (** Create a new server on the given channels.
 
     @param ic Input channel (typically stdin)
-    @param oc Output channel (typically stdout) *)
+    @param oc Output channel (typically stdout)
+    @param debounce_ms
+      Diagnostic debounce delay in milliseconds (default 200). Set to 0 for
+      tests to disable debouncing. *)
 
 val state : t -> state
 (** Get the server's current state *)
