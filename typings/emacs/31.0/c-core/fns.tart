@@ -55,16 +55,27 @@
 (defun elt [a] ((list a) int) -> a)
 
 ;; (copy-sequence SEQ) - shallow copy
-(defun copy-sequence [a] (a) -> a)
+(defun copy-sequence [a]
+  (((list a)) -> (list a))
+  (((vector a)) -> (vector a))
+  ((string) -> string))
 
 ;; (reverse SEQ) - return reversed copy
-(defun reverse [a] ((list a)) -> (list a))
+(defun reverse [a]
+  (((list a)) -> (list a))
+  (((vector a)) -> (vector a))
+  ((string) -> string))
 
 ;; (nreverse SEQ) - destructive reverse
-(defun nreverse [a] ((list a)) -> (list a))
+(defun nreverse [a]
+  (((list a)) -> (list a))
+  (((vector a)) -> (vector a))
+  ((string) -> string))
 
 ;; (sort SEQ PRED) - destructive sort
-(defun sort [a] ((list a) ((a a) -> any)) -> (list a))
+(defun sort [a]
+  (((list a) ((a a) -> any)) -> (list a))
+  (((vector a) ((a a) -> any)) -> (vector a)))
 
 ;; ===========================================================================
 ;; List operations
@@ -123,10 +134,13 @@
 (defun append [a] (&rest (list a)) -> (list a))
 
 ;; (concat &rest SEQS) - concatenate strings
+;; Kept as &rest any: tightening to (string | symbol | ...) would cause
+;; signature mismatches when callers declare string parameters, because the
+;; constraint solver infers the full union as the parameter type.
 (defun concat (&rest any) -> string)
 
 ;; (vconcat &rest SEQS) - concatenate to vector
-(defun vconcat (&rest any) -> (vector any))
+(defun vconcat (&rest ((list any) | (vector any) | string | bool-vector)) -> (vector any))
 
 ;; (nconc &rest LISTS) - destructive append
 (defun nconc [a] (&rest (list a)) -> (list a))
@@ -147,7 +161,7 @@
 (defun plist-get [k v] ((plist k v) k &optional any) -> (v | nil))
 
 ;; (plist-put PLIST PROP VALUE &optional PREDICATE) - put in plist
-(defun plist-put ((list any) any any &optional any) -> (list any))
+(defun plist-put [k v] ((plist k v) k v &optional any) -> (plist k v))
 
 ;; (plist-member PLIST PROP &optional PREDICATE) - check membership
 ;; Plist clause: structural traversal is safe.
