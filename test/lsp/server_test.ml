@@ -1612,6 +1612,68 @@ let test_did_change_cjk_utf16 () =
         "\xe6\x97\xa5\xe6\x9c\xac\xe8\xaa\x9e hello Emacs" doc.text
   | None -> Alcotest.fail "Document not found after didChange"
 
+(** {1 Sync Recovery Tests} *)
+
+let test_edit_past_end_succeeds () =
+  (* Open a document, send a didChange with range extending past document
+     bounds, then verify the server doesn't crash and subsequent operations
+     (hover, diagnostics) still work on the clamped document. *)
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el" ~text:"(+ 1 2)" ();
+        (* Range extends far past document end — should be clamped *)
+        did_change_msg ~uri:"file:///test.el" ~version:2
+          ~changes:
+            [
+              `Assoc
+                [
+                  ( "range",
+                    `Assoc
+                      [
+                        ( "start",
+                          `Assoc [ ("line", `Int 0); ("character", `Int 5) ] );
+                        ( "end",
+                          `Assoc [ ("line", `Int 99); ("character", `Int 99) ]
+                        );
+                      ] );
+                  ("text", `String "\"hello\")");
+                ];
+            ]
+          ();
+        (* Hover on the `+` to verify the server is still responsive *)
+        hover_msg ~id:2 ~uri:"file:///test.el" ~line:0 ~character:1 ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  (* Document should reflect the clamped edit: "(+ 1 " + "\"hello\")" *)
+  (match
+     Document.get_doc (Server.documents result.server) "file:///test.el"
+   with
+  | Some doc ->
+      Alcotest.(check string)
+        "doc text after clamped edit" "(+ 1 \"hello\")" doc.text;
+      Alcotest.(check int) "doc version" 2 doc.version
+  | None -> Alcotest.fail "Document not found after clamped didChange");
+  (* Hover should return a response (server is still working) *)
+  (match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "No hover response after clamped edit"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result_field = json |> member "result" in
+      Alcotest.(check bool)
+        "hover result is not null" true (result_field <> `Null));
+  (* Diagnostics should have been re-published after the edit *)
+  match find_last_diagnostics ~uri:"file:///test.el" result.messages with
+  | None -> Alcotest.fail "No diagnostics after clamped edit"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let params = json |> member "params" in
+      let _diagnostics = params |> member "diagnostics" |> to_list in
+      (* Just verify diagnostics were published — exact content is not the
+         point of this test *)
+      ()
+
 (** {1 Test Registration} *)
 
 let () =
@@ -1760,6 +1822,11 @@ let () =
           Alcotest.test_case "not on symbol" `Quick test_rename_not_on_symbol;
           Alcotest.test_case "has correct uri" `Quick
             test_rename_has_correct_uri;
+        ] );
+      ( "sync-recovery",
+        [
+          Alcotest.test_case "edit past end succeeds" `Quick
+            test_edit_past_end_succeeds;
         ] );
       ( "utf16-positions",
         [

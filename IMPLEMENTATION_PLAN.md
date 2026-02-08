@@ -99,4 +99,4 @@ Add an end-to-end test in the server test suite:
 |---|------|--------|
 | 1 | Clamp out-of-range positions | Done |
 | 2 | Detect version gaps | Done |
-| 3 | End-to-end integration test | Not started |
+| 3 | End-to-end integration test | Done |
