@@ -403,14 +403,14 @@ Where `infer_application` now:
 - [x] [R5] Handle open row extension and closed row rejection in clause matching
 - [x] [R5] Migrate `plist-get`, `alist-get`, `gethash`, `map-elt` to
       multi-clause `.tart` signatures
-- [ ] [R5] Remove hard-coded row inference functions from `row_dispatch.ml`
+- [x] [R5] Remove hard-coded row inference functions from `row_dispatch.ml`
 - [x] [R6] Run all existing row-typed test fixtures; verify decision table
       semantics preserved
 - [x] [R7] Document literal matching in clause selection
 
-**Status:** Virtual clause generation covers all 5 cases of the Spec 11 R4
-decision table. `generate_virtual_clauses` generates per-field clauses (Cases
-1-2), closed-row absent-key clauses returning nil/default (Cases 3-4), and
-open-row extension clauses returning `(T | nil)` (Case 5). Signatures migrated
-to generic single-clause forms with loosened optional params. Remaining:
-`row_dispatch.ml` removal.
+**Status:** Complete. Virtual clause generation covers all 5 cases of the
+Spec 11 R4 decision table. `generate_virtual_clauses` generates per-field
+clauses (Cases 1-2), closed-row absent-key clauses returning nil/default
+(Cases 3-4), and open-row extension clauses returning `(T | nil)` (Case 5).
+Signatures migrated to generic single-clause forms with loosened optional
+params. `row_dispatch.ml` removed; row helpers moved into `infer.ml`.
