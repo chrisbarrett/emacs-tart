@@ -72,6 +72,6 @@ The predicate must match:
 
 ## Tasks
 
-- [ ] [R1] Add `risky-local-variable` property to `tart-executable` and `tart-install-directory`
-- [ ] [R2] Extract safe-version predicate, tighten to semver regex
-- [ ] Update [Spec 23](./23-binary-installation.md) R1 to reference this spec
+- [x] [R1] Add `risky-local-variable` property to `tart-executable` and `tart-install-directory`
+- [x] [R2] Extract safe-version predicate, tighten to semver regex
+- [x] Update [Spec 23](./23-binary-installation.md) R1 to reference this spec

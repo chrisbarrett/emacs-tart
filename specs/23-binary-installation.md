@@ -25,6 +25,10 @@ Changes to `lisp/tart-mode.el`.
 
 ### R1: Version variable
 
+> [!NOTE]
+> The `:safe` predicate was tightened in [Spec 65](./65-download-security.md)
+> to reject path-traversal payloads. See `tart--safe-version-p`.
+
 ```elisp
 (defcustom tart-version 'latest
   "Tart version to install.
