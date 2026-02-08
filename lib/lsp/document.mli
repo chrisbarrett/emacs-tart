@@ -65,10 +65,18 @@ type content_change = {
 }
 (** A content change event *)
 
+type apply_result = { warning : string option }
+(** Result of applying changes, with an optional warning (e.g. version gap). *)
+
 val apply_changes :
-  t -> uri:string -> version:int -> content_change list -> (unit, string) result
-(** Apply incremental changes to a document. Returns Error if document not found
-    or position out of range. *)
+  t ->
+  uri:string ->
+  version:int ->
+  content_change list ->
+  (apply_result, string) result
+(** Apply incremental changes to a document. Returns a warning when a version
+    gap is detected (incoming version ≠ stored version + 1). Returns Error if
+    the document is not open or the range is invalid. *)
 
 (** {1 JSON Parsing} *)
 

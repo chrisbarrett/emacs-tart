@@ -43,7 +43,7 @@ let test_full_replacement () =
   (match
      Document.apply_changes store ~uri:"file:///test.el" ~version:2 [ change ]
    with
-  | Ok () -> ()
+  | Ok _ -> ()
   | Error e -> Alcotest.fail e);
   match Document.get_doc store "file:///test.el" with
   | Some doc ->
@@ -68,7 +68,7 @@ let test_single_line_insert () =
   (match
      Document.apply_changes store ~uri:"file:///test.el" ~version:2 [ change ]
    with
-  | Ok () -> ()
+  | Ok _ -> ()
   | Error e -> Alcotest.fail e);
   match Document.get_doc store "file:///test.el" with
   | Some doc -> Alcotest.(check string) "text" "hello beautiful world" doc.text
@@ -91,7 +91,7 @@ let test_single_line_delete () =
   (match
      Document.apply_changes store ~uri:"file:///test.el" ~version:2 [ change ]
    with
-  | Ok () -> ()
+  | Ok _ -> ()
   | Error e -> Alcotest.fail e);
   match Document.get_doc store "file:///test.el" with
   | Some doc -> Alcotest.(check string) "text" "hello" doc.text
@@ -114,7 +114,7 @@ let test_single_line_replace () =
   (match
      Document.apply_changes store ~uri:"file:///test.el" ~version:2 [ change ]
    with
-  | Ok () -> ()
+  | Ok _ -> ()
   | Error e -> Alcotest.fail e);
   match Document.get_doc store "file:///test.el" with
   | Some doc -> Alcotest.(check string) "text" "hello Emacs" doc.text
@@ -139,7 +139,7 @@ let test_multiline_text () =
   (match
      Document.apply_changes store ~uri:"file:///test.el" ~version:2 [ change ]
    with
-  | Ok () -> ()
+  | Ok _ -> ()
   | Error e -> Alcotest.fail e);
   match Document.get_doc store "file:///test.el" with
   | Some doc ->
@@ -165,7 +165,7 @@ let test_delete_across_lines () =
   (match
      Document.apply_changes store ~uri:"file:///test.el" ~version:2 [ change ]
    with
-  | Ok () -> ()
+  | Ok _ -> ()
   | Error e -> Alcotest.fail e);
   match Document.get_doc store "file:///test.el" with
   | Some doc -> Alcotest.(check string) "text" "line 1line 3" doc.text
@@ -203,7 +203,7 @@ let test_multiple_changes () =
   (match
      Document.apply_changes store ~uri:"file:///test.el" ~version:2 changes
    with
-  | Ok () -> ()
+  | Ok _ -> ()
   | Error e -> Alcotest.fail e);
   match Document.get_doc store "file:///test.el" with
   | Some doc -> Alcotest.(check string) "text" "XXX YYY ccc" doc.text
@@ -215,7 +215,7 @@ let test_error_document_not_open () =
   match
     Document.apply_changes store ~uri:"file:///missing.el" ~version:1 [ change ]
   with
-  | Ok () -> Alcotest.fail "Expected error"
+  | Ok _ -> Alcotest.fail "Expected error"
   | Error e ->
       Alcotest.(check bool) "error mentions not open" true (String.length e > 0)
 
@@ -465,7 +465,7 @@ let test_incremental_edit_with_cjk () =
   (match
      Document.apply_changes store ~uri:"file:///test.el" ~version:2 [ change ]
    with
-  | Ok () -> ()
+  | Ok _ -> ()
   | Error e -> Alcotest.fail e);
   match Document.get_doc store "file:///test.el" with
   | Some doc ->
@@ -494,7 +494,7 @@ let test_incremental_edit_with_emoji () =
   (match
      Document.apply_changes store ~uri:"file:///test.el" ~version:2 [ change ]
    with
-  | Ok () -> ()
+  | Ok _ -> ()
   | Error e -> Alcotest.fail e);
   match Document.get_doc store "file:///test.el" with
   | Some doc ->
@@ -524,7 +524,7 @@ let test_incremental_edit_multiline_with_multibyte () =
   (match
      Document.apply_changes store ~uri:"file:///test.el" ~version:2 [ change ]
    with
-  | Ok () -> ()
+  | Ok _ -> ()
   | Error e -> Alcotest.fail e);
   match Document.get_doc store "file:///test.el" with
   | Some doc ->
@@ -551,7 +551,7 @@ let test_edit_past_end_clamps () =
   (match
      Document.apply_changes store ~uri:"file:///test.el" ~version:2 [ change ]
    with
-  | Ok () -> ()
+  | Ok _ -> ()
   | Error e -> Alcotest.fail e);
   match Document.get_doc store "file:///test.el" with
   | Some doc -> Alcotest.(check string) "text" "hello world" doc.text
@@ -576,7 +576,7 @@ let test_edit_past_line_end_clamps () =
   (match
      Document.apply_changes store ~uri:"file:///test.el" ~version:2 [ change ]
    with
-  | Ok () -> ()
+  | Ok _ -> ()
   | Error e -> Alcotest.fail e);
   match Document.get_doc store "file:///test.el" with
   | Some doc ->
@@ -603,11 +603,69 @@ let test_incremental_edit_ascii_unchanged () =
   (match
      Document.apply_changes store ~uri:"file:///test.el" ~version:2 [ change ]
    with
-  | Ok () -> ()
+  | Ok _ -> ()
   | Error e -> Alcotest.fail e);
   match Document.get_doc store "file:///test.el" with
   | Some doc -> Alcotest.(check string) "text" "hello Emacs" doc.text
   | None -> Alcotest.fail "Document not found"
+
+(** {1 Version Gap Detection Tests} *)
+
+let contains_substring haystack needle =
+  let hlen = String.length haystack in
+  let nlen = String.length needle in
+  if nlen > hlen then false
+  else
+    let rec check i =
+      if i > hlen - nlen then false
+      else if String.sub haystack i nlen = needle then true
+      else check (i + 1)
+    in
+    check 0
+
+let test_version_gap_detected () =
+  let store = Document.create () in
+  Document.open_doc store ~uri:"file:///test.el" ~version:1 ~text:"hello";
+  let change : Document.content_change = { range = None; text = "world" } in
+  (* Jump from version 1 to 5 — should succeed with a warning *)
+  match
+    Document.apply_changes store ~uri:"file:///test.el" ~version:5 [ change ]
+  with
+  | Ok { warning = Some msg } -> (
+      Alcotest.(check bool)
+        "warning mentions expected version" true
+        (contains_substring msg "expected 2");
+      Alcotest.(check bool)
+        "warning mentions actual version" true
+        (contains_substring msg "got 5");
+      (* Verify the change was still applied *)
+      match Document.get_doc store "file:///test.el" with
+      | Some doc ->
+          Alcotest.(check string) "text updated" "world" doc.text;
+          Alcotest.(check int) "version updated" 5 doc.version
+      | None -> Alcotest.fail "Document not found")
+  | Ok { warning = None } -> Alcotest.fail "Expected warning for version gap"
+  | Error e -> Alcotest.fail (Printf.sprintf "Unexpected error: %s" e)
+
+let test_version_sequential_no_warning () =
+  let store = Document.create () in
+  Document.open_doc store ~uri:"file:///test.el" ~version:1 ~text:"hello";
+  let change : Document.content_change = { range = None; text = "world" } in
+  (* Sequential version 1 → 2 — should succeed with no warning *)
+  match
+    Document.apply_changes store ~uri:"file:///test.el" ~version:2 [ change ]
+  with
+  | Ok { warning = None } -> (
+      (* Verify the change was applied *)
+      match Document.get_doc store "file:///test.el" with
+      | Some doc ->
+          Alcotest.(check string) "text updated" "world" doc.text;
+          Alcotest.(check int) "version updated" 2 doc.version
+      | None -> Alcotest.fail "Document not found")
+  | Ok { warning = Some msg } ->
+      Alcotest.fail
+        (Printf.sprintf "Unexpected warning for sequential version: %s" msg)
+  | Error e -> Alcotest.fail (Printf.sprintf "Unexpected error: %s" e)
 
 let () =
   Alcotest.run "document"
@@ -685,5 +743,12 @@ let () =
             test_edit_past_end_clamps;
           Alcotest.test_case "edit past line end clamps" `Quick
             test_edit_past_line_end_clamps;
+        ] );
+      ( "version_gap",
+        [
+          Alcotest.test_case "version gap detected" `Quick
+            test_version_gap_detected;
+          Alcotest.test_case "sequential no warning" `Quick
+            test_version_sequential_no_warning;
         ] );
     ]

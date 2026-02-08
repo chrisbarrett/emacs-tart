@@ -534,7 +534,8 @@ let handle_did_change (server : t) (params : Yojson.Safe.t option) : unit =
         |> List.map Document.content_change_of_json
       in
       match Document.apply_changes server.documents ~uri ~version changes with
-      | Ok () ->
+      | Ok { warning } ->
+          (match warning with Some msg -> Log.info "%s" msg | None -> ());
           Log.debug "Changed document: %s (version %d)" uri version;
           (* Update dependency graph with new document content *)
           (match Document.get_doc server.documents uri with

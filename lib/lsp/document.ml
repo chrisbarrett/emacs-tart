@@ -150,11 +150,20 @@ let apply_single_change (text : string) (change : content_change) :
         in
         Ok (before ^ change.text ^ after)
 
+type apply_result = { warning : string option }
+
 let apply_changes (store : t) ~(uri : string) ~(version : int)
-    (changes : content_change list) : (unit, string) result =
+    (changes : content_change list) : (apply_result, string) result =
   match get_doc store uri with
   | None -> Error (Printf.sprintf "Document not open: %s" uri)
   | Some doc -> (
+      let warning =
+        if version <> doc.version + 1 then
+          Some
+            (Printf.sprintf "Version gap on %s: expected %d, got %d" uri
+               (doc.version + 1) version)
+        else None
+      in
       let rec apply_all text = function
         | [] -> Ok text
         | change :: rest -> (
@@ -165,7 +174,7 @@ let apply_changes (store : t) ~(uri : string) ~(version : int)
       match apply_all doc.text changes with
       | Ok new_text ->
           Hashtbl.replace store uri { uri; version; text = new_text };
-          Ok ()
+          Ok { warning }
       | Error e -> Error e)
 
 (** {1 JSON Parsing} *)
