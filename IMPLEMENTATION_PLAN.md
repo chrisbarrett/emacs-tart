@@ -114,5 +114,5 @@ For `.tart` files: module name from `sig_ast.sig_module`.
 | # | Task | Status |
 |---|------|--------|
 | 1 | Protocol types + capability | Done |
-| 2 | Workspace symbols module | Not started |
+| 2 | Workspace symbols module | Done |
 | 3 | Server wiring + tests | Not started |
