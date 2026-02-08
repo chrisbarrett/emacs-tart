@@ -570,3 +570,23 @@ type workspace_symbol_result = symbol_information list option
 
 val workspace_symbol_result_to_json : workspace_symbol_result -> Yojson.Safe.t
 (** Encode workspace symbol result to JSON *)
+
+(** {1 File Watching} *)
+
+(** File change type as defined by LSP *)
+type file_change_type = Created | Changed | Deleted
+
+type file_event = { fe_uri : string; fe_type : file_change_type }
+(** A file change event *)
+
+type did_change_watched_files_params = { dcwf_changes : file_event list }
+(** Parameters for workspace/didChangeWatchedFiles notification *)
+
+val parse_did_change_watched_files_params :
+  Yojson.Safe.t -> did_change_watched_files_params
+(** Parse didChangeWatchedFiles params from JSON *)
+
+val register_file_watchers_json : id:string -> Yojson.Safe.t
+(** Build the [client/registerCapability] params JSON for registering
+    [workspace/didChangeWatchedFiles] watchers with [**/*.el] and [**/*.tart]
+    glob patterns. The [id] is used as the registration ID. *)

@@ -176,6 +176,19 @@ let write_notification (oc : Out_channel.t) ~(method_ : string)
   in
   write_json oc json
 
+let write_request (oc : Out_channel.t) ~(id : int) ~(method_ : string)
+    ~(params : Yojson.Safe.t) : unit =
+  let json =
+    `Assoc
+      [
+        ("jsonrpc", `String "2.0");
+        ("id", `Int id);
+        ("method", `String method_);
+        ("params", params);
+      ]
+  in
+  write_json oc json
+
 (** {1 Response Helpers} *)
 
 let success_response ~(id : Yojson.Safe.t) ~(result : Yojson.Safe.t) : response

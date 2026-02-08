@@ -77,6 +77,13 @@ val write_notification :
 
     Notifications have no id and expect no response. *)
 
+val write_request :
+  Out_channel.t -> id:int -> method_:string -> params:Yojson.Safe.t -> unit
+(** Write a JSON-RPC request to an output channel.
+
+    Requests have an id and expect a response from the client. Used for
+    server-initiated requests like [client/registerCapability]. *)
+
 (** {1 Response Helpers} *)
 
 val success_response : id:Yojson.Safe.t -> result:Yojson.Safe.t -> response

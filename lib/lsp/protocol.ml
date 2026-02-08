@@ -1341,3 +1341,64 @@ let workspace_symbol_result_to_json (result : workspace_symbol_result) :
   match result with
   | Some symbols -> `List (List.map symbol_information_to_json symbols)
   | None -> `Null
+
+(** {1 File Watching} *)
+
+type file_change_type = Created | Changed | Deleted
+
+let file_change_type_of_int = function
+  | 1 -> Created
+  | 2 -> Changed
+  | 3 -> Deleted
+  | n -> failwith (Printf.sprintf "Unknown file change type: %d" n)
+
+type file_event = { fe_uri : string; fe_type : file_change_type }
+(** A file change event *)
+
+type did_change_watched_files_params = { dcwf_changes : file_event list }
+(** Parameters for workspace/didChangeWatchedFiles notification *)
+
+let parse_did_change_watched_files_params (json : Yojson.Safe.t) :
+    did_change_watched_files_params =
+  let open Yojson.Safe.Util in
+  let changes =
+    json |> member "changes" |> to_list
+    |> List.map (fun change ->
+        {
+          fe_uri = change |> member "uri" |> to_string;
+          fe_type = change |> member "type" |> to_int |> file_change_type_of_int;
+        })
+  in
+  { dcwf_changes = changes }
+
+let register_file_watchers_json ~(id : string) : Yojson.Safe.t =
+  `Assoc
+    [
+      ( "registrations",
+        `List
+          [
+            `Assoc
+              [
+                ("id", `String id);
+                ("method", `String "workspace/didChangeWatchedFiles");
+                ( "registerOptions",
+                  `Assoc
+                    [
+                      ( "watchers",
+                        `List
+                          [
+                            `Assoc
+                              [
+                                ("globPattern", `String "**/*.el");
+                                ("kind", `Int 7);
+                              ];
+                            `Assoc
+                              [
+                                ("globPattern", `String "**/*.tart");
+                                ("kind", `Int 7);
+                              ];
+                          ] );
+                    ] );
+              ];
+          ] );
+    ]
