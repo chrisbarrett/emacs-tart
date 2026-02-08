@@ -104,13 +104,13 @@
 ;; ===========================================================================
 
 ;; (with-case-table TABLE &rest BODY) - use case table during body
-(defun with-case-table (any &rest any) -> any)
+(defun with-case-table (char-table &rest any) -> any)
 
 ;; (with-file-modes MODES &rest BODY) - set default file modes during body
 (defun with-file-modes (int &rest any) -> any)
 
 ;; (with-syntax-table TABLE &rest BODY) - use syntax table during body
-(defun with-syntax-table (any &rest any) -> any)
+(defun with-syntax-table (char-table &rest any) -> any)
 
 ;; (with-eval-after-load FILE &rest BODY) - evaluate body after file loads
 (defun with-eval-after-load ((string | symbol) &rest any) -> nil)
@@ -151,10 +151,14 @@
 (defun evenp (int) -> bool)
 
 ;; (fixnump OBJECT) - test if object is a fixnum
-(defun fixnump (any) -> bool)
+(defun fixnump
+  ((int) -> bool)
+  ((_) -> nil))
 
 ;; (bignump OBJECT) - test if object is a bignum
-(defun bignump (any) -> bool)
+(defun bignump
+  ((int) -> bool)
+  ((_) -> nil))
 
 ;; ===========================================================================
 ;; List accessors (c*r functions)
@@ -234,10 +238,10 @@
 ;; ===========================================================================
 
 ;; (add-hook HOOK FN &optional DEPTH LOCAL) - add function to hook
-(defun add-hook (symbol any &optional int bool) -> nil)
+(defun add-hook (symbol (symbol | (any -> any)) &optional int bool) -> nil)
 
 ;; (remove-hook HOOK FN &optional LOCAL) - remove function from hook
-(defun remove-hook (symbol any &optional bool) -> nil)
+(defun remove-hook (symbol (symbol | (any -> any)) &optional bool) -> nil)
 
 ;; (run-hooks &rest HOOKS) - run multiple hooks
 (defun run-hooks (&rest symbol) -> nil)
@@ -403,7 +407,7 @@
 (defun substitute-command-keys (string &optional bool) -> string)
 
 ;; (kbd KEYS) - convert key description to internal form
-(defun kbd (string) -> any)
+(defun kbd (string) -> (string | (vector any)))
 
 ;; ===========================================================================
 ;; Minibuffer utilities (from subr.el)
@@ -457,7 +461,7 @@
 ;; ===========================================================================
 
 ;; (char-displayable-p CHAR) - test if character can be displayed
-(defun char-displayable-p (int) -> any)
+(defun char-displayable-p (int) -> bool)
 
 ;; (char-resolve-modifiers CHAR) - resolve modifier bits in character
 (defun char-resolve-modifiers (int) -> int)
