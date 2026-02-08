@@ -25,6 +25,7 @@ type t = {
       (** Detected or overridden Emacs version *)
   last_diagnostics : (string, Protocol.diagnostic list) Hashtbl.t;
       (** Last published diagnostics per URI, for deduplication *)
+  worker : Worker.t;  (** Background domain for async type checking *)
 }
 
 module Log = Tart_log.Log
@@ -113,6 +114,7 @@ let create ~ic ~oc () : t =
     module_config;
     emacs_version;
     last_diagnostics = Hashtbl.create 16;
+    worker = Worker.create ();
   }
 
 (** Get the server's current state *)
@@ -213,251 +215,28 @@ let read_file_safe (path : string) : string =
 let range_of_span = Span_conv.range_of_span
 let location_of_span = Span_conv.location_of_span
 
-(** Convert a related location to LSP DiagnosticRelatedInformation.
+(** Publish pre-computed diagnostics for a document.
 
-    Skips locations with dummy spans (used for notes without source locations).
-*)
-let related_info_of_related_location ~(text : string)
-    (rel : Typing.Diagnostic.related_location) :
-    Protocol.diagnostic_related_information option =
-  (* Skip dummy spans - these are notes without specific locations *)
-  if rel.span.start_pos.file = "<generated>" then None
-  else
-    Some
-      {
-        Protocol.location = location_of_span ~text rel.span;
-        message = rel.message;
-      }
-
-(** Convert a Typing.Diagnostic.t to an LSP diagnostic.
-
-    Maps the rich diagnostic structure to LSP format:
-    - Primary span → diagnostic range
-    - Error code → diagnostic code string
-    - Related locations → relatedInformation (skipping dummy spans)
-    - Help suggestions → appended to message with "help: " prefix *)
-let lsp_diagnostic_of_diagnostic ~(text : string) (d : Typing.Diagnostic.t) :
-    Protocol.diagnostic =
-  let severity =
-    match d.severity with
-    | Typing.Diagnostic.Error -> Protocol.Error
-    | Typing.Diagnostic.Warning -> Protocol.Warning
-    | Typing.Diagnostic.Hint -> Protocol.Hint
-  in
-  (* Build the message with help suggestions appended *)
-  let message =
-    match d.help with
-    | [] -> d.message
-    | helps ->
-        let help_lines =
-          List.map (fun h -> "help: " ^ h) helps |> String.concat "\n"
-        in
-        d.message ^ "\n\n" ^ help_lines
-  in
-  (* Convert error code to string *)
-  let code =
-    match d.code with
-    | Some c -> Some (Typing.Diagnostic.error_code_to_string c)
-    | None -> None
-  in
-  (* Convert related locations to LSP format, filtering out dummy spans *)
-  let related_information =
-    List.filter_map (related_info_of_related_location ~text) d.related
-  in
-  {
-    Protocol.range = range_of_span ~text d.span;
-    severity = Some severity;
-    code;
-    message;
-    source = Some "tart";
-    related_information;
-  }
-
-(** Convert a parse error to an LSP diagnostic *)
-let lsp_diagnostic_of_parse_error ~(text : string)
-    (err : Syntax.Read.parse_error) : Protocol.diagnostic =
-  {
-    Protocol.range = range_of_span ~text err.span;
-    severity = Some Protocol.Error;
-    code = None;
-    message = err.message;
-    source = Some "tart";
-    related_information = [];
-  }
-
-(** Convert a signature error to an LSP diagnostic *)
-let lsp_diagnostic_of_sig_error ~(text : string)
-    (err : Sig.Search_path.sig_error) : Protocol.diagnostic =
-  let message =
-    match err.kind with
-    | Sig.Search_path.LexerError msg -> msg
-    | Sig.Search_path.ParseError msg -> msg
-    | Sig.Search_path.ValidationError msg -> msg
-    | Sig.Search_path.IOError msg -> msg
-  in
-  {
-    Protocol.range = range_of_span ~text err.span;
-    severity = Some Protocol.Error;
-    code = None;
-    message;
-    source = Some "tart";
-    related_information = [];
-  }
-
-(** Check a .tart signature file and return LSP diagnostics.
-
-    Validates the signature file for:
-    - Lexer errors (invalid characters)
-    - Parse errors (invalid syntax)
-    - Validation errors (unbound type variables, invalid types) *)
-let check_tart_document (text : string) (uri : string) :
-    Protocol.diagnostic list =
-  let filename = Uri.to_filename uri in
-  let parse_result = Syntax.Read.parse_string ~filename text in
-  (* Check for lexer errors first *)
-  if parse_result.errors <> [] then
-    List.map (lsp_diagnostic_of_parse_error ~text) parse_result.errors
-  else
-    (* Parse the signature *)
-    let basename = Filename.basename filename in
-    let module_name =
-      if Filename.check_suffix basename ".tart" then
-        Filename.chop_suffix basename ".tart"
-      else basename
-    in
-    match Sig.Sig_parser.parse_signature ~module_name parse_result.sexps with
-    | Error errors ->
-        List.map
-          (fun (e : Sig.Sig_parser.parse_error) ->
-            lsp_diagnostic_of_sig_error ~text
-              { path = filename; kind = ParseError e.message; span = e.span })
-          errors
-    | Ok sig_file ->
-        (* Validate the signature *)
-        let validation_errors =
-          Sig.Sig_loader.validate_signature_all sig_file
-        in
-        List.map
-          (fun (e : Sig.Sig_loader.load_error) ->
-            lsp_diagnostic_of_sig_error ~text
-              {
-                path = filename;
-                kind = ValidationError e.message;
-                span = e.span;
-              })
-          validation_errors
-
-(** Try to read the content of a sibling .tart file for cache invalidation.
-
-    Checks the signature tracker first (for open buffers), then falls back to
-    disk. Returns None if the file doesn't exist in either place. *)
-let read_sibling_sig_content ~(sig_tracker : Signature_tracker.t)
-    (filename : string) : string option =
-  let dir = Filename.dirname filename in
-  let basename = Filename.basename filename in
-  let module_name =
-    if Filename.check_suffix basename ".el" then
-      Filename.chop_suffix basename ".el"
-    else basename
-  in
-  let tart_path = Filename.concat dir (module_name ^ ".tart") in
-  (* Check signature tracker first (R3: prefer buffer over disk) *)
-  match Signature_tracker.get_by_path sig_tracker tart_path with
-  | Some content -> Some content
-  | None ->
-      (* Fall back to disk *)
-      if Sys.file_exists tart_path then
-        try
-          let ic = In_channel.open_text tart_path in
-          let content = In_channel.input_all ic in
-          In_channel.close ic;
-          Some content
-        with _ -> None
-      else None
-
-(** Type-check a document and return LSP diagnostics. Returns parse errors if
-    parsing fails, otherwise type errors.
-
-    Uses module-aware type checking with form-level caching to:
-    - Load sibling `.tart` files for signature verification
-    - Load required modules from the search path
-    - Verify implementations match signatures
-    - Cache unchanged forms for incremental updates *)
-let check_document ~(config : Typing.Module_check.config)
-    ~(cache : Form_cache.t) ~(sig_tracker : Signature_tracker.t) (uri : string)
-    (text : string) : Protocol.diagnostic list * Form_cache.check_stats option =
-  let filename = Uri.to_filename uri in
-  (* Enrich config with Package-Requires declared version from document text *)
-  let config =
-    match Sig.Package_header.parse_package_requires text with
-    | Some v ->
-        Log.debug "Package-Requires: emacs %d.%d for %s" v.major v.minor
-          (Filename.basename filename);
-        let core_v : Core.Type_env.emacs_version =
-          { major = v.major; minor = v.minor }
-        in
-        Typing.Module_check.with_declared_version core_v config
-    | None -> config
-  in
-  let parse_result = Syntax.Read.parse_string ~filename text in
-  (* Collect parse errors *)
-  let parse_diagnostics =
-    List.map (lsp_diagnostic_of_parse_error ~text) parse_result.errors
-  in
-  (* If we have sexps, type-check them *)
-  let type_diagnostics, stats =
-    if parse_result.sexps = [] then ([], None)
-    else
-      let sibling_sig_content =
-        read_sibling_sig_content ~sig_tracker filename
-      in
-      let check_result, stats =
-        Form_cache.check_with_cache ~cache ~config ~filename ~uri
-          ~sibling_sig_content parse_result.sexps
-      in
-      let typing_diagnostics =
-        Typing.Module_check.diagnostics_of_result check_result
-      in
-      ( List.map (lsp_diagnostic_of_diagnostic ~text) typing_diagnostics,
-        Some stats )
-  in
-  (parse_diagnostics @ type_diagnostics, stats)
-
-(** Publish diagnostics for a document *)
-let publish_diagnostics (server : t) (uri : string) (version : int option) :
-    unit =
+    Performs version staleness check and deduplication, then writes the
+    notification to the output channel. Called from {!handle_worker_results}
+    when the background domain delivers results. *)
+let publish_diagnostics (server : t) (result : Worker.work_result) : unit =
+  let uri = result.wr_uri in
+  let version = Some result.wr_version in
   match Document.get_doc server.documents uri with
   | None -> ()
   | Some doc -> (
-      (* Version staleness check: if a specific version triggered this check,
-         verify the document hasn't been updated since. Discard stale results. *)
+      (* Version staleness check: if the checked version doesn't match the
+         document's current version, discard stale results. *)
       match version with
       | Some v when v <> doc.version ->
           Log.debug
             "Discarding stale diagnostics for %s (checked v%d, current v%d)" uri
             v doc.version
       | _ ->
-          (* Check file type and use appropriate checker *)
-          let is_tart = Signature_tracker.is_tart_file uri in
-          let diagnostics, stats =
-            if is_tart then
-              (* For .tart files, check signature syntax and validation *)
-              (check_tart_document doc.text uri, None)
-            else
-              (* For .el files, do full type checking *)
-              check_document ~config:server.module_config
-                ~cache:server.form_cache ~sig_tracker:server.signature_tracker
-                uri doc.text
-          in
-          (* Check for dependency cycles (only for .el files) *)
-          let cycle_diagnostics =
-            if is_tart then []
-            else
-              Graph_tracker.check_cycles_for_module server.dependency_graph ~uri
-          in
-          let all_diagnostics = diagnostics @ cycle_diagnostics in
+          let all_diagnostics = result.wr_diagnostics in
           (* Log cache statistics at debug level *)
-          (match stats with
+          (match result.wr_stats with
           | Some s ->
               Log.debug "Type check: %d forms total, %d cached, %d re-checked"
                 s.total_forms s.cached_forms s.checked_forms
@@ -482,17 +261,48 @@ let publish_diagnostics (server : t) (uri : string) (version : int option) :
               ~method_:"textDocument/publishDiagnostics"
               ~params:(Protocol.publish_diagnostics_params_to_json params)))
 
+(** Process completed results from the background worker and publish
+    diagnostics. Called from the main loop when the worker signal pipe is
+    readable. *)
+let handle_worker_results (server : t) : unit =
+  let results = Worker.poll_results server.worker in
+  List.iter (publish_diagnostics server) results
+
+(** Block until the worker has no more pending or in-flight items, publishing
+    results as they arrive. Called before shutdown to ensure all enqueued
+    diagnostics are delivered. *)
+let drain_worker (server : t) : unit =
+  let worker_fd = Worker.signal_fd server.worker in
+  while Worker.pending_count server.worker > 0 do
+    (* Wait for the signal pipe with a short timeout to avoid deadlock *)
+    let readable, _, _ = Unix.select [ worker_fd ] [] [] 0.1 in
+    if readable <> [] then handle_worker_results server
+  done;
+  (* One final poll to pick up any results posted between the last
+     pending_count check and now *)
+  handle_worker_results server
+
 (** Schedule a diagnostic check for the given URI.
 
-    Looks up the document and publishes diagnostics with the current version.
-    This centralises the five call sites that were previously inlining
-    [publish_diagnostics server uri (Some doc.version)]. In a future task this
-    helper will enqueue work items for a background domain instead of running
-    the check synchronously. *)
+    Enqueues a work item to the background worker domain. The main loop will
+    pick up the result via [handle_worker_results] once the check completes. *)
 let schedule_check (server : t) (uri : string) : unit =
   match Document.get_doc server.documents uri with
   | None -> ()
-  | Some doc -> publish_diagnostics server uri (Some doc.version)
+  | Some doc ->
+      let item : Worker.work_item =
+        {
+          uri;
+          text = doc.text;
+          version = doc.version;
+          config = server.module_config;
+          cache = server.form_cache;
+          sig_tracker = server.signature_tracker;
+          dependency_graph = server.dependency_graph;
+          is_tart = Signature_tracker.is_tart_file uri;
+        }
+      in
+      Worker.enqueue server.worker item
 
 (** Apply user settings, rebuilding the module config and rechecking all open
     documents.
@@ -1610,24 +1420,102 @@ let process_message (server : t) (msg : Rpc.message) :
       (* Notification - no response *)
       dispatch_notification server msg
 
-(** Main server loop *)
+(** Main server loop.
+
+    Reads messages from stdin with a background reader thread while the main
+    thread multiplexes between stdin messages and worker results using
+    [Unix.select].
+
+    Architecture:
+    - A reader thread pulls JSON-RPC messages from the In_channel and pushes
+      them through a pipe as serialised JSON.
+    - The main loop uses [Unix.select] on the reader pipe + worker signal pipe,
+      avoiding the In_channel buffering vs. select deadlock. *)
 let run (server : t) : int =
   Log.info "Starting LSP server";
+  let worker_fd = Worker.signal_fd server.worker in
+  (* We use the simple approach: read stdin synchronously, but between
+     messages always poll for worker results. The trade-off is that
+     worker results are delivered only when the next stdin message
+     arrives, or at shutdown. To keep responsiveness, we also poll on
+     just the worker pipe with a short timeout when waiting for stdin. *)
+
+  (* Use a mutex-protected queue to pass messages from a reader thread
+     and a pipe to signal the main select loop. *)
+  let msg_pipe_r, msg_pipe_w = Unix.pipe () in
+  let msg_queue : (Rpc.message, Rpc.read_error) result Queue.t =
+    Queue.create ()
+  in
+  let msg_mutex = Mutex.create () in
+
+  (* Reader thread: pulls messages from In_channel and pushes them *)
+  let _reader_thread =
+    Thread.create
+      (fun () ->
+        let running = ref true in
+        while !running do
+          let msg = Rpc.read_message server.ic in
+          Mutex.lock msg_mutex;
+          Queue.push msg msg_queue;
+          Mutex.unlock msg_mutex;
+          (* Wake the main select loop *)
+          let _n = Unix.write msg_pipe_w (Bytes.of_string "m") 0 1 in
+          match msg with Error _ -> running := false | Ok _ -> ()
+        done)
+      ()
+  in
+
+  (* Drain signal bytes from message pipe *)
+  let drain_msg_pipe () =
+    let buf = Bytes.create 64 in
+    (try
+       Unix.set_nonblock msg_pipe_r;
+       while Unix.read msg_pipe_r buf 0 64 > 0 do
+         ()
+       done
+     with
+     | Unix.Unix_error (Unix.EAGAIN, _, _)
+     | Unix.Unix_error (Unix.EWOULDBLOCK, _, _)
+     ->
+       ());
+    Unix.clear_nonblock msg_pipe_r
+  in
+
   let rec loop () =
-    match Rpc.read_message server.ic with
-    | Error Rpc.Eof -> (
-        Log.info "Client disconnected";
-        (* Exit with code 1 if we didn't get proper shutdown *)
-        match server.state with
-        | ShuttingDown -> 0
-        | _ -> 1)
-    | Error err ->
-        Log.info "Read error: %s" (Rpc.read_error_to_string err);
-        1
-    | Ok msg -> (
-        Log.debug "Received: %s" (Rpc.message_to_string msg);
-        match process_message server msg with
-        | `Continue -> loop ()
-        | `Exit code -> code)
+    let readable, _, _ = Unix.select [ msg_pipe_r; worker_fd ] [] [] (-1.0) in
+    (* Process worker results *)
+    if List.mem worker_fd readable then handle_worker_results server;
+    (* Process stdin messages *)
+    if List.mem msg_pipe_r readable then (
+      drain_msg_pipe ();
+      Mutex.lock msg_mutex;
+      let msgs = Queue.fold (fun acc m -> m :: acc) [] msg_queue in
+      Queue.clear msg_queue;
+      Mutex.unlock msg_mutex;
+      process_queued_msgs (List.rev msgs))
+    else loop ()
+  and process_queued_msgs = function
+    | [] -> loop ()
+    | msg :: rest -> (
+        match msg with
+        | Error Rpc.Eof -> (
+            Log.info "Client disconnected";
+            match server.state with ShuttingDown -> finish 0 | _ -> finish 1)
+        | Error err ->
+            Log.info "Read error: %s" (Rpc.read_error_to_string err);
+            finish 1
+        | Ok msg -> (
+            Log.debug "Received: %s" (Rpc.message_to_string msg);
+            match process_message server msg with
+            | `Continue -> process_queued_msgs rest
+            | `Exit code -> finish code))
+  and finish code =
+    (* Drain any remaining worker results before shutdown so all pending
+       diagnostics are published. *)
+    drain_worker server;
+    Worker.shutdown server.worker;
+    Unix.close msg_pipe_r;
+    Unix.close msg_pipe_w;
+    code
   in
   loop ()

@@ -40,5 +40,7 @@ val emacs_version : t -> Sig.Emacs_version.version option
 val run : t -> int
 (** Run the server's main loop.
 
-    Reads messages, dispatches to handlers, sends responses. Returns exit code
-    (0 for clean shutdown, 1 for error). *)
+    Reads messages from stdin via a reader thread, dispatches to handlers, sends
+    responses, and publishes diagnostics from the background type-check worker.
+    Uses [Unix.select] to multiplex the reader pipe and worker signal pipe.
+    Returns exit code (0 for clean shutdown, 1 for error). *)

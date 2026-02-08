@@ -2,6 +2,8 @@
  (name lsp)
  (public_name tart.lsp)
  (libraries
+  unix
+  threads.posix
   yojson
   tart.syntax
   tart.core

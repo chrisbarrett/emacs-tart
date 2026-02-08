@@ -173,9 +173,10 @@ let test_diagnostics_on_open () =
         (first |> member "source" |> to_string)
 
 let test_diagnostics_on_change () =
-  (* Open a file with one error, then change to have a different error.
-     Use expressions that produce distinct diagnostic sets so dedup doesn't
-     suppress. *)
+  (* Open a file with valid code, then change to have a parse error.
+     The worker may coalesce rapid enqueues, so we check the *final*
+     diagnostics match the final document state rather than requiring
+     multiple notifications. *)
   let result =
     run_initialized_session
       [
@@ -191,8 +192,19 @@ let test_diagnostics_on_change () =
       result.messages
   in
   Alcotest.(check bool)
-    "has multiple diagnostics notifications" true
-    (List.length diag_notifications >= 2)
+    "has diagnostics notifications" true
+    (List.length diag_notifications >= 1);
+  (* The last diagnostics should reflect the parse error in the final text *)
+  match find_last_diagnostics ~uri:"file:///test.el" result.messages with
+  | None -> Alcotest.fail "No publishDiagnostics found"
+  | Some last ->
+      let open Yojson.Safe.Util in
+      let diagnostics =
+        last |> member "params" |> member "diagnostics" |> to_list
+      in
+      Alcotest.(check bool)
+        "final diagnostics contain parse error" true
+        (List.length diagnostics > 0)
 
 let test_diagnostics_cleared_on_close () =
   let result =
@@ -1804,7 +1816,9 @@ let test_identical_diagnostics_suppressed () =
 
 let test_diagnostics_republished_after_reopen () =
   (* Close a document with errors, then reopen it. The dedup cache should not
-     suppress the diagnostics on reopen — the cache was cleared on close. *)
+     suppress the diagnostics on reopen — the cache was cleared on close.
+     The worker may coalesce, so check the final state rather than exact
+     notification count. *)
   let result =
     run_initialized_session
       [
@@ -1825,10 +1839,11 @@ let test_diagnostics_republished_after_reopen () =
         json |> member "params" |> member "uri" |> to_string = "file:///test.el")
       diag_notifications
   in
-  (* Expect 3: first open (errors), close (empty), second open (errors again) *)
-  Alcotest.(check int)
-    "diagnostics republished after reopen" 3
-    (List.length uri_notifications);
+  (* At least 2 notifications: close (empty) + second open (errors).
+     The first open's diagnostics may be coalesced away by the worker. *)
+  Alcotest.(check bool)
+    "diagnostics republished after reopen" true
+    (List.length uri_notifications >= 2);
   (* Last notification should have diagnostics (not empty) *)
   match List.rev uri_notifications with
   | last :: _ ->
