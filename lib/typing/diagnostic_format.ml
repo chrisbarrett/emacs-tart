@@ -49,16 +49,35 @@ let error_type_of_code = function
   | Some UndefinedVariable -> "UNDEFINED VARIABLE"
   | Some UndefinedFunction -> "UNDEFINED FUNCTION"
   | Some UndefinedType -> "UNDEFINED TYPE"
+  | Some UndefinedField -> "UNDEFINED FIELD"
   | Some MissingSignature -> "MISSING SIGNATURE"
+  | Some AmbiguousName -> "AMBIGUOUS NAME"
   | Some WrongArity -> "WRONG ARITY"
   | Some WrongTypeArity -> "WRONG TYPE ARITY"
+  | Some MissingRequired -> "MISSING REQUIRED"
+  | Some UnknownKeyword -> "UNKNOWN KEYWORD"
   | Some KindMismatch -> "KIND MISMATCH"
   | Some InfiniteKind -> "INFINITE KIND"
   | Some TypeArityMismatch -> "TYPE ARITY MISMATCH"
   | Some NonExhaustive -> "NON-EXHAUSTIVE MATCH"
+  | Some RedundantPattern -> "REDUNDANT PATTERN"
+  | Some InvalidPattern -> "INVALID PATTERN"
+  | Some MissingField -> "MISSING FIELD"
+  | Some DuplicateField -> "DUPLICATE FIELD"
+  | Some RowMismatch -> "ROW MISMATCH"
+  | Some ClosedRowExtra -> "CLOSED ROW EXTRA"
+  | Some UnionMismatch -> "UNION MISMATCH"
+  | Some EmptyUnion -> "EMPTY UNION"
+  | Some AmbiguousVariant -> "AMBIGUOUS VARIANT"
+  | Some MissingModule -> "MISSING MODULE"
+  | Some CircularDependency -> "CIRCULAR DEPENDENCY"
   | Some SignatureNotFound -> "SIGNATURE NOT FOUND"
+  | Some FileNotFound -> "FILE NOT FOUND"
+  | Some FileUnreadable -> "FILE UNREADABLE"
+  | Some ParseError -> "PARSE ERROR"
   | Some VersionTooLow -> "VERSION TOO LOW"
   | Some VersionTooHigh -> "VERSION TOO HIGH"
+  | Some VersionParseFailed -> "VERSION PARSE FAILED"
   | Some RedundantGuard -> "REDUNDANT GUARD"
   | None -> "ERROR"
 
@@ -169,16 +188,35 @@ let to_string_human (d : Diagnostic.t) : string =
     | Some UndefinedVariable
     | Some UndefinedFunction
     | Some UndefinedType
+    | Some UndefinedField
     | Some MissingSignature
+    | Some AmbiguousName
     | Some WrongArity
     | Some WrongTypeArity
+    | Some MissingRequired
+    | Some UnknownKeyword
     | Some KindMismatch
     | Some InfiniteKind
     | Some TypeArityMismatch
     | Some NonExhaustive
+    | Some RedundantPattern
+    | Some InvalidPattern
+    | Some MissingField
+    | Some DuplicateField
+    | Some RowMismatch
+    | Some ClosedRowExtra
+    | Some UnionMismatch
+    | Some EmptyUnion
+    | Some AmbiguousVariant
+    | Some MissingModule
+    | Some CircularDependency
     | Some SignatureNotFound
+    | Some FileNotFound
+    | Some FileUnreadable
+    | Some ParseError
     | Some VersionTooLow
     | Some VersionTooHigh
+    | Some VersionParseFailed
     | Some RedundantGuard
     | None ->
         Source_excerpt.NoContext

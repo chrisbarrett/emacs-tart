@@ -43,21 +43,43 @@ type error_code =
   | UndefinedVariable  (** E0100: Variable not in scope *)
   | UndefinedFunction  (** E0101: Function not in scope *)
   | UndefinedType  (** E0102: Type not in scope *)
+  | UndefinedField  (** E0103: Field not present in record type *)
   | MissingSignature  (** E0104: Function defined but not in .tart file *)
+  | AmbiguousName  (** E0105: Name resolves to multiple definitions *)
   (* Arity Errors (E0200–E0299) *)
   | WrongArity  (** E0200: Wrong number of arguments to function *)
   | WrongTypeArity  (** E0201: Wrong number of type arguments *)
+  | MissingRequired  (** E0202: Required argument not provided *)
+  | UnknownKeyword  (** E0203: Unknown keyword argument *)
   (* Kind Errors (E0300–E0399) *)
   | KindMismatch  (** E0300: Expected one kind, found another *)
   | InfiniteKind  (** E0301: Occurs check failed at kind level *)
   | TypeArityMismatch  (** E0302: Type constructor applied to wrong # of args *)
   (* Pattern Errors (E0400–E0499) *)
   | NonExhaustive  (** E0400: Pattern match doesn't cover all cases *)
+  | RedundantPattern  (** E0401: Pattern can never match *)
+  | InvalidPattern  (** E0402: Pattern syntax not supported *)
+  (* Row/Record Errors (E0500–E0599) *)
+  | MissingField  (** E0500: Required field not present *)
+  | DuplicateField  (** E0501: Field specified multiple times *)
+  | RowMismatch  (** E0502: Row types cannot be unified *)
+  | ClosedRowExtra  (** E0503: Extra field in closed row type *)
+  (* Union Errors (E0600–E0699) *)
+  | UnionMismatch  (** E0600: Value does not match any union variant *)
+  | EmptyUnion  (** E0601: Type subtraction produced empty type *)
+  | AmbiguousVariant  (** E0602: Cannot determine which union variant *)
   (* Module Errors (E0700–E0799) *)
+  | MissingModule  (** E0700: Required module not found *)
+  | CircularDependency  (** E0701: Modules have circular require *)
   | SignatureNotFound  (** E0702: No .tart signature file found *)
+  (* File Errors (E0800–E0899) *)
+  | FileNotFound  (** E0800: Source file does not exist *)
+  | FileUnreadable  (** E0801: Source file cannot be read *)
+  | ParseError  (** E0802: Syntax error in source file *)
   (* Version Errors (E0900–E0999) *)
   | VersionTooLow  (** E0900: Feature requires newer Emacs version *)
   | VersionTooHigh  (** E0901: Feature removed in declared Emacs version *)
+  | VersionParseFailed  (** E0902: Package-Requires parse error *)
   | RedundantGuard  (** E0903: Feature guard is redundant given min version *)
 
 (** Format an error code for display. *)
@@ -75,21 +97,43 @@ let error_code_to_string = function
   | UndefinedVariable -> "E0100"
   | UndefinedFunction -> "E0101"
   | UndefinedType -> "E0102"
+  | UndefinedField -> "E0103"
   | MissingSignature -> "E0104"
+  | AmbiguousName -> "E0105"
   (* Arity Errors *)
   | WrongArity -> "E0200"
   | WrongTypeArity -> "E0201"
+  | MissingRequired -> "E0202"
+  | UnknownKeyword -> "E0203"
   (* Kind Errors *)
   | KindMismatch -> "E0300"
   | InfiniteKind -> "E0301"
   | TypeArityMismatch -> "E0302"
   (* Pattern Errors *)
   | NonExhaustive -> "E0400"
+  | RedundantPattern -> "E0401"
+  | InvalidPattern -> "E0402"
+  (* Row/Record Errors *)
+  | MissingField -> "E0500"
+  | DuplicateField -> "E0501"
+  | RowMismatch -> "E0502"
+  | ClosedRowExtra -> "E0503"
+  (* Union Errors *)
+  | UnionMismatch -> "E0600"
+  | EmptyUnion -> "E0601"
+  | AmbiguousVariant -> "E0602"
   (* Module Errors *)
+  | MissingModule -> "E0700"
+  | CircularDependency -> "E0701"
   | SignatureNotFound -> "E0702"
+  (* File Errors *)
+  | FileNotFound -> "E0800"
+  | FileUnreadable -> "E0801"
+  | ParseError -> "E0802"
   (* Version Errors *)
   | VersionTooLow -> "E0900"
   | VersionTooHigh -> "E0901"
+  | VersionParseFailed -> "E0902"
   | RedundantGuard -> "E0903"
 
 (** Severity level for diagnostics *)

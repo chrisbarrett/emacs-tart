@@ -1208,21 +1208,43 @@ let test_error_code_stability () =
   check "UndefinedVariable" "E0100" Diag.UndefinedVariable;
   check "UndefinedFunction" "E0101" Diag.UndefinedFunction;
   check "UndefinedType" "E0102" Diag.UndefinedType;
+  check "UndefinedField" "E0103" Diag.UndefinedField;
   check "MissingSignature" "E0104" Diag.MissingSignature;
+  check "AmbiguousName" "E0105" Diag.AmbiguousName;
   (* Arity Errors E0200–E0299 *)
   check "WrongArity" "E0200" Diag.WrongArity;
   check "WrongTypeArity" "E0201" Diag.WrongTypeArity;
+  check "MissingRequired" "E0202" Diag.MissingRequired;
+  check "UnknownKeyword" "E0203" Diag.UnknownKeyword;
   (* Kind Errors E0300–E0399 *)
   check "KindMismatch" "E0300" Diag.KindMismatch;
   check "InfiniteKind" "E0301" Diag.InfiniteKind;
   check "TypeArityMismatch" "E0302" Diag.TypeArityMismatch;
   (* Pattern Errors E0400–E0499 *)
   check "NonExhaustive" "E0400" Diag.NonExhaustive;
+  check "RedundantPattern" "E0401" Diag.RedundantPattern;
+  check "InvalidPattern" "E0402" Diag.InvalidPattern;
+  (* Row/Record Errors E0500–E0599 *)
+  check "MissingField" "E0500" Diag.MissingField;
+  check "DuplicateField" "E0501" Diag.DuplicateField;
+  check "RowMismatch" "E0502" Diag.RowMismatch;
+  check "ClosedRowExtra" "E0503" Diag.ClosedRowExtra;
+  (* Union Errors E0600–E0699 *)
+  check "UnionMismatch" "E0600" Diag.UnionMismatch;
+  check "EmptyUnion" "E0601" Diag.EmptyUnion;
+  check "AmbiguousVariant" "E0602" Diag.AmbiguousVariant;
   (* Module Errors E0700–E0799 *)
+  check "MissingModule" "E0700" Diag.MissingModule;
+  check "CircularDependency" "E0701" Diag.CircularDependency;
   check "SignatureNotFound" "E0702" Diag.SignatureNotFound;
+  (* File Errors E0800–E0899 *)
+  check "FileNotFound" "E0800" Diag.FileNotFound;
+  check "FileUnreadable" "E0801" Diag.FileUnreadable;
+  check "ParseError" "E0802" Diag.ParseError;
   (* Version Errors E0900–E0999 *)
   check "VersionTooLow" "E0900" Diag.VersionTooLow;
-  check "VersionTooHigh" "E0901" Diag.VersionTooHigh
+  check "VersionTooHigh" "E0901" Diag.VersionTooHigh;
+  check "VersionParseFailed" "E0902" Diag.VersionParseFailed
 
 (** Verify that every constructor is covered by the stability test. This
     function uses an exhaustive match — if a new constructor is added and not
@@ -1231,10 +1253,14 @@ let _exhaustiveness_guard (code : Diag.error_code) =
   match code with
   | TypeMismatch | BranchMismatch | InfiniteType | SignatureMismatch
   | AnnotationMismatch | ReturnMismatch | UnificationFailed | DisjointEquality
-  | UndefinedVariable | UndefinedFunction | UndefinedType | MissingSignature
-  | WrongArity | WrongTypeArity | KindMismatch | InfiniteKind
-  | TypeArityMismatch | NonExhaustive | SignatureNotFound | VersionTooLow
-  | VersionTooHigh | RedundantGuard ->
+  | UndefinedVariable | UndefinedFunction | UndefinedType | UndefinedField
+  | MissingSignature | AmbiguousName | WrongArity | WrongTypeArity
+  | MissingRequired | UnknownKeyword | KindMismatch | InfiniteKind
+  | TypeArityMismatch | NonExhaustive | RedundantPattern | InvalidPattern
+  | MissingField | DuplicateField | RowMismatch | ClosedRowExtra | UnionMismatch
+  | EmptyUnion | AmbiguousVariant | MissingModule | CircularDependency
+  | SignatureNotFound | FileNotFound | FileUnreadable | ParseError
+  | VersionTooLow | VersionTooHigh | VersionParseFailed | RedundantGuard ->
       ()
 
 (* =============================================================================

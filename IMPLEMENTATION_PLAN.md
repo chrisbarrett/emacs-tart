@@ -587,7 +587,7 @@ Tasks 1–3, 5–6, 8–9, 11, 13–16 are independent and can proceed in parall
 | #  | Task                            | Spec | New files                 | Key changed files                                | Status      |
 | -- | ------------------------------- | ---- | ------------------------- | ------------------------------------------------ | ----------- |
 | 1  | Debug-level unification tracing | 72   | —                         | `unify.ml`                                       | Done        |
-| 2  | Reserved error codes            | 73   | —                         | `diagnostic.ml`, `diagnostic.mli`                | Not started |
+| 2  | Reserved error codes            | 73   | —                         | `diagnostic.ml`, `diagnostic.mli`                | Done        |
 | 3  | Info severity                   | 73   | —                         | `diagnostic.ml`, `diagnostic.mli`, `server.ml`   | Not started |
 | 4  | Clause diagnostics in LSP       | 73   | —                         | `diagnostic.ml`, `diagnostic.mli`, `server.ml`   | Not started |
 | 5  | Workspace-wide find-references  | 71   | —                         | `server.ml`                                      | Not started |
