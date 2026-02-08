@@ -401,7 +401,7 @@ any order, interleaved with other work.
 | 5 | Request cancellation | — | `server.ml` | Stub only |
 | 6 | Debounce & coalescing | — | `server.ml` | Partial (dedup + version staleness done; timer debounce needs task 4) |
 | 7 | Progress reporting | — | `server.ml`, `protocol.ml` | Not started |
-| 8 | File watching | — | `server.ml`, `protocol.ml` | Not started |
+| 8 | File watching | — | `server.ml`, `protocol.ml` | Done |
 | 9 | Workspace configuration | — | `server.ml`, `protocol.ml` | Not started |
 | 10 | Document save events | — | `server.ml`, `protocol.ml` | Done |
 | 11 | Workspace symbols | `lib/lsp/workspace_symbols.{ml,mli}` | `server.ml`, `protocol.ml` | Done |

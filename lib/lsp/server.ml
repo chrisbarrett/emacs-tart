@@ -194,6 +194,15 @@ let with_sexp_at_cursor ~(doc : Document.doc) ~(uri : string) ~(line : int)
         Ok not_found
     | Some ctx -> f parse_result ctx
 
+(** Read a file's contents, returning [""] on any error. *)
+let read_file_safe (path : string) : string =
+  try
+    let ic = In_channel.open_text path in
+    let content = In_channel.input_all ic in
+    In_channel.close ic;
+    content
+  with _ -> ""
+
 let range_of_span = Span_conv.range_of_span
 let location_of_span = Span_conv.location_of_span
 
@@ -902,6 +911,29 @@ let find_type_definition_in_signatures ~(config : Typing.Module_check.config)
             | None -> None)
         | None -> None)
 
+(** Search for a definition by prefix-based module lookup.
+
+    Tries each prefix of the symbol name (e.g. ["foo-bar"; "foo"] for
+    "foo-bar-baz") against the search path, returning the first match. *)
+let find_definition_by_prefix ~(config : Typing.Module_check.config)
+    (name : string) : Syntax.Location.span option =
+  let prefixes = Typing.Module_check.extract_module_prefixes name in
+  let search_path = Typing.Module_check.search_path config in
+  let rec try_prefixes = function
+    | [] -> None
+    | prefix :: rest -> (
+        match Sig.Search_path.find_signature search_path prefix with
+        | Some sig_path -> (
+            match Sig.Search_path.parse_signature_file sig_path with
+            | Some sig_ast -> (
+                match find_definition_in_signature name sig_ast with
+                | Some span -> Some span
+                | None -> try_prefixes rest)
+            | None -> try_prefixes rest)
+        | None -> try_prefixes rest)
+  in
+  try_prefixes prefixes
+
 (** Look up a symbol definition in loaded signatures.
 
     Searches the sibling .tart file and any signatures from the search path.
@@ -921,49 +953,8 @@ let find_definition_in_signatures ~(config : Typing.Module_check.config)
   | Some sig_ast -> (
       match find_definition_in_signature name sig_ast with
       | Some span -> Some span
-      | None ->
-          (* Not in sibling, try signatures from requires and autoloads.
-             For now, we try prefix-based lookup similar to autoloads. *)
-          let prefixes = Typing.Module_check.extract_module_prefixes name in
-          let rec try_prefixes = function
-            | [] -> None
-            | prefix :: rest -> (
-                match
-                  Sig.Search_path.find_signature
-                    (Typing.Module_check.search_path config)
-                    prefix
-                with
-                | Some sig_path -> (
-                    match Sig.Search_path.parse_signature_file sig_path with
-                    | Some sig_ast -> (
-                        match find_definition_in_signature name sig_ast with
-                        | Some span -> Some span
-                        | None -> try_prefixes rest)
-                    | None -> try_prefixes rest)
-                | None -> try_prefixes rest)
-          in
-          try_prefixes prefixes)
-  | None ->
-      (* No sibling .tart, try prefix-based lookup *)
-      let prefixes = Typing.Module_check.extract_module_prefixes name in
-      let rec try_prefixes = function
-        | [] -> None
-        | prefix :: rest -> (
-            match
-              Sig.Search_path.find_signature
-                (Typing.Module_check.search_path config)
-                prefix
-            with
-            | Some sig_path -> (
-                match Sig.Search_path.parse_signature_file sig_path with
-                | Some sig_ast -> (
-                    match find_definition_in_signature name sig_ast with
-                    | Some span -> Some span
-                    | None -> try_prefixes rest)
-                | None -> try_prefixes rest)
-            | None -> try_prefixes rest)
-      in
-      try_prefixes prefixes
+      | None -> find_definition_by_prefix ~config name)
+  | None -> find_definition_by_prefix ~config name
 
 (** Extract the symbol name from an S-expression, if it is a symbol. *)
 let symbol_name_of_sexp (sexp : Syntax.Sexp.t) : string option =
@@ -1031,15 +1022,7 @@ let handle_definition (server : t) (params : Yojson.Safe.t option) :
           | Some span ->
               Log.debug "Found definition in signature at %s:%d:%d"
                 span.start_pos.file span.start_pos.line span.start_pos.col;
-              (* Read the target file's text for UTF-16 conversion *)
-              let target_text =
-                try
-                  let ic = In_channel.open_text span.start_pos.file in
-                  let content = In_channel.input_all ic in
-                  In_channel.close ic;
-                  content
-                with _ -> ""
-              in
+              let target_text = read_file_safe span.start_pos.file in
               let loc = location_of_span ~text:target_text span in
               Ok (Protocol.definition_result_to_json (Protocol.DefLocation loc))
           | None ->
@@ -1094,15 +1077,7 @@ let handle_type_definition (server : t) (params : Yojson.Safe.t option) :
           | Some span ->
               Log.debug "Found type definition at %s:%d:%d" span.start_pos.file
                 span.start_pos.line span.start_pos.col;
-              (* Read the target file's text for UTF-16 conversion *)
-              let target_text =
-                try
-                  let ic = In_channel.open_text span.start_pos.file in
-                  let content = In_channel.input_all ic in
-                  In_channel.close ic;
-                  content
-                with _ -> ""
-              in
+              let target_text = read_file_safe span.start_pos.file in
               let loc = location_of_span ~text:target_text span in
               Ok (Protocol.definition_result_to_json (Protocol.DefLocation loc))
           | None ->
