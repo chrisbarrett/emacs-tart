@@ -173,12 +173,16 @@ let test_diagnostics_on_open () =
         (first |> member "source" |> to_string)
 
 let test_diagnostics_on_change () =
+  (* Open a file with one error, then change to have a different error.
+     Use expressions that produce distinct diagnostic sets so dedup doesn't
+     suppress. *)
   let result =
     run_initialized_session
       [
         did_open_msg ~uri:"file:///test.el" ~text:"(+ 1 2)" ();
-        did_change_full_msg ~uri:"file:///test.el" ~version:2
-          ~text:"(+ 1 \"bad\")" ();
+        (* Change to an expression with a parse error — different diagnostics *)
+        did_change_full_msg ~uri:"file:///test.el" ~version:2 ~text:"(+ 1 2) ("
+          ();
       ]
   in
   Alcotest.(check int) "exit code" 0 result.exit_code;
@@ -1674,6 +1678,78 @@ let test_edit_past_end_succeeds () =
          point of this test *)
       ()
 
+(** {1 Diagnostic Dedup Tests} *)
+
+let test_identical_diagnostics_suppressed () =
+  (* Open a file with an error, then send a whitespace-only change that
+     doesn't alter the diagnostic set. The server should suppress the
+     second (identical) publishDiagnostics notification. *)
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el" ~text:"(+ 1 \"hello\")" ();
+        (* Append a trailing newline — same diagnostics *)
+        did_change_full_msg ~uri:"file:///test.el" ~version:2
+          ~text:"(+ 1 \"hello\")\n" ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  let diag_notifications =
+    find_all_notifications ~method_:"textDocument/publishDiagnostics"
+      result.messages
+  in
+  let uri_notifications =
+    List.filter
+      (fun json ->
+        let open Yojson.Safe.Util in
+        json |> member "params" |> member "uri" |> to_string = "file:///test.el")
+      diag_notifications
+  in
+  (* Should have exactly 1: the initial open publishes diagnostics, but the
+     second change produces identical diagnostics and is suppressed. *)
+  Alcotest.(check int)
+    "only one publishDiagnostics for identical set" 1
+    (List.length uri_notifications)
+
+let test_diagnostics_republished_after_reopen () =
+  (* Close a document with errors, then reopen it. The dedup cache should not
+     suppress the diagnostics on reopen — the cache was cleared on close. *)
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el" ~text:"(+ 1 \"hello\")" ();
+        did_close_msg ~uri:"file:///test.el" ();
+        did_open_msg ~uri:"file:///test.el" ~text:"(+ 1 \"hello\")" ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  let diag_notifications =
+    find_all_notifications ~method_:"textDocument/publishDiagnostics"
+      result.messages
+  in
+  let uri_notifications =
+    List.filter
+      (fun json ->
+        let open Yojson.Safe.Util in
+        json |> member "params" |> member "uri" |> to_string = "file:///test.el")
+      diag_notifications
+  in
+  (* Expect 3: first open (errors), close (empty), second open (errors again) *)
+  Alcotest.(check int)
+    "diagnostics republished after reopen" 3
+    (List.length uri_notifications);
+  (* Last notification should have diagnostics (not empty) *)
+  match List.rev uri_notifications with
+  | last :: _ ->
+      let open Yojson.Safe.Util in
+      let diagnostics =
+        last |> member "params" |> member "diagnostics" |> to_list
+      in
+      Alcotest.(check bool)
+        "last notification has diagnostics" true
+        (List.length diagnostics > 0)
+  | [] -> Alcotest.fail "No diagnostics notifications"
+
 (** {1 Test Registration} *)
 
 let () =
@@ -1827,6 +1903,13 @@ let () =
         [
           Alcotest.test_case "edit past end succeeds" `Quick
             test_edit_past_end_succeeds;
+        ] );
+      ( "diagnostic-dedup",
+        [
+          Alcotest.test_case "identical diagnostics suppressed" `Quick
+            test_identical_diagnostics_suppressed;
+          Alcotest.test_case "republished after reopen" `Quick
+            test_diagnostics_republished_after_reopen;
         ] );
       ( "utf16-positions",
         [

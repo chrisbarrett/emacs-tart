@@ -249,6 +249,30 @@ type publish_diagnostics_params = {
   diagnostics : diagnostic list;
 }
 
+let position_equal (a : position) (b : position) : bool =
+  a.line = b.line && a.character = b.character
+
+let range_equal (a : range) (b : range) : bool =
+  position_equal a.start b.start && position_equal a.end_ b.end_
+
+let location_equal (a : location) (b : location) : bool =
+  a.uri = b.uri && range_equal a.range b.range
+
+let diagnostic_related_information_equal (a : diagnostic_related_information)
+    (b : diagnostic_related_information) : bool =
+  location_equal a.location b.location && a.message = b.message
+
+let diagnostic_equal (a : diagnostic) (b : diagnostic) : bool =
+  range_equal a.range b.range
+  && a.severity = b.severity && a.code = b.code && a.message = b.message
+  && a.source = b.source
+  && List.length a.related_information = List.length b.related_information
+  && List.for_all2 diagnostic_related_information_equal a.related_information
+       b.related_information
+
+let diagnostics_equal (a : diagnostic list) (b : diagnostic list) : bool =
+  List.length a = List.length b && List.for_all2 diagnostic_equal a b
+
 let diagnostic_severity_to_int = function
   | Error -> 1
   | Warning -> 2

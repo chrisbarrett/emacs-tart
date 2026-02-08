@@ -141,10 +141,10 @@ let test_did_change_incremental () =
     (did_open_msg ~uri:"file:///change.el" ~text:"(defun foo () t)" ());
   (* Consume initial diagnostics *)
   let _initial = Subprocess_client.recv_all client ~timeout_ms:3000 in
-  (* Send a full-document change *)
+  (* Send a full-document change that introduces an error *)
   Subprocess_client.send client
     (did_change_full_msg ~uri:"file:///change.el" ~version:2
-       ~text:"(defun bar () nil)" ());
+       ~text:"(defun bar () nil) (" ());
   let msgs = Subprocess_client.recv_all client ~timeout_ms:3000 in
   let diag = find_diagnostics ~uri:"file:///change.el" msgs in
   Alcotest.(check bool)

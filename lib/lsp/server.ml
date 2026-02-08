@@ -21,6 +21,8 @@ type t = {
       (** Module check config, computed once at server creation *)
   emacs_version : Sig.Emacs_version.version option;
       (** Detected Emacs version, if any *)
+  last_diagnostics : (string, Protocol.diagnostic list) Hashtbl.t;
+      (** Last published diagnostics per URI, for deduplication *)
 }
 
 module Log = Tart_log.Log
@@ -100,6 +102,7 @@ let create ~ic ~oc () : t =
     signature_tracker = Signature_tracker.create ();
     module_config;
     emacs_version;
+    last_diagnostics = Hashtbl.create 16;
   }
 
 (** Get the server's current state *)
@@ -400,21 +403,30 @@ let publish_diagnostics (server : t) (uri : string) (version : int option) :
         else Graph_tracker.check_cycles_for_module server.dependency_graph ~uri
       in
       let all_diagnostics = diagnostics @ cycle_diagnostics in
-      let params : Protocol.publish_diagnostics_params =
-        { uri; version; diagnostics = all_diagnostics }
-      in
       (* Log cache statistics at debug level *)
       (match stats with
       | Some s ->
           Log.debug "Type check: %d forms total, %d cached, %d re-checked"
             s.total_forms s.cached_forms s.checked_forms
       | None -> ());
-      Log.debug "Publishing %d diagnostics for %s"
-        (List.length all_diagnostics)
-        uri;
-      Rpc.write_notification server.oc
-        ~method_:"textDocument/publishDiagnostics"
-        ~params:(Protocol.publish_diagnostics_params_to_json params)
+      (* Suppress identical diagnostics *)
+      let dominated =
+        match Hashtbl.find_opt server.last_diagnostics uri with
+        | Some prev -> Protocol.diagnostics_equal prev all_diagnostics
+        | None -> false
+      in
+      if dominated then Log.debug "Suppressing identical diagnostics for %s" uri
+      else (
+        Hashtbl.replace server.last_diagnostics uri all_diagnostics;
+        let params : Protocol.publish_diagnostics_params =
+          { uri; version; diagnostics = all_diagnostics }
+        in
+        Log.debug "Publishing %d diagnostics for %s"
+          (List.length all_diagnostics)
+          uri;
+        Rpc.write_notification server.oc
+          ~method_:"textDocument/publishDiagnostics"
+          ~params:(Protocol.publish_diagnostics_params_to_json params))
 
 (** Handle initialize request *)
 let handle_initialize (server : t) (params : Yojson.Safe.t option) :
@@ -599,6 +611,7 @@ let handle_did_close (server : t) (params : Yojson.Safe.t option) : unit =
       Graph_tracker.close_document server.dependency_graph ~uri;
       Log.debug "Closed document: %s" uri;
       (* Clear diagnostics for the closed document *)
+      Hashtbl.remove server.last_diagnostics uri;
       let params : Protocol.publish_diagnostics_params =
         { uri; version = None; diagnostics = [] }
       in

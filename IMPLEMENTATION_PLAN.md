@@ -1,102 +1,126 @@
-# Implementation Plan — Incremental Sync Recovery
+# Implementation Plan — Diagnostic Deduplication & Version Staleness
 
-> Source: [Spec 71](./specs/71-lsp-server.md) §Robustness, task 3 from
-> [specs/IMPLEMENTATION_PLAN.md](./specs/IMPLEMENTATION_PLAN.md)
+> Source: [Spec 71](./specs/71-lsp-server.md) §Robustness, task 6 (partial)
+> from [specs/IMPLEMENTATION_PLAN.md](./specs/IMPLEMENTATION_PLAN.md)
 
 ## Problem
 
-When a client sends an incremental `didChange` with positions outside the
-document bounds, `apply_single_change` returns `Error` and the server logs the
-message but otherwise ignores the edit. The document is left at the old version,
-creating silent state divergence — every subsequent incremental edit is applied
-against stale text, compounding the problem.
+Every `didChange` notification immediately triggers `publish_diagnostics` →
+`check_document`, and during invalidation cascades, every dependent is also
+re-checked and published. This produces two classes of waste:
 
-The spec calls for two defences:
+1. **Identical diagnostics re-published.** If an edit doesn't change the
+   diagnostic set (e.g., adding whitespace, editing a comment), the same
+   diagnostics are sent to the client, causing redundant rendering.
 
-1. **Clamp** out-of-range edits to the document bounds so the edit can still be
-   applied (best-effort).
-2. **Detect version gaps** (incoming version ≠ stored version + 1) and log at
-   info level so operators can diagnose sync issues.
+2. **Stale diagnostics for superseded versions.** During rapid edits the server
+   re-checks a document whose version has already been superseded by a later
+   `didChange`. The resulting diagnostics are for stale text and may flash
+   incorrect ranges before the next check completes.
+
+The spec (§Robustness) calls for:
+
+- **Identical diagnostics suppression:** compare the new diagnostic set against
+  the last published set per URI; suppress if identical.
+- **Version staleness check:** before publishing, verify the document version
+  hasn't advanced; discard stale results silently.
+
+These are achievable without concurrency (Task 4) and directly improve
+correctness.
 
 ## Current State
 
-- `position_to_offset` returns `None` for out-of-range positions.
-- `apply_single_change` propagates the `None` as `Error "... out of range"`.
-- `apply_changes` returns the first `Error` immediately.
-- `handle_did_change` in `server.ml` logs the error at info and drops the edit.
-- No version gap detection exists.
+- `publish_diagnostics` always writes the notification to the output channel.
+- No record of previously published diagnostics exists.
+- No version check between the version that triggered the check and the current
+  document version.
+- The `didChange` handler calls `publish_diagnostics server uri (Some version)`
+  synchronously, so in the single-threaded model staleness only arises during
+  invalidation cascades (dependent re-checks happen in sequence while the main
+  URI may have received another `didChange` between iterations). However,
+  installing the version check now prepares for Task 4 (concurrent requests).
 
 ## Tasks
 
-### Task 1 — Clamp out-of-range positions in `position_to_offset`
+### Task 1 — Track last-published diagnostics per URI
 
-**Files:** `lib/lsp/document.ml`, `lib/lsp/document.mli`
+**Files:** `lib/lsp/server.ml`, `lib/lsp/server.mli`
 
-Change `position_to_offset` to never return `None`. When a position is past the
-end of the document, clamp to `String.length text`. When a character offset is
-past the end of a line, clamp to the line's byte length.
+Add a `last_diagnostics` hashtable to `server.t`:
 
-- Make `position_to_offset` return `int` (not `int option`).
-- Update `apply_single_change` to remove the `None` match arms.
-- Remove the `Error "Start/End position out of range"` paths — they become
-  unreachable.
-- Keep the `start > end` guard (invalid range).
-- Keep the `end_offset > String.length text` guard but change it to clamp
-  `end_offset` to `String.length text` rather than error.
-
-**Tests:** Add to `test/lsp/document_test.ml`:
-
-- `test_edit_past_end_clamps`: edit with start/end beyond document end → clamps
-  to end, inserts at end.
-- `test_edit_past_line_end_clamps`: character offset beyond line length → clamps
-  to line end.
-
-### Task 2 — Detect version gaps
-
-**Files:** `lib/lsp/document.ml`, `lib/lsp/server.ml`
-
-Add version gap detection to `apply_changes`:
-
-- Before applying, check if `version <> doc.version + 1`. If so, return an
-  enriched result that signals the gap (e.g., a separate variant or a warning
-  string alongside `Ok`).
-- In `handle_did_change`, log at info level when a version gap is detected:
-  `"Version gap on %s: expected %d, got %d"`.
-- Still apply the changes regardless — version gaps are informational, not
-  blocking.
-
-Design the return type as:
 ```ocaml
-type apply_result = {
-  warning : string option;
-}
+last_diagnostics : (string, Protocol.diagnostic list) Hashtbl.t;
 ```
 
-Change `apply_changes` to return `(apply_result, string) result`. The `Ok`
-variant carries an optional warning string. `handle_did_change` logs the warning
-when present.
+In `publish_diagnostics`, before writing the notification:
 
-**Tests:** Add to `test/lsp/document_test.ml`:
+1. Look up the previous diagnostic list for this URI.
+2. Compare against the new list. If structurally equal, skip the write and log
+   at debug level: `"Suppressing identical diagnostics for %s"`.
+3. Otherwise, store the new list and write the notification.
 
-- `test_version_gap_detected`: apply changes with version jump (1 → 5) →
-  succeeds with warning.
-- `test_version_sequential_no_warning`: apply changes with version 1 → 2 → no
-  warning.
+For the `didClose` case (publishing empty diagnostics), also update the cache.
 
-### Task 3 — End-to-end integration test
+Structural equality requires a comparison function for `Protocol.diagnostic`.
+Add `diagnostic_equal : diagnostic -> diagnostic -> bool` and
+`diagnostics_equal : diagnostic list -> diagnostic list -> bool` to
+`protocol.{ml,mli}`. Compare all fields: range, severity, code, message,
+source, related_information.
 
-**Files:** `test/lsp/server_test.ml`
+**Tests:** Add to `test/lsp/server_test.ml`:
 
-Add an end-to-end test in the server test suite:
+- `test_identical_diagnostics_suppressed`: open a file with errors, note the
+  diagnostics, send a whitespace-only didChange that doesn't alter the
+  diagnostic set → verify only one `publishDiagnostics` notification is sent
+  (not two).
 
-- `test_edit_past_end_succeeds`: send `didChange` with a range extending past
-  document bounds → no crash, subsequent operations (hover, diagnostics) still
-  work on the clamped document.
+### Task 2 — Version staleness check
+
+**Files:** `lib/lsp/server.ml`
+
+Before publishing diagnostics in `publish_diagnostics`, check that the document
+version matches the version that was passed:
+
+```ocaml
+match Document.get_doc server.documents uri with
+| Some doc when version = Some doc.version -> (* proceed *)
+| Some doc when version = None -> (* proceed — didClose/explicit cases *)
+| _ -> (* version mismatch — discard *)
+```
+
+If stale, log at debug level: `"Discarding stale diagnostics for %s (checked
+v%d, current v%d)"` and skip the write.
+
+This is most impactful during the invalidation cascade in `handle_did_change`:
+while re-checking dependent documents, if the *triggering* document receives
+another `didChange`, the dependents' versions haven't changed but the results
+are based on outdated signature/graph state. The version check on the dependent
+itself won't catch this, but it correctly catches the simpler case where the
+same URI is re-checked.
+
+**Tests:** Add to `test/lsp/server_test.ml`:
+
+- `test_stale_diagnostics_discarded`: this is hard to test in the current
+  synchronous model. Instead, verify the positive case: after a sequence of
+  opens and changes, the final diagnostics match the final document state. This
+  confirms the version plumbing is correct.
+
+### Task 3 — Clear last-published diagnostics on close
+
+**Files:** `lib/lsp/server.ml`
+
+In `handle_did_close`, after publishing the empty diagnostic set, remove the URI
+from `last_diagnostics`. This prevents stale entries from accumulating for
+documents that are no longer open.
+
+**Tests:** This is covered by existing `test_diagnostics_cleared_on_close`. Add
+an assertion that reopening the same file re-publishes diagnostics (i.e., the
+dedup cache doesn't suppress them after reopen).
 
 ## Checklist
 
 | # | Task | Status |
 |---|------|--------|
-| 1 | Clamp out-of-range positions | Done |
-| 2 | Detect version gaps | Done |
-| 3 | End-to-end integration test | Done |
+| 1 | Track last-published diagnostics per URI | Done |
+| 2 | Version staleness check | Not started |
+| 3 | Clear last-published diagnostics on close | Not started |

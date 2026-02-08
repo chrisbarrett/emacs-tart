@@ -127,6 +127,14 @@ type publish_diagnostics_params = {
 }
 (** Parameters for textDocument/publishDiagnostics notification *)
 
+val diagnostic_equal : diagnostic -> diagnostic -> bool
+(** Structural equality for diagnostics.
+
+    Compares range, severity, code, message, source, and related_information. *)
+
+val diagnostics_equal : diagnostic list -> diagnostic list -> bool
+(** Structural equality for diagnostic lists (order-sensitive). *)
+
 val publish_diagnostics_params_to_json :
   publish_diagnostics_params -> Yojson.Safe.t
 (** Encode publishDiagnostics params to JSON *)
