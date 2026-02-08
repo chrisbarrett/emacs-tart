@@ -120,6 +120,6 @@ instead of `true`.
 
 | # | Task | Status |
 |---|------|--------|
-| 1 | Protocol types and capability change | Not started |
+| 1 | Protocol types and capability change | Done |
 | 2 | Expose is_builtin_symbol and add handler | Not started |
 | 3 | Tests | Not started |

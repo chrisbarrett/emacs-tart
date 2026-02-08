@@ -47,6 +47,9 @@ type text_document_sync_options = {
 }
 (** Text document sync options *)
 
+type rename_options = { prepare_provider : bool }
+(** Rename options with optional prepare support *)
+
 type server_capabilities = {
   text_document_sync : text_document_sync_options option;
   hover_provider : bool;
@@ -56,7 +59,7 @@ type server_capabilities = {
   document_symbol_provider : bool;
   completion_provider : bool;
   signature_help_provider : bool;
-  rename_provider : bool;
+  rename_provider : rename_options option;
   folding_range_provider : bool;
   semantic_tokens_provider : bool;
   inlay_hint_provider : bool;
@@ -248,8 +251,13 @@ let server_capabilities_to_json (caps : server_capabilities) : Yojson.Safe.t =
     else fields
   in
   let fields =
-    if caps.rename_provider then ("renameProvider", `Bool true) :: fields
-    else fields
+    match caps.rename_provider with
+    | Some opts ->
+        let rename_json =
+          `Assoc [ ("prepareProvider", `Bool opts.prepare_provider) ]
+        in
+        ("renameProvider", rename_json) :: fields
+    | None -> fields
   in
   let fields =
     if caps.folding_range_provider then
@@ -1107,6 +1115,42 @@ type rename_result = workspace_edit option
 
 let rename_result_to_json (result : rename_result) : Yojson.Safe.t =
   match result with Some edit -> workspace_edit_to_json edit | None -> `Null
+
+(** {1 Prepare Rename} *)
+
+type prepare_rename_params = {
+  prp_text_document : string;
+  prp_position : position;
+}
+(** Prepare rename request params *)
+
+let parse_prepare_rename_params (json : Yojson.Safe.t) : prepare_rename_params =
+  let open Yojson.Safe.Util in
+  let text_document =
+    json |> member "textDocument" |> member "uri" |> to_string
+  in
+  let pos_json = json |> member "position" in
+  let position =
+    {
+      line = pos_json |> member "line" |> to_int;
+      character = pos_json |> member "character" |> to_int;
+    }
+  in
+  { prp_text_document = text_document; prp_position = position }
+
+type prepare_rename_result = { prr_range : range; prr_placeholder : string }
+(** Prepare rename result with range and placeholder *)
+
+let prepare_rename_result_to_json (result : prepare_rename_result option) :
+    Yojson.Safe.t =
+  match result with
+  | Some r ->
+      `Assoc
+        [
+          ("range", range_to_json r.prr_range);
+          ("placeholder", `String r.prr_placeholder);
+        ]
+  | None -> `Null
 
 (** {1 Folding Ranges} *)
 

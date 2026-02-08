@@ -1433,9 +1433,10 @@ let test_rename_capability_advertised () =
       let result = json |> member "result" in
       let caps = result |> member "capabilities" in
       let rename_provider = caps |> member "renameProvider" in
-      Alcotest.(check bool)
-        "renameProvider is true" true
-        (rename_provider = `Bool true)
+      let prepare_provider =
+        rename_provider |> member "prepareProvider" |> to_bool
+      in
+      Alcotest.(check bool) "prepareProvider is true" true prepare_provider
 
 let test_rename_not_on_symbol () =
   let result =

@@ -135,7 +135,7 @@ let capabilities () : Protocol.server_capabilities =
     document_symbol_provider = true;
     completion_provider = true;
     signature_help_provider = true;
-    rename_provider = true;
+    rename_provider = Some { prepare_provider = true };
     folding_range_provider = true;
     semantic_tokens_provider = true;
     inlay_hint_provider = true;

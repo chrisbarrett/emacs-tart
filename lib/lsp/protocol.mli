@@ -43,6 +43,9 @@ type text_document_sync_options = {
 }
 (** Text document sync options *)
 
+type rename_options = { prepare_provider : bool }
+(** Rename options with optional prepare support *)
+
 type server_capabilities = {
   text_document_sync : text_document_sync_options option;
   hover_provider : bool;
@@ -52,7 +55,7 @@ type server_capabilities = {
   document_symbol_provider : bool;
   completion_provider : bool;
   signature_help_provider : bool;
-  rename_provider : bool;
+  rename_provider : rename_options option;
   folding_range_provider : bool;
   semantic_tokens_provider : bool;
   inlay_hint_provider : bool;
@@ -418,6 +421,24 @@ type rename_result = workspace_edit option
 
 val rename_result_to_json : rename_result -> Yojson.Safe.t
 (** Encode rename result to JSON *)
+
+(** {1 Prepare Rename} *)
+
+type prepare_rename_params = {
+  prp_text_document : string;
+  prp_position : position;
+}
+(** Prepare rename request params *)
+
+val parse_prepare_rename_params : Yojson.Safe.t -> prepare_rename_params
+(** Parse prepare rename params from JSON *)
+
+type prepare_rename_result = { prr_range : range; prr_placeholder : string }
+(** Prepare rename result with range and placeholder *)
+
+val prepare_rename_result_to_json :
+  prepare_rename_result option -> Yojson.Safe.t
+(** Encode prepare rename result to JSON *)
 
 (** {1 Folding Ranges} *)
 
