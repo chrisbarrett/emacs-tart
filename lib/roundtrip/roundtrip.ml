@@ -127,7 +127,7 @@ let check_file_with_emacs ?(timeout_ms = 5000) path =
 
 let cache_key path =
   let binary = Cache.Content_cache.binary_path () in
-  Cache.Content_cache.compute_key ~binary ~input:path
+  Cache.Content_cache.compute_key ~binary ~input:path ~deps:[]
 
 let check_file_cached ?(no_cache = false) path =
   if not no_cache then begin

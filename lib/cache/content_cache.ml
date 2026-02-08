@@ -26,10 +26,13 @@ let read_file_contents path =
     Some (Bytes.unsafe_to_string buf)
   with _ -> None
 
-let compute_key ~binary ~input =
+let compute_key ~binary ~input ~deps =
   match (read_file_contents binary, read_file_contents input) with
   | Some b, Some i ->
-      let combined = b ^ i in
+      let dep_contents =
+        List.sort String.compare deps |> List.filter_map read_file_contents
+      in
+      let combined = String.concat "" (b :: i :: dep_contents) in
       Digest.to_hex (Digest.string combined)
   | _ -> ""
 

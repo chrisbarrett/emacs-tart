@@ -11,9 +11,12 @@ val cache_dir : unit -> string
 val binary_path : unit -> string
 (** Path to the currently running executable, resolved through symlinks. *)
 
-val compute_key : binary:string -> input:string -> string
-(** [compute_key ~binary ~input] hashes the contents of both files and returns a
-    32-char hex string. Returns empty string if either file is unreadable. *)
+val compute_key : binary:string -> input:string -> deps:string list -> string
+(** [compute_key ~binary ~input ~deps] hashes the contents of [binary], [input],
+    and all [deps] files, returning a 32-char hex string. [deps] are sorted
+    before hashing for deterministic keys regardless of enumeration order.
+    Returns empty string if [binary] or [input] is unreadable; unreadable deps
+    are skipped. *)
 
 val store : key:string -> data:string -> unit
 (** [store ~key ~data] writes [data] to the cache under [key]. Creates

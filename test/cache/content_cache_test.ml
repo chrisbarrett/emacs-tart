@@ -78,30 +78,30 @@ let binary_path_tests =
 let test_compute_key_deterministic () =
   let binary = write_temp_file "binary_contents" in
   let input = write_temp_file "input_contents" in
-  let k1 = Cache.compute_key ~binary ~input in
-  let k2 = Cache.compute_key ~binary ~input in
+  let k1 = Cache.compute_key ~binary ~input ~deps:[] in
+  let k2 = Cache.compute_key ~binary ~input ~deps:[] in
   Alcotest.(check string) "same inputs = same key" k1 k2
 
 let test_compute_key_different_inputs () =
   let binary = write_temp_file "binary_contents" in
   let input1 = write_temp_file "input_a" in
   let input2 = write_temp_file "input_b" in
-  let k1 = Cache.compute_key ~binary ~input:input1 in
-  let k2 = Cache.compute_key ~binary ~input:input2 in
+  let k1 = Cache.compute_key ~binary ~input:input1 ~deps:[] in
+  let k2 = Cache.compute_key ~binary ~input:input2 ~deps:[] in
   Alcotest.(check bool) "different inputs = different keys" true (k1 <> k2)
 
 let test_compute_key_different_binary () =
   let binary1 = write_temp_file "binary_a" in
   let binary2 = write_temp_file "binary_b" in
   let input = write_temp_file "input_contents" in
-  let k1 = Cache.compute_key ~binary:binary1 ~input in
-  let k2 = Cache.compute_key ~binary:binary2 ~input in
+  let k1 = Cache.compute_key ~binary:binary1 ~input ~deps:[] in
+  let k2 = Cache.compute_key ~binary:binary2 ~input ~deps:[] in
   Alcotest.(check bool) "different binaries = different keys" true (k1 <> k2)
 
 let test_compute_key_hex_string () =
   let binary = write_temp_file "binary" in
   let input = write_temp_file "input" in
-  let key = Cache.compute_key ~binary ~input in
+  let key = Cache.compute_key ~binary ~input ~deps:[] in
   Alcotest.(check int) "32-char hex" 32 (String.length key);
   let is_hex c = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') in
   String.iter
@@ -112,8 +112,44 @@ let test_compute_key_hex_string () =
 let test_compute_key_unreadable () =
   let binary = "/nonexistent/path/binary" in
   let input = write_temp_file "input" in
-  let key = Cache.compute_key ~binary ~input in
+  let key = Cache.compute_key ~binary ~input ~deps:[] in
   Alcotest.(check string) "unreadable binary = empty key" "" key
+
+let test_compute_key_deps_change_key () =
+  let binary = write_temp_file "binary_contents" in
+  let input = write_temp_file "input_contents" in
+  let dep = write_temp_file "dep_contents" in
+  let k_no_deps = Cache.compute_key ~binary ~input ~deps:[] in
+  let k_with_deps = Cache.compute_key ~binary ~input ~deps:[ dep ] in
+  Alcotest.(check bool) "deps change key" true (k_no_deps <> k_with_deps)
+
+let test_compute_key_deps_deterministic () =
+  let binary = write_temp_file "binary_contents" in
+  let input = write_temp_file "input_contents" in
+  let dep1 = write_temp_file "dep_a" in
+  let dep2 = write_temp_file "dep_b" in
+  let k1 = Cache.compute_key ~binary ~input ~deps:[ dep1; dep2 ] in
+  let k2 = Cache.compute_key ~binary ~input ~deps:[ dep2; dep1 ] in
+  Alcotest.(check string) "dep order doesn't matter" k1 k2
+
+let test_compute_key_different_deps_differ () =
+  let binary = write_temp_file "binary_contents" in
+  let input = write_temp_file "input_contents" in
+  let dep_a = write_temp_file "dep_version_1" in
+  let dep_b = write_temp_file "dep_version_2" in
+  let k1 = Cache.compute_key ~binary ~input ~deps:[ dep_a ] in
+  let k2 = Cache.compute_key ~binary ~input ~deps:[ dep_b ] in
+  Alcotest.(check bool) "different deps = different keys" true (k1 <> k2)
+
+let test_compute_key_unreadable_dep_skipped () =
+  let binary = write_temp_file "binary_contents" in
+  let input = write_temp_file "input_contents" in
+  let dep = write_temp_file "dep_contents" in
+  let k1 = Cache.compute_key ~binary ~input ~deps:[ dep ] in
+  let k2 =
+    Cache.compute_key ~binary ~input ~deps:[ dep; "/nonexistent/dep/file" ]
+  in
+  Alcotest.(check string) "unreadable dep skipped" k1 k2
 
 let compute_key_tests =
   [
@@ -122,6 +158,10 @@ let compute_key_tests =
     ("different binaries differ", `Quick, test_compute_key_different_binary);
     ("32-char hex string", `Quick, test_compute_key_hex_string);
     ("unreadable file = empty key", `Quick, test_compute_key_unreadable);
+    ("deps change key", `Quick, test_compute_key_deps_change_key);
+    ("dep order doesn't matter", `Quick, test_compute_key_deps_deterministic);
+    ("different deps differ", `Quick, test_compute_key_different_deps_differ);
+    ("unreadable dep skipped", `Quick, test_compute_key_unreadable_dep_skipped);
   ]
 
 (* =============================================================================
