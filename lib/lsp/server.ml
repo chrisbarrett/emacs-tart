@@ -704,13 +704,17 @@ let handle_hover (server : t) (params : Yojson.Safe.t option) :
       let hover_params = Protocol.parse_hover_params json in
       let uri = hover_params.text_document in
       let line = hover_params.position.line in
-      let col = hover_params.position.character in
-      Log.debug "Hover request at %s:%d:%d" uri line col;
+      Log.debug "Hover request at %s:%d:%d" uri line
+        hover_params.position.character;
       match Document.get_doc server.documents uri with
       | None ->
           Log.debug "Document not found: %s" uri;
           Ok `Null
       | Some doc -> (
+          let col =
+            Document.utf16_col_to_byte ~text:doc.text ~line
+              ~col:hover_params.position.character
+          in
           let filename = filename_of_uri uri in
           let parse_result = Syntax.Read.parse_string ~filename doc.text in
           if parse_result.sexps = [] then (
@@ -889,13 +893,17 @@ let handle_definition (server : t) (params : Yojson.Safe.t option) :
       let def_params = Protocol.parse_definition_params json in
       let uri = def_params.def_text_document in
       let line = def_params.def_position.line in
-      let col = def_params.def_position.character in
-      Log.debug "Definition request at %s:%d:%d" uri line col;
+      Log.debug "Definition request at %s:%d:%d" uri line
+        def_params.def_position.character;
       match Document.get_doc server.documents uri with
       | None ->
           Log.debug "Document not found: %s" uri;
           Ok (Protocol.definition_result_to_json Protocol.DefNull)
       | Some doc -> (
+          let col =
+            Document.utf16_col_to_byte ~text:doc.text ~line
+              ~col:def_params.def_position.character
+          in
           let filename = filename_of_uri uri in
           let parse_result = Syntax.Read.parse_string ~filename doc.text in
           if parse_result.sexps = [] then (
@@ -978,13 +986,17 @@ let handle_references (server : t) (params : Yojson.Safe.t option) :
       let ref_params = Protocol.parse_references_params json in
       let uri = ref_params.ref_text_document in
       let line = ref_params.ref_position.line in
-      let col = ref_params.ref_position.character in
-      Log.debug "References request at %s:%d:%d" uri line col;
+      Log.debug "References request at %s:%d:%d" uri line
+        ref_params.ref_position.character;
       match Document.get_doc server.documents uri with
       | None ->
           Log.debug "Document not found: %s" uri;
           Ok (Protocol.references_result_to_json None)
       | Some doc -> (
+          let col =
+            Document.utf16_col_to_byte ~text:doc.text ~line
+              ~col:ref_params.ref_position.character
+          in
           let filename = filename_of_uri uri in
           let parse_result = Syntax.Read.parse_string ~filename doc.text in
           if parse_result.sexps = [] then (
@@ -1043,6 +1055,23 @@ let handle_code_action (server : t) (params : Yojson.Safe.t option) :
           Log.debug "Document not found: %s" uri;
           Ok (Protocol.code_action_result_to_json (Some []))
       | Some doc ->
+          let to_byte line col =
+            Document.utf16_col_to_byte ~text:doc.text ~line ~col
+          in
+          let range : Protocol.range =
+            {
+              start =
+                {
+                  line = range.start.line;
+                  character = to_byte range.start.line range.start.character;
+                };
+              end_ =
+                {
+                  line = range.end_.line;
+                  character = to_byte range.end_.line range.end_.character;
+                };
+            }
+          in
           Code_action.handle
             ~range_of_span:(range_of_span ~text:doc.text)
             ~config:server.module_config ~uri ~doc_text:doc.text ~range ~context
@@ -1201,13 +1230,17 @@ let handle_completion (server : t) (params : Yojson.Safe.t option) :
       let cp_params = Protocol.parse_completion_params json in
       let uri = cp_params.cp_text_document in
       let line = cp_params.cp_position.line in
-      let col = cp_params.cp_position.character in
-      Log.debug "Completion request at %s:%d:%d" uri line col;
+      Log.debug "Completion request at %s:%d:%d" uri line
+        cp_params.cp_position.character;
       match Document.get_doc server.documents uri with
       | None ->
           Log.debug "Document not found: %s" uri;
           Ok (Protocol.completion_result_to_json None)
       | Some doc ->
+          let col =
+            Document.utf16_col_to_byte ~text:doc.text ~line
+              ~col:cp_params.cp_position.character
+          in
           Completion.handle ~config:server.module_config ~uri ~doc_text:doc.text
             ~line ~col)
 
@@ -1228,13 +1261,17 @@ let handle_signature_help (server : t) (params : Yojson.Safe.t option) :
       let sh_params = Protocol.parse_signature_help_params json in
       let uri = sh_params.shp_text_document in
       let line = sh_params.shp_position.line in
-      let col = sh_params.shp_position.character in
-      Log.debug "Signature help request at %s:%d:%d" uri line col;
+      Log.debug "Signature help request at %s:%d:%d" uri line
+        sh_params.shp_position.character;
       match Document.get_doc server.documents uri with
       | None ->
           Log.debug "Document not found: %s" uri;
           Ok (Protocol.signature_help_result_to_json None)
       | Some doc ->
+          let col =
+            Document.utf16_col_to_byte ~text:doc.text ~line
+              ~col:sh_params.shp_position.character
+          in
           Signature_help.handle ~config:server.module_config ~uri
             ~doc_text:doc.text ~line ~col)
 
@@ -1259,14 +1296,18 @@ let handle_rename (server : t) (params : Yojson.Safe.t option) :
       let rename_params = Protocol.parse_rename_params json in
       let uri = rename_params.rp_text_document in
       let line = rename_params.rp_position.line in
-      let col = rename_params.rp_position.character in
       let new_name = rename_params.rp_new_name in
-      Log.debug "Rename request at %s:%d:%d -> '%s'" uri line col new_name;
+      Log.debug "Rename request at %s:%d:%d -> '%s'" uri line
+        rename_params.rp_position.character new_name;
       match Document.get_doc server.documents uri with
       | None ->
           Log.debug "Document not found: %s" uri;
           Ok (Protocol.rename_result_to_json None)
       | Some doc -> (
+          let col =
+            Document.utf16_col_to_byte ~text:doc.text ~line
+              ~col:rename_params.rp_position.character
+          in
           let filename = filename_of_uri uri in
           let parse_result = Syntax.Read.parse_string ~filename doc.text in
           if parse_result.sexps = [] then (

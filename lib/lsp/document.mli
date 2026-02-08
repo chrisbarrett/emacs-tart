@@ -51,6 +51,12 @@ val line_text_at : string -> int -> string option
     [line_number] from [text], or [None] if [line_number] is out of range. The
     returned string does not include the trailing newline. *)
 
+val utf16_col_to_byte : text:string -> line:int -> col:int -> int
+(** [utf16_col_to_byte ~text ~line ~col] converts a UTF-16 character offset
+    [col] on 0-based [line] to a byte offset, using the document [text] for line
+    lookup. Returns [col] unchanged if the line is not found (graceful fallback
+    for out-of-range lines). *)
+
 (** {1 Incremental Changes} *)
 
 type content_change = {

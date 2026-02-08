@@ -92,6 +92,11 @@ let line_text_at (text : string) (line_number : int) : string option =
     in
     if len = 0 && line_number = 0 then Some "" else find_line 0 0
 
+let utf16_col_to_byte ~(text : string) ~(line : int) ~(col : int) : int =
+  match line_text_at text line with
+  | Some line_text -> byte_offset_of_utf16 ~line_text ~utf16_offset:col
+  | None -> col
+
 (** {1 Incremental Changes} *)
 
 type content_change = { range : range option; text : string }

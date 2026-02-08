@@ -1472,6 +1472,146 @@ let test_rename_has_correct_uri () =
       let uri = text_doc |> member "uri" |> to_string in
       Alcotest.(check string) "uri matches" "file:///my-project/test.el" uri
 
+(** {1 UTF-16 Position Tests} *)
+
+(** Diagnostics for code with CJK characters report UTF-16 positions, not byte
+    offsets. Line 1 is [(+ 日本語 "bad")] where ["bad"] starts at byte 13 but
+    UTF-16 offset 7. *)
+let test_diagnostic_cjk_positions () =
+  let text = "(defvar 日本語 42)\n(+ 日本語 \"bad\")" in
+  let result =
+    run_initialized_session [ did_open_msg ~uri:"file:///test.el" ~text () ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_diagnostics ~uri:"file:///test.el" result.messages with
+  | None -> Alcotest.fail "No publishDiagnostics notification found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let params = json |> member "params" in
+      let diagnostics = params |> member "diagnostics" |> to_list in
+      Alcotest.(check bool) "has diagnostics" true (List.length diagnostics > 0);
+      (* Find a diagnostic on line 1 (the error line) *)
+      let line1_diags =
+        List.filter
+          (fun d ->
+            let range = d |> member "range" in
+            let start = range |> member "start" in
+            start |> member "line" |> to_int = 1)
+          diagnostics
+      in
+      Alcotest.(check bool)
+        "has diagnostic on line 1" true
+        (List.length line1_diags > 0);
+      (* The diagnostic character positions should be in UTF-16 code units.
+         "bad" starts at UTF-16 offset 7, not byte offset 13. *)
+      let diag = List.hd line1_diags in
+      let range = diag |> member "range" in
+      let start_char =
+        range |> member "start" |> member "character" |> to_int
+      in
+      Alcotest.(check bool)
+        "start character is UTF-16 (<=7), not byte offset (13)" true
+        (start_char <= 7)
+
+(** Diagnostics for code with 4-byte emoji report UTF-16 positions using
+    surrogate-pair counting. Line 0 is [(+ 🎉 "bad")] where ["bad"] starts at
+    byte 8 but UTF-16 offset 6. *)
+let test_diagnostic_emoji_positions () =
+  let text = "(+ \xF0\x9F\x8E\x89 \"bad\")" in
+  let result =
+    run_initialized_session [ did_open_msg ~uri:"file:///test.el" ~text () ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_diagnostics ~uri:"file:///test.el" result.messages with
+  | None -> Alcotest.fail "No publishDiagnostics notification found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let params = json |> member "params" in
+      let diagnostics = params |> member "diagnostics" |> to_list in
+      Alcotest.(check bool) "has diagnostics" true (List.length diagnostics > 0);
+      let diag = List.hd diagnostics in
+      let range = diag |> member "range" in
+      let start_char =
+        range |> member "start" |> member "character" |> to_int
+      in
+      (* 🎉 is 4 bytes / 2 UTF-16 code units. "bad" starts at byte 8 but
+         UTF-16 offset 6. A byte-based implementation would report 8. *)
+      Alcotest.(check bool)
+        "start character is UTF-16 (<=6), not byte offset (8)" true
+        (start_char <= 6)
+
+(** Hover on a literal after CJK characters returns a range with UTF-16
+    positions. [(defvar 日本語 42)] — [42] starts at byte 18, UTF-16 12. *)
+let test_hover_cjk_range () =
+  let text = "(defvar \xe6\x97\xa5\xe6\x9c\xac\xe8\xaa\x9e 42)" in
+  (* Hover at UTF-16 character 12, which is byte 18 (the '4' of 42). *)
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el" ~text ();
+        hover_msg ~id:2 ~uri:"file:///test.el" ~line:0 ~character:12 ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "No hover response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      Alcotest.(check bool) "result is not null" true (result <> `Null);
+      let range = result |> member "range" in
+      let start_char =
+        range |> member "start" |> member "character" |> to_int
+      in
+      let end_char = range |> member "end" |> member "character" |> to_int in
+      (* 42 is at UTF-16 12-14, not bytes 18-20 *)
+      Alcotest.(check int) "start character is UTF-16" 12 start_char;
+      Alcotest.(check int) "end character is UTF-16" 14 end_char
+
+(** Incremental didChange with UTF-16 positions on a line containing CJK.
+    Replaces ["world"] in ["日本語 hello world"] using UTF-16 character offsets.
+    "world" starts at UTF-16 offset 10 (3 CJK + space + 5 ASCII + space). *)
+let test_did_change_cjk_utf16 () =
+  let text = "\xe6\x97\xa5\xe6\x9c\xac\xe8\xaa\x9e hello world" in
+  (* "日本語 hello world"
+     日: bytes 0-2,  UTF-16 0
+     本: bytes 3-5,  UTF-16 1
+     語: bytes 6-8,  UTF-16 2
+     ' ': byte 9,    UTF-16 3
+     hello: bytes 10-14, UTF-16 4-8
+     ' ': byte 15,   UTF-16 9
+     world: bytes 16-20, UTF-16 10-14 *)
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el" ~text ();
+        did_change_msg ~uri:"file:///test.el" ~version:2
+          ~changes:
+            [
+              `Assoc
+                [
+                  ( "range",
+                    `Assoc
+                      [
+                        ( "start",
+                          `Assoc [ ("line", `Int 0); ("character", `Int 10) ] );
+                        ( "end",
+                          `Assoc [ ("line", `Int 0); ("character", `Int 15) ] );
+                      ] );
+                  ("text", `String "Emacs");
+                ];
+            ]
+          ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match Document.get_doc (Server.documents result.server) "file:///test.el" with
+  | Some doc ->
+      Alcotest.(check string)
+        "doc text after change"
+        "\xe6\x97\xa5\xe6\x9c\xac\xe8\xaa\x9e hello Emacs" doc.text
+  | None -> Alcotest.fail "Document not found after didChange"
+
 (** {1 Test Registration} *)
 
 let () =
@@ -1620,5 +1760,15 @@ let () =
           Alcotest.test_case "not on symbol" `Quick test_rename_not_on_symbol;
           Alcotest.test_case "has correct uri" `Quick
             test_rename_has_correct_uri;
+        ] );
+      ( "utf16-positions",
+        [
+          Alcotest.test_case "diagnostics CJK positions" `Quick
+            test_diagnostic_cjk_positions;
+          Alcotest.test_case "diagnostics emoji positions" `Quick
+            test_diagnostic_emoji_positions;
+          Alcotest.test_case "hover CJK range" `Quick test_hover_cjk_range;
+          Alcotest.test_case "didChange CJK UTF-16" `Quick
+            test_did_change_cjk_utf16;
         ] );
     ]
