@@ -292,6 +292,96 @@ let test_text_document_item () =
   Alcotest.(check int) "version" 1 version;
   Alcotest.(check string) "text" "(defun foo () t)" text
 
+(** {1 UTF-16 Encoding Tests} *)
+
+let test_utf16_ascii_round_trip () =
+  (* ASCII: 1 byte = 1 UTF-16 code unit *)
+  let line = "hello" in
+  Alcotest.(check int)
+    "byte 3 -> utf16 3" 3
+    (Document.utf16_offset_of_byte ~line_text:line ~byte_offset:3);
+  Alcotest.(check int)
+    "utf16 3 -> byte 3" 3
+    (Document.byte_offset_of_utf16 ~line_text:line ~utf16_offset:3)
+
+let test_utf16_two_byte_utf8 () =
+  (* "café": c(1) a(1) f(1) é(2 bytes, U+00E9) = 5 bytes, 4 UTF-16 units *)
+  let line = "caf\xC3\xA9" in
+  (* byte offset 4 is inside the é sequence; byte 3 is start of 'é' *)
+  Alcotest.(check int)
+    "byte 3 (start of é) -> utf16 3" 3
+    (Document.utf16_offset_of_byte ~line_text:line ~byte_offset:3);
+  Alcotest.(check int)
+    "byte 5 (end) -> utf16 4" 4
+    (Document.utf16_offset_of_byte ~line_text:line ~byte_offset:5);
+  Alcotest.(check int)
+    "utf16 3 -> byte 3" 3
+    (Document.byte_offset_of_utf16 ~line_text:line ~utf16_offset:3);
+  Alcotest.(check int)
+    "utf16 4 -> byte 5" 5
+    (Document.byte_offset_of_utf16 ~line_text:line ~utf16_offset:4)
+
+let test_utf16_three_byte_cjk () =
+  (* "a中b": a(1) 中(3 bytes, U+4E2D, BMP) b(1) = 5 bytes, 3 UTF-16 units *)
+  let line = "a\xE4\xB8\xADb" in
+  Alcotest.(check int)
+    "byte 4 (start of b) -> utf16 2" 2
+    (Document.utf16_offset_of_byte ~line_text:line ~byte_offset:4);
+  Alcotest.(check int)
+    "byte 5 (end) -> utf16 3" 3
+    (Document.utf16_offset_of_byte ~line_text:line ~byte_offset:5);
+  Alcotest.(check int)
+    "utf16 2 -> byte 4" 4
+    (Document.byte_offset_of_utf16 ~line_text:line ~utf16_offset:2)
+
+let test_utf16_four_byte_emoji () =
+  (* "a😀b": a(1) 😀(4 bytes, U+1F600, surrogate pair = 2 UTF-16 units) b(1)
+     = 6 bytes, 4 UTF-16 units *)
+  let line = "a\xF0\x9F\x98\x80b" in
+  Alcotest.(check int)
+    "byte 5 (start of b) -> utf16 3" 3
+    (Document.utf16_offset_of_byte ~line_text:line ~byte_offset:5);
+  Alcotest.(check int)
+    "byte 6 (end) -> utf16 4" 4
+    (Document.utf16_offset_of_byte ~line_text:line ~byte_offset:6);
+  Alcotest.(check int)
+    "utf16 3 -> byte 5" 5
+    (Document.byte_offset_of_utf16 ~line_text:line ~utf16_offset:3);
+  Alcotest.(check int)
+    "utf16 4 -> byte 6" 6
+    (Document.byte_offset_of_utf16 ~line_text:line ~utf16_offset:4)
+
+let test_utf16_clamp_past_end () =
+  let line = "abc" in
+  Alcotest.(check int)
+    "byte 10 -> utf16 3 (clamped)" 3
+    (Document.utf16_offset_of_byte ~line_text:line ~byte_offset:10);
+  Alcotest.(check int)
+    "utf16 10 -> byte 3 (clamped)" 3
+    (Document.byte_offset_of_utf16 ~line_text:line ~utf16_offset:10)
+
+let test_utf16_empty_line () =
+  let line = "" in
+  Alcotest.(check int)
+    "byte 0 -> utf16 0" 0
+    (Document.utf16_offset_of_byte ~line_text:line ~byte_offset:0);
+  Alcotest.(check int)
+    "utf16 0 -> byte 0" 0
+    (Document.byte_offset_of_utf16 ~line_text:line ~utf16_offset:0)
+
+let test_utf16_multiple_emoji () =
+  (* "😀😀": each 4 bytes, 2 UTF-16 units = 8 bytes, 4 UTF-16 units *)
+  let line = "\xF0\x9F\x98\x80\xF0\x9F\x98\x80" in
+  Alcotest.(check int)
+    "byte 4 (2nd emoji) -> utf16 2" 2
+    (Document.utf16_offset_of_byte ~line_text:line ~byte_offset:4);
+  Alcotest.(check int)
+    "byte 8 (end) -> utf16 4" 4
+    (Document.utf16_offset_of_byte ~line_text:line ~byte_offset:8);
+  Alcotest.(check int)
+    "utf16 2 -> byte 4" 4
+    (Document.byte_offset_of_utf16 ~line_text:line ~utf16_offset:2)
+
 let () =
   Alcotest.run "document"
     [
@@ -328,5 +418,16 @@ let () =
           Alcotest.test_case "versioned text document identifier" `Quick
             test_versioned_text_document_identifier;
           Alcotest.test_case "text document item" `Quick test_text_document_item;
+        ] );
+      ( "utf16",
+        [
+          Alcotest.test_case "ASCII round-trip" `Quick
+            test_utf16_ascii_round_trip;
+          Alcotest.test_case "2-byte UTF-8" `Quick test_utf16_two_byte_utf8;
+          Alcotest.test_case "3-byte CJK" `Quick test_utf16_three_byte_cjk;
+          Alcotest.test_case "4-byte emoji" `Quick test_utf16_four_byte_emoji;
+          Alcotest.test_case "clamp past end" `Quick test_utf16_clamp_past_end;
+          Alcotest.test_case "empty line" `Quick test_utf16_empty_line;
+          Alcotest.test_case "multiple emoji" `Quick test_utf16_multiple_emoji;
         ] );
     ]

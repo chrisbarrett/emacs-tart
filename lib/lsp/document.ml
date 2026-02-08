@@ -28,6 +28,50 @@ let get_doc (store : t) (uri : string) : doc option = Hashtbl.find_opt store uri
 let list_uris (store : t) : string list =
   Hashtbl.fold (fun uri _ acc -> uri :: acc) store []
 
+(** {1 UTF-16 Position Encoding} *)
+
+(** Decode the length of a UTF-8 sequence from its leading byte. Returns the
+    number of bytes in the sequence, or 1 for invalid/continuation bytes
+    (treating them as single units). *)
+let utf8_seq_len (byte : char) : int =
+  let b = Char.code byte in
+  if b land 0x80 = 0 then 1
+  else if b land 0xE0 = 0xC0 then 2
+  else if b land 0xF0 = 0xE0 then 3
+  else if b land 0xF8 = 0xF0 then 4
+  else 1
+
+(** Number of UTF-16 code units for a codepoint encoded in the given number of
+    UTF-8 bytes. 4-byte sequences (supplementary plane) require a surrogate pair
+    (2 code units); everything else is 1. *)
+let utf16_code_units_of_seq_len (seq_len : int) : int =
+  if seq_len = 4 then 2 else 1
+
+let utf16_offset_of_byte ~(line_text : string) ~(byte_offset : int) : int =
+  let len = String.length line_text in
+  let target = min byte_offset len in
+  let rec walk byte_pos utf16_pos =
+    if byte_pos >= target then utf16_pos
+    else
+      let seq_len = utf8_seq_len (String.get line_text byte_pos) in
+      let units = utf16_code_units_of_seq_len seq_len in
+      let next = min (byte_pos + seq_len) len in
+      if next > target then utf16_pos else walk next (utf16_pos + units)
+  in
+  walk 0 0
+
+let byte_offset_of_utf16 ~(line_text : string) ~(utf16_offset : int) : int =
+  let len = String.length line_text in
+  let rec walk byte_pos utf16_pos =
+    if utf16_pos >= utf16_offset || byte_pos >= len then byte_pos
+    else
+      let seq_len = utf8_seq_len (String.get line_text byte_pos) in
+      let units = utf16_code_units_of_seq_len seq_len in
+      let next = min (byte_pos + seq_len) len in
+      walk next (utf16_pos + units)
+  in
+  walk 0 0
+
 (** {1 Incremental Changes} *)
 
 type content_change = { range : range option; text : string }

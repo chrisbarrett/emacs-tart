@@ -36,6 +36,16 @@ val get_doc : t -> string -> doc option
 val list_uris : t -> string list
 (** List all open document URIs *)
 
+(** {1 UTF-16 Position Encoding} *)
+
+val utf16_offset_of_byte : line_text:string -> byte_offset:int -> int
+(** Convert a byte offset within a line to UTF-16 code units. Clamps to the end
+    of the line if [byte_offset] exceeds the line length. *)
+
+val byte_offset_of_utf16 : line_text:string -> utf16_offset:int -> int
+(** Convert a UTF-16 code-unit offset within a line to a byte offset. Clamps to
+    the end of the line if [utf16_offset] exceeds the line length. *)
+
 (** {1 Incremental Changes} *)
 
 type content_change = {
