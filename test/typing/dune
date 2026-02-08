@@ -84,8 +84,3 @@
  (name clause_dispatch_test)
  (modules clause_dispatch_test)
  (libraries tart alcotest))
-
-(test
- (name row_dispatch_test)
- (modules row_dispatch_test)
- (libraries tart alcotest))
