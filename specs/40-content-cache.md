@@ -187,12 +187,12 @@ Eviction must never block type-checking. Partial cleanup is acceptable.
 - [x] [R12] `maybe_evict` with marker file
 - [x] [R13] Best-effort error handling in eviction
 - [x] Tests
-- [ ] Integrate into type-checking
+- [x] Integrate into type-checking
 
 ## Status
 
-Complete (except integration into type-checking pipeline). Diagnostic
-serialisation format is provided by [Spec 35](./35-structured-errors.md)
-(structured errors) and [Spec 47](./47-error-codes.md) (error codes). Cache
-key computation needs updating to include transitive dependency hashing (R2)
-before integration.
+Complete. Cache is integrated into the `check` subcommand in `bin/main.ml`.
+Cache key includes binary, input `.el` file, and all typings `.tart` deps
+(c-core, lisp-core, sibling). Pass-only caching: clean files are cached,
+files with errors are always re-checked. `--no-cache` flag available.
+Eviction runs once per session via `maybe_evict`.

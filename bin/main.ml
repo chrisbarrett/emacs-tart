@@ -201,6 +201,47 @@ let scan_c_source_verbose ~src_dir : Tart.C_scanner.c_definition list =
   !all_defs
 
 (* ============================================================================
+   Cache Helpers
+   ============================================================================ *)
+
+(** Collect all .tart typings file paths for cache dependency computation.
+
+    Returns paths for c-core + lisp-core signature files, plus the sibling .tart
+    file if present. Changes to any of these files invalidate the cache. *)
+let collect_typings_deps ~typings_root ~version ~filename : string list =
+  let typings_files =
+    match Tart.Search_path.find_typings_dir ~typings_root ~version with
+    | Some typings_dir ->
+        let c_core_dir = Filename.concat typings_dir "c-core" in
+        let lisp_core_dir = Filename.concat typings_dir "lisp-core" in
+        let c_core_files = Tart.Search_path.list_c_core_files c_core_dir in
+        let lisp_core_files =
+          if Sys.file_exists lisp_core_dir && Sys.is_directory lisp_core_dir
+          then Tart.Search_path.list_c_core_files lisp_core_dir
+          else []
+        in
+        c_core_files @ lisp_core_files
+    | None -> []
+  in
+  (* Include sibling .tart if present *)
+  let sibling =
+    if Filename.check_suffix filename ".el" then
+      let base = Filename.chop_suffix (Filename.basename filename) ".el" in
+      let tart_path =
+        Filename.concat (Filename.dirname filename) (base ^ ".tart")
+      in
+      if Sys.file_exists tart_path then [ tart_path ] else []
+    else []
+  in
+  typings_files @ sibling
+
+(** Compute cache key for a type-check invocation. *)
+let check_cache_key ~typings_root ~version ~filename =
+  let binary = Tart.Content_cache.binary_path () in
+  let deps = collect_typings_deps ~typings_root ~version ~filename in
+  Tart.Content_cache.compute_key ~binary ~input:filename ~deps
+
+(* ============================================================================
    Command Implementations
    ============================================================================ *)
 
@@ -303,8 +344,8 @@ let apply_severity_flags ~warn_as_error ~ignore_warnings ~ignore_hints
   else errors
 
 (** Check subcommand: type-check files *)
-let run_check ~memory format warn_as_error ignore_warnings ignore_hints
-    emacs_version files =
+let run_check ~memory ~no_cache format warn_as_error ignore_warnings
+    ignore_hints emacs_version files =
   if files = [] then (
     let err =
       Tart.Error.cli_error ~message:"no input files"
@@ -312,6 +353,8 @@ let run_check ~memory format warn_as_error ignore_warnings ignore_hints
     in
     prerr_endline (Tart.Error.to_string err);
     exit 2);
+  (* Run cache eviction once per session *)
+  Tart.Content_cache.maybe_evict ();
   let t_total = Tart.Timing.start () in
   (* Validate all files exist first, collecting file errors *)
   let file_errors, valid_files =
@@ -344,7 +387,21 @@ let run_check ~memory format warn_as_error ignore_warnings ignore_hints
     |> Tart.Module_check.with_search_path search_path
   in
   let type_errors =
-    List.concat_map (fun file -> check_file ~memory ~config file) valid_files
+    List.concat_map
+      (fun file ->
+        if no_cache then check_file ~memory ~config file
+        else
+          let key = check_cache_key ~typings_root ~version ~filename:file in
+          match Tart.Content_cache.retrieve ~key with
+          | Some "check:pass" ->
+              Tart.Log.verbose "Cache hit: %s" (Filename.basename file);
+              []
+          | _ ->
+              let errors = check_file ~memory ~config file in
+              if errors = [] then
+                Tart.Content_cache.store ~key ~data:"check:pass";
+              errors)
+      valid_files
   in
   let total_elapsed = Tart.Timing.elapsed_s t_total in
   Tart.Log.verbose "Total: %s" (Tart.Timing.format_duration total_elapsed);
@@ -965,6 +1022,10 @@ let check_files_arg =
   (* Use string instead of file to handle errors with structured File_error *)
   Arg.(value & pos_all string [] & info [] ~docv:"FILE" ~doc)
 
+let no_cache_arg =
+  let doc = "Skip cache lookup; always run full type-checking." in
+  Arg.(value & flag & info [ "no-cache" ] ~doc)
+
 let check_cmd =
   let doc = "Type-check Elisp files" in
   let man =
@@ -975,16 +1036,16 @@ let check_cmd =
   in
   let info = Cmd.info "check" ~doc ~man in
   let run log_level log_format verbose_flag format warn_as_error ignore_warnings
-      ignore_hints memory emacs_version files =
+      ignore_hints memory no_cache emacs_version files =
     setup_logging ~log_level ~log_format ~verbose_flag;
-    run_check ~memory format warn_as_error ignore_warnings ignore_hints
-      emacs_version files
+    run_check ~memory ~no_cache format warn_as_error ignore_warnings
+      ignore_hints emacs_version files
   in
   Cmd.v info
     Term.(
       const run $ log_level_arg $ log_format_arg $ verbose_flag_arg $ format_arg
       $ warn_as_error_arg $ ignore_warnings_arg $ ignore_hints_arg
-      $ memory_flag_arg $ emacs_version_arg $ check_files_arg)
+      $ memory_flag_arg $ no_cache_arg $ emacs_version_arg $ check_files_arg)
 
 (* Eval subcommand *)
 let eval_expr_arg =
@@ -1457,15 +1518,15 @@ let roundtrip_cmd =
 
 let default_cmd =
   let run log_level log_format verbose_flag format warn_as_error ignore_warnings
-      ignore_hints memory emacs_version files =
+      ignore_hints memory no_cache emacs_version files =
     setup_logging ~log_level ~log_format ~verbose_flag;
-    run_check ~memory format warn_as_error ignore_warnings ignore_hints
-      emacs_version files
+    run_check ~memory ~no_cache format warn_as_error ignore_warnings
+      ignore_hints emacs_version files
   in
   Term.(
     const run $ log_level_arg $ log_format_arg $ verbose_flag_arg $ format_arg
     $ warn_as_error_arg $ ignore_warnings_arg $ ignore_hints_arg
-    $ memory_flag_arg $ emacs_version_arg $ check_files_arg)
+    $ memory_flag_arg $ no_cache_arg $ emacs_version_arg $ check_files_arg)
 
 let main_cmd =
   let doc = "A type checker for Emacs Lisp" in
