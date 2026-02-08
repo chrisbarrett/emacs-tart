@@ -532,6 +532,58 @@ let test_incremental_edit_multiline_with_multibyte () =
       Alcotest.(check string) "text" "cafb" doc.text
   | None -> Alcotest.fail "Document not found"
 
+let test_edit_past_end_clamps () =
+  (* Edit with start/end beyond the document end → clamps to end, inserts *)
+  let store = Document.create () in
+  let text = "hello" in
+  Document.open_doc store ~uri:"file:///test.el" ~version:1 ~text;
+  let change : Document.content_change =
+    {
+      range =
+        Some
+          {
+            start = { line = 99; character = 0 };
+            end_ = { line = 99; character = 0 };
+          };
+      text = " world";
+    }
+  in
+  (match
+     Document.apply_changes store ~uri:"file:///test.el" ~version:2 [ change ]
+   with
+  | Ok () -> ()
+  | Error e -> Alcotest.fail e);
+  match Document.get_doc store "file:///test.el" with
+  | Some doc -> Alcotest.(check string) "text" "hello world" doc.text
+  | None -> Alcotest.fail "Document not found"
+
+let test_edit_past_line_end_clamps () =
+  (* Character offset beyond line length → clamps to line end *)
+  let store = Document.create () in
+  let text = "ab\ncd" in
+  Document.open_doc store ~uri:"file:///test.el" ~version:1 ~text;
+  let change : Document.content_change =
+    {
+      range =
+        Some
+          {
+            start = { line = 0; character = 99 };
+            end_ = { line = 0; character = 99 };
+          };
+      text = "X";
+    }
+  in
+  (match
+     Document.apply_changes store ~uri:"file:///test.el" ~version:2 [ change ]
+   with
+  | Ok () -> ()
+  | Error e -> Alcotest.fail e);
+  match Document.get_doc store "file:///test.el" with
+  | Some doc ->
+      (* X inserted at end of line 0, before newline *)
+      Alcotest.(check string) "text" "abX\ncd" doc.text
+  | None -> Alcotest.fail "Document not found"
+
 let test_incremental_edit_ascii_unchanged () =
   (* Verify ASCII edits still work identically (byte = UTF-16 for ASCII) *)
   let store = Document.create () in
@@ -626,5 +678,12 @@ let () =
             test_incremental_edit_multiline_with_multibyte;
           Alcotest.test_case "ASCII unchanged" `Quick
             test_incremental_edit_ascii_unchanged;
+        ] );
+      ( "clamping",
+        [
+          Alcotest.test_case "edit past end clamps" `Quick
+            test_edit_past_end_clamps;
+          Alcotest.test_case "edit past line end clamps" `Quick
+            test_edit_past_line_end_clamps;
         ] );
     ]

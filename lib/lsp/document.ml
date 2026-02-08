@@ -103,57 +103,52 @@ type content_change = { range : range option; text : string }
 
 (** Convert a (line, character) position to a byte offset in text. The
     [character] field is interpreted as a UTF-16 code-unit offset and converted
-    to bytes. Returns None if position is out of range. *)
-let position_to_offset (text : string) (pos : position) : int option =
+    to bytes. Out-of-range positions are clamped to the nearest valid offset:
+    lines past the end clamp to [String.length text], and character offsets past
+    the line length clamp to the line's byte length. *)
+let position_to_offset (text : string) (pos : position) : int =
+  let len = String.length text in
   let lines = String.split_on_char '\n' text in
   let rec find_offset line_num char_offset lines =
     match lines with
     | [] ->
-        (* Past end of document - could be appending at the very end *)
-        if line_num = pos.line && pos.character = 0 then Some char_offset
-        else None
+        (* Past end of document — clamp to document end *)
+        len
     | line :: rest ->
         if line_num = pos.line then
           let byte_char =
             byte_offset_of_utf16 ~line_text:line ~utf16_offset:pos.character
           in
           let line_len = String.length line in
-          (* Allow character position up to line_len + 1 to handle cursor at EOL *)
-          if byte_char <= line_len then Some (char_offset + byte_char)
-          else if byte_char = line_len + 1 && rest = [] then
-            (* Special case: at very end of last line (after implicit \n) *)
-            Some (char_offset + line_len)
-          else None
+          (* Clamp character offset to line length *)
+          char_offset + min byte_char line_len
         else
           (* Add line length + 1 for the newline character *)
           find_offset (line_num + 1) (char_offset + String.length line + 1) rest
   in
   find_offset 0 0 lines
 
-(** Apply a single content change to document text. Returns Error if position is
-    out of range. *)
+(** Apply a single content change to document text. Out-of-range positions are
+    clamped to the document bounds. Returns Error only for invalid ranges where
+    start > end after clamping. *)
 let apply_single_change (text : string) (change : content_change) :
     (string, string) result =
   match change.range with
   | None ->
       (* Full document replacement *)
       Ok change.text
-  | Some range -> (
-      match
-        (position_to_offset text range.start, position_to_offset text range.end_)
-      with
-      | Some start_offset, Some end_offset ->
-          if start_offset > end_offset then Error "Invalid range: start > end"
-          else if end_offset > String.length text then
-            Error "Range extends past end of document"
-          else
-            let before = String.sub text 0 start_offset in
-            let after =
-              String.sub text end_offset (String.length text - end_offset)
-            in
-            Ok (before ^ change.text ^ after)
-      | None, _ -> Error "Start position out of range"
-      | _, None -> Error "End position out of range")
+  | Some range ->
+      let start_offset = position_to_offset text range.start in
+      let end_offset = position_to_offset text range.end_ in
+      if start_offset > end_offset then Error "Invalid range: start > end"
+      else
+        (* Clamp end_offset to document length *)
+        let end_offset = min end_offset (String.length text) in
+        let before = String.sub text 0 start_offset in
+        let after =
+          String.sub text end_offset (String.length text - end_offset)
+        in
+        Ok (before ^ change.text ^ after)
 
 let apply_changes (store : t) ~(uri : string) ~(version : int)
     (changes : content_change list) : (unit, string) result =
