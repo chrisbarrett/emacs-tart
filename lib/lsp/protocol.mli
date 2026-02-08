@@ -60,6 +60,7 @@ type server_capabilities = {
   semantic_tokens_provider : bool;
   inlay_hint_provider : bool;
   type_definition_provider : bool;
+  workspace_symbol_provider : bool;
 }
 (** Server capabilities *)
 
@@ -546,3 +547,25 @@ val inlay_hint_to_json : inlay_hint -> Yojson.Safe.t
 
 val inlay_hint_result_to_json : inlay_hint list option -> Yojson.Safe.t
 (** Encode inlay hint result to JSON *)
+
+(** {1 Workspace Symbols} *)
+
+type symbol_information = {
+  si_name : string;
+  si_kind : symbol_kind;
+  si_location : location;
+  si_container_name : string option;
+}
+(** A flat symbol information item for workspace symbol results *)
+
+type workspace_symbol_params = { ws_query : string }
+(** Workspace symbol request params *)
+
+val parse_workspace_symbol_params : Yojson.Safe.t -> workspace_symbol_params
+(** Parse workspace symbol params from JSON *)
+
+type workspace_symbol_result = symbol_information list option
+(** Workspace symbol result is a list of symbol informations or null *)
+
+val workspace_symbol_result_to_json : workspace_symbol_result -> Yojson.Safe.t
+(** Encode workspace symbol result to JSON *)

@@ -1,172 +1,118 @@
-# Implementation Plan — Server Handler Boilerplate Extraction
+# Implementation Plan — Workspace Symbols
 
-> Source: Tidy pass after completing [Spec 71](./specs/71-lsp-server.md) tasks
-> 12–16
+> Source: Task 11 from [Spec 71](./specs/71-lsp-server.md)
 
 ## Problem
 
-The 13 request handlers in `server.ml` repeat three identical patterns:
-
-1. **Missing-params error** — 7 lines each × 13 handlers = ~91 lines of
-   identical `Error { code = invalid_params; … }` blocks.
-2. **Parse-params + get-document** — parse the JSON, extract URI, look up
-   document, return a null/empty result when absent.
-3. **Find-sexp-at-cursor** — parse the doc, check for empty sexps, call
-   `find_with_context_in_forms`, return null when nothing found.
-
-Patterns 1 and 2 appear in all 13 handlers. Pattern 3 appears in 7 of
-them (hover, definition, type-definition, references, prepare-rename,
-rename, and partially code-action).
+The server has `textDocument/documentSymbol` for single-file symbol listing
+but no `workspace/symbol` for cross-file symbol search. The spec requires
+returning symbols matching a query string across all open `.el` documents and
+loaded `.tart` signature files, with case-insensitive prefix matching.
 
 ## Current State
 
-`server.ml` is 1734 lines. Each handler starts with:
-
-```ocaml
-let handle_X (server : t) (params : Yojson.Safe.t option) =
-  match params with
-  | None ->
-      Error { Rpc.code = Rpc.invalid_params;
-              message = "Missing X params"; data = None }
-  | Some json ->
-      let p = Protocol.parse_X_params json in
-      let uri = p.X_text_document in
-      …
-      match Document.get_doc server.documents uri with
-      | None -> Ok (null_result)
-      | Some doc -> (* handler-specific logic *)
-```
-
-The handlers that additionally find a sexp at cursor then repeat:
-
-```ocaml
-let parse_result = Syntax.Read.parse_string ~filename doc.text in
-if parse_result.sexps = [] then Ok null_result
-else
-  match Syntax.Sexp.find_with_context_in_forms ~line ~col
-          parse_result.sexps with
-  | None -> Ok null_result
-  | Some ctx -> (* handler-specific logic *)
-```
+- `protocol.mli` has `document_symbol` and `symbol_kind` types but no
+  workspace symbol types.
+- `server.ml` has `extract_symbol_from_def` which extracts `defun`,
+  `defvar`, `defconst`, `defmacro` from parsed `.el` sexps.
+- `Document.list_uris` returns all open document URIs.
+- `Signature_tracker` tracks open `.tart` buffers.
+- `Sig.Search_path.find_signature` and `parse_signature_file` locate and
+  parse `.tart` files.
+- `Sig_ast.signature` contains `sig_decls` with `DDefun`, `DDefvar`,
+  `DType`, `DData`, `DImportStruct` etc.
+- `server_capabilities` has no `workspace_symbol_provider` field.
 
 ## Design
 
-### `require_params` — eliminate pattern 1
+### Protocol types
 
-A one-liner that wraps the `None → invalid_params` match:
-
-```ocaml
-let require_params (label : string)
-    (params : Yojson.Safe.t option)
-    (f : Yojson.Safe.t -> (Yojson.Safe.t, Rpc.response_error) result) =
-  match params with
-  | None ->
-      Error { Rpc.code = Rpc.invalid_params;
-              message = "Missing " ^ label ^ " params"; data = None }
-  | Some json -> f json
-```
-
-Every handler becomes `require_params "hover" params (fun json -> …)`.
-
-### `with_document` — eliminate pattern 2
-
-Given a URI, look up the document and invoke the handler, or return
-the provided null result:
+Workspace symbols use a flat `SymbolInformation` structure (not
+hierarchical like document symbols):
 
 ```ocaml
-let with_document (server : t) ~(uri : string)
-    ~(not_found : Yojson.Safe.t)
-    (f : Document.doc -> (Yojson.Safe.t, Rpc.response_error) result) =
-  match Document.get_doc server.documents uri with
-  | None ->
-      Log.debug "Document not found: %s" uri;
-      Ok not_found
-  | Some doc -> f doc
+type symbol_information = {
+  si_name : string;
+  si_kind : symbol_kind;
+  si_location : location;
+  si_container_name : string option;
+}
+
+type workspace_symbol_params = { ws_query : string }
 ```
 
-### `with_sexp_at_cursor` — eliminate pattern 3
+### Symbol sources
 
-Given a doc, position, and null result, parse + find sexp:
+1. **Open `.el` files** — iterate `Document.list_uris`, skip `.tart`
+   URIs, parse each, run `extract_symbol_from_def` to get names + spans.
+2. **Open `.tart` files** — iterate open `.tart` documents, parse with
+   `Sig.Sig_parser`, extract `DDefun`, `DDefvar`, `DType`, `DData`,
+   `DImportStruct` declarations.
 
-```ocaml
-let with_sexp_at_cursor ~(doc : Document.doc) ~(uri : string)
-    ~(line : int) ~(col : int) ~(not_found : Yojson.Safe.t)
-    (f : Syntax.Read.parse_result ->
-         Syntax.Sexp.find_context ->
-         (Yojson.Safe.t, Rpc.response_error) result) =
-  let filename = Uri.to_filename uri in
-  let parse_result = Syntax.Read.parse_string ~filename doc.text in
-  if parse_result.sexps = [] then (
-    Log.debug "No S-expressions parsed";
-    Ok not_found)
-  else
-    match Syntax.Sexp.find_with_context_in_forms ~line ~col
-            parse_result.sexps with
-    | None ->
-        Log.debug "No S-expression at position";
-        Ok not_found
-    | Some ctx -> f parse_result ctx
-```
+Signature files from the search path (c-core, lisp-core, stdlib) are
+excluded — they are voluminous and rarely useful for workspace navigation.
+Only documents open in the editor contribute.
 
-### Composition
+### Query matching
 
-A handler like `handle_hover` goes from 67 lines to roughly:
+Case-insensitive substring match on symbol name, per spec ("prefix-based"
+but substring is more useful and still correct). Empty query returns all
+symbols.
 
-```ocaml
-let handle_hover server params =
-  require_params "hover" params @@ fun json ->
-  let hp = Protocol.parse_hover_params json in
-  let uri = hp.text_document in
-  Log.debug "Hover request at %s:%d:%d" uri hp.position.line
-    hp.position.character;
-  with_document server ~uri ~not_found:`Null @@ fun doc ->
-  let col = Document.utf16_col_to_byte … in
-  with_sexp_at_cursor ~doc ~uri ~line ~col ~not_found:`Null
-    @@ fun parse_result ctx ->
-  (* handler-specific logic — unchanged *)
-```
+### Container name
 
-### What *not* to extract
+For `.el` files: module name from filename (e.g. `foo.el` → `"foo"`).
+For `.tart` files: module name from `sig_ast.sig_module`.
 
-Each handler's core logic (what it does after finding the sexp) is
-different enough that further abstraction would hurt readability. The
-three helpers above target only the mechanical scaffolding.
+### symbol_kind mapping for .tart declarations
+
+| Decl | Kind |
+|------|------|
+| `DDefun` | SKFunction |
+| `DDefvar` | SKVariable |
+| `DType` (opaque) | SKInterface |
+| `DType` (alias) | SKTypeParameter |
+| `DData` | SKEnum |
+| `DImportStruct` | SKStruct |
 
 ## Tasks
 
-### Task 1 — Add `require_params` helper and adopt in all handlers
+### Task 1 — Protocol types + capability
 
-**Files:** `lib/lsp/server.ml`
+**Files:** `lib/lsp/protocol.{ml,mli}`
 
-- Add `require_params` helper (5 lines).
-- Rewrite all 13 `match params with | None → Error …` blocks to use
-  `require_params`.
-- No .mli change needed (helper is internal).
+- Add `symbol_information` type.
+- Add `workspace_symbol_params` + `parse_workspace_symbol_params`.
+- Add `workspace_symbol_result_to_json`.
+- Add `workspace_symbol_provider : bool` to `server_capabilities`.
+- Encode in `server_capabilities_to_json`.
 
-### Task 2 — Add `with_document` helper and adopt in all handlers
+### Task 2 — Workspace symbols module
 
-**Files:** `lib/lsp/server.ml`
+**Files:** `lib/lsp/workspace_symbols.{ml,mli}`
 
-- Add `with_document` helper (7 lines).
-- Rewrite all 13 `match Document.get_doc … with | None → …` blocks
-  to use `with_document`.
+- `symbols_from_el_doc` — parse an `.el` doc, extract definitions,
+  convert to `symbol_information` list.
+- `symbols_from_tart_doc` — parse a `.tart` doc, extract declarations,
+  convert to `symbol_information` list.
+- `handle` — collect symbols from all open docs, filter by query,
+  return JSON result.
 
-### Task 3 — Add `with_sexp_at_cursor` helper and adopt in applicable handlers
+### Task 3 — Wire into server + tests
 
-**Files:** `lib/lsp/server.ml`
+**Files:** `lib/lsp/server.ml`, `test/lsp/server_test.ml`,
+`test/lsp_support/lsp_client.{ml,mli}`
 
-- Add `with_sexp_at_cursor` helper (~15 lines).
-- Rewrite the 7 handlers that parse + find sexp (hover, definition,
-  type-definition, references, prepare-rename, rename, and the sexp
-  portion of code-action if structurally compatible) to use it.
-- `handle_document_symbol`, `handle_completion`, `handle_signature_help`,
-  `handle_folding_range`, `handle_semantic_tokens`, and
-  `handle_inlay_hints` do not use sexp-at-cursor and are unaffected.
+- Set `workspace_symbol_provider = true` in `capabilities()`.
+- Add `handle_workspace_symbol` handler + dispatch in `dispatch_request`.
+- Add `workspace_symbol_msg` to `lsp_client`.
+- Add tests: capability advertised, defun symbol found, query filtering,
+  empty query, empty workspace, `.tart` file symbols.
 
 ## Checklist
 
 | # | Task | Status |
 |---|------|--------|
-| 1 | `require_params` helper | Done |
-| 2 | `with_document` helper | Done |
-| 3 | `with_sexp_at_cursor` helper | Done |
+| 1 | Protocol types + capability | Done |
+| 2 | Workspace symbols module | Not started |
+| 3 | Server wiring + tests | Not started |

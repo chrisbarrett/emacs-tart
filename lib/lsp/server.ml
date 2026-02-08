@@ -140,6 +140,7 @@ let capabilities () : Protocol.server_capabilities =
     semantic_tokens_provider = true;
     inlay_hint_provider = true;
     type_definition_provider = true;
+    workspace_symbol_provider = true;
   }
 
 (** Require non-None params, returning an invalid-params error otherwise. *)

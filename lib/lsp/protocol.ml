@@ -64,6 +64,7 @@ type server_capabilities = {
   semantic_tokens_provider : bool;
   inlay_hint_provider : bool;
   type_definition_provider : bool;
+  workspace_symbol_provider : bool;
 }
 (** Server capabilities *)
 
@@ -283,6 +284,11 @@ let server_capabilities_to_json (caps : server_capabilities) : Yojson.Safe.t =
   let fields =
     if caps.type_definition_provider then
       ("typeDefinitionProvider", `Bool true) :: fields
+    else fields
+  in
+  let fields =
+    if caps.workspace_symbol_provider then
+      ("workspaceSymbolProvider", `Bool true) :: fields
     else fields
   in
   `Assoc fields
@@ -1290,4 +1296,46 @@ let inlay_hint_result_to_json (result : inlay_hint list option) : Yojson.Safe.t
     =
   match result with
   | Some hints -> `List (List.map inlay_hint_to_json hints)
+  | None -> `Null
+
+(** {1 Workspace Symbols} *)
+
+type symbol_information = {
+  si_name : string;
+  si_kind : symbol_kind;
+  si_location : location;
+  si_container_name : string option;
+}
+(** A flat symbol information item for workspace symbol results *)
+
+type workspace_symbol_params = { ws_query : string }
+(** Workspace symbol request params *)
+
+let parse_workspace_symbol_params (json : Yojson.Safe.t) :
+    workspace_symbol_params =
+  let open Yojson.Safe.Util in
+  { ws_query = json |> member "query" |> to_string }
+
+let symbol_information_to_json (si : symbol_information) : Yojson.Safe.t =
+  let fields =
+    [
+      ("name", `String si.si_name);
+      ("kind", `Int (symbol_kind_to_int si.si_kind));
+      ("location", location_to_json si.si_location);
+    ]
+  in
+  let fields =
+    match si.si_container_name with
+    | Some name -> ("containerName", `String name) :: fields
+    | None -> fields
+  in
+  `Assoc fields
+
+type workspace_symbol_result = symbol_information list option
+(** Workspace symbol result is a list of symbol informations or null *)
+
+let workspace_symbol_result_to_json (result : workspace_symbol_result) :
+    Yojson.Safe.t =
+  match result with
+  | Some symbols -> `List (List.map symbol_information_to_json symbols)
   | None -> `Null
