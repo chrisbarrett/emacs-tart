@@ -304,7 +304,7 @@ let sig_name_to_prim (name : string) : Types.typ =
 (** Convert a signature type to a core type. [ctx] is the type context
     containing aliases and opaques. [tvar_names] is the list of bound type
     variable names in scope. [scope_tvars] maps scope type variable names to
-    their pre-created TVars (shared across declarations in a type-scope block);
+    their pre-created TVars (shared across declarations in a forall block);
     defaults to empty. *)
 let rec sig_type_to_typ_with_ctx ?(scope_tvars : (string * Types.typ) list = [])
     (ctx : type_context) (tvar_names : string list) (ty : sig_type) : Types.typ

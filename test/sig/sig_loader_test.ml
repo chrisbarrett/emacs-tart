@@ -1350,13 +1350,13 @@ let test_data_accessor_lowercase () =
   | None -> Alcotest.fail "result-err-value accessor not found"
   | Some _ -> ()
 
-(** {1 Type-Scope Tests (Spec 19)} *)
+(** {1 Forall Tests (Spec 19)} *)
 
-(** Test that type-scope parses and loads correctly. R1: Basic syntax *)
-let test_type_scope_basic () =
+(** Test that forall parses and loads correctly. R1: Basic syntax *)
+let test_forall_basic () =
   let sig_src =
     {|
-    (type-scope [a]
+    (forall [a]
       (defun iter-next ((iter a)) -> (a | nil))
       (defun iter-peek ((iter a)) -> (a | nil)))
   |}
@@ -1371,11 +1371,11 @@ let test_type_scope_basic () =
   | Some _ -> ()
 
 (** Test that scoped type variables are shared. R2: Shared variables *)
-let test_type_scope_shared_vars () =
+let test_forall_shared_vars () =
   let sig_src =
     {|
     (type iter)
-    (type-scope [a]
+    (forall [a]
       (defun make-iter ((list a)) -> iter)
       (defun iter-next (iter) -> (a | nil)))
   |}
@@ -1392,11 +1392,11 @@ let test_type_scope_shared_vars () =
         (String.length scheme_str > 0)
 
 (** Test explicit forall inside scope adds to scope vars. R3: Explicit forall *)
-let test_type_scope_explicit_forall () =
+let test_forall_explicit_forall () =
   let sig_src =
     {|
     (type iter)
-    (type-scope [a]
+    (forall [a]
       (defun iter-map [b] (((a -> b)) iter) -> iter)
       (defun iter-next (iter) -> (a | nil)))
   |}
@@ -1413,10 +1413,10 @@ let test_type_scope_explicit_forall () =
         (String.length scheme_str > 0)
 
 (** Test type declarations inside scope. R6: Types in scopes *)
-let test_type_scope_with_type_decl () =
+let test_forall_with_type_decl () =
   let sig_src =
     {|
-    (type-scope [a]
+    (forall [a]
       (type iter)
       (defun make-iter ((list a)) -> iter))
   |}
@@ -1427,13 +1427,13 @@ let test_type_scope_with_type_decl () =
   | None -> Alcotest.fail "make-iter not found"
   | Some _ -> ()
 
-(** Test nested type scopes shadow outer variables. R5: Nested shadowing *)
-let test_type_scope_nested () =
+(** Test nested forall blocks shadow outer variables. R5: Nested shadowing *)
+let test_forall_nested () =
   let sig_src =
     {|
-    (type-scope [a]
+    (forall [a]
       (defun outer-fn ((list a)) -> a)
-      (type-scope [a]
+      (forall [a]
         (defun inner-fn ((vector a)) -> a)))
   |}
   in
@@ -1447,9 +1447,9 @@ let test_type_scope_nested () =
   | Some _ -> ()
 
 (** Test validation rejects unbound vars in scope. R8: Error on unbound *)
-let test_type_scope_unbound_error () =
+let test_forall_unbound_error () =
   let sig_src = {|
-    (type-scope [a]
+    (forall [a]
       (defun bad-fn (b) -> b))
   |} in
   let parse_result = Syntax.Read.parse_string sig_src in
@@ -1464,10 +1464,10 @@ let test_type_scope_unbound_error () =
             (String.length e.message > 0))
 
 (** Test higher-kinded type variable in scope. R4: HK scoped variables *)
-let test_type_scope_hk_variable () =
+let test_forall_hk_variable () =
   let sig_src =
     {|
-    (type-scope [(f : (* -> *))]
+    (forall [(f : (* -> *))]
       (defun fmap-scope [a b] (((a -> b)) (f a)) -> (f b))
       (defun pure-scope [a] (a) -> (f a)))
   |}
@@ -1482,10 +1482,10 @@ let test_type_scope_hk_variable () =
   | Some _ -> ()
 
 (** Test HK scoped variable kind is enforced in inner declarations *)
-let test_type_scope_hk_kind_enforced () =
+let test_forall_hk_kind_enforced () =
   let sig_src =
     {|
-    (type-scope [(f : (* -> *))]
+    (forall [(f : (* -> *))]
       (defun use-f [a] ((f a)) -> int))
   |}
   in
@@ -2489,21 +2489,18 @@ let () =
           Alcotest.test_case "accessor lowercase" `Quick
             test_data_accessor_lowercase;
         ] );
-      ( "type-scope",
+      ( "forall",
         [
-          Alcotest.test_case "basic syntax" `Quick test_type_scope_basic;
-          Alcotest.test_case "shared variables" `Quick
-            test_type_scope_shared_vars;
+          Alcotest.test_case "basic syntax" `Quick test_forall_basic;
+          Alcotest.test_case "shared variables" `Quick test_forall_shared_vars;
           Alcotest.test_case "explicit forall" `Quick
-            test_type_scope_explicit_forall;
-          Alcotest.test_case "with type decl" `Quick
-            test_type_scope_with_type_decl;
-          Alcotest.test_case "nested scopes" `Quick test_type_scope_nested;
-          Alcotest.test_case "unbound error" `Quick
-            test_type_scope_unbound_error;
-          Alcotest.test_case "HK variable" `Quick test_type_scope_hk_variable;
+            test_forall_explicit_forall;
+          Alcotest.test_case "with type decl" `Quick test_forall_with_type_decl;
+          Alcotest.test_case "nested scopes" `Quick test_forall_nested;
+          Alcotest.test_case "unbound error" `Quick test_forall_unbound_error;
+          Alcotest.test_case "HK variable" `Quick test_forall_hk_variable;
           Alcotest.test_case "HK kind enforced" `Quick
-            test_type_scope_hk_kind_enforced;
+            test_forall_hk_kind_enforced;
         ] );
       ( "type-subtraction",
         [

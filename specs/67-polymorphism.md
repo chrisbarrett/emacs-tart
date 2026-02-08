@@ -243,17 +243,17 @@ The `tart` macro expands to just the expression at runtime:
 ### Purpose
 
 By default each function signature has its own independent type variables.
-`type-scope` blocks share type variables across multiple declarations,
+`forall` blocks share type variables across multiple declarations,
 enabling patterns like iterators, state machines, and builder APIs where
 several functions must agree on a type parameter.
 
 ### Syntax
 
-In `.tart` files, a `(type-scope [vars] ...)` block binds type variables
+In `.tart` files, a `(forall [vars] ...)` block binds type variables
 across all enclosed declarations:
 
 ```elisp
-(type-scope [a]
+(forall [a]
   (defun iter-next ((iter a)) -> (a | nil))
   (defun iter-peek ((iter a)) -> (a | nil))
   (defun iter-collect ((iter a)) -> (list a)))
@@ -265,7 +265,7 @@ Variables inside a scope are shared; variables declared outside with the
 same name are independent:
 
 ```elisp
-(type-scope [a]
+(forall [a]
   (defun get-first ((list a)) -> (a | nil))
   (defun get-last ((list a)) -> (a | nil)))
 
@@ -275,12 +275,12 @@ same name are independent:
 
 ### Additional quantifiers inside scope
 
-A function inside a `type-scope` that needs extra type variables declares
+A function inside a `forall` that needs extra type variables declares
 them with the usual `[vars]` syntax. These are added to the scope
 variables:
 
 ```elisp
-(type-scope [a]
+(forall [a]
   ;; Uses scope's 'a' plus local 'b'
   (defun iter-map [b] (((a -> b)) (iter a)) -> (iter b)))
 ```
@@ -291,19 +291,19 @@ Scoped variables support kind annotations and participate in kind
 inference:
 
 ```elisp
-(type-scope [(f : (* -> *))]
+(forall [(f : (* -> *))]
   (defun fmap-scope [a b] (((a -> b)) (f a)) -> (f b))
   (defun pure-scope [a] (a) -> (f a)))
 ```
 
 ### Nested scopes
 
-Nested `type-scope` blocks shadow outer variables of the same name:
+Nested `forall` blocks shadow outer variables of the same name:
 
 ```elisp
-(type-scope [a]
+(forall [a]
   (defun outer ((list a)) -> a)
-  (type-scope [a]  ; shadows outer 'a'
+  (forall [a]  ; shadows outer 'a'
     (defun inner ((vector a)) -> a)))
 ```
 
@@ -314,7 +314,7 @@ variable acts as a phantom type -- the scope provides documentation but no
 structural connection:
 
 ```elisp
-(type-scope [a]
+(forall [a]
   (type iter)  ; opaque, but conceptually holds 'a'
   (defun make-iter ((list a)) -> iter)
   (defun iter-next (iter) -> (a | nil)))
@@ -322,13 +322,13 @@ structural connection:
 
 ### Exported types
 
-When a `type-scope` appears at the top level of a `.tart` file, all
+When a `forall` appears at the top level of a `.tart` file, all
 contained declarations are exported with the scope variables universally
 quantified:
 
 ```elisp
 ;; iter.tart
-(type-scope [a]
+(forall [a]
   (type iter)
   (defun make-iter ((list a)) -> iter)
   (defun iter-next (iter) -> (a | nil)))
@@ -338,11 +338,11 @@ quantified:
 
 ### Unbound variables in scopes
 
-Using a type variable inside a `type-scope` that is neither declared in the
+Using a type variable inside a `forall` that is neither declared in the
 scope binder nor in a local `[vars]` quantifier produces an error:
 
 ```elisp
-(type-scope [a]
+(forall [a]
   (defun bad (b) -> b))  ; Error: unbound type variable 'b'
 ```
 
@@ -354,9 +354,9 @@ Key modules:
 | ------------------------------------------------------------------------------ | --------------------------------------------- |
 | [`lib/typing/kind.mli`](../lib/typing/kind.mli)                               | Kind representation and kind environments     |
 | [`lib/typing/kind_infer.mli`](../lib/typing/kind_infer.mli)                   | Kind inference algorithm                       |
-| [`lib/sig/sig_parser.ml`](../lib/sig/sig_parser.ml)                           | Parses `[vars]`, kind annotations, `type-scope` |
+| [`lib/sig/sig_parser.ml`](../lib/sig/sig_parser.ml)                           | Parses `[vars]`, kind annotations, `forall` |
 | [`lib/sig/sig_loader.ml`](../lib/sig/sig_loader.ml)                           | Loads signatures with scope and kind contexts  |
-| [`lib/sig/sig_ast.mli`](../lib/sig/sig_ast.mli)                               | AST nodes: `DTypeScope`, `tvar_binder`        |
+| [`lib/sig/sig_ast.mli`](../lib/sig/sig_ast.mli)                               | AST nodes: `DForall`, `tvar_binder`        |
 | [`lib/typing/infer.ml`](../lib/typing/infer.ml)                               | Explicit instantiation (`tart` forms)         |
 | [`lisp/tart.el`](../lisp/tart.el)                                             | `tart` macro (runtime expansion)              |
 

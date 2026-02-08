@@ -409,8 +409,8 @@ let load_defun_with_ctx (ctx : type_context) (d : defun_decl) : Type_env.scheme
   if tvar_names = [] then Type_env.Mono arrow
   else Type_env.Poly (tvar_names, arrow)
 
-(** Convert a defun declaration inside a type-scope to a type scheme. The scope
-    type variables are added to the function's quantifier list. Uses the
+(** Convert a defun declaration inside a forall block to a type scheme. The
+    scope type variables are added to the function's quantifier list. Uses the
     pre-created TVars from the scope for consistency across declarations. *)
 let load_defun_with_scope (ctx : type_context)
     (scope_tvars : (string * Types.typ) list) (d : defun_decl) : Type_env.scheme
@@ -485,7 +485,7 @@ type load_state = {
           auxiliary .tart files (no .el) can be included but not opened. *)
   ls_loaded : string list;  (** Modules already loaded (cycle detection) *)
   ls_scope_tvars : (string * Types.typ) list;
-      (** Type variables from enclosing type-scope blocks *)
+      (** Type variables from enclosing forall blocks *)
   ls_imported_types : string list;
       (** Type names imported from prelude/open/include (for shadowing check) *)
   ls_imported_values : string list;
@@ -1049,21 +1049,21 @@ and load_decls_into_state ?(from_include = false) (sig_file : signature)
                          s)
                      state d.data_ctors
                  else state)
-          | DTypeScope d -> load_type_scope ~from_include sig_file d state
+          | DForall d -> load_forall ~from_include sig_file d state
           | DLet d -> load_let ~from_include sig_file d state))
     (Ok state) sig_file.sig_decls
 
-(** Load a type-scope block. Creates fresh type variables for the scope's
-    binders and processes each inner declaration with those variables available
-    in the type context. *)
-and load_type_scope ?(from_include = false) (sig_file : signature)
-    (scope : type_scope_decl) (state : load_state) : load_state result =
+(** Load a forall block. Creates fresh type variables for the scope's binders
+    and processes each inner declaration with those variables available in the
+    type context. *)
+and load_forall ?(from_include = false) (sig_file : signature)
+    (scope : forall_decl) (state : load_state) : load_state result =
   (* Create fresh TVars for each scope binder.
      Level 0 is used for signature-level type variables. *)
   let scope_tvars =
     List.map
       (fun binder -> (binder.name, Types.fresh_tvar 0))
-      scope.scope_tvar_binders
+      scope.forall_tvar_binders
   in
   (* Extend state with scope type variables *)
   let state_with_scope =
@@ -1075,9 +1075,9 @@ and load_type_scope ?(from_include = false) (sig_file : signature)
       match st_r with
       | Error _ as e -> e
       | Ok st -> load_scoped_decl ~from_include sig_file scope_tvars decl st)
-    (Ok state_with_scope) scope.scope_decls
+    (Ok state_with_scope) scope.forall_decls
 
-(** Load a declaration inside a type-scope. Adds scope type variables to the
+(** Load a declaration inside a forall block. Adds scope type variables to the
     defun's quantifier list. *)
 and load_scoped_decl ?(from_include = false) (sig_file : signature)
     (scope_tvars : (string * Types.typ) list) (decl : decl) (state : load_state)
@@ -1197,9 +1197,9 @@ and load_scoped_decl ?(from_include = false) (sig_file : signature)
                  s)
              state d.data_ctors
          else state)
-  | DTypeScope nested ->
+  | DForall nested ->
       (* Handle nested scopes recursively *)
-      load_type_scope ~from_include sig_file nested state
+      load_forall ~from_include sig_file nested state
   | DLet d -> load_let ~from_include sig_file d state
 
 (** Load a let block. Extends the type context with local aliases for the

@@ -710,18 +710,18 @@ let test_three_way_circular_deps () =
       ())
 
 (* =============================================================================
-   Type-Scope Cross-Module Tests (Spec 19 R7)
+   Forall Cross-Module Tests (Spec 19 R7)
    ============================================================================= *)
 
-(** R7: Functions exported from type-scope are usable from other modules *)
-let test_type_scope_cross_module () =
+(** R7: Functions exported from forall are usable from other modules *)
+let test_forall_cross_module () =
   let files =
     [
       ("iter.el", "(defun make-iter (lst) lst)\n(defun iter-next (it) (car it))");
       ( "iter.tart",
         {|
         (type iter)
-        (type-scope [a]
+        (forall [a]
           (defun make-iter ((list a)) -> iter)
           (defun iter-next (iter) -> (a | nil)))
       |}
@@ -739,14 +739,14 @@ let test_type_scope_cross_module () =
       Alcotest.(check int) "no type errors" 0 (List.length result.type_errors))
 
 (** R7: Type-scope exported functions detect type errors in other modules *)
-let test_type_scope_cross_module_type_error () =
+let test_forall_cross_module_type_error () =
   let files =
     [
       ("iter.el", "(defun make-iter (lst) lst)");
       ( "iter.tart",
         {|
         (type iter)
-        (type-scope [a]
+        (forall [a]
           (defun make-iter ((list a)) -> iter))
       |}
       );
@@ -765,14 +765,14 @@ let test_type_scope_cross_module_type_error () =
         "has type error" true
         (List.length result.type_errors > 0))
 
-(** R4: HK type-scope functions usable from other modules *)
-let test_hk_type_scope_cross_module () =
+(** R4: HK forall functions usable from other modules *)
+let test_hk_forall_cross_module () =
   let files =
     [
       ("functor.el", "(defun fmap-f (fn container) (mapcar fn container))");
       ( "functor.tart",
         {|
-        (type-scope [(f : (* -> *))]
+        (forall [(f : (* -> *))]
           (defun fmap-f [a b] (((a -> b)) (f a)) -> (f b)))
       |}
       );
@@ -791,7 +791,7 @@ let test_hk_type_scope_cross_module () =
       in
       let sexps = parse main_content in
       let result = Module_check.check_module ~config ~filename:el_path sexps in
-      (* HK type-scope functions should be callable from other modules *)
+      (* HK forall functions should be callable from other modules *)
       Alcotest.(check int) "no type errors" 0 (List.length result.type_errors))
 
 (* =============================================================================
@@ -1205,14 +1205,14 @@ let () =
           Alcotest.test_case "no inline uses inferred" `Quick
             test_no_inline_uses_inferred;
         ] );
-      ( "type_scope_cross_module",
+      ( "forall_cross_module",
         [
           Alcotest.test_case "basic cross-module" `Quick
-            test_type_scope_cross_module;
+            test_forall_cross_module;
           Alcotest.test_case "type error cross-module" `Quick
-            test_type_scope_cross_module_type_error;
+            test_forall_cross_module_type_error;
           Alcotest.test_case "HK cross-module" `Quick
-            test_hk_type_scope_cross_module;
+            test_hk_forall_cross_module;
         ] );
       ( "version_constraints",
         [

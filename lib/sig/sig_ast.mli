@@ -117,8 +117,8 @@ type decl =
   | DImportStruct of import_struct_decl
       (** [(import-struct name ...)] - struct import *)
   | DData of data_decl  (** [(data name ...)] - algebraic data type *)
-  | DTypeScope of type_scope_decl
-      (** [(type-scope [vars] ...)] - scoped type variable declarations *)
+  | DForall of forall_decl
+      (** [(forall [vars] ...)] - scoped type variable declarations *)
   | DLet of let_decl
       (** [(let [(type name [vars] def)...] decl...)] - local type aliases *)
 
@@ -236,17 +236,17 @@ and data_decl = {
 
     Generates: constructor functions, predicates, and accessors. *)
 
-and type_scope_decl = {
-  scope_tvar_binders : tvar_binder list;
+and forall_decl = {
+  forall_tvar_binders : tvar_binder list;
       (** Type variables shared across declarations in this scope *)
-  scope_decls : decl list;  (** Declarations within the scope *)
-  scope_loc : span;
+  forall_decls : decl list;  (** Declarations within the scope *)
+  forall_loc : span;
 }
-(** Type scope declaration for sharing type variables across signatures.
+(** Forall declaration for sharing type variables across signatures.
 
     Example:
-    - [(type-scope [a] (defun iter-next ((iter a)) -> (a | nil)) (defun
-       iter-peek ((iter a)) -> (a | nil)))]
+    - [(forall [a] (defun iter-next ((iter a)) -> (a | nil)) (defun iter-peek
+       ((iter a)) -> (a | nil)))]
 
     The type variable [a] is shared across all declarations in the scope. *)
 

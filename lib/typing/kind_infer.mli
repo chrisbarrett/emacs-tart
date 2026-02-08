@@ -73,7 +73,7 @@ val infer_data_kinds : Sig.Sig_ast.data_decl -> infer_result
 
 (** {1 Inference with Scope Context}
 
-    Functions to infer kinds for declarations within a type-scope, where the
+    Functions to infer kinds for declarations within a forall block, where the
     scope provides additional type variables with potentially explicit kind
     annotations. *)
 
@@ -82,9 +82,10 @@ val infer_defun_kinds_with_scope :
 (** Infer kinds for a defun declaration within a scope context.
 
     The scope_env contains kind bindings for type variables from enclosing
-    type-scope blocks. These are combined with the defun's own type parameters.
+    forall block blocks. These are combined with the defun's own type
+    parameters.
 
-    @param scope_env Kind environment from enclosing type-scope
+    @param scope_env Kind environment from enclosing forall block
     @param d The defun declaration to analyze
     @return The inferred kind environment and any errors *)
 
@@ -92,7 +93,7 @@ val infer_type_decl_kinds_with_scope :
   Kind.env -> Sig.Sig_ast.type_decl -> infer_result
 (** Infer kinds for a type declaration within a scope context.
 
-    @param scope_env Kind environment from enclosing type-scope
+    @param scope_env Kind environment from enclosing forall block
     @param d The type declaration to analyze
     @return The inferred kind environment and any errors *)
 
@@ -100,7 +101,7 @@ val infer_data_kinds_with_scope :
   Kind.env -> Sig.Sig_ast.data_decl -> infer_result
 (** Infer kinds for a data declaration within a scope context.
 
-    @param scope_env Kind environment from enclosing type-scope
+    @param scope_env Kind environment from enclosing forall block
     @param d The data declaration to analyze
     @return The inferred kind environment and any errors *)
 

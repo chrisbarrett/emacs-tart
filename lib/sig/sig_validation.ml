@@ -204,15 +204,15 @@ let rec validate_decl ctx (decl : decl) : unit result =
   | DType d -> validate_type_decl ctx d
   | DImportStruct d -> validate_import_struct ctx d
   | DData d -> validate_data ctx d
-  | DTypeScope d ->
+  | DForall d ->
       (* Add scope type variables to context, then validate inner decls *)
-      let scope_var_names = List.map (fun b -> b.name) d.scope_tvar_binders in
+      let scope_var_names = List.map (fun b -> b.name) d.forall_tvar_binders in
       let scope_ctx = with_tvars ctx scope_var_names in
       List.fold_left
         (fun acc inner_decl ->
           let* () = acc in
           validate_decl scope_ctx inner_decl)
-        (Ok ()) d.scope_decls
+        (Ok ()) d.forall_decls
   | DLet d ->
       (* Validate let bindings *)
       let* () =
@@ -247,9 +247,9 @@ let build_context (sig_file : signature) : tvar_context =
     | DType d -> with_type ctx d.type_name
     | DImportStruct d -> with_type ctx d.struct_name
     | DData d -> with_type ctx d.data_name
-    | DTypeScope d ->
+    | DForall d ->
         (* Recursively collect types from scope declarations *)
-        List.fold_left add_decl_types ctx d.scope_decls
+        List.fold_left add_decl_types ctx d.forall_decls
     | DLet d ->
         (* Recursively collect types from body declarations;
            let-bound names are NOT added (they're local) *)

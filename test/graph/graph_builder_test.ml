@@ -221,11 +221,11 @@ let test_tart_with_defun () =
     [ { Graph.target = "seq"; kind = Graph.Open } ]
     edges
 
-let test_nested_in_type_scope () =
+let test_nested_in_forall () =
   let sig_ =
     parse_tart
       {|
-    (type-scope [a]
+    (forall [a]
       (open 'foo)
       (defun my-fn (a) -> a))
   |}
@@ -358,8 +358,7 @@ let () =
           Alcotest.test_case "multiple opens" `Quick test_multiple_opens;
           Alcotest.test_case "mixed open include" `Quick test_mixed_open_include;
           Alcotest.test_case "with defun" `Quick test_tart_with_defun;
-          Alcotest.test_case "nested in type-scope" `Quick
-            test_nested_in_type_scope;
+          Alcotest.test_case "nested in forall" `Quick test_nested_in_forall;
           Alcotest.test_case "no deps" `Quick test_no_deps_tart;
         ] );
       ( "sibling edge",

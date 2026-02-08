@@ -264,7 +264,7 @@ Share type variables across multiple declarations:
 
 [source,elisp]
 ----
-(type-scope [a]
+(forall [a]
   (defun my-container-new () -> (container a))
   (defun my-container-add ((container a) a) -> (container a))
   (defun my-container-get ((container a)) -> (a | nil)))

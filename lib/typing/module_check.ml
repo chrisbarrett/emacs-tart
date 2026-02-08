@@ -633,7 +633,7 @@ let build_scope_kind_env (binders : Sig.Sig_ast.tvar_binder list) : Kind.env =
     Kind.empty_env binders
 
 (** Check kinds for a single declaration. Returns any kind errors found.
-    @param scope_env Kind environment from enclosing type-scope (if any) *)
+    @param scope_env Kind environment from enclosing forall block (if any) *)
 let rec check_decl_kinds_with_scope (scope_env : Kind.env)
     (decl : Sig.Sig_ast.decl) : kind_check_error list =
   match decl with
@@ -646,13 +646,13 @@ let rec check_decl_kinds_with_scope (scope_env : Kind.env)
   | Sig.Sig_ast.DData d ->
       let result = Kind_infer.infer_data_kinds_with_scope scope_env d in
       List.map (fun e -> { kind_error = e; span = d.data_loc }) result.errors
-  | Sig.Sig_ast.DTypeScope d ->
+  | Sig.Sig_ast.DForall d ->
       (* Build kind environment from scope's binders (respecting explicit kind annotations) *)
-      let inner_scope_env = build_scope_kind_env d.scope_tvar_binders in
+      let inner_scope_env = build_scope_kind_env d.forall_tvar_binders in
       (* Merge with outer scope environment (inner shadows outer) *)
       let combined_env = Kind.merge scope_env inner_scope_env in
       (* Recursively check kinds for declarations inside the scope with combined env *)
-      List.concat_map (check_decl_kinds_with_scope combined_env) d.scope_decls
+      List.concat_map (check_decl_kinds_with_scope combined_env) d.forall_decls
   | Sig.Sig_ast.DLet d ->
       (* Recursively check kinds for declarations inside the let body *)
       List.concat_map (check_decl_kinds_with_scope scope_env) d.let_body
