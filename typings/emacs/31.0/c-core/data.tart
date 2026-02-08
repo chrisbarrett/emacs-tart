@@ -47,12 +47,17 @@
 (defun numberp
   ((num) -> t)
   ((_) -> nil))
-(defun natnump (any) -> bool)
+(defun natnump
+  ((int) -> bool)
+  ((_) -> nil))
 (defun number-or-marker-p
   ((num) -> t)
   ((marker) -> t)
   ((_) -> nil))
-(defun integer-or-marker-p (any) -> bool)
+(defun integer-or-marker-p
+  ((int) -> t)
+  ((marker) -> t)
+  ((_) -> nil))
 
 ;; List/cons predicates
 (defun consp
@@ -64,7 +69,9 @@
 (defun listp
   (((list any)) -> t)
   ((_) -> nil))
-(defun nlistp (any) -> bool)
+(defun nlistp
+  (((list any)) -> nil)
+  ((_) -> t))
 
 ;; Sequence predicates
 (defun arrayp (any) -> bool)
@@ -93,7 +100,10 @@
   ((marker) -> t)
   ((_) -> nil))
 (defun user-ptrp (any) -> bool)
-(defun char-or-string-p (any) -> bool)
+(defun char-or-string-p
+  ((int) -> t)
+  ((string) -> t)
+  ((_) -> nil))
 (defun subrp (any) -> bool)
 (defun byte-code-function-p (any) -> bool)
 (defun interpreted-function-p (any) -> bool)
@@ -134,10 +144,14 @@
 (defun cdr [a] ((list a)) -> (list a))
 
 ;; (car-safe OBJ) - car or nil if not a cons
-(defun car-safe (any) -> any)
+(defun car-safe [a b]
+  (((cons a b)) -> a)
+  ((_) -> nil))
 
 ;; (cdr-safe OBJ) - cdr or nil if not a cons
-(defun cdr-safe (any) -> any)
+(defun cdr-safe [a b]
+  (((cons a b)) -> b)
+  ((_) -> nil))
 
 ;; (setcar CELL NEWCAR) - destructive update
 (defun setcar [a] ((cons any any) a) -> a)
@@ -242,7 +256,7 @@
 ;; ===========================================================================
 
 ;; (interactive-form FN) - return interactive spec or nil
-(defun interactive-form (any) -> ((list any) | nil))
+(defun interactive-form ((symbol | (any -> any))) -> ((list any) | nil))
 
 ;; (command-modes FN) - return command modes
 (defun command-modes (any) -> (list symbol))
