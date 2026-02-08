@@ -123,6 +123,7 @@
 (type overlay)     ; Text overlay in a buffer
 (type process)     ; Subprocess or network connection
 (type terminal)    ; Terminal device (display or tty)
+(type finalizer)   ; GC weak reference with cleanup function
 
 ;; Special sequences
 (type bool-vector) ; Bit vector

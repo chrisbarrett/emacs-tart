@@ -45,7 +45,7 @@
 ;; ===========================================================================
 
 ;; (make-string LENGTH INIT &optional MULTIBYTE) - create string
-(defun make-string (int int &optional any) -> string)
+(defun make-string (int int &optional bool) -> string)
 
 ;; ===========================================================================
 ;; Symbols
@@ -89,8 +89,7 @@
 
 ;; (make-finalizer FN) - create weak reference with cleanup function
 ;; FN is called with no arguments when the finalizer is garbage collected.
-;; Returns a finalizer object (always non-nil)
-(defun make-finalizer ((() -> any)) -> truthy)
+(defun make-finalizer ((() -> any)) -> finalizer)
 
 ;; ===========================================================================
 ;; Garbage collection

@@ -222,6 +222,8 @@ let prelude_opaque_defs : (string * string list) list =
     (* Subprocess or network connection *)
     ("terminal", []);
     (* Terminal device (display or tty) *)
+    ("finalizer", []);
+    (* GC weak reference with cleanup function *)
     (* Special sequences *)
     ("bool-vector", []);
     (* Bit vector *)
