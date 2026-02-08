@@ -195,6 +195,11 @@ let rename_msg ~id ~uri ~line ~character ~new_name () =
          ])
     ()
 
+let did_save_msg ~uri () =
+  make_message ~method_:"textDocument/didSave"
+    ~params:(`Assoc [ ("textDocument", `Assoc [ ("uri", `String uri) ]) ])
+    ()
+
 let workspace_symbol_msg ~id ~query () =
   make_message ~id:(`Int id) ~method_:"workspace/symbol"
     ~params:(`Assoc [ ("query", `String query) ])

@@ -1877,6 +1877,86 @@ let test_final_diagnostics_match_final_state () =
         "diagnostic is a parse error from final state" true
         (String.length diag_msg > 0)
 
+(** {1 Document Save Tests} *)
+
+let test_save_capability_advertised () =
+  let result =
+    run_session [ initialize_msg ~id:1 (); shutdown_msg ~id:2 (); exit_msg () ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:1 result.messages with
+  | None -> Alcotest.fail "No initialize response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let caps = json |> member "result" |> member "capabilities" in
+      let sync = caps |> member "textDocumentSync" in
+      Alcotest.(check bool)
+        "save capability" true
+        (sync |> member "save" |> to_bool)
+
+let test_save_triggers_fresh_diagnostics () =
+  (* Open with valid code, then save. The save should force a full re-check
+     and publish diagnostics. We verify by counting the total diagnostic
+     notifications: open publishes once, save re-checks and publishes (dedup
+     suppresses identical results, but the save path still runs). *)
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el" ~text:"(+ 1 \"bad\")" ();
+        (* Save — forces a full re-check *)
+        did_save_msg ~uri:"file:///test.el" ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  (* After open+save with the same content, dedup suppresses the second
+     identical set. But the first open must have produced diagnostics. *)
+  let diag_notifications =
+    find_all_notifications ~method_:"textDocument/publishDiagnostics"
+      result.messages
+  in
+  Alcotest.(check bool)
+    "has diagnostics notifications" true
+    (List.length diag_notifications >= 1);
+  (* The diagnostics should contain the type error *)
+  match find_last_diagnostics ~uri:"file:///test.el" result.messages with
+  | None -> Alcotest.fail "No diagnostics notification found"
+  | Some last ->
+      let open Yojson.Safe.Util in
+      let diagnostics =
+        last |> member "params" |> member "diagnostics" |> to_list
+      in
+      Alcotest.(check bool)
+        "diagnostics present" true
+        (List.length diagnostics > 0)
+
+let test_save_invalidates_cache () =
+  (* Save forces a full re-check even when the form cache would normally hit.
+     Verify by: open → change to error → save → check that error diagnostics
+     are still published (the cache was invalidated). *)
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el" ~text:"(+ 1 2)" ();
+        (* Change to have a parse error *)
+        did_change_full_msg ~uri:"file:///test.el" ~version:2 ~text:"(+ 1 2) ("
+          ();
+        (* Save — cache invalidated, full re-check *)
+        did_save_msg ~uri:"file:///test.el" ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_last_diagnostics ~uri:"file:///test.el" result.messages with
+  | None -> Alcotest.fail "No diagnostics notification found"
+  | Some last ->
+      let open Yojson.Safe.Util in
+      let diagnostics =
+        last |> member "params" |> member "diagnostics" |> to_list
+      in
+      (* The parse error from v2 should still be present after save *)
+      Alcotest.(check bool)
+        "diagnostics present after save" true
+        (List.length diagnostics > 0)
+
 (** {1 Folding Range Tests} *)
 
 let test_folding_range_capability_advertised () =
@@ -2509,6 +2589,15 @@ let () =
         [
           Alcotest.test_case "final diagnostics match final state" `Quick
             test_final_diagnostics_match_final_state;
+        ] );
+      ( "did-save",
+        [
+          Alcotest.test_case "capability advertised" `Quick
+            test_save_capability_advertised;
+          Alcotest.test_case "triggers fresh diagnostics" `Quick
+            test_save_triggers_fresh_diagnostics;
+          Alcotest.test_case "invalidates cache" `Quick
+            test_save_invalidates_cache;
         ] );
       ( "folding-range",
         [

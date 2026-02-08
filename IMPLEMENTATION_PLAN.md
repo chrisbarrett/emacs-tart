@@ -102,4 +102,4 @@ cache is cleared so every form is re-checked from scratch.
 | # | Task | Status |
 |---|------|--------|
 | 1 | Protocol: add `save` to sync options | Done |
-| 2 | Handler + capability + tests | Not started |
+| 2 | Handler + capability + tests | Done |

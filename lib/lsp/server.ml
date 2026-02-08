@@ -613,6 +613,27 @@ let handle_did_change (server : t) (params : Yojson.Safe.t option) : unit =
           invalidate_dependents server ~uri
       | Error e -> Log.info "Error applying changes to %s: %s" uri e)
 
+(** Handle textDocument/didSave notification.
+
+    Forces a full re-check by invalidating the form cache for the saved
+    document, then re-publishes diagnostics and cascades to dependents. *)
+let handle_did_save (server : t) (params : Yojson.Safe.t option) : unit =
+  match params with
+  | None -> Log.debug "didSave missing params"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let text_document = json |> member "textDocument" in
+      let uri = Document.text_document_identifier_of_json text_document in
+      Log.debug "Saved document: %s" uri;
+      (* Invalidate form cache to force a full re-check *)
+      Form_cache.invalidate_document server.form_cache uri;
+      (* Re-publish diagnostics with a fresh check *)
+      (match Document.get_doc server.documents uri with
+      | Some doc -> publish_diagnostics server uri (Some doc.version)
+      | None -> ());
+      (* Cascade to dependents *)
+      invalidate_dependents server ~uri
+
 (** Handle textDocument/didClose notification *)
 let handle_did_close (server : t) (params : Yojson.Safe.t option) : unit =
   match params with
@@ -1465,6 +1486,9 @@ let dispatch_notification (server : t) (msg : Rpc.message) :
       `Continue
   | "textDocument/didClose" ->
       handle_did_close server msg.params;
+      `Continue
+  | "textDocument/didSave" ->
+      handle_did_save server msg.params;
       `Continue
   | "$/cancelRequest" ->
       (* Ignore cancellation for now *)

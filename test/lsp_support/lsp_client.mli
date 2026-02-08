@@ -107,6 +107,9 @@ val rename_msg :
   string
 (** textDocument/rename request. *)
 
+val did_save_msg : uri:string -> unit -> string
+(** textDocument/didSave notification. *)
+
 val workspace_symbol_msg : id:int -> query:string -> unit -> string
 (** workspace/symbol request. *)
 
