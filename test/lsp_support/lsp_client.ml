@@ -205,6 +205,17 @@ let workspace_symbol_msg ~id ~query () =
     ~params:(`Assoc [ ("query", `String query) ])
     ()
 
+let did_change_watched_files_msg ~(changes : (string * int) list) () =
+  let change_jsons =
+    List.map
+      (fun (uri, type_) ->
+        `Assoc [ ("uri", `String uri); ("type", `Int type_) ])
+      changes
+  in
+  make_message ~method_:"workspace/didChangeWatchedFiles"
+    ~params:(`Assoc [ ("changes", `List change_jsons) ])
+    ()
+
 (* {1 Message Parsing} *)
 
 let parse_messages (output : string) : Yojson.Safe.t list =
@@ -264,6 +275,16 @@ let find_response ~id (messages : Yojson.Safe.t list) : Yojson.Safe.t option =
   let open Yojson.Safe.Util in
   List.find_opt
     (fun json -> match json |> member "id" with `Int i -> i = id | _ -> false)
+    messages
+
+let find_request ~method_ (messages : Yojson.Safe.t list) : Yojson.Safe.t option
+    =
+  let open Yojson.Safe.Util in
+  List.find_opt
+    (fun json ->
+      match (json |> member "method", json |> member "id") with
+      | `String m, id when m = method_ && id <> `Null -> true
+      | _ -> false)
     messages
 
 let find_notification ~method_ (messages : Yojson.Safe.t list) :

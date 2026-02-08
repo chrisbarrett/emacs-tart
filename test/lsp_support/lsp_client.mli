@@ -113,6 +113,10 @@ val did_save_msg : uri:string -> unit -> string
 val workspace_symbol_msg : id:int -> query:string -> unit -> string
 (** workspace/symbol request. *)
 
+val did_change_watched_files_msg : changes:(string * int) list -> unit -> string
+(** workspace/didChangeWatchedFiles notification. Each change is a [(uri, type)]
+    pair where type is 1=created, 2=changed, 3=deleted. *)
+
 (** {1 Session Runners} *)
 
 type session_result = {
@@ -136,6 +140,10 @@ val run_initialized_session : string list -> session_result
 
 val find_response : id:int -> Yojson.Safe.t list -> Yojson.Safe.t option
 (** Find a response message whose [id] matches the given integer. *)
+
+val find_request : method_:string -> Yojson.Safe.t list -> Yojson.Safe.t option
+(** Find the first server-initiated request with the given method name (has both
+    [method] and [id] fields). *)
 
 val find_notification :
   method_:string -> Yojson.Safe.t list -> Yojson.Safe.t option

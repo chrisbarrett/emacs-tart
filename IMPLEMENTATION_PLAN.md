@@ -119,4 +119,4 @@ did_change_watched_files_params = { dcwf_changes : file_event list }
 | # | Task | Status |
 |---|------|--------|
 | 1 | Protocol types + write_request | Done |
-| 2 | Registration + handler + tests | Not started |
+| 2 | Registration + handler + tests | Done |

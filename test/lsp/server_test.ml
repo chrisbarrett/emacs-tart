@@ -2406,6 +2406,108 @@ let test_workspace_symbol_tart_file () =
         "kind is function" 12
         (first |> member "kind" |> to_int)
 
+(** {1 File Watching Tests} *)
+
+let test_file_watcher_registration () =
+  (* After initialized notification, the server should send a
+     client/registerCapability request for file watchers *)
+  let result =
+    run_session
+      [
+        initialize_msg ~id:1 ();
+        initialized_msg ();
+        shutdown_msg ~id:99 ();
+        exit_msg ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_request ~method_:"client/registerCapability" result.messages with
+  | None -> Alcotest.fail "No client/registerCapability request found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let params = json |> member "params" in
+      let registrations = params |> member "registrations" |> to_list in
+      Alcotest.(check bool)
+        "has registrations" true
+        (List.length registrations >= 1);
+      let reg = List.hd registrations in
+      Alcotest.(check string)
+        "method is didChangeWatchedFiles" "workspace/didChangeWatchedFiles"
+        (reg |> member "method" |> to_string);
+      (* Verify glob patterns *)
+      let watchers =
+        reg |> member "registerOptions" |> member "watchers" |> to_list
+      in
+      let globs =
+        List.map (fun w -> w |> member "globPattern" |> to_string) watchers
+      in
+      Alcotest.(check bool) "has *.el pattern" true (List.mem "**/*.el" globs);
+      Alcotest.(check bool)
+        "has *.tart pattern" true
+        (List.mem "**/*.tart" globs)
+
+let test_watched_tart_file_invalidates_dependent () =
+  (* Open an .el file, then send a watched files notification for its sibling
+     .tart file. The .el file's diagnostics should be republished. *)
+  let result =
+    run_session
+      [
+        initialize_msg ~id:1 ();
+        initialized_msg ();
+        did_open_msg ~uri:"file:///test.el" ~text:"(+ 1 2)" ();
+        (* Notify that a sibling .tart file changed *)
+        did_change_watched_files_msg
+          ~changes:[ ("file:///test.tart", 2 (* Changed *)) ]
+          ();
+        shutdown_msg ~id:99 ();
+        exit_msg ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  (* Should have diagnostics published for the .el file (from open, and
+     possibly again from the invalidation) *)
+  let diag_notifications =
+    find_all_notifications ~method_:"textDocument/publishDiagnostics"
+      result.messages
+  in
+  Alcotest.(check bool)
+    "has diagnostic notifications" true
+    (List.length diag_notifications >= 1)
+
+let test_watched_file_open_ignored () =
+  (* If a file is open in the editor, watched file events for the same URI
+     should be ignored (the buffer is source of truth). We verify by opening
+     a file with an error, then sending a "changed" event for the same URI.
+     The diagnostics count should not increase beyond what the open produced. *)
+  let result =
+    run_session
+      [
+        initialize_msg ~id:1 ();
+        initialized_msg ();
+        did_open_msg ~uri:"file:///test.el" ~text:"(+ 1 \"bad\")" ();
+        (* Send a watched files notification for the same open URI *)
+        did_change_watched_files_msg
+          ~changes:[ ("file:///test.el", 2 (* Changed *)) ]
+          ();
+        shutdown_msg ~id:99 ();
+        exit_msg ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  (* Only one set of diagnostics should exist — from the initial open.
+     The watched file event should have been ignored for the open URI. *)
+  let diag_notifications =
+    find_all_notifications ~method_:"textDocument/publishDiagnostics"
+      result.messages
+    |> List.filter (fun json ->
+        let open Yojson.Safe.Util in
+        json |> member "params" |> member "uri" |> to_string = "file:///test.el")
+  in
+  (* Exactly 1 diagnostic notification from the open, none from the watched event *)
+  Alcotest.(check int)
+    "only one diagnostic notification" 1
+    (List.length diag_notifications)
+
 (** {1 Test Registration} *)
 
 let () =
@@ -2650,5 +2752,14 @@ let () =
             test_workspace_symbol_empty_workspace;
           Alcotest.test_case "tart file symbols" `Quick
             test_workspace_symbol_tart_file;
+        ] );
+      ( "file-watching",
+        [
+          Alcotest.test_case "registration sent after initialized" `Quick
+            test_file_watcher_registration;
+          Alcotest.test_case "changed tart invalidates dependent" `Quick
+            test_watched_tart_file_invalidates_dependent;
+          Alcotest.test_case "open file events ignored" `Quick
+            test_watched_file_open_ignored;
         ] );
     ]

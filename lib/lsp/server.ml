@@ -13,6 +13,8 @@ type t = {
   oc : Out_channel.t;
   mutable state : state;
   mutable position_encoding : Protocol.position_encoding;
+  mutable next_request_id : int;
+      (** Monotonic counter for server-initiated request IDs *)
   documents : Document.t;
   form_cache : Form_cache.t;
   dependency_graph : Graph.Dependency_graph.t;
@@ -96,6 +98,7 @@ let create ~ic ~oc () : t =
     oc;
     state = Uninitialized;
     position_encoding = Protocol.UTF16;
+    next_request_id = 1;
     documents = Document.create ();
     form_cache = Form_cache.create ();
     dependency_graph = Graph.Dependency_graph.create ();
@@ -509,9 +512,19 @@ let handle_initialize (server : t) (params : Yojson.Safe.t option) :
       in
       Ok (Protocol.initialize_response_to_json ~result ~server_info)
 
-(** Handle initialized notification *)
-let handle_initialized (_server : t) : unit =
-  Log.info "Client confirmed initialization"
+(** Handle initialized notification.
+
+    Registers dynamic file watchers for [.el] and [.tart] files via
+    [client/registerCapability]. The client may ignore this if it doesn't
+    support dynamic registration. *)
+let handle_initialized (server : t) : unit =
+  Log.info "Client confirmed initialization";
+  (* Register file watchers for .el and .tart files *)
+  let id = server.next_request_id in
+  server.next_request_id <- id + 1;
+  let params = Protocol.register_file_watchers_json ~id:(string_of_int id) in
+  Rpc.write_request server.oc ~id ~method_:"client/registerCapability" ~params;
+  Log.debug "Registered file watchers (request id %d)" id
 
 (** Handle shutdown request *)
 let handle_shutdown (server : t) : (Yojson.Safe.t, Rpc.response_error) result =
@@ -633,6 +646,36 @@ let handle_did_save (server : t) (params : Yojson.Safe.t option) : unit =
       | None -> ());
       (* Cascade to dependents *)
       invalidate_dependents server ~uri
+
+(** Handle workspace/didChangeWatchedFiles notification.
+
+    For each file event, skips URIs that are currently open (buffer is source of
+    truth). For changed/created/deleted [.tart] files, invalidates dependents so
+    the next type-check re-reads from disk. *)
+let handle_did_change_watched_files (server : t) (params : Yojson.Safe.t option)
+    : unit =
+  match params with
+  | None -> Log.debug "didChangeWatchedFiles missing params"
+  | Some json ->
+      let dcwf = Protocol.parse_did_change_watched_files_params json in
+      List.iter
+        (fun (event : Protocol.file_event) ->
+          let uri = event.fe_uri in
+          (* Skip open documents — the editor buffer is source of truth *)
+          match Document.get_doc server.documents uri with
+          | Some _ ->
+              Log.debug "Ignoring watched file event for open URI: %s" uri
+          | None -> (
+              match event.fe_type with
+              | Protocol.Changed | Protocol.Created ->
+                  if Signature_tracker.is_tart_file uri then (
+                    Log.debug "Watched .tart file changed: %s" uri;
+                    invalidate_dependents server ~uri)
+                  else Log.debug "Ignoring watched .el file change: %s" uri
+              | Protocol.Deleted ->
+                  Log.debug "Watched file deleted: %s" uri;
+                  invalidate_dependents server ~uri))
+        dcwf.dcwf_changes
 
 (** Handle textDocument/didClose notification *)
 let handle_did_close (server : t) (params : Yojson.Safe.t option) : unit =
@@ -1489,6 +1532,9 @@ let dispatch_notification (server : t) (msg : Rpc.message) :
       `Continue
   | "textDocument/didSave" ->
       handle_did_save server msg.params;
+      `Continue
+  | "workspace/didChangeWatchedFiles" ->
+      handle_did_change_watched_files server msg.params;
       `Continue
   | "$/cancelRequest" ->
       (* Ignore cancellation for now *)
