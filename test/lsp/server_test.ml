@@ -1786,6 +1786,89 @@ let test_final_diagnostics_match_final_state () =
         "diagnostic is a parse error from final state" true
         (String.length diag_msg > 0)
 
+(** {1 Folding Range Tests} *)
+
+let test_folding_range_capability_advertised () =
+  let result =
+    run_session [ initialize_msg ~id:1 (); shutdown_msg ~id:2 (); exit_msg () ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:1 result.messages with
+  | None -> Alcotest.fail "No initialize response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let caps = json |> member "result" |> member "capabilities" in
+      Alcotest.(check bool)
+        "foldingRangeProvider" true
+        (caps |> member "foldingRangeProvider" |> to_bool)
+
+let test_folding_range_multiline_defun () =
+  let text = "(defun foo (x)\n  (+ x 1))" in
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el" ~text ();
+        folding_range_msg ~id:2 ~uri:"file:///test.el" ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "No folding range response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result_field = json |> member "result" in
+      let ranges = result_field |> to_list in
+      Alcotest.(check bool) "has at least one fold" true (List.length ranges > 0);
+      let first = List.hd ranges in
+      Alcotest.(check int) "startLine" 0 (first |> member "startLine" |> to_int);
+      Alcotest.(check int) "endLine" 1 (first |> member "endLine" |> to_int)
+
+let test_folding_range_comments () =
+  let text = ";; line 1\n;; line 2\n;; line 3\n(+ 1 2)" in
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el" ~text ();
+        folding_range_msg ~id:2 ~uri:"file:///test.el" ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "No folding range response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let ranges = json |> member "result" |> to_list in
+      let comment_folds =
+        List.filter
+          (fun r ->
+            match r |> member "kind" with
+            | `String "comment" -> true
+            | _ -> false)
+          ranges
+      in
+      Alcotest.(check bool)
+        "has comment fold" true
+        (List.length comment_folds > 0);
+      let fold = List.hd comment_folds in
+      Alcotest.(check int) "startLine" 0 (fold |> member "startLine" |> to_int);
+      Alcotest.(check int) "endLine" 2 (fold |> member "endLine" |> to_int)
+
+let test_folding_range_empty_file () =
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el" ~text:"" ();
+        folding_range_msg ~id:2 ~uri:"file:///test.el" ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "No folding range response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let ranges = json |> member "result" |> to_list in
+      Alcotest.(check int) "no folds" 0 (List.length ranges)
+
 (** {1 Test Registration} *)
 
 let () =
@@ -1951,6 +2034,15 @@ let () =
         [
           Alcotest.test_case "final diagnostics match final state" `Quick
             test_final_diagnostics_match_final_state;
+        ] );
+      ( "folding-range",
+        [
+          Alcotest.test_case "capability advertised" `Quick
+            test_folding_range_capability_advertised;
+          Alcotest.test_case "multiline defun" `Quick
+            test_folding_range_multiline_defun;
+          Alcotest.test_case "comments" `Quick test_folding_range_comments;
+          Alcotest.test_case "empty file" `Quick test_folding_range_empty_file;
         ] );
       ( "utf16-positions",
         [

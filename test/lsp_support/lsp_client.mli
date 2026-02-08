@@ -72,6 +72,9 @@ val code_action_msg :
   string
 (** textDocument/codeAction request. *)
 
+val folding_range_msg : id:int -> uri:string -> unit -> string
+(** textDocument/foldingRange request. *)
+
 val rename_msg :
   id:int ->
   uri:string ->

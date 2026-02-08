@@ -138,6 +138,11 @@ let code_action_msg ~id ~uri ~start_line ~start_character ~end_line
          ])
     ()
 
+let folding_range_msg ~id ~uri () =
+  make_message ~id:(`Int id) ~method_:"textDocument/foldingRange"
+    ~params:(`Assoc [ ("textDocument", `Assoc [ ("uri", `String uri) ]) ])
+    ()
+
 let rename_msg ~id ~uri ~line ~character ~new_name () =
   make_message ~id:(`Int id) ~method_:"textDocument/rename"
     ~params:

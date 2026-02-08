@@ -160,4 +160,4 @@ start line, and returns the JSON result.
 |---|------|--------|
 | 1 | Protocol types for folding ranges | Done |
 | 2 | Folding module with AST-based folds | Done |
-| 3 | Wire into server | Not started |
+| 3 | Wire into server | Done |

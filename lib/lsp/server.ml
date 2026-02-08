@@ -1294,6 +1294,29 @@ let handle_signature_help (server : t) (params : Yojson.Safe.t option) :
           Signature_help.handle ~config:server.module_config ~uri
             ~doc_text:doc.text ~line ~col)
 
+(** Handle textDocument/foldingRange request.
+
+    Delegates to {!Folding} module. *)
+let handle_folding_range (server : t) (params : Yojson.Safe.t option) :
+    (Yojson.Safe.t, Rpc.response_error) result =
+  match params with
+  | None ->
+      Error
+        {
+          Rpc.code = Rpc.invalid_params;
+          message = "Missing folding range params";
+          data = None;
+        }
+  | Some json -> (
+      let frp = Protocol.parse_folding_range_params json in
+      let uri = frp.frp_text_document in
+      Log.debug "Folding range request for %s" uri;
+      match Document.get_doc server.documents uri with
+      | None ->
+          Log.debug "Document not found: %s" uri;
+          Ok (Protocol.folding_range_result_to_json None)
+      | Some doc -> Folding.handle ~uri ~doc_text:doc.text)
+
 (** {1 Rename} *)
 
 (** Handle textDocument/rename request.
@@ -1389,6 +1412,7 @@ let dispatch_request (server : t) (msg : Rpc.message) :
   | "textDocument/completion" -> handle_completion server msg.params
   | "textDocument/signatureHelp" -> handle_signature_help server msg.params
   | "textDocument/rename" -> handle_rename server msg.params
+  | "textDocument/foldingRange" -> handle_folding_range server msg.params
   | _ ->
       Error
         {
