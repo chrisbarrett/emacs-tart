@@ -6,19 +6,6 @@ Cross-version issues affecting multiple Emacs releases.
 
 _Symbols requiring features tart doesn't have (dependent types, row polymorphism)._
 
-### `car-safe`
-- **Location:** data.c
-- **Issue:** Returns car of argument if cons, nil otherwise. Return type
-  depends on runtime type of argument — would need dependent types to
-  express `(cons a b) -> a | (not-cons) -> nil`
-- **Suggested feature:** Overloaded return types
-
-### `cdr-safe`
-- **Location:** data.c
-- **Issue:** Returns cdr of argument if cons, nil otherwise. Same
-  dependent-type issue as car-safe
-- **Suggested feature:** Overloaded return types
-
 ### `subr-type`
 - **Location:** data.c
 - **Issue:** Returns a function type descriptor as a sexp; the shape
@@ -126,3 +113,12 @@ _Symbols whose behavior can't be captured soundly (dynamic dispatch, eval-based)
 ## ergonomic
 
 _Symbols that are typeable but awkward (excessive annotations at call sites)._
+
+### `concat`
+- **Location:** fns.c
+- **Issue:** Accepts strings, symbols, and lists/vectors of ints.
+  Tightening to `(&rest (string | symbol | (list int) | (vector int)))`
+  causes signature mismatches when callers declare string parameters,
+  because the constraint solver infers the full union as the parameter
+  type. Kept as `(&rest any) -> string`
+- **Suggested feature:** Constraint solver union-avoidance heuristic
