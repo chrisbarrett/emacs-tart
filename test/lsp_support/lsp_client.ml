@@ -261,3 +261,11 @@ let response_error (json : Yojson.Safe.t) : Yojson.Safe.t option =
   match Yojson.Safe.Util.member "error" json with
   | `Null -> None
   | err -> Some err
+
+(* {1 String Helpers} *)
+
+let contains_string ~needle haystack =
+  try
+    ignore (Str.search_forward (Str.regexp_string needle) haystack 0);
+    true
+  with Not_found -> false

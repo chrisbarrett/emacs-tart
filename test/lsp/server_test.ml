@@ -260,12 +260,7 @@ let test_hover_on_literal () =
       let value = contents |> member "value" |> to_string in
       Alcotest.(check bool)
         "contains literal type" true
-        (String.length value > 0
-        &&
-          try
-            let _ = Str.search_forward (Str.regexp_string "42") value 0 in
-            true
-          with Not_found -> false)
+        (contains_string ~needle:"42" value)
 
 let test_hover_on_function_call () =
   let result =
@@ -286,10 +281,7 @@ let test_hover_on_function_call () =
       let value = contents |> member "value" |> to_string in
       Alcotest.(check bool)
         "contains arrow" true
-        (try
-           let _ = Str.search_forward (Str.regexp_string "->") value 0 in
-           true
-         with Not_found -> false)
+        (contains_string ~needle:"->" value)
 
 let test_hover_outside_code () =
   let result =
@@ -348,19 +340,8 @@ let test_hover_instantiated_type () =
       let value = contents |> member "value" |> to_string in
       Alcotest.(check bool)
         "contains resolved type" true
-        (let has_int =
-           try
-             ignore (Str.search_forward (Str.regexp_string "int") value 0);
-             true
-           with Not_found -> false
-         in
-         let has_literal =
-           try
-             ignore (Str.search_forward (Str.regexp_string "1") value 0);
-             true
-           with Not_found -> false
-         in
-         has_int || has_literal)
+        (contains_string ~needle:"int" value
+        || contains_string ~needle:"1" value)
 
 let test_hover_with_errors_elsewhere () =
   let result =
@@ -381,10 +362,7 @@ let test_hover_with_errors_elsewhere () =
       let value = contents |> member "value" |> to_string in
       Alcotest.(check bool)
         "contains literal type" true
-        (try
-           let _ = Str.search_forward (Str.regexp_string "42") value 0 in
-           true
-         with Not_found -> false)
+        (contains_string ~needle:"42" value)
 
 let test_hover_at_error_site () =
   let result =
@@ -445,34 +423,19 @@ let test_diagnostic_has_help_suggestions () =
         List.find_opt
           (fun d ->
             let msg = d |> member "message" |> to_string in
-            String.length msg > 0
-            &&
-              try
-                let _ = Str.search_forward (Str.regexp_string "fop") msg 0 in
-                true
-              with Not_found -> false)
+            contains_string ~needle:"fop" msg)
           diagnostics
       in
       match fop_diag with
       | None -> Alcotest.fail "No diagnostic for 'fop' found"
       | Some diag ->
           let message = diag |> member "message" |> to_string in
-          let has_similar_name =
-            try
-              let _ =
-                Str.search_forward (Str.regexp_string "similar name") message 0
-              in
-              true
-            with Not_found -> false
-          in
-          Alcotest.(check bool) "message has similar name" true has_similar_name;
-          let has_foo =
-            try
-              let _ = Str.search_forward (Str.regexp_string "foo") message 0 in
-              true
-            with Not_found -> false
-          in
-          Alcotest.(check bool) "suggests foo" true has_foo)
+          Alcotest.(check bool)
+            "message has similar name" true
+            (contains_string ~needle:"similar name" message);
+          Alcotest.(check bool)
+            "suggests foo" true
+            (contains_string ~needle:"foo" message))
 
 (** {1 Go to Definition Tests} *)
 
@@ -598,12 +561,7 @@ let test_definition_cross_file () =
         let result_uri = result |> member "uri" |> to_string in
         Alcotest.(check bool)
           "uri points to .tart file" true
-          (try
-             let _ =
-               Str.search_forward (Str.regexp_string ".tart") result_uri 0
-             in
-             true
-           with Not_found -> false)
+          (contains_string ~needle:".tart" result_uri)
 
 let test_definition_cross_file_defvar () =
   let fixture_dir =
@@ -633,12 +591,7 @@ let test_definition_cross_file_defvar () =
         let result_uri = result |> member "uri" |> to_string in
         Alcotest.(check bool)
           "uri points to .tart file" true
-          (try
-             let _ =
-               Str.search_forward (Str.regexp_string ".tart") result_uri 0
-             in
-             true
-           with Not_found -> false)
+          (contains_string ~needle:".tart" result_uri)
 
 (** {1 Find References Tests} *)
 
@@ -849,10 +802,7 @@ let test_code_action_missing_signature_quickfix () =
       let title = action |> member "title" |> to_string in
       Alcotest.(check bool)
         "title contains function name" true
-        (try
-           let _ = Str.search_forward (Str.regexp_string "my-add") title 0 in
-           true
-         with Not_found -> false);
+        (contains_string ~needle:"my-add" title);
       let kind = action |> member "kind" |> to_string in
       Alcotest.(check string) "kind is quickfix" "quickfix" kind
 
@@ -890,27 +840,16 @@ let test_code_action_quickfix_has_edit () =
       let target_uri = text_document |> member "uri" |> to_string in
       Alcotest.(check bool)
         "edit targets .tart file" true
-        (try
-           let _ =
-             Str.search_forward (Str.regexp_string ".tart") target_uri 0
-           in
-           true
-         with Not_found -> false);
+        (contains_string ~needle:".tart" target_uri);
       let edits = doc_change |> member "edits" |> to_list in
       let text_edit = List.hd edits in
       let new_text = text_edit |> member "newText" |> to_string in
       Alcotest.(check bool)
         "new text contains defun" true
-        (try
-           let _ = Str.search_forward (Str.regexp_string "defun") new_text 0 in
-           true
-         with Not_found -> false);
+        (contains_string ~needle:"defun" new_text);
       Alcotest.(check bool)
         "new text contains function name" true
-        (try
-           let _ = Str.search_forward (Str.regexp_string "my-add") new_text 0 in
-           true
-         with Not_found -> false)
+        (contains_string ~needle:"my-add" new_text)
 
 let test_code_action_respects_range () =
   let temp_dir = Filename.temp_dir "tart_test" "" in
@@ -948,10 +887,7 @@ let test_code_action_respects_range () =
       let title = action |> member "title" |> to_string in
       Alcotest.(check bool)
         "action is for fn-two" true
-        (try
-           let _ = Str.search_forward (Str.regexp_string "fn-two") title 0 in
-           true
-         with Not_found -> false)
+        (contains_string ~needle:"fn-two" title)
 
 (** {1 Extract Function Tests} *)
 
@@ -1042,21 +978,13 @@ let test_extract_function_captures_free_vars () =
         List.find
           (fun e ->
             let new_text = e |> member "newText" |> to_string in
-            try
-              let _ =
-                Str.search_forward (Str.regexp_string "defun") new_text 0
-              in
-              true
-            with Not_found -> false)
+            contains_string ~needle:"defun" new_text)
           edits
       in
       let new_text = insert_edit |> member "newText" |> to_string in
       Alcotest.(check bool)
         "has x param" true
-        (try
-           let _ = Str.search_forward (Str.regexp_string "(x y)") new_text 0 in
-           true
-         with Not_found -> false)
+        (contains_string ~needle:"(x y)" new_text)
 
 (** {1 Document Symbol Tests} *)
 

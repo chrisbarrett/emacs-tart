@@ -131,3 +131,9 @@ val response_error : Yojson.Safe.t -> Yojson.Safe.t option
 
 val parse_messages : string -> Yojson.Safe.t list
 (** Parse all Content-Length-delimited JSON-RPC messages from raw output. *)
+
+(** {1 String Helpers} *)
+
+val contains_string : needle:string -> string -> bool
+(** [contains_string ~needle haystack] returns [true] if [needle] is a substring
+    of [haystack]. *)
