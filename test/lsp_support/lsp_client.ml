@@ -148,6 +148,31 @@ let semantic_tokens_msg ~id ~uri () =
     ~params:(`Assoc [ ("textDocument", `Assoc [ ("uri", `String uri) ]) ])
     ()
 
+let inlay_hint_msg ~id ~uri ~start_line ~start_character ~end_line
+    ~end_character () =
+  make_message ~id:(`Int id) ~method_:"textDocument/inlayHint"
+    ~params:
+      (`Assoc
+         [
+           ("textDocument", `Assoc [ ("uri", `String uri) ]);
+           ( "range",
+             `Assoc
+               [
+                 ( "start",
+                   `Assoc
+                     [
+                       ("line", `Int start_line);
+                       ("character", `Int start_character);
+                     ] );
+                 ( "end",
+                   `Assoc
+                     [
+                       ("line", `Int end_line); ("character", `Int end_character);
+                     ] );
+               ] );
+         ])
+    ()
+
 let rename_msg ~id ~uri ~line ~character ~new_name () =
   make_message ~id:(`Int id) ~method_:"textDocument/rename"
     ~params:

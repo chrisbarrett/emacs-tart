@@ -78,6 +78,17 @@ val folding_range_msg : id:int -> uri:string -> unit -> string
 val semantic_tokens_msg : id:int -> uri:string -> unit -> string
 (** textDocument/semanticTokens/full request. *)
 
+val inlay_hint_msg :
+  id:int ->
+  uri:string ->
+  start_line:int ->
+  start_character:int ->
+  end_line:int ->
+  end_character:int ->
+  unit ->
+  string
+(** textDocument/inlayHint request. *)
+
 val rename_msg :
   id:int ->
   uri:string ->

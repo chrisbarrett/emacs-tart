@@ -1967,6 +1967,88 @@ let test_semantic_tokens_comments () =
       in
       Alcotest.(check bool) "has comment token" true (has_comment_type 0)
 
+(** {1 Inlay Hints Tests} *)
+
+let test_inlay_hint_capability_advertised () =
+  let result =
+    run_session [ initialize_msg ~id:1 (); shutdown_msg ~id:2 (); exit_msg () ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:1 result.messages with
+  | None -> Alcotest.fail "No initialize response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let caps = json |> member "result" |> member "capabilities" in
+      let inlay_hint = caps |> member "inlayHintProvider" in
+      Alcotest.(check bool) "inlayHintProvider" true (to_bool inlay_hint)
+
+let test_inlay_hint_defun_return_type () =
+  let text = "(defun foo (x)\n  (+ x 1))" in
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el" ~text ();
+        inlay_hint_msg ~id:2 ~uri:"file:///test.el" ~start_line:0
+          ~start_character:0 ~end_line:1 ~end_character:11 ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "No inlay hint response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let hints = json |> member "result" |> to_list in
+      Alcotest.(check bool) "has hints" true (List.length hints > 0);
+      let hint = List.hd hints in
+      let label = hint |> member "label" |> to_string in
+      Alcotest.(check bool)
+        "label starts with colon" true
+        (String.length label > 0 && label.[0] = ':');
+      let kind = hint |> member "kind" |> to_int in
+      Alcotest.(check int) "kind is Type (1)" 1 kind
+
+let test_inlay_hint_let_binding () =
+  let text = "(let ((x (+ 1 2)))\n  x)" in
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el" ~text ();
+        inlay_hint_msg ~id:2 ~uri:"file:///test.el" ~start_line:0
+          ~start_character:0 ~end_line:1 ~end_character:3 ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "No inlay hint response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let hints = json |> member "result" |> to_list in
+      Alcotest.(check bool) "has let binding hints" true (List.length hints > 0);
+      let hint = List.hd hints in
+      let label = hint |> member "label" |> to_string in
+      Alcotest.(check bool)
+        "label starts with colon" true
+        (String.length label > 0 && label.[0] = ':');
+      let kind = hint |> member "kind" |> to_int in
+      Alcotest.(check int) "kind is Type (1)" 1 kind
+
+let test_inlay_hint_empty_file () =
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el" ~text:"" ();
+        inlay_hint_msg ~id:2 ~uri:"file:///test.el" ~start_line:0
+          ~start_character:0 ~end_line:0 ~end_character:0 ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "No inlay hint response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let hints = json |> member "result" |> to_list in
+      Alcotest.(check int) "no hints" 0 (List.length hints)
+
 (** {1 Test Registration} *)
 
 let () =
@@ -2160,5 +2242,14 @@ let () =
           Alcotest.test_case "hover CJK range" `Quick test_hover_cjk_range;
           Alcotest.test_case "didChange CJK UTF-16" `Quick
             test_did_change_cjk_utf16;
+        ] );
+      ( "inlay-hints",
+        [
+          Alcotest.test_case "capability advertised" `Quick
+            test_inlay_hint_capability_advertised;
+          Alcotest.test_case "defun return type" `Quick
+            test_inlay_hint_defun_return_type;
+          Alcotest.test_case "let binding" `Quick test_inlay_hint_let_binding;
+          Alcotest.test_case "empty file" `Quick test_inlay_hint_empty_file;
         ] );
     ]

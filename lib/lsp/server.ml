@@ -1342,6 +1342,31 @@ let handle_semantic_tokens (server : t) (params : Yojson.Safe.t option) :
           Ok (Protocol.semantic_tokens_result_to_json None)
       | Some doc -> Semantic_tokens.handle ~uri ~doc_text:doc.text)
 
+(** Handle textDocument/inlayHint request.
+
+    Returns inline type annotations for [defun] return types and [let]/[let*]
+    bindings within the requested range. *)
+let handle_inlay_hints (server : t) (params : Yojson.Safe.t option) :
+    (Yojson.Safe.t, Rpc.response_error) result =
+  match params with
+  | None ->
+      Error
+        {
+          Rpc.code = Rpc.invalid_params;
+          message = "Missing inlay hint params";
+          data = None;
+        }
+  | Some json -> (
+      let ihp = Protocol.parse_inlay_hint_params json in
+      let uri = ihp.ihp_text_document in
+      Log.debug "Inlay hint request for %s" uri;
+      match Document.get_doc server.documents uri with
+      | None ->
+          Log.debug "Document not found: %s" uri;
+          Ok (Protocol.inlay_hint_result_to_json None)
+      | Some doc ->
+          Inlay_hints.handle ~uri ~doc_text:doc.text ~range:ihp.ihp_range)
+
 (** {1 Rename} *)
 
 (** Handle textDocument/rename request.
@@ -1440,6 +1465,7 @@ let dispatch_request (server : t) (msg : Rpc.message) :
   | "textDocument/foldingRange" -> handle_folding_range server msg.params
   | "textDocument/semanticTokens/full" ->
       handle_semantic_tokens server msg.params
+  | "textDocument/inlayHint" -> handle_inlay_hints server msg.params
   | _ ->
       Error
         {

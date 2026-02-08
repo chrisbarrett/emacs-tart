@@ -188,4 +188,4 @@ obvious and suppresses the hint.
 |---|------|--------|
 | 1 | Protocol types for inlay hints | Done |
 | 2 | Inlay hints module | Done |
-| 3 | Wire into server | Not started |
+| 3 | Wire into server | Done |
