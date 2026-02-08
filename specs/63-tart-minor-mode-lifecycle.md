@@ -61,10 +61,10 @@ fresh `emacs-lisp-mode`
 
 ## Tasks
 
-- [ ] [R1–R4] Audit current `tart-mode` body for any modifications that
+- [x] [R1–R4] Audit current `tart-mode` body for any modifications that
   need enable/disable handling
-- [ ] [R1–R2] Implement setup/teardown in the `tart-mode` definition body
+- [x] [R1–R2] Implement setup/teardown in the `tart-mode` definition body
   (the `:body` runs on both enable and disable — use the mode variable to
   branch)
-- [ ] [R3] Ensure all modifications are buffer-local
-- [ ] [R4] Test idempotent toggling
+- [x] [R3] Ensure all modifications are buffer-local
+- [x] [R4] Test idempotent toggling

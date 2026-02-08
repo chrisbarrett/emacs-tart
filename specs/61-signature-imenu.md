@@ -51,7 +51,7 @@ Provide `imenu` index definitions for `tart-signature-mode` so that
 
 ## Tasks
 
-- [ ] [R1–R4] Set `imenu-generic-expression` in `tart-signature-mode`
-- [ ] [R4] Set `imenu-create-index-function` if flat fallback needs custom logic
-- [ ] [R1–R3] Manual test: imenu on prelude (mixed types) and buffer.tart
+- [x] [R1–R4] Set `imenu-generic-expression` in `tart-signature-mode`
+- [x] [R4] Set `imenu-create-index-function` if flat fallback needs custom logic
+- [x] [R1–R3] Manual test: imenu on prelude (mixed types) and buffer.tart
   (all functions)

@@ -78,7 +78,7 @@ cannot handle
 
 ## Tasks
 
-- [ ] [R1] Write `lisp/tart.tart`
-- [ ] [R2] Write `lisp/tart-mode.tart`
-- [ ] [R1–R2] Run `tart check` against both files; iterate on signatures
-- [ ] [R3] Document gaps in BUGS.md
+- [x] [R1] Write `lisp/tart.tart`
+- [x] [R2] Write `lisp/tart-mode.tart`
+- [x] [R1–R2] Run `tart check` against both files; iterate on signatures
+- [x] [R3] Document gaps in BUGS.md

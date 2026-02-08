@@ -77,7 +77,7 @@ word
 
 ## Tasks
 
-- [ ] [R1–R5] Define `tart-signature-mode-syntax-table` (modelled on
+- [x] [R1–R5] Define `tart-signature-mode-syntax-table` (modelled on
   `inferior-tart-mode-syntax-table`)
-- [ ] [R1–R5] Set `:syntax-table` in `tart-signature-mode` definition
-- [ ] [R1–R4] Manual smoke test: `check-parens` on prelude and buffer.tart
+- [x] [R1–R5] Set `:syntax-table` in `tart-signature-mode` definition
+- [x] [R1–R4] Manual smoke test: `check-parens` on prelude and buffer.tart

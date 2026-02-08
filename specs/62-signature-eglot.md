@@ -53,7 +53,7 @@ eglot-show-workspace-configuration` shows one server
 
 ## Tasks
 
-- [ ] [R1] Add `tart-signature-mode` to `eglot-server-programs`
+- [x] [R1] Add `tart-signature-mode` to `eglot-server-programs`
   alongside the existing `emacs-lisp-mode` entry
-- [ ] [R3] Verify shared workspace behaviour (may require no code change
+- [x] [R3] Verify shared workspace behaviour (may require no code change
   if eglot's project detection handles it)

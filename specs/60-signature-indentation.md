@@ -78,6 +78,6 @@ argument alignment or 1/2-space body offset as appropriate)
 
 ## Tasks
 
-- [ ] [R1–R3] Register Lisp indent properties for tart forms (`defun`,
+- [x] [R1–R3] Register Lisp indent properties for tart forms (`defun`,
   `defvar`, `type`, `open`, `include`)
-- [ ] [R1–R3] Verify with `indent-region` on prelude and c-core files
+- [x] [R1–R3] Verify with `indent-region` on prelude and c-core files

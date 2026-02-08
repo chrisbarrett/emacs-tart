@@ -67,6 +67,6 @@ names are highlighted
 
 ## Tasks
 
-- [ ] [R1–R5] Define `tart-signature-mode-font-lock-keywords`
-- [ ] [R1–R5] Set `font-lock-defaults` in `tart-signature-mode`
-- [ ] [R1–R5] Manual smoke test on prelude and c-core files
+- [x] [R1–R5] Define `tart-signature-mode-font-lock-keywords`
+- [x] [R1–R5] Set `font-lock-defaults` in `tart-signature-mode`
+- [x] [R1–R5] Manual smoke test on prelude and c-core files
