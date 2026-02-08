@@ -1,127 +1,206 @@
-# Implementation Plan — Workspace Configuration
+# Implementation Plan — Concurrent Processing & Responsiveness
 
-> Source: Task 9 from [Spec 71](./specs/71-lsp-server.md)
+> Source: Tasks 4–7 from [Spec 71](./specs/71-lsp-server.md)
 
 ## Problem
 
-The server detects Emacs version and resolves typings paths at startup,
-but there is no way for the user to override these via editor settings.
-If detection fails or the user works with a different target version,
-they must restart the server. There is also no way to add custom
-signature lookup directories.
+The server runs a blocking `read → process → respond → loop` cycle.
+Every `didChange` immediately triggers `publish_diagnostics` →
+`check_document`, blocking the main loop until the type check completes.
+This means:
+
+- Hover / completion / signature-help requests are blocked during type
+  checks.
+- Rapid keystrokes produce redundant type checks (no debouncing).
+- `$/cancelRequest` is acknowledged but never acted on.
+- Progress reporting is impossible because the loop cannot send
+  notifications while work executes.
 
 ## Current State
 
-- `server.ml`: `detect_emacs_and_build_config` runs once in `create`.
-  `module_config` and `emacs_version` are immutable fields on `server.t`.
-- `protocol.ml`: `initialize_params` has `process_id`, `root_uri`,
-  `capabilities` — no `initializationOptions` field.
-- `Search_path`: has `prepend_dir`, `of_dirs`, `with_emacs_version`.
-- `Module_check`: has `with_search_path`, `with_search_dirs`,
-  `with_stdlib`.
-- No `workspace/didChangeConfiguration` handler exists.
+- `server.ml` `run`: tight `loop () = Rpc.read_message ... process_message ... loop ()`.
+- `publish_diagnostics` runs synchronously inside notification handlers
+  (5 call sites: `apply_settings`, `handle_did_open`, `handle_did_change`,
+  `handle_did_save`, `invalidate_dependents`).
+- `rpc.ml` `read_message` blocks on `In_channel.input_line`.
+- Diagnostic dedup + version staleness checks already exist.
+- OCaml 5.4 available: `Domain`, `Mutex`, `Condition` are in stdlib.
 
 ## Design
 
-### Settings
+### Architecture: single background domain
 
-| Key | Type | Default | Effect |
-|-----|------|---------|--------|
-| `tart.emacsVersion` | `string` | auto-detect | Target Emacs version for typings |
-| `tart.searchPath` | `string[]` | `[]` | Additional `.tart` lookup dirs (prepended) |
+```
+Main domain (IO)              Background domain (worker)
+─────────────────             ──────────────────────────
+read_message ──┐
+               │  mutex-protected queue
+schedule_check ─► enqueue(uri, text, version, config)
+               │
+poll_results ◄── dequeue(uri, version, diagnostics)
+               │
+write responses/
+notifications
+```
 
-`tart.diagnostics.debounceMs` is deferred until concurrent processing
-(task 4) enables timer-based debouncing.
+- **Main domain** owns all IO (stdin/stdout) and server state.
+- **Background domain** runs type checks. It reads work items from a
+  queue, executes `check_document`, and posts results back.
+- A `Unix.pipe` signals the main loop that results are ready, so
+  `Unix.select` can multiplex stdin + result-pipe without busy-waiting.
 
-### Where settings come from
+### Why not threads?
 
-1. **`initializationOptions`** in the `initialize` request — provides
-   initial settings before the first type check.
-2. **`workspace/didChangeConfiguration`** notification — applies
-   settings changes at runtime without restart.
+OCaml 5 domains provide true parallelism. A single background domain is
+simpler than thread pools and avoids GC contention issues with multiple
+domains. The type checker is CPU-bound, so one domain saturates one core
+while the main domain handles IO.
 
-Both paths parse the same settings shape and call the same
-`apply_settings` function.
+### Coalescing
 
-### Applying settings
+The work queue coalesces by URI: if a new check is enqueued for a URI
+that already has a pending entry, the old entry is replaced. This handles
+rapid `didChange` sequences without explicit timers.
 
-`apply_settings` on `server.t`:
+### Debounce
 
-1. Parse `tart.emacsVersion` string via `Emacs_version.parse_version`.
-   If set and different from current, update `emacs_version` field.
-2. Parse `tart.searchPath` array. Prepend each directory to the
-   search path.
-3. Rebuild `module_config` by re-running the same config-building
-   logic as `detect_emacs_and_build_config`, but using the overridden
-   version and additional dirs.
-4. Invalidate all form caches and re-publish diagnostics for all open
-   documents (settings change affects all type checking).
+After enqueuing a check, the main loop sets a per-URI debounce
+timestamp. The worker skips items whose timestamp hasn't expired (the
+item stays in the queue to be retried on the next poll). Default 200 ms,
+configurable via `tart.diagnostics.debounceMs`.
 
-### Making server.t fields mutable
+### Cancellation
 
-`module_config` and `emacs_version` must become `mutable` so
-`apply_settings` can update them after initialization.
+A `pending_requests` table maps request ID → `bool Atomic.t`. Long-running
+request handlers (hover, completion, code actions) check the flag
+periodically. `$/cancelRequest` sets the flag. The main loop catches
+`Cancelled` and responds with error code −32800.
+
+### Progress
+
+During initial check and invalidation cascades, the server sends
+`window/workDoneProgress/create` followed by `begin`/`report`/`end`
+notifications. This requires checking `window.workDoneProgress` in
+client capabilities.
 
 ## Tasks
 
-### Task 1 — Protocol types + settings parsing
+### Task 1 — Extract `schedule_check` abstraction
 
-**Files:** `lib/lsp/protocol.{ml,mli}`
+**Files:** `lib/lsp/server.ml`
 
-- Add `tart_settings` type:
-  `{ ts_emacs_version : string option; ts_search_path : string list }`.
-- Add `parse_tart_settings : Yojson.Safe.t -> tart_settings` — extracts
-  `tart.emacsVersion` (string or null) and `tart.searchPath` (string
-  array or absent → `[]`). Tolerates missing keys gracefully.
-- Add `initialization_options` field to `initialize_params` as
-  `Yojson.Safe.t option`.
-- Update `parse_initialize_params` to extract `initializationOptions`.
-- Add `did_change_configuration_params` type with `settings` field
-  (`Yojson.Safe.t`).
-- Add `parse_did_change_configuration_params`.
+Replace the 5 inline `publish_diagnostics server uri (Some version)`
+call sites with a `schedule_check server uri` helper. In this task the
+helper still calls `publish_diagnostics` synchronously — the point is to
+centralise the call site so task 2 can make it async.
 
-### Task 2 — Server apply_settings + mutable config
+- Add `schedule_check : t -> string -> unit` that looks up the document,
+  extracts version, and calls `publish_diagnostics`.
+- Replace all 5 call sites:
+  - `apply_settings` (line 521)
+  - `handle_did_open` (line 657)
+  - `handle_did_change` (line 688)
+  - `handle_did_save` (line 708)
+  - `invalidate_dependents` (line 635)
+- Verify all 122 tests still pass.
 
-**Files:** `lib/lsp/server.{ml,mli}`
+### Task 2 — Worker module + async check loop
 
-- Make `module_config` and `emacs_version` mutable on `server.t`.
-- Extract `build_config` helper from `detect_emacs_and_build_config`
-  that takes `?emacs_version:version option` and
-  `?extra_search_dirs:string list` parameters, so it can be reused
-  with overrides.
-- Add `apply_settings : t -> Protocol.tart_settings -> unit`:
-  1. Parse emacs version string if provided.
-  2. Rebuild config via `build_config` with overrides.
-  3. Update `server.module_config` and `server.emacs_version`.
-  4. Invalidate all form caches (`Form_cache.invalidate_all`).
-  5. Re-publish diagnostics for all open documents.
-- Wire `initializationOptions` into `handle_initialize`: after state
-  transition, parse settings from init options (if present) and call
-  `apply_settings`.
-- Add `handle_did_change_configuration` notification handler: parse
-  params, extract settings, call `apply_settings`.
-- Add `"workspace/didChangeConfiguration"` to `dispatch_notification`.
-- Add `Form_cache.invalidate_all` if it doesn't exist (clear all
-  entries).
+**Files:** `lib/lsp/worker.{ml,mli}`, `lib/lsp/server.ml`, `lib/lsp/dune`
 
-### Task 3 — Tests
+Create `worker.ml` with a background domain that processes type checks:
+
+- Types: `work_item` (uri, text, version, config snapshot, sig_tracker
+  snapshot, is_tart flag), `work_result` (uri, version,
+  diagnostics, stats option).
+- `create : unit -> t` — spawns background domain, creates work/result
+  queues + Unix pipe for signalling.
+- `enqueue : t -> work_item -> unit` — adds item to work queue,
+  coalescing by URI. Writes a byte to the pipe to wake `select`.
+- `poll_results : t -> work_result list` — drains the result queue
+  (non-blocking).
+- `signal_fd : t -> Unix.file_descr` — the read end of the pipe, for
+  `select`.
+- `shutdown : t -> unit` — signals the worker to stop and joins.
+
+Modify `server.ml`:
+- Add `worker : Worker.t` field to `server.t`.
+- Change `schedule_check` to enqueue work items instead of calling
+  `publish_diagnostics` directly.
+- Change `run` to use `Unix.select` on `[stdin_fd; worker.signal_fd]`
+  with a short timeout. On worker signal, call `poll_results` and
+  publish diagnostics from results.
+- `publish_diagnostics` becomes result-only: takes pre-computed
+  diagnostics and writes the notification (no type checking).
+
+Add `unix` to dune libraries.
+
+### Task 3 — Debounce timer
+
+**Files:** `lib/lsp/server.ml`
+
+- Add `pending_checks : (string, float) Hashtbl.t` to `server.t`
+  (URI → earliest-allowed-check timestamp).
+- Add `debounce_ms : int` to `server.t` (default 200, from settings).
+- In `schedule_check`, set `pending_checks.(uri) <- Unix.gettimeofday() + debounce_ms/1000`.
+- In worker loop, before processing an item, check if
+  `Unix.gettimeofday() >= pending_checks.(uri)`. If not, re-enqueue
+  and sleep briefly.
+- Wire `tart.diagnostics.debounceMs` setting into `apply_settings`.
+
+### Task 4 — Request cancellation
+
+**Files:** `lib/lsp/server.ml`, `lib/lsp/rpc.ml`
+
+- Add `pending_requests : (Yojson.Safe.t, bool Atomic.t) Hashtbl.t` to
+  `server.t`.
+- Add `Cancelled` exception.
+- In `process_message`, before dispatching a request: create an
+  `Atomic.make false`, store in table. After response, remove from
+  table.
+- `$/cancelRequest` handler: parse id from params, look up in table,
+  `Atomic.set flag true`.
+- Catch `Cancelled` in `process_message`, respond with
+  `Rpc.request_cancelled` (−32800).
+- For now, only `check_document` checks the flag (between form-level
+  cache lookups). Other handlers are fast enough not to need it.
+
+### Task 5 — Progress reporting
+
+**Files:** `lib/lsp/protocol.{ml,mli}`, `lib/lsp/server.ml`
+
+- Parse `window.workDoneProgress` from client capabilities.
+- Add protocol types: `work_done_progress_begin`,
+  `work_done_progress_report`, `work_done_progress_end` with JSON
+  encoders.
+- Add `send_progress_begin`, `send_progress_report`,
+  `send_progress_end` helpers to server.
+- In `apply_settings` (full invalidation): send progress begin, report
+  per-document, end.
+- In `handle_did_open` with many dependents: send progress for
+  cascade.
+
+### Task 6 — Tests
 
 **Files:** `test/lsp/server_test.ml`,
 `test/lsp_support/lsp_client.{ml,mli}`
 
-- Add `did_change_configuration_msg` to `lsp_client.{ml,mli}`.
-- Tests:
-  - `initializationOptions` with `emacsVersion` applied (verify
-    diagnostics are published after initialize with custom version).
-  - `workspace/didChangeConfiguration` with `searchPath` change
-    (open doc, change config, verify diagnostics re-published).
-  - Empty/null settings tolerated (no crash on `{}` or missing keys).
-  - Unknown keys ignored (extra fields in settings don't cause errors).
+- Add `cancel_request_msg` to lsp_client.
+- Test: schedule_check centralisation (open doc, verify diagnostics).
+- Test: rapid didChange coalescing (3 changes, verify final diagnostics
+  match final state — existing test may suffice).
+- Test: `$/cancelRequest` returns −32800 for a pending request.
+- Test: empty settings debounceMs parsed (verify no crash).
+- Test: progress notifications appear during invalidation cascade (if
+  client advertises `window.workDoneProgress`).
 
 ## Checklist
 
 | # | Task | Status |
 |---|------|--------|
-| 1 | Protocol types + settings parsing | Done |
-| 2 | Server apply_settings + mutable config | Done |
-| 3 | Tests | Done |
+| 1 | Extract `schedule_check` abstraction | Not started |
+| 2 | Worker module + async check loop | Not started |
+| 3 | Debounce timer | Not started |
+| 4 | Request cancellation | Not started |
+| 5 | Progress reporting | Not started |
+| 6 | Tests | Not started |
