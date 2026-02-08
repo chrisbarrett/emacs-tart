@@ -1494,9 +1494,9 @@ let handle_prepare_rename (server : t) (params : Yojson.Safe.t option) :
 
 (** Handle textDocument/rename request.
 
-    Renames all occurrences of a symbol within the document. Uses
-    find_references to locate all occurrences and generates text edits to
-    replace each one with the new name. *)
+    Renames all occurrences of a symbol across all open documents. Uses
+    {!find_references_in_workspace} to locate occurrences workspace-wide and
+    generates text edits grouped by document URI. *)
 let handle_rename (server : t) (params : Yojson.Safe.t option) :
     (Yojson.Safe.t, Rpc.response_error) result =
   require_params "rename" params @@ fun json ->
@@ -1513,7 +1513,7 @@ let handle_rename (server : t) (params : Yojson.Safe.t option) :
       ~col:rename_params.rp_position.character
   in
   with_sexp_at_cursor ~doc ~uri ~line ~col ~not_found:rename_null
-  @@ fun parse_result ctx ->
+  @@ fun _parse_result ctx ->
   (* Extract symbol name from the target sexp *)
   match symbol_name_of_sexp ctx.target with
   | None ->
@@ -1521,27 +1521,42 @@ let handle_rename (server : t) (params : Yojson.Safe.t option) :
       Ok (Protocol.rename_result_to_json None)
   | Some name ->
       Log.debug "Renaming '%s' to '%s'" name new_name;
-      (* Find all references in the document *)
-      let ref_spans = find_references name parse_result.sexps in
-      Log.debug "Found %d occurrences to rename" (List.length ref_spans);
-      if ref_spans = [] then Ok (Protocol.rename_result_to_json None)
+      (* Find all references across all open documents *)
+      let locations =
+        find_references_in_workspace server ~origin_uri:uri name
+      in
+      Log.debug "Found %d occurrences to rename" (List.length locations);
+      if locations = [] then Ok (Protocol.rename_result_to_json None)
       else
-        (* Generate text edits for each occurrence *)
-        let edits =
-          List.map
-            (fun span : Protocol.text_edit ->
-              {
-                te_range = range_of_span ~text:doc.text span;
-                new_text = new_name;
-              })
-            ref_spans
+        (* Group locations by URI *)
+        let by_uri = Hashtbl.create 16 in
+        List.iter
+          (fun (loc : Protocol.location) ->
+            let existing =
+              match Hashtbl.find_opt by_uri loc.uri with
+              | Some edits -> edits
+              | None -> []
+            in
+            let edit : Protocol.text_edit =
+              { te_range = loc.range; new_text = new_name }
+            in
+            Hashtbl.replace by_uri loc.uri (edit :: existing))
+          locations;
+        (* Build text_document_edit for each document *)
+        let document_changes =
+          Hashtbl.fold
+            (fun doc_uri edits acc ->
+              let doc_edit : Protocol.text_document_edit =
+                {
+                  tde_uri = doc_uri;
+                  tde_version = None;
+                  edits = List.rev edits;
+                }
+              in
+              doc_edit :: acc)
+            by_uri []
         in
-        let doc_edit : Protocol.text_document_edit =
-          { tde_uri = uri; tde_version = None; edits }
-        in
-        let workspace_edit : Protocol.workspace_edit =
-          { document_changes = [ doc_edit ] }
-        in
+        let workspace_edit : Protocol.workspace_edit = { document_changes } in
         Ok (Protocol.rename_result_to_json (Some workspace_edit))
 
 (** Handle workspace/symbol request.

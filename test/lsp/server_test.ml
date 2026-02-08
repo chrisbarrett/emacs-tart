@@ -1591,6 +1591,49 @@ let test_rename_has_correct_uri () =
       let uri = text_doc |> member "uri" |> to_string in
       Alcotest.(check string) "uri matches" "file:///my-project/test.el" uri
 
+let test_rename_cross_file () =
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///a.el"
+          ~text:"(defun shared-fn () 42)\n(shared-fn)" ();
+        did_open_msg ~uri:"file:///b.el" ~text:"(shared-fn)\n(shared-fn)" ();
+        rename_msg ~id:2 ~uri:"file:///a.el" ~line:0 ~character:7
+          ~new_name:"renamed-fn" ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "No rename response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      Alcotest.(check bool) "result is not null" true (result <> `Null);
+      let doc_changes = result |> member "documentChanges" |> to_list in
+      Alcotest.(check bool)
+        "has 2 document changes" true
+        (List.length doc_changes = 2);
+      (* Collect all edits from all documents *)
+      let all_edits =
+        List.concat_map (fun dc -> dc |> member "edits" |> to_list) doc_changes
+      in
+      (* 2 in a.el (defun name + call) + 2 in b.el *)
+      Alcotest.(check int) "has 4 total edits" 4 (List.length all_edits);
+      (* All edits have the new name *)
+      List.iter
+        (fun edit ->
+          let new_text = edit |> member "newText" |> to_string in
+          Alcotest.(check string) "newText is renamed-fn" "renamed-fn" new_text)
+        all_edits;
+      (* Both URIs are present *)
+      let uris =
+        List.map
+          (fun dc -> dc |> member "textDocument" |> member "uri" |> to_string)
+          doc_changes
+      in
+      Alcotest.(check bool) "a.el present" true (List.mem "file:///a.el" uris);
+      Alcotest.(check bool) "b.el present" true (List.mem "file:///b.el" uris)
+
 (** {1 Prepare Rename Tests} *)
 
 let test_prepare_rename_symbol () =
@@ -2999,6 +3042,7 @@ let () =
           Alcotest.test_case "not on symbol" `Quick test_rename_not_on_symbol;
           Alcotest.test_case "has correct uri" `Quick
             test_rename_has_correct_uri;
+          Alcotest.test_case "cross-file" `Quick test_rename_cross_file;
         ] );
       ( "prepare-rename",
         [
