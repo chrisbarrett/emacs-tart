@@ -495,6 +495,7 @@ let handle_initialize (server : t) (params : Yojson.Safe.t option) :
               Protocol.process_id = None;
               root_uri = None;
               capabilities = { text_document = None; general = None };
+              initialization_options = None;
             }
       in
       Log.info "Initializing (root: %s)"

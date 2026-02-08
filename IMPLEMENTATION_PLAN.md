@@ -1,122 +1,127 @@
-# Implementation Plan — File Watching
+# Implementation Plan — Workspace Configuration
 
-> Source: Task 8 from [Spec 71](./specs/71-lsp-server.md)
+> Source: Task 9 from [Spec 71](./specs/71-lsp-server.md)
 
 ## Problem
 
-When `.el` or `.tart` files change on disk outside the editor (branch
-switches, `git stash pop`, code generation, external editors), the
-server doesn't notice. Sibling `.tart` signatures may become stale,
-causing incorrect diagnostics in open `.el` files until the user
-manually closes and reopens them.
+The server detects Emacs version and resolves typings paths at startup,
+but there is no way for the user to override these via editor settings.
+If detection fails or the user works with a different target version,
+they must restart the server. There is also no way to add custom
+signature lookup directories.
 
 ## Current State
 
-- `server.ml`: `handle_did_save` invalidates the form cache and
-  re-checks, but only for documents the editor explicitly saves.
-  There is no handler for `workspace/didChangeWatchedFiles`.
-- `rpc.{ml,mli}`: Only `write_response` and `write_notification`
-  exist. There is no `write_request` for server→client requests
-  (needed for `client/registerCapability`).
-- `protocol.{ml,mli}`: No file event types, no registration types.
-- `signature_tracker`: `get_by_path` checks the tracker first, then
-  falls back to disk. Closed `.tart` files are read from disk at type
-  check time via `read_sibling_sig_content`.
-- `graph_tracker`: `update_document` re-extracts edges from document
-  text. `dependent_uris` finds open dependents of a module.
-- `invalidate_dependents` in `server.ml` handles the cascade pattern.
+- `server.ml`: `detect_emacs_and_build_config` runs once in `create`.
+  `module_config` and `emacs_version` are immutable fields on `server.t`.
+- `protocol.ml`: `initialize_params` has `process_id`, `root_uri`,
+  `capabilities` — no `initializationOptions` field.
+- `Search_path`: has `prepend_dir`, `of_dirs`, `with_emacs_version`.
+- `Module_check`: has `with_search_path`, `with_search_dirs`,
+  `with_stdlib`.
+- No `workspace/didChangeConfiguration` handler exists.
 
 ## Design
 
-### Registration
+### Settings
 
-After receiving `initialized`, the server sends a
-`client/registerCapability` request to dynamically register a
-`workspace/didChangeWatchedFiles` watcher with glob patterns
-`**/*.el` and `**/*.tart`.
+| Key | Type | Default | Effect |
+|-----|------|---------|--------|
+| `tart.emacsVersion` | `string` | auto-detect | Target Emacs version for typings |
+| `tart.searchPath` | `string[]` | `[]` | Additional `.tart` lookup dirs (prepended) |
 
-This requires adding `write_request` to `rpc.{ml,mli}` (a JSON-RPC
-request with an `id` field that expects a response). The server tracks
-a monotonic request ID counter for outgoing requests.
+`tart.diagnostics.debounceMs` is deferred until concurrent processing
+(task 4) enables timer-based debouncing.
 
-The server doesn't need to process the response — it's a
-fire-and-forget registration. The client may not support dynamic
-registration, in which case it simply ignores the request.
+### Where settings come from
 
-### Handler behaviour
+1. **`initializationOptions`** in the `initialize` request — provides
+   initial settings before the first type check.
+2. **`workspace/didChangeConfiguration`** notification — applies
+   settings changes at runtime without restart.
 
-On `workspace/didChangeWatchedFiles`:
+Both paths parse the same settings shape and call the same
+`apply_settings` function.
 
-1. Parse the `changes` array (each has `uri` and `type`: created=1,
-   changed=2, deleted=3).
-2. For each change, skip if the URI is currently open (buffer is
-   source of truth).
-3. For changed/created `.tart` files: invalidate dependents via
-   `invalidate_dependents` (forces re-read from disk on next check).
-4. For changed/created `.el` files (not open): no action needed (the
-   server only type-checks open documents).
-5. For deleted files: invalidate dependents (their require/autoload
-   may now be broken).
+### Applying settings
 
-The key insight: we don't need to load/track closed files. We just
-need to invalidate caches so the next type-check re-reads from disk.
+`apply_settings` on `server.t`:
 
-### Params types
+1. Parse `tart.emacsVersion` string via `Emacs_version.parse_version`.
+   If set and different from current, update `emacs_version` field.
+2. Parse `tart.searchPath` array. Prepend each directory to the
+   search path.
+3. Rebuild `module_config` by re-running the same config-building
+   logic as `detect_emacs_and_build_config`, but using the overridden
+   version and additional dirs.
+4. Invalidate all form caches and re-publish diagnostics for all open
+   documents (settings change affects all type checking).
 
-```
-file_change_type = Created | Changed | Deleted
-file_event = { fe_uri : string; fe_type : file_change_type }
-did_change_watched_files_params = { dcwf_changes : file_event list }
-```
+### Making server.t fields mutable
+
+`module_config` and `emacs_version` must become `mutable` so
+`apply_settings` can update them after initialization.
 
 ## Tasks
 
-### Task 1 — Protocol types + write_request
+### Task 1 — Protocol types + settings parsing
 
-**Files:** `lib/lsp/rpc.{ml,mli}`, `lib/lsp/protocol.{ml,mli}`
+**Files:** `lib/lsp/protocol.{ml,mli}`
 
-- Add `write_request` to `rpc.{ml,mli}`: sends a JSON-RPC message
-  with `id`, `method`, and `params`. Takes an `id` parameter (server
-  generates IDs).
-- Add `file_change_type` (Created=1, Changed=2, Deleted=3),
-  `file_event`, `did_change_watched_files_params` to
-  `protocol.{ml,mli}`.
-- Add `parse_did_change_watched_files_params` JSON parser.
-- Add `register_file_watchers_json` helper that builds the
-  `client/registerCapability` params JSON for
-  `workspace/didChangeWatchedFiles` with `**/*.el` and `**/*.tart`
-  glob patterns.
+- Add `tart_settings` type:
+  `{ ts_emacs_version : string option; ts_search_path : string list }`.
+- Add `parse_tart_settings : Yojson.Safe.t -> tart_settings` — extracts
+  `tart.emacsVersion` (string or null) and `tart.searchPath` (string
+  array or absent → `[]`). Tolerates missing keys gracefully.
+- Add `initialization_options` field to `initialize_params` as
+  `Yojson.Safe.t option`.
+- Update `parse_initialize_params` to extract `initializationOptions`.
+- Add `did_change_configuration_params` type with `settings` field
+  (`Yojson.Safe.t`).
+- Add `parse_did_change_configuration_params`.
 
-### Task 2 — Registration + handler + tests
+### Task 2 — Server apply_settings + mutable config
 
-**Files:** `lib/lsp/server.ml`, `test/lsp/server_test.ml`,
+**Files:** `lib/lsp/server.{ml,mli}`
+
+- Make `module_config` and `emacs_version` mutable on `server.t`.
+- Extract `build_config` helper from `detect_emacs_and_build_config`
+  that takes `?emacs_version:version option` and
+  `?extra_search_dirs:string list` parameters, so it can be reused
+  with overrides.
+- Add `apply_settings : t -> Protocol.tart_settings -> unit`:
+  1. Parse emacs version string if provided.
+  2. Rebuild config via `build_config` with overrides.
+  3. Update `server.module_config` and `server.emacs_version`.
+  4. Invalidate all form caches (`Form_cache.invalidate_all`).
+  5. Re-publish diagnostics for all open documents.
+- Wire `initializationOptions` into `handle_initialize`: after state
+  transition, parse settings from init options (if present) and call
+  `apply_settings`.
+- Add `handle_did_change_configuration` notification handler: parse
+  params, extract settings, call `apply_settings`.
+- Add `"workspace/didChangeConfiguration"` to `dispatch_notification`.
+- Add `Form_cache.invalidate_all` if it doesn't exist (clear all
+  entries).
+
+### Task 3 — Tests
+
+**Files:** `test/lsp/server_test.ml`,
 `test/lsp_support/lsp_client.{ml,mli}`
 
-- Add a `mutable next_request_id : int` field to `server.t`.
-- In `handle_initialized`, after logging, call `write_request` with
-  `client/registerCapability` to register the file watchers.
-- Add `handle_did_change_watched_files` notification handler:
-  1. Parse params.
-  2. For each `file_event`, skip if URI is open
-     (`Document.get_doc` returns `Some`).
-  3. For changed/created `.tart` files: invalidate dependents via
-     `invalidate_dependents`.
-  4. For changed/created `.el` files (not open): no action needed.
-  5. For deleted files: invalidate dependents.
-- Add `"workspace/didChangeWatchedFiles"` to `dispatch_notification`.
-- Add `did_change_watched_files_msg` to `lsp_client.{ml,mli}`.
+- Add `did_change_configuration_msg` to `lsp_client.{ml,mli}`.
 - Tests:
-  - Registration request sent after initialized (verify
-    `client/registerCapability` appears in messages).
-  - Changed .tart file invalidates dependent (open .el, send watched
-    files notification for sibling .tart, verify diagnostics
-    republished).
-  - Open file events ignored (open a file, send watched files
-    notification for same URI, verify no extra diagnostics).
+  - `initializationOptions` with `emacsVersion` applied (verify
+    diagnostics are published after initialize with custom version).
+  - `workspace/didChangeConfiguration` with `searchPath` change
+    (open doc, change config, verify diagnostics re-published).
+  - Empty/null settings tolerated (no crash on `{}` or missing keys).
+  - Unknown keys ignored (extra fields in settings don't cause errors).
 
 ## Checklist
 
 | # | Task | Status |
 |---|------|--------|
-| 1 | Protocol types + write_request | Done |
-| 2 | Registration + handler + tests | Done |
+| 1 | Protocol types + settings parsing | Not started |
+| 2 | Server apply_settings + mutable config | Not started |
+| 3 | Tests | Not started |

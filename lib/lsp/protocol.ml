@@ -30,6 +30,7 @@ type initialize_params = {
   process_id : int option;
   root_uri : string option;
   capabilities : client_capabilities;
+  initialization_options : Yojson.Safe.t option;
 }
 (** Initialize request params *)
 
@@ -141,7 +142,12 @@ let parse_initialize_params (json : Yojson.Safe.t) : initialize_params =
     | `Null -> { text_document = None; general = None }
     | caps -> parse_client_capabilities caps
   in
-  { process_id; root_uri; capabilities }
+  let initialization_options =
+    match json |> member "initializationOptions" with
+    | `Null -> None
+    | opts -> Some opts
+  in
+  { process_id; root_uri; capabilities; initialization_options }
 
 (** {1 JSON Encoding} *)
 
@@ -1402,3 +1408,33 @@ let register_file_watchers_json ~(id : string) : Yojson.Safe.t =
               ];
           ] );
     ]
+
+(** {1 Workspace Configuration} *)
+
+type tart_settings = {
+  ts_emacs_version : string option;
+  ts_search_path : string list;
+}
+(** User-configurable settings *)
+
+let parse_tart_settings (json : Yojson.Safe.t) : tart_settings =
+  let open Yojson.Safe.Util in
+  let ts_emacs_version =
+    match json |> member "tart.emacsVersion" with
+    | `String s when s <> "" -> Some s
+    | _ -> None
+  in
+  let ts_search_path =
+    match json |> member "tart.searchPath" with
+    | `List items -> List.filter_map to_string_option items
+    | _ -> []
+  in
+  { ts_emacs_version; ts_search_path }
+
+type did_change_configuration_params = { dcc_settings : Yojson.Safe.t }
+(** Parameters for workspace/didChangeConfiguration notification *)
+
+let parse_did_change_configuration_params (json : Yojson.Safe.t) :
+    did_change_configuration_params =
+  let open Yojson.Safe.Util in
+  { dcc_settings = json |> member "settings" }

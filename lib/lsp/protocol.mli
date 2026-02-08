@@ -31,6 +31,7 @@ type initialize_params = {
   process_id : int option;
   root_uri : string option;
   capabilities : client_capabilities;
+  initialization_options : Yojson.Safe.t option;
 }
 (** Initialize request params *)
 
@@ -590,3 +591,29 @@ val register_file_watchers_json : id:string -> Yojson.Safe.t
 (** Build the [client/registerCapability] params JSON for registering
     [workspace/didChangeWatchedFiles] watchers with [**/*.el] and [**/*.tart]
     glob patterns. The [id] is used as the registration ID. *)
+
+(** {1 Workspace Configuration} *)
+
+type tart_settings = {
+  ts_emacs_version : string option;
+  ts_search_path : string list;
+}
+(** User-configurable settings for the tart language server.
+
+    [ts_emacs_version] overrides the auto-detected Emacs version for typings
+    lookup. [ts_search_path] provides additional directories to prepend to the
+    signature search path. *)
+
+val parse_tart_settings : Yojson.Safe.t -> tart_settings
+(** Parse tart settings from JSON.
+
+    Expects an object with optional [tart.emacsVersion] (string or null) and
+    optional [tart.searchPath] (string array). Missing keys or unexpected types
+    are tolerated gracefully with defaults. *)
+
+type did_change_configuration_params = { dcc_settings : Yojson.Safe.t }
+(** Parameters for [workspace/didChangeConfiguration] notification *)
+
+val parse_did_change_configuration_params :
+  Yojson.Safe.t -> did_change_configuration_params
+(** Parse [workspace/didChangeConfiguration] params from JSON *)
