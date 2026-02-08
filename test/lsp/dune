@@ -54,3 +54,14 @@
  (name semantic_tokens_test)
  (modules semantic_tokens_test)
  (libraries tart.lsp alcotest))
+
+(test
+ (name inlay_hints_test)
+ (modules inlay_hints_test)
+ (libraries tart.lsp alcotest)
+ (deps
+  (source_tree %{project_root}/typings))
+ (action
+  (chdir
+   %{project_root}
+   (run %{test}))))
