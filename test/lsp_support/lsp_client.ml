@@ -284,6 +284,16 @@ let on_type_formatting_msg ~id ~uri ~line ~character ~ch () =
          ])
     ()
 
+let document_diagnostic_msg ~id ~uri ?previous_result_id () =
+  let fields = [ ("textDocument", `Assoc [ ("uri", `String uri) ]) ] in
+  let fields =
+    match previous_result_id with
+    | Some rid -> fields @ [ ("previousResultId", `String rid) ]
+    | None -> fields
+  in
+  make_message ~id:(`Int id) ~method_:"textDocument/diagnostic"
+    ~params:(`Assoc fields) ()
+
 (* {1 Message Parsing} *)
 
 let parse_messages (output : string) : Yojson.Safe.t list =

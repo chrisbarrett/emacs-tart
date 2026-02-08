@@ -3697,6 +3697,126 @@ let test_on_type_formatting_close_paren_already_newline () =
       let result_json = json |> member "result" in
       Alcotest.(check bool) "result is null" true (result_json = `Null)
 
+(** {1 Pull-Based Diagnostics Tests} *)
+
+let test_pull_diagnostic_capability_advertised () =
+  let result =
+    run_session [ initialize_msg ~id:1 (); shutdown_msg ~id:2 (); exit_msg () ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:1 result.messages with
+  | None -> Alcotest.fail "no initialize response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let caps = json |> member "result" |> member "capabilities" in
+      let diag_provider = caps |> member "diagnosticProvider" in
+      Alcotest.(check bool)
+        "diagnosticProvider present" true (diag_provider <> `Null);
+      let inter_file = diag_provider |> member "interFileDependencies" in
+      Alcotest.(check bool)
+        "interFileDependencies is true" true
+        (inter_file = `Bool true);
+      let workspace = diag_provider |> member "workspaceDiagnostics" in
+      Alcotest.(check bool)
+        "workspaceDiagnostics is false" true
+        (workspace = `Bool false)
+
+let test_pull_diagnostic_full_report () =
+  let uri = "file:///test/pull_diag.el" in
+  let text = "(defun my-fn (x) (+ x \"oops\"))" in
+  let result =
+    run_initialized_session
+      [ did_open_msg ~uri ~text (); document_diagnostic_msg ~id:2 ~uri () ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "no response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result_json = json |> member "result" in
+      let kind = result_json |> member "kind" |> to_string in
+      Alcotest.(check string) "kind is full" "full" kind;
+      let result_id = result_json |> member "resultId" in
+      Alcotest.(check bool) "has resultId" true (result_id <> `Null);
+      let items = result_json |> member "items" |> to_list in
+      Alcotest.(check bool) "has diagnostics" true (List.length items > 0)
+
+let test_pull_diagnostic_unchanged_report () =
+  let uri = "file:///test/pull_unchanged.el" in
+  let text = "(defun my-fn (x) (+ x \"oops\"))" in
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri ~text ();
+        document_diagnostic_msg ~id:2 ~uri ();
+        document_diagnostic_msg ~id:3 ~uri ~previous_result_id:"1" ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  (* First response should be full *)
+  (match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "no first response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result_json = json |> member "result" in
+      let kind = result_json |> member "kind" |> to_string in
+      Alcotest.(check string) "first request is full" "full" kind);
+  (* Second response should be unchanged *)
+  match find_response ~id:3 result.messages with
+  | None -> Alcotest.fail "no second response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result_json = json |> member "result" in
+      let kind = result_json |> member "kind" |> to_string in
+      Alcotest.(check string) "second request is unchanged" "unchanged" kind;
+      let result_id = result_json |> member "resultId" |> to_string in
+      Alcotest.(check string) "resultId matches" "1" result_id
+
+let test_pull_diagnostic_no_errors () =
+  let uri = "file:///test/pull_clean.el" in
+  let text = ";;; comment" in
+  let result =
+    run_initialized_session
+      [ did_open_msg ~uri ~text (); document_diagnostic_msg ~id:2 ~uri () ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "no response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result_json = json |> member "result" in
+      let kind = result_json |> member "kind" |> to_string in
+      Alcotest.(check string) "kind is full" "full" kind;
+      let items = result_json |> member "items" |> to_list in
+      Alcotest.(check int) "no diagnostics" 0 (List.length items)
+
+let test_pull_diagnostic_matches_push () =
+  let uri = "file:///test/pull_matches_push.el" in
+  let text = "(defun my-fn (x) (+ x \"oops\"))" in
+  let result =
+    run_initialized_session
+      [ did_open_msg ~uri ~text (); document_diagnostic_msg ~id:2 ~uri () ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "no response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result_json = json |> member "result" in
+      let kind = result_json |> member "kind" |> to_string in
+      Alcotest.(check string) "kind is full" "full" kind;
+      let items = result_json |> member "items" |> to_list in
+      (* Pull diagnostics should produce the same error the push model finds *)
+      Alcotest.(check bool)
+        "has diagnostics from type check" true
+        (List.length items > 0);
+      (* Each item should have message and range *)
+      let first = List.hd items in
+      let msg = first |> member "message" in
+      Alcotest.(check bool) "has message" true (msg <> `Null);
+      let range = first |> member "range" in
+      Alcotest.(check bool) "has range" true (range <> `Null)
+
 (** {1 Test Registration} *)
 
 let () =
@@ -4062,5 +4182,17 @@ let () =
             test_on_type_formatting_close_paren_nested;
           Alcotest.test_case "close paren already newline" `Quick
             test_on_type_formatting_close_paren_already_newline;
+        ] );
+      ( "pull-diagnostics",
+        [
+          Alcotest.test_case "capability advertised" `Quick
+            test_pull_diagnostic_capability_advertised;
+          Alcotest.test_case "full report" `Quick
+            test_pull_diagnostic_full_report;
+          Alcotest.test_case "unchanged report" `Quick
+            test_pull_diagnostic_unchanged_report;
+          Alcotest.test_case "no errors" `Quick test_pull_diagnostic_no_errors;
+          Alcotest.test_case "matches push" `Quick
+            test_pull_diagnostic_matches_push;
         ] );
     ]

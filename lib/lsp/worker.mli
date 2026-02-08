@@ -58,3 +58,7 @@ val signal_fd : t -> Unix.file_descr
 val pending_count : t -> int
 (** Number of items still in the work queue (not yet picked up by the background
     domain). Does not count the item currently being processed. *)
+
+val process_item : work_item -> work_result
+(** Synchronously process a work item and return diagnostics. Useful for
+    pull-based diagnostics where the result must be returned immediately. *)

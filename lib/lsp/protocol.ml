@@ -76,6 +76,7 @@ type server_capabilities = {
   code_lens_provider : bool;
   linked_editing_range_provider : bool;
   document_on_type_formatting_provider : bool;
+  diagnostic_provider : bool;
 }
 (** Server capabilities *)
 
@@ -345,6 +346,17 @@ let server_capabilities_to_json (caps : server_capabilities) : Yojson.Safe.t =
           [
             ("firstTriggerCharacter", `String ")");
             ("moreTriggerCharacter", `List [ `String "\n" ]);
+          ] )
+      :: fields
+    else fields
+  in
+  let fields =
+    if caps.diagnostic_provider then
+      ( "diagnosticProvider",
+        `Assoc
+          [
+            ("interFileDependencies", `Bool true);
+            ("workspaceDiagnostics", `Bool false);
           ] )
       :: fields
     else fields
@@ -1609,6 +1621,71 @@ let on_type_formatting_result_to_json (result : text_edit list option) :
   match result with
   | Some edits -> `List (List.map text_edit_to_json edits)
   | None -> `Null
+
+(** {1 Pull-Based Diagnostics} *)
+
+type document_diagnostic_params = {
+  ddp_text_document : string;
+  ddp_identifier : string option;
+  ddp_previous_result_id : string option;
+}
+(** Parameters for textDocument/diagnostic request. *)
+
+type full_document_diagnostic_report = {
+  fddr_result_id : string option;
+  fddr_items : diagnostic list;
+}
+(** A full diagnostic report with all diagnostics. *)
+
+type unchanged_document_diagnostic_report = { uddr_result_id : string }
+(** An unchanged diagnostic report, referencing a previous result. *)
+
+type document_diagnostic_report =
+  | FullReport of full_document_diagnostic_report
+  | UnchangedReport of unchanged_document_diagnostic_report
+      (** Result of a textDocument/diagnostic request. *)
+
+let parse_document_diagnostic_params (json : Yojson.Safe.t) :
+    document_diagnostic_params =
+  let open Yojson.Safe.Util in
+  let text_document =
+    json |> member "textDocument" |> member "uri" |> to_string
+  in
+  let identifier =
+    match json |> member "identifier" with `String s -> Some s | _ -> None
+  in
+  let previous_result_id =
+    match json |> member "previousResultId" with
+    | `String s -> Some s
+    | _ -> None
+  in
+  {
+    ddp_text_document = text_document;
+    ddp_identifier = identifier;
+    ddp_previous_result_id = previous_result_id;
+  }
+
+let document_diagnostic_report_to_json (report : document_diagnostic_report) :
+    Yojson.Safe.t =
+  match report with
+  | FullReport r ->
+      let fields =
+        [
+          ("kind", `String "full");
+          ("items", `List (List.map diagnostic_to_json r.fddr_items));
+        ]
+      in
+      let fields =
+        match r.fddr_result_id with
+        | Some id -> ("resultId", `String id) :: fields
+        | None -> fields
+      in
+      `Assoc fields
+  | UnchangedReport r ->
+      `Assoc
+        [
+          ("kind", `String "unchanged"); ("resultId", `String r.uddr_result_id);
+        ]
 
 (** {1 File Watching} *)
 

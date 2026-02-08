@@ -43,6 +43,11 @@ type t = {
   semantic_tokens_cache : Semantic_tokens.cache;
       (** Cache of previous semantic token arrays per URI, used for delta
           computation in [textDocument/semanticTokens/full/delta]. *)
+  diagnostic_result_ids : (string, string) Hashtbl.t;
+      (** Last diagnostic result ID per URI, for pull-based diagnostics
+          [textDocument/diagnostic]. Used to support [unchanged] reports. *)
+  mutable next_diagnostic_result_id : int;
+      (** Monotonic counter for generating unique diagnostic result IDs. *)
 }
 
 exception Cancelled
@@ -148,6 +153,8 @@ let create ~ic ~oc ?(debounce_ms = 200) () : t =
     cancel_flag = Atomic.make false;
     supports_work_done_progress = false;
     semantic_tokens_cache = Semantic_tokens.create_cache ();
+    diagnostic_result_ids = Hashtbl.create 16;
+    next_diagnostic_result_id = 1;
   }
 
 (** Get the server's current state *)
@@ -191,6 +198,7 @@ let capabilities () : Protocol.server_capabilities =
     code_lens_provider = true;
     linked_editing_range_provider = true;
     document_on_type_formatting_provider = true;
+    diagnostic_provider = true;
   }
 
 (** Require non-None params, returning an invalid-params error otherwise. *)
@@ -2263,6 +2271,61 @@ let handle_on_type_formatting (_server : t) (params : Yojson.Safe.t option) :
       Log.debug "Unhandled trigger character: %S" ch;
       Ok null
 
+(** Handle textDocument/diagnostic request (pull-based diagnostics).
+
+    Runs the same type-check pipeline used by the push model and returns a
+    [DocumentDiagnosticReport]. Supports [unchanged] responses when the
+    diagnostics haven't changed since the previous result. *)
+let handle_document_diagnostic (server : t) (params : Yojson.Safe.t option) :
+    (Yojson.Safe.t, Rpc.response_error) result =
+  require_params "textDocument/diagnostic" params (fun json ->
+      let p = Protocol.parse_document_diagnostic_params json in
+      let uri = p.ddp_text_document in
+      with_document server ~uri ~not_found:`Null (fun doc ->
+          (* Check if we can return an unchanged report *)
+          let prev_result_id = p.ddp_previous_result_id in
+          let cached_result_id =
+            Hashtbl.find_opt server.diagnostic_result_ids uri
+          in
+          let last_diags = Hashtbl.find_opt server.last_diagnostics uri in
+          match (prev_result_id, cached_result_id, last_diags) with
+          | Some prev_id, Some cached_id, Some _diags when prev_id = cached_id
+            ->
+              Log.debug "Pull diagnostics unchanged for %s (resultId %s)" uri
+                prev_id;
+              let report =
+                Protocol.UnchangedReport { uddr_result_id = cached_id }
+              in
+              Ok (Protocol.document_diagnostic_report_to_json report)
+          | _ ->
+              let item : Worker.work_item =
+                {
+                  uri;
+                  text = doc.text;
+                  version = doc.version;
+                  config = server.module_config;
+                  cache = server.form_cache;
+                  sig_tracker = server.signature_tracker;
+                  dependency_graph = server.dependency_graph;
+                  is_tart = Signature_tracker.is_tart_file uri;
+                }
+              in
+              let result = Worker.process_item item in
+              let diagnostics = result.wr_diagnostics in
+              let result_id = string_of_int server.next_diagnostic_result_id in
+              server.next_diagnostic_result_id <-
+                server.next_diagnostic_result_id + 1;
+              Hashtbl.replace server.last_diagnostics uri diagnostics;
+              Hashtbl.replace server.diagnostic_result_ids uri result_id;
+              Log.debug
+                "Pull diagnostics full report for %s (%d items, resultId %s)"
+                uri (List.length diagnostics) result_id;
+              let report =
+                Protocol.FullReport
+                  { fddr_result_id = Some result_id; fddr_items = diagnostics }
+              in
+              Ok (Protocol.document_diagnostic_report_to_json report)))
+
 (** Dispatch a request to its handler *)
 let dispatch_request (server : t) (msg : Rpc.message) :
     (Yojson.Safe.t, Rpc.response_error) result =
@@ -2300,6 +2363,7 @@ let dispatch_request (server : t) (msg : Rpc.message) :
       handle_linked_editing_range server msg.params
   | "textDocument/onTypeFormatting" ->
       handle_on_type_formatting server msg.params
+  | "textDocument/diagnostic" -> handle_document_diagnostic server msg.params
   | _ ->
       Error
         {

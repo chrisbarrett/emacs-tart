@@ -72,6 +72,7 @@ type server_capabilities = {
   code_lens_provider : bool;
   linked_editing_range_provider : bool;
   document_on_type_formatting_provider : bool;
+  diagnostic_provider : bool;
 }
 (** Server capabilities *)
 
@@ -778,6 +779,39 @@ val parse_on_type_formatting_params : Yojson.Safe.t -> on_type_formatting_params
 
 val on_type_formatting_result_to_json : text_edit list option -> Yojson.Safe.t
 (** Encode on-type formatting result to JSON *)
+
+(** {1 Pull-Based Diagnostics} *)
+
+type document_diagnostic_params = {
+  ddp_text_document : string;
+  ddp_identifier : string option;
+  ddp_previous_result_id : string option;
+}
+(** Parameters for textDocument/diagnostic request. *)
+
+type full_document_diagnostic_report = {
+  fddr_result_id : string option;
+  fddr_items : diagnostic list;
+}
+(** A full diagnostic report with all diagnostics. *)
+
+type unchanged_document_diagnostic_report = { uddr_result_id : string }
+(** An unchanged diagnostic report, referencing a previous result. *)
+
+type document_diagnostic_report =
+  | FullReport of full_document_diagnostic_report
+  | UnchangedReport of unchanged_document_diagnostic_report
+      (** Result of a textDocument/diagnostic request: either a full report with
+          all diagnostics or an unchanged report referencing a previous result.
+      *)
+
+val parse_document_diagnostic_params :
+  Yojson.Safe.t -> document_diagnostic_params
+(** Parse textDocument/diagnostic params from JSON *)
+
+val document_diagnostic_report_to_json :
+  document_diagnostic_report -> Yojson.Safe.t
+(** Encode a document diagnostic report to JSON *)
 
 (** {1 File Watching} *)
 

@@ -168,6 +168,10 @@ val on_type_formatting_msg :
   string
 (** textDocument/onTypeFormatting request. *)
 
+val document_diagnostic_msg :
+  id:int -> uri:string -> ?previous_result_id:string -> unit -> string
+(** textDocument/diagnostic request. *)
+
 (** {1 Session Runners} *)
 
 type session_result = {
