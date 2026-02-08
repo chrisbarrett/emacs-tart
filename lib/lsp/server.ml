@@ -127,7 +127,7 @@ let emacs_version (server : t) : Sig.Emacs_version.version option =
 let capabilities () : Protocol.server_capabilities =
   {
     text_document_sync =
-      Some { open_close = true; change = Protocol.Incremental };
+      Some { open_close = true; change = Protocol.Incremental; save = true };
     hover_provider = true;
     definition_provider = true;
     references_provider = true;

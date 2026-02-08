@@ -40,6 +40,7 @@ type text_document_sync_kind = None_ | Full | Incremental
 type text_document_sync_options = {
   open_close : bool;
   change : text_document_sync_kind;
+  save : bool;
 }
 (** Text document sync options *)
 

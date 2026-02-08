@@ -1,118 +1,105 @@
-# Implementation Plan — Workspace Symbols
+# Implementation Plan — Document Save Events
 
-> Source: Task 11 from [Spec 71](./specs/71-lsp-server.md)
+> Source: Task 10 from [Spec 71](./specs/71-lsp-server.md)
 
 ## Problem
 
-The server has `textDocument/documentSymbol` for single-file symbol listing
-but no `workspace/symbol` for cross-file symbol search. The spec requires
-returning symbols matching a query string across all open `.el` documents and
-loaded `.tart` signature files, with case-insensitive prefix matching.
+The server has no `textDocument/didSave` handler. The LSP
+`TextDocumentSyncOptions` omits the `save` field, so clients never send
+save notifications. This means:
+
+1. Full re-checks never happen — only incremental cache-based checks run
+   on `didChange`. If incremental state drifts, there is no corrective
+   pass.
+2. Non-open sibling `.tart` files that change on disk (e.g. after
+   `git stash pop` or code generation) are not re-read until the next
+   `didOpen`.
+3. Dependents are not invalidated when a sibling file changes outside the
+   editor.
 
 ## Current State
 
-- `protocol.mli` has `document_symbol` and `symbol_kind` types but no
-  workspace symbol types.
-- `server.ml` has `extract_symbol_from_def` which extracts `defun`,
-  `defvar`, `defconst`, `defmacro` from parsed `.el` sexps.
-- `Document.list_uris` returns all open document URIs.
-- `Signature_tracker` tracks open `.tart` buffers.
-- `Sig.Search_path.find_signature` and `parse_signature_file` locate and
-  parse `.tart` files.
-- `Sig_ast.signature` contains `sig_decls` with `DDefun`, `DDefvar`,
-  `DType`, `DData`, `DImportStruct` etc.
-- `server_capabilities` has no `workspace_symbol_provider` field.
+- `protocol.{ml,mli}`: `text_document_sync_options` has `open_close`
+  and `change` but no `save` field.
+  `text_document_sync_options_to_json` emits `openClose` and `change`
+  only.
+- `server.ml`: `dispatch_notification` has no `textDocument/didSave`
+  arm. `capabilities()` sets `text_document_sync` with `open_close =
+  true; change = Incremental`.
+- `form_cache.mli`: exposes `invalidate_document` (clears cached form
+  results) and `remove_document`.
+- `server.ml`: `invalidate_dependents` already handles the cascade
+  pattern (invalidate cache + re-publish diagnostics for each open
+  dependent).
+- `read_sibling_sig_content` re-reads `.tart` from disk when not in the
+  signature tracker.
 
 ## Design
 
-### Protocol types
+### Capability advertisement
 
-Workspace symbols use a flat `SymbolInformation` structure (not
-hierarchical like document symbols):
+Add `save : bool` to `text_document_sync_options`. When true, the JSON
+encoder emits `"save": true` inside `textDocumentSync`. This tells the
+client to send `textDocument/didSave` notifications.
 
-```ocaml
-type symbol_information = {
-  si_name : string;
-  si_kind : symbol_kind;
-  si_location : location;
-  si_container_name : string option;
-}
+The LSP spec also supports `"save": { "includeText": true }` for sending
+the full text with the notification, but we don't need it — the server
+already has the buffer contents from `didChange`.
 
-type workspace_symbol_params = { ws_query : string }
-```
+### Handler behaviour
 
-### Symbol sources
+On `textDocument/didSave`:
 
-1. **Open `.el` files** — iterate `Document.list_uris`, skip `.tart`
-   URIs, parse each, run `extract_symbol_from_def` to get names + spans.
-2. **Open `.tart` files** — iterate open `.tart` documents, parse with
-   `Sig.Sig_parser`, extract `DDefun`, `DDefvar`, `DType`, `DData`,
-   `DImportStruct` declarations.
+1. **Invalidate form cache** for the saved document — forces a full
+   (non-incremental) type-check.
+2. **Re-publish diagnostics** — calls `publish_diagnostics`, which now
+   runs a fresh check since the cache was cleared.
+3. **Invalidate dependents** — calls `invalidate_dependents` to cascade
+   re-checks to open files that depend on this module.
 
-Signature files from the search path (c-core, lisp-core, stdlib) are
-excluded — they are voluminous and rarely useful for workspace navigation.
-Only documents open in the editor contribute.
+Step 1 is the key difference from `didChange`: on change, the form cache
+is consulted and only changed forms are re-checked. On save, the entire
+cache is cleared so every form is re-checked from scratch.
 
-### Query matching
+### Params parsing
 
-Case-insensitive substring match on symbol name, per spec ("prefix-based"
-but substring is more useful and still correct). Empty query returns all
-symbols.
-
-### Container name
-
-For `.el` files: module name from filename (e.g. `foo.el` → `"foo"`).
-For `.tart` files: module name from `sig_ast.sig_module`.
-
-### symbol_kind mapping for .tart declarations
-
-| Decl | Kind |
-|------|------|
-| `DDefun` | SKFunction |
-| `DDefvar` | SKVariable |
-| `DType` (opaque) | SKInterface |
-| `DType` (alias) | SKTypeParameter |
-| `DData` | SKEnum |
-| `DImportStruct` | SKStruct |
+`textDocument/didSave` sends `{ textDocument: { uri } }` (optionally
+`text` if `includeText` is true, but we don't request that). We reuse
+`Document.text_document_identifier_of_json` to extract the URI.
 
 ## Tasks
 
-### Task 1 — Protocol types + capability
+### Task 1 — Protocol: add `save` to sync options
 
 **Files:** `lib/lsp/protocol.{ml,mli}`
 
-- Add `symbol_information` type.
-- Add `workspace_symbol_params` + `parse_workspace_symbol_params`.
-- Add `workspace_symbol_result_to_json`.
-- Add `workspace_symbol_provider : bool` to `server_capabilities`.
-- Encode in `server_capabilities_to_json`.
+- Add `save : bool` to `text_document_sync_options`.
+- Emit `("save", \`Bool opts.save)` in
+  `text_document_sync_options_to_json`.
 
-### Task 2 — Workspace symbols module
-
-**Files:** `lib/lsp/workspace_symbols.{ml,mli}`
-
-- `symbols_from_el_doc` — parse an `.el` doc, extract definitions,
-  convert to `symbol_information` list.
-- `symbols_from_tart_doc` — parse a `.tart` doc, extract declarations,
-  convert to `symbol_information` list.
-- `handle` — collect symbols from all open docs, filter by query,
-  return JSON result.
-
-### Task 3 — Wire into server + tests
+### Task 2 — Handler + capability + tests
 
 **Files:** `lib/lsp/server.ml`, `test/lsp/server_test.ml`,
 `test/lsp_support/lsp_client.{ml,mli}`
 
-- Set `workspace_symbol_provider = true` in `capabilities()`.
-- Add `handle_workspace_symbol` handler + dispatch in `dispatch_request`.
-- Add `workspace_symbol_msg` to `lsp_client`.
-- Add tests: capability advertised, defun symbol found, query filtering,
-  empty query, empty workspace, `.tart` file symbols.
+- Set `save = true` in `capabilities()` sync options.
+- Add `handle_did_save` notification handler:
+  1. Parse URI from params.
+  2. `Form_cache.invalidate_document` for the URI.
+  3. `publish_diagnostics` with the document's current version.
+  4. `invalidate_dependents` for the URI.
+- Add `"textDocument/didSave"` to `dispatch_notification`.
+- Add `did_save_msg` to `lsp_client.{ml,mli}`.
+- Tests:
+  - Save capability advertised (`save: true` in initialize response).
+  - Save triggers fresh diagnostics (open doc → change → save → verify
+    diagnostics republished).
+  - Save invalidates dependents (open two files where A requires B,
+    save B, verify A's diagnostics are updated).
 
 ## Checklist
 
 | # | Task | Status |
 |---|------|--------|
-| 1 | Protocol types + capability | Done |
-| 2 | Workspace symbols module | Done |
-| 3 | Server wiring + tests | Done |
+| 1 | Protocol: add `save` to sync options | Done |
+| 2 | Handler + capability + tests | Not started |

@@ -44,6 +44,7 @@ let text_document_sync_kind_to_int = function
 type text_document_sync_options = {
   open_close : bool;
   change : text_document_sync_kind;
+  save : bool;
 }
 (** Text document sync options *)
 
@@ -151,6 +152,7 @@ let text_document_sync_options_to_json (opts : text_document_sync_options) :
     [
       ("openClose", `Bool opts.open_close);
       ("change", `Int (text_document_sync_kind_to_int opts.change));
+      ("save", `Bool opts.save);
     ]
 
 (** {1 Semantic Token Types} *)
