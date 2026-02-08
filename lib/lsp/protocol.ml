@@ -58,6 +58,7 @@ type server_capabilities = {
   signature_help_provider : bool;
   rename_provider : bool;
   folding_range_provider : bool;
+  semantic_tokens_provider : bool;
 }
 (** Server capabilities *)
 
@@ -146,6 +147,69 @@ let text_document_sync_options_to_json (opts : text_document_sync_options) :
       ("change", `Int (text_document_sync_kind_to_int opts.change));
     ]
 
+(** {1 Semantic Token Types} *)
+
+type semantic_token_type =
+  | STFunction
+  | STVariable
+  | STMacro
+  | STParameter
+  | STKeyword
+  | STString
+  | STNumber
+  | STComment
+  | STType
+
+type semantic_token_modifier = SMDefinition | SMDeclaration | SMReadonly
+
+type semantic_tokens_legend = {
+  stl_token_types : string list;
+  stl_token_modifiers : string list;
+}
+
+let semantic_token_type_index = function
+  | STFunction -> 0
+  | STVariable -> 1
+  | STMacro -> 2
+  | STParameter -> 3
+  | STKeyword -> 4
+  | STString -> 5
+  | STNumber -> 6
+  | STComment -> 7
+  | STType -> 8
+
+let semantic_token_modifier_bit = function
+  | SMDefinition -> 0
+  | SMDeclaration -> 1
+  | SMReadonly -> 2
+
+let semantic_tokens_legend =
+  {
+    stl_token_types =
+      [
+        "function";
+        "variable";
+        "macro";
+        "parameter";
+        "keyword";
+        "string";
+        "number";
+        "comment";
+        "type";
+      ];
+    stl_token_modifiers = [ "definition"; "declaration"; "readonly" ];
+  }
+
+let semantic_tokens_legend_to_json (legend : semantic_tokens_legend) :
+    Yojson.Safe.t =
+  `Assoc
+    [
+      ( "tokenTypes",
+        `List (List.map (fun s -> `String s) legend.stl_token_types) );
+      ( "tokenModifiers",
+        `List (List.map (fun s -> `String s) legend.stl_token_modifiers) );
+    ]
+
 (** Encode server capabilities to JSON *)
 let server_capabilities_to_json (caps : server_capabilities) : Yojson.Safe.t =
   let fields = [] in
@@ -189,6 +253,17 @@ let server_capabilities_to_json (caps : server_capabilities) : Yojson.Safe.t =
   let fields =
     if caps.folding_range_provider then
       ("foldingRangeProvider", `Bool true) :: fields
+    else fields
+  in
+  let fields =
+    if caps.semantic_tokens_provider then
+      ( "semanticTokensProvider",
+        `Assoc
+          [
+            ("full", `Bool true);
+            ("legend", semantic_tokens_legend_to_json semantic_tokens_legend);
+          ] )
+      :: fields
     else fields
   in
   `Assoc fields
@@ -1087,4 +1162,23 @@ let folding_range_result_to_json (result : folding_range_result) : Yojson.Safe.t
     =
   match result with
   | Some ranges -> `List (List.map folding_range_to_json ranges)
+  | None -> `Null
+
+(** {1 Semantic Tokens} *)
+
+type semantic_tokens_params = { stp_text_document : string }
+type semantic_tokens_result = { str_data : int list }
+
+let parse_semantic_tokens_params (json : Yojson.Safe.t) : semantic_tokens_params
+    =
+  let open Yojson.Safe.Util in
+  {
+    stp_text_document =
+      json |> member "textDocument" |> member "uri" |> to_string;
+  }
+
+let semantic_tokens_result_to_json (result : semantic_tokens_result option) :
+    Yojson.Safe.t =
+  match result with
+  | Some r -> `Assoc [ ("data", `List (List.map (fun i -> `Int i) r.str_data)) ]
   | None -> `Null

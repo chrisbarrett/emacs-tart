@@ -54,6 +54,7 @@ type server_capabilities = {
   signature_help_provider : bool;
   rename_provider : bool;
   folding_range_provider : bool;
+  semantic_tokens_provider : bool;
 }
 (** Server capabilities *)
 
@@ -445,3 +446,51 @@ val folding_range_to_json : folding_range -> Yojson.Safe.t
 
 val folding_range_result_to_json : folding_range_result -> Yojson.Safe.t
 (** Encode folding range result to JSON *)
+
+(** {1 Semantic Tokens} *)
+
+(** Semantic token type as defined by LSP *)
+type semantic_token_type =
+  | STFunction
+  | STVariable
+  | STMacro
+  | STParameter
+  | STKeyword
+  | STString
+  | STNumber
+  | STComment
+  | STType
+
+(** Semantic token modifier as defined by LSP *)
+type semantic_token_modifier = SMDefinition | SMDeclaration | SMReadonly
+
+type semantic_tokens_legend = {
+  stl_token_types : string list;
+  stl_token_modifiers : string list;
+}
+(** The legend describing token types and modifiers *)
+
+type semantic_tokens_params = { stp_text_document : string }
+(** Semantic tokens request params *)
+
+type semantic_tokens_result = { str_data : int list }
+(** The delta-encoded flat array of semantic tokens *)
+
+val semantic_token_type_index : semantic_token_type -> int
+(** Index of a token type in the legend's tokenTypes array *)
+
+val semantic_token_modifier_bit : semantic_token_modifier -> int
+(** Bit position for a token modifier (for bitfield encoding) *)
+
+val semantic_tokens_legend : semantic_tokens_legend
+(** The canonical legend advertised in server capabilities *)
+
+val parse_semantic_tokens_params : Yojson.Safe.t -> semantic_tokens_params
+(** Parse semantic tokens params from JSON *)
+
+val semantic_tokens_legend_to_json : semantic_tokens_legend -> Yojson.Safe.t
+(** Encode semantic tokens legend to JSON *)
+
+val semantic_tokens_result_to_json :
+  semantic_tokens_result option -> Yojson.Safe.t
+(** Encode semantic tokens result to JSON *)
