@@ -143,6 +143,11 @@ let folding_range_msg ~id ~uri () =
     ~params:(`Assoc [ ("textDocument", `Assoc [ ("uri", `String uri) ]) ])
     ()
 
+let semantic_tokens_msg ~id ~uri () =
+  make_message ~id:(`Int id) ~method_:"textDocument/semanticTokens/full"
+    ~params:(`Assoc [ ("textDocument", `Assoc [ ("uri", `String uri) ]) ])
+    ()
+
 let rename_msg ~id ~uri ~line ~character ~new_name () =
   make_message ~id:(`Int id) ~method_:"textDocument/rename"
     ~params:

@@ -1318,6 +1318,29 @@ let handle_folding_range (server : t) (params : Yojson.Safe.t option) :
           Ok (Protocol.folding_range_result_to_json None)
       | Some doc -> Folding.handle ~uri ~doc_text:doc.text)
 
+(** Handle textDocument/semanticTokens/full request.
+
+    Delegates to {!Semantic_tokens} module. *)
+let handle_semantic_tokens (server : t) (params : Yojson.Safe.t option) :
+    (Yojson.Safe.t, Rpc.response_error) result =
+  match params with
+  | None ->
+      Error
+        {
+          Rpc.code = Rpc.invalid_params;
+          message = "Missing semantic tokens params";
+          data = None;
+        }
+  | Some json -> (
+      let stp = Protocol.parse_semantic_tokens_params json in
+      let uri = stp.stp_text_document in
+      Log.debug "Semantic tokens request for %s" uri;
+      match Document.get_doc server.documents uri with
+      | None ->
+          Log.debug "Document not found: %s" uri;
+          Ok (Protocol.semantic_tokens_result_to_json None)
+      | Some doc -> Semantic_tokens.handle ~uri ~doc_text:doc.text)
+
 (** {1 Rename} *)
 
 (** Handle textDocument/rename request.
@@ -1414,6 +1437,8 @@ let dispatch_request (server : t) (msg : Rpc.message) :
   | "textDocument/signatureHelp" -> handle_signature_help server msg.params
   | "textDocument/rename" -> handle_rename server msg.params
   | "textDocument/foldingRange" -> handle_folding_range server msg.params
+  | "textDocument/semanticTokens/full" ->
+      handle_semantic_tokens server msg.params
   | _ ->
       Error
         {

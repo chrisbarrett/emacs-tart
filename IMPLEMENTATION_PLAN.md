@@ -213,4 +213,4 @@ delta-encodes, returns JSON.
 |---|------|--------|
 | 1 | Protocol types for semantic tokens | Done |
 | 2 | Semantic tokens module | Done |
-| 3 | Wire into server | Not started |
+| 3 | Wire into server | Done |

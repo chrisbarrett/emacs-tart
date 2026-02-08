@@ -1869,6 +1869,104 @@ let test_folding_range_empty_file () =
       let ranges = json |> member "result" |> to_list in
       Alcotest.(check int) "no folds" 0 (List.length ranges)
 
+(** {1 Semantic Tokens Tests} *)
+
+let test_semantic_tokens_capability_advertised () =
+  let result =
+    run_session [ initialize_msg ~id:1 (); shutdown_msg ~id:2 (); exit_msg () ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:1 result.messages with
+  | None -> Alcotest.fail "No initialize response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let caps = json |> member "result" |> member "capabilities" in
+      let stp = caps |> member "semanticTokensProvider" in
+      Alcotest.(check bool) "has full" true (stp |> member "full" |> to_bool);
+      let legend = stp |> member "legend" in
+      let token_types = legend |> member "tokenTypes" |> to_list in
+      Alcotest.(check bool) "has token types" true (List.length token_types > 0);
+      let token_modifiers = legend |> member "tokenModifiers" |> to_list in
+      Alcotest.(check bool)
+        "has token modifiers" true
+        (List.length token_modifiers > 0)
+
+let test_semantic_tokens_defun () =
+  let text = "(defun foo (x)\n  (+ x 1))" in
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el" ~text ();
+        semantic_tokens_msg ~id:2 ~uri:"file:///test.el" ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "No semantic tokens response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let data =
+        json |> member "result" |> member "data" |> to_list |> List.map to_int
+      in
+      (* Should have at least some tokens *)
+      Alcotest.(check bool) "has tokens" true (List.length data > 0);
+      (* Tokens come in 5-tuples *)
+      Alcotest.(check int) "multiple of 5" 0 (List.length data mod 5);
+      (* First token is "defun" keyword at (0,1): deltaLine=0, deltaCol=1,
+         len=5, type=4 (STKeyword), mods=0 *)
+      Alcotest.(check int) "first deltaLine" 0 (List.nth data 0);
+      Alcotest.(check int) "first deltaCol" 1 (List.nth data 1);
+      Alcotest.(check int) "first length" 5 (List.nth data 2);
+      Alcotest.(check int) "first type (keyword)" 4 (List.nth data 3);
+      (* Second token is "foo" function+definition: deltaLine=0, deltaCol=6,
+         len=3, type=0 (STFunction), mods=1 (SMDefinition) *)
+      Alcotest.(check int) "second deltaLine" 0 (List.nth data 5);
+      Alcotest.(check int) "second length" 3 (List.nth data 7);
+      Alcotest.(check int) "second type (function)" 0 (List.nth data 8);
+      Alcotest.(check int) "second mods (definition)" 1 (List.nth data 9)
+
+let test_semantic_tokens_empty_file () =
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el" ~text:"" ();
+        semantic_tokens_msg ~id:2 ~uri:"file:///test.el" ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "No semantic tokens response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let data = json |> member "result" |> member "data" |> to_list in
+      Alcotest.(check int) "empty data" 0 (List.length data)
+
+let test_semantic_tokens_comments () =
+  let text = ";; a comment\n(+ 1 2)" in
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el" ~text ();
+        semantic_tokens_msg ~id:2 ~uri:"file:///test.el" ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "No semantic tokens response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let data =
+        json |> member "result" |> member "data" |> to_list |> List.map to_int
+      in
+      Alcotest.(check bool) "has tokens" true (List.length data >= 5);
+      (* Find a comment token (type index 7) somewhere in the data *)
+      let rec has_comment_type i =
+        if i + 4 >= List.length data then false
+        else if List.nth data (i + 3) = 7 then true
+        else has_comment_type (i + 5)
+      in
+      Alcotest.(check bool) "has comment token" true (has_comment_type 0)
+
 (** {1 Test Registration} *)
 
 let () =
@@ -2043,6 +2141,15 @@ let () =
             test_folding_range_multiline_defun;
           Alcotest.test_case "comments" `Quick test_folding_range_comments;
           Alcotest.test_case "empty file" `Quick test_folding_range_empty_file;
+        ] );
+      ( "semantic-tokens",
+        [
+          Alcotest.test_case "capability advertised" `Quick
+            test_semantic_tokens_capability_advertised;
+          Alcotest.test_case "defun tokens" `Quick test_semantic_tokens_defun;
+          Alcotest.test_case "empty file" `Quick test_semantic_tokens_empty_file;
+          Alcotest.test_case "comment tokens" `Quick
+            test_semantic_tokens_comments;
         ] );
       ( "utf16-positions",
         [

@@ -75,6 +75,9 @@ val code_action_msg :
 val folding_range_msg : id:int -> uri:string -> unit -> string
 (** textDocument/foldingRange request. *)
 
+val semantic_tokens_msg : id:int -> uri:string -> unit -> string
+(** textDocument/semanticTokens/full request. *)
+
 val rename_msg :
   id:int ->
   uri:string ->
