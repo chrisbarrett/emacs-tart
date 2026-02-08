@@ -122,6 +122,6 @@ Both paths parse the same settings shape and call the same
 
 | # | Task | Status |
 |---|------|--------|
-| 1 | Protocol types + settings parsing | Not started |
-| 2 | Server apply_settings + mutable config | Not started |
+| 1 | Protocol types + settings parsing | Done |
+| 2 | Server apply_settings + mutable config | Done |
 | 3 | Tests | Not started |

@@ -111,6 +111,11 @@ let invalidate_document (cache : t) (uri : string) : unit =
   | Some dc -> invalidate_all_forms dc
   | None -> ()
 
+(** Invalidate all cached forms for all documents (used for global config
+    changes) *)
+let invalidate_all (cache : t) : unit =
+  Hashtbl.iter (fun _ dc -> invalidate_all_forms dc) cache
+
 (** {1 Incremental Type Checking} *)
 
 type check_stats = {

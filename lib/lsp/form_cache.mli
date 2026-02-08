@@ -48,6 +48,12 @@ val invalidate_document : t -> string -> unit
     [remove_document], this keeps the document cache entry but clears all cached
     form results. *)
 
+val invalidate_all : t -> unit
+(** Invalidate all cached forms for all documents.
+
+    Use this when a global config change (e.g., Emacs version or search path)
+    affects all type checking. *)
+
 (** {1 Incremental Type Checking} *)
 
 val check_with_cache :

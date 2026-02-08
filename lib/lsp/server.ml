@@ -19,31 +19,18 @@ type t = {
   form_cache : Form_cache.t;
   dependency_graph : Graph.Dependency_graph.t;
   signature_tracker : Signature_tracker.t;
-  module_config : Typing.Module_check.config;
-      (** Module check config, computed once at server creation *)
-  emacs_version : Sig.Emacs_version.version option;
-      (** Detected Emacs version, if any *)
+  mutable module_config : Typing.Module_check.config;
+      (** Module check config, rebuilt when settings change *)
+  mutable emacs_version : Sig.Emacs_version.version option;
+      (** Detected or overridden Emacs version *)
   last_diagnostics : (string, Protocol.diagnostic list) Hashtbl.t;
       (** Last published diagnostics per URI, for deduplication *)
 }
 
 module Log = Tart_log.Log
 
-(** Detect Emacs version and build module config.
-
-    Detects Emacs version once at server startup and builds the module config
-    with appropriate versioned typings. *)
-let detect_emacs_and_build_config () :
-    Typing.Module_check.config * Sig.Emacs_version.version option =
-  (* Detect Emacs version *)
-  let version_result = Sig.Emacs_version.detect () in
-  let emacs_version =
-    match version_result with
-    | Sig.Emacs_version.Detected v -> Some v
-    | Sig.Emacs_version.NotFound | Sig.Emacs_version.ParseError _ -> None
-  in
-
-  (* Try to find stdlib/typings relative to the executable *)
+(** Locate stdlib and typings root directories relative to the executable. *)
+let discover_paths () : string option * string option =
   let exe_dir = Filename.dirname Sys.executable_name in
   let stdlib_candidates =
     [
@@ -53,22 +40,25 @@ let detect_emacs_and_build_config () :
     ]
   in
   let stdlib_dir = List.find_opt Sys.file_exists stdlib_candidates in
-
-  (* Find typings root for versioned c-core.
-     Search relative to executable, parent of executable, share/tart,
-     and current working directory (for development/testing). *)
   let typings_candidates =
     [
       Filename.concat exe_dir "typings/emacs";
       Filename.concat (Filename.dirname exe_dir) "typings/emacs";
       Filename.concat exe_dir "../share/tart/typings/emacs";
       "typings/emacs";
-      (* Current working directory *)
     ]
   in
   let typings_root = List.find_opt Sys.file_exists typings_candidates in
+  (stdlib_dir, typings_root)
 
-  (* Build config with all components *)
+(** Build module config from discovered paths and optional overrides.
+
+    @param emacs_version Target Emacs version for versioned typings
+    @param extra_search_dirs
+      Additional directories to prepend to the search path *)
+let build_config ?(emacs_version : Sig.Emacs_version.version option)
+    ?(extra_search_dirs : string list = []) ~(stdlib_dir : string option)
+    ~(typings_root : string option) () : Typing.Module_check.config =
   let config = Typing.Module_check.default_config () in
   let config =
     match stdlib_dir with
@@ -86,8 +76,25 @@ let detect_emacs_and_build_config () :
     | Some v -> Sig.Search_path.with_emacs_version v search_path
     | None -> search_path
   in
-  (* Rebuild config with updated search path *)
-  let config = Typing.Module_check.with_search_path search_path config in
+  let search_path =
+    List.fold_right Sig.Search_path.prepend_dir extra_search_dirs search_path
+  in
+  Typing.Module_check.with_search_path search_path config
+
+(** Detect Emacs version and build module config.
+
+    Detects Emacs version once at server startup and builds the module config
+    with appropriate versioned typings. *)
+let detect_emacs_and_build_config () :
+    Typing.Module_check.config * Sig.Emacs_version.version option =
+  let version_result = Sig.Emacs_version.detect () in
+  let emacs_version =
+    match version_result with
+    | Sig.Emacs_version.Detected v -> Some v
+    | Sig.Emacs_version.NotFound | Sig.Emacs_version.ParseError _ -> None
+  in
+  let stdlib_dir, typings_root = discover_paths () in
+  let config = build_config ?emacs_version ~stdlib_dir ~typings_root () in
   (config, emacs_version)
 
 (** Create a new server on the given channels *)
@@ -475,6 +482,46 @@ let publish_diagnostics (server : t) (uri : string) (version : int option) :
               ~method_:"textDocument/publishDiagnostics"
               ~params:(Protocol.publish_diagnostics_params_to_json params)))
 
+(** Apply user settings, rebuilding the module config and rechecking all open
+    documents.
+
+    Called from [initializationOptions] and [workspace/didChangeConfiguration].
+*)
+let apply_settings (server : t) (settings : Protocol.tart_settings) : unit =
+  let new_version =
+    match settings.ts_emacs_version with
+    | Some s -> (
+        match Sig.Emacs_version.parse_version s with
+        | Some v ->
+            Log.info "Settings: emacs version overridden to %s"
+              (Sig.Emacs_version.version_to_string v);
+            Some v
+        | None ->
+            Log.info "Settings: ignoring unparseable emacsVersion %S" s;
+            server.emacs_version)
+    | None -> server.emacs_version
+  in
+  let extra_search_dirs = settings.ts_search_path in
+  if extra_search_dirs <> [] then
+    Log.info "Settings: prepending %d search path dirs"
+      (List.length extra_search_dirs);
+  let stdlib_dir, typings_root = discover_paths () in
+  let new_config =
+    build_config ?emacs_version:new_version ~extra_search_dirs ~stdlib_dir
+      ~typings_root ()
+  in
+  server.module_config <- new_config;
+  server.emacs_version <- new_version;
+  (* Invalidate all caches and re-publish diagnostics for every open document *)
+  Form_cache.invalidate_all server.form_cache;
+  let open_uris = Document.list_uris server.documents in
+  List.iter
+    (fun uri ->
+      match Document.get_doc server.documents uri with
+      | Some doc -> publish_diagnostics server uri (Some doc.version)
+      | None -> ())
+    open_uris
+
 (** Handle initialize request *)
 let handle_initialize (server : t) (params : Yojson.Safe.t option) :
     (Yojson.Safe.t, Rpc.response_error) result =
@@ -514,6 +561,12 @@ let handle_initialize (server : t) (params : Yojson.Safe.t option) :
       Log.debug "Position encoding: %s"
         (Protocol.position_encoding_to_string encoding);
       server.state <- Initialized { root_uri = init_params.root_uri };
+      (* Apply initializationOptions if provided *)
+      (match init_params.initialization_options with
+      | Some json ->
+          let settings = Protocol.parse_tart_settings json in
+          apply_settings server settings
+      | None -> ());
       let result : Protocol.initialize_result =
         { capabilities = capabilities (); position_encoding = encoding }
       in
@@ -686,6 +739,20 @@ let handle_did_change_watched_files (server : t) (params : Yojson.Safe.t option)
                   Log.debug "Watched file deleted: %s" uri;
                   invalidate_dependents server ~uri))
         dcwf.dcwf_changes
+
+(** Handle workspace/didChangeConfiguration notification.
+
+    Parses the settings payload and applies it, rebuilding the module config and
+    rechecking all open documents. *)
+let handle_did_change_configuration (server : t) (params : Yojson.Safe.t option)
+    : unit =
+  match params with
+  | None -> Log.debug "didChangeConfiguration missing params"
+  | Some json ->
+      let dcc = Protocol.parse_did_change_configuration_params json in
+      let settings = Protocol.parse_tart_settings dcc.dcc_settings in
+      Log.info "Configuration changed";
+      apply_settings server settings
 
 (** Handle textDocument/didClose notification *)
 let handle_did_close (server : t) (params : Yojson.Safe.t option) : unit =
@@ -1511,6 +1578,9 @@ let dispatch_notification (server : t) (msg : Rpc.message) :
       `Continue
   | "workspace/didChangeWatchedFiles" ->
       handle_did_change_watched_files server msg.params;
+      `Continue
+  | "workspace/didChangeConfiguration" ->
+      handle_did_change_configuration server msg.params;
       `Continue
   | "$/cancelRequest" ->
       (* Ignore cancellation for now *)
