@@ -6,7 +6,7 @@
 (test
  (name server_test)
  (modules server_test)
- (libraries tart str alcotest)
+ (libraries tart lsp_client str alcotest)
  (deps
   (source_tree %{project_root}/typings))
  (action
