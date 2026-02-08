@@ -222,7 +222,7 @@
 (defun subst-char-in-region (int int int int &optional any) -> nil)
 
 ;; (translate-region-internal START END TABLE) - translate chars by table
-(defun translate-region-internal (int int (string | any)) -> int)
+(defun translate-region-internal (int int (string | char-table)) -> int)
 
 ;; ===========================================================================
 ;; Buffer comparison
@@ -230,11 +230,11 @@
 
 ;; (compare-buffer-substrings BUFFER1 START1 END1 BUFFER2 START2 END2)
 ;; Compare two buffer regions, return -N, 0, or +N
-(defun compare-buffer-substrings (any (int | nil) (int | nil) any (int | nil) (int | nil)) -> int)
+(defun compare-buffer-substrings ((buffer | string | nil) (int | nil) (int | nil) (buffer | string | nil) (int | nil) (int | nil)) -> int)
 
 ;; (replace-region-contents BEG END SOURCE &optional MAX-SECS MAX-COSTS INHERIT)
 ;; Replace region with SOURCE buffer/string contents non-destructively
-(defun replace-region-contents (int int any &optional (int | nil) (int | nil) any) -> (t | nil))
+(defun replace-region-contents (int int (any -> any) &optional (int | nil) (int | nil) any) -> (t | nil))
 
 ;; ===========================================================================
 ;; Transposition
