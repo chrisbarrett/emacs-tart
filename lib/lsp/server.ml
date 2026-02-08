@@ -139,6 +139,7 @@ let capabilities () : Protocol.server_capabilities =
     folding_range_provider = true;
     semantic_tokens_provider = true;
     inlay_hint_provider = true;
+    type_definition_provider = true;
   }
 
 (** Convert a source location span to an LSP range. Loc.span has 1-based lines

@@ -59,6 +59,7 @@ type server_capabilities = {
   folding_range_provider : bool;
   semantic_tokens_provider : bool;
   inlay_hint_provider : bool;
+  type_definition_provider : bool;
 }
 (** Server capabilities *)
 
@@ -172,6 +173,9 @@ type definition_params = { def_text_document : string; def_position : position }
 
 val parse_definition_params : Yojson.Safe.t -> definition_params
 (** Parse definition params from JSON *)
+
+val parse_type_definition_params : Yojson.Safe.t -> definition_params
+(** Parse type definition params from JSON (same shape as definition). *)
 
 (** Definition result *)
 type definition_result =

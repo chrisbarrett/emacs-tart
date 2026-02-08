@@ -1,125 +1,124 @@
-# Implementation Plan — Prepare Rename
+# Implementation Plan — Type Definition
 
-> Source: [Spec 71](./specs/71-lsp-server.md) §Prepare Rename, task 14
-> from [specs/IMPLEMENTATION_PLAN.md](./specs/IMPLEMENTATION_PLAN.md)
+> Source: [Spec 71](./specs/71-lsp-server.md) §Type Definition, task 15
+> from [specs/IMPLEMENTATION\_PLAN.md](./specs/IMPLEMENTATION_PLAN.md)
 
 ## Problem
 
-The LSP server supports `textDocument/rename` but not
-`textDocument/prepareRename`. Without prepare-rename, editors cannot
-pre-validate whether a symbol at the cursor is renameable — they either
-attempt the rename blindly (resulting in a confusing error or no-op for
-builtins, keywords, literals, and comments) or disable the rename UI
-entirely until the user invokes it.
+The LSP server has no `textDocument/typeDefinition` handler. Editors
+cannot navigate from a value to the source of its type — e.g., jumping
+from a variable of type `person` to the `(import-struct person …)`
+declaration in its `.tart` file.
 
-The spec (§Prepare Rename) calls for:
+The spec (§Type Definition) calls for:
 
-- Return `{ range, placeholder }` for user-defined symbols.
-- Return `null` for keywords (`:foo`), string literals, comments,
-  numbers, chars, and builtin symbols (`t`, `nil`, `+`, `car`, etc.).
-- Advertise `renameProvider: { prepareProvider: true }` instead of
-  `renameProvider: true` in server capabilities.
+- Infer the type at the cursor. If it resolves to a named type defined
+  in a `.tart` file, return the location of that type's declaration.
+- Return `null` for primitive types (`integer`, `string`, `symbol`,
+  etc.) that have no user-visible definition.
 
 ## Current State
 
-- `handle_rename` in `server.ml` parses the document, finds the sexp
-  at the cursor via `Syntax.Sexp.find_with_context_in_forms`, and uses
-  `symbol_name_of_sexp` to extract the name. Returns `null` for
-  non-`Symbol` nodes but does not reject builtins.
-- `code_action.ml` has `is_builtin_symbol` with a comprehensive
-  deny-list of ~70 builtins + all binding forms.
-- `rename_provider` is `bool` in `server_capabilities`.
-- `range_of_span` converts spans to LSP ranges with UTF-16 positions.
-- `lsp_client.ml` uses `position_params` for position-based request
-  builders (hover, definition, etc.).
+- `type_at_sexp` in `server.ml` infers the type at a cursor position
+  and returns a `Core.Types.typ option`.
+- Named types appear as `TCon "module/name"` (e.g., `TCon "mymod/person"`
+  from `opaque_con_name` which formats as `module ^ "/" ^ type`).
+- Prelude opaque types use `TCon "prelude.buffer"`, `TCon "prelude.window"`,
+  etc. (dot-separated, built-in — no source location).
+- Intrinsic primitives use `TCon "%tart-intrinsic%Int"` etc.
+- `.tart` signature ASTs carry `DType { type_name; type_loc; … }`,
+  `DData { data_name; data_loc; … }`, and
+  `DImportStruct { struct_name; struct_loc; … }` — all with spans.
+- `find_definition_in_signature` searches `DDefun`/`DDefvar` but not
+  type declarations. `find_definition_in_signatures` resolves module
+  prefixes to `.tart` files via the search path.
+- `definition_params` / `definition_result` protocol types already
+  exist and can be reused (same request/response shape).
 
 ## Design
 
-The logic is simple enough to live inline in `server.ml` (like
-`handle_rename`) rather than a separate module.
+### Extracting the type name
 
-### Handler Flow
+Given the inferred `typ`:
+1. Follow `TVar` links via `repr`.
+2. For `TCon name` — use `name` directly.
+3. For `TApp (TCon name, _)` — use `name` (parameterised type).
+4. For `TArrow`, `TForall`, `TUnion`, `TLiteral`, etc. — return null
+   (no single named type to navigate to).
 
-1. Parse params (same shape as hover: text document + position).
-2. Look up document, parse, find sexp at cursor.
-3. If the target is not a `Symbol` node → return `null`.
-4. If the symbol name is a builtin (reuse `Code_action.is_builtin_symbol`)
-   → return `null`.
-5. Otherwise, return `{ range, placeholder }` where `range` is the
-   symbol's span converted via `range_of_span` and `placeholder` is
-   the symbol name.
+### Resolving to a source location
 
-### Capability Change
+Given a TCon name like `"mymod/person"`:
+1. If it starts with `%tart-intrinsic%` → null (primitive).
+2. If it starts with `prelude.` → null (built-in opaque, no source).
+3. Split on `/` to get `(module_name, type_name)`.
+4. Search for the module's `.tart` file via `Sig.Search_path.find_signature`.
+5. Parse the signature and find the `DType`, `DData`, or `DImportStruct`
+   declaration matching `type_name`.
+6. Return the location span.
 
-`rename_provider : bool` → `rename_provider : rename_options option`
-where `rename_options = { prepare_provider : bool }`. The JSON encoding
-changes from `"renameProvider": true` to
-`"renameProvider": { "prepareProvider": true }`. The existing rename
-capability test must be updated.
+### New helper: `find_type_definition_in_signature`
 
-### Exposing `is_builtin_symbol`
+Like `find_definition_in_signature` but matches `DType`, `DData`, and
+`DImportStruct` by their name fields instead of `DDefun`/`DDefvar`.
 
-`Code_action.is_builtin_symbol` is currently not in `code_action.mli`.
-It needs to be exposed so `server.ml` can call it for prepare-rename.
-Alternatively, move it to a shared module, but exposing it is simpler
-since `server.ml` already depends on `Code_action`.
+### Reuse of protocol types
+
+`textDocument/typeDefinition` has the same params and result shape as
+`textDocument/definition`. Reuse `definition_params` / `definition_result`
+and their parsers/encoders. Add `type_definition_provider : bool` to
+`server_capabilities`.
 
 ## Tasks
 
-### Task 1 — Protocol types and capability change
+### Task 1 — Protocol type and capability
 
-**Files:** `lib/lsp/protocol.ml`, `lib/lsp/protocol.mli`
+**Files:** `lib/lsp/protocol.ml`, `lib/lsp/protocol.mli`, `lib/lsp/server.ml`
 
-- Add `rename_options = { prepare_provider : bool }`.
-- Change `rename_provider : bool` to `rename_provider : rename_options option`.
-- Update `server_capabilities_to_json` to emit
-  `{ "prepareProvider": true }` when `prepare_provider = true`.
-- Add `prepare_rename_result = { prr_range : range; prr_placeholder : string }`.
-- Add `prepare_rename_result_to_json : prepare_rename_result option -> Yojson.Safe.t`.
-- Add `prepare_rename_params` type and parser (same structure as
-  hover — can reuse the pattern from `parse_hover_params`).
+- Add `type_definition_provider : bool` to `server_capabilities`.
+- Encode it as `"typeDefinitionProvider": true` in
+  `server_capabilities_to_json`.
+- Set `type_definition_provider = true` in `server.ml` `capabilities()`.
+- Add `parse_type_definition_params` (alias for `parse_definition_params`
+  since the JSON shape is identical).
 
-Update `server.ml` `capabilities()` to set
-`rename_provider = Some { prepare_provider = true }`.
+### Task 2 — Handler and type lookup
 
-**Tests:** Update `test_rename_capability_advertised` in
-`server_test.ml` to expect `{ "prepareProvider": true }` object
-instead of `true`.
+**Files:** `lib/lsp/server.ml`
 
-### Task 2 — Expose `is_builtin_symbol` and add handler
-
-**Files:** `lib/lsp/code_action.mli`, `lib/lsp/server.ml`
-
-- Expose `is_builtin_symbol : string -> bool` in `code_action.mli`.
-- Add `handle_prepare_rename` to `server.ml`:
-  1. Parse prepare rename params.
-  2. Get document, parse sexps.
-  3. Find sexp at cursor with `find_with_context_in_forms`.
-  4. Match `ctx.target`: if `Symbol (name, span)` and not
-     `Code_action.is_builtin_symbol name`, return
-     `{ range = range_of_span ~text span; placeholder = name }`.
-  5. Otherwise return `null`.
-- Add `"textDocument/prepareRename"` to `dispatch_request`.
+- Add `find_type_definition_in_signature`: match `DType`, `DData`,
+  `DImportStruct` by name in a `Sig_ast.signature`.
+- Add `find_type_definition_in_signatures`: given a `TCon` name,
+  split `module/type`, resolve the module via the search path, delegate
+  to `find_type_definition_in_signature`.
+- Add `handle_type_definition`:
+  1. Parse params, get doc, parse sexps, find sexp at cursor.
+  2. Type-check, call `type_at_sexp`.
+  3. Extract `TCon` name from result type (follow `TVar`, handle `TApp`).
+  4. Skip intrinsics and prelude types → null.
+  5. Call `find_type_definition_in_signatures` → location or null.
+- Add `"textDocument/typeDefinition"` to `dispatch_request`.
 
 ### Task 3 — Tests
 
 **Files:** `test/lsp_support/lsp_client.{ml,mli}`,
 `test/lsp/server_test.ml`
 
-- Add `prepare_rename_msg` to `lsp_client.{ml,mli}` (same shape as
-  `hover_msg`).
-- Add tests in "prepare-rename" group:
-  - `test_prepare_rename_symbol`: cursor on user-defined symbol →
-    returns range and placeholder matching the symbol name.
-  - `test_prepare_rename_builtin`: cursor on `+` → returns `null`.
-  - `test_prepare_rename_keyword`: cursor on `:foo` keyword → `null`.
-  - `test_prepare_rename_number`: cursor on `42` → `null`.
-  - `test_prepare_rename_string`: cursor on `"hello"` → `null`.
+- Add `type_definition_msg` to `lsp_client.{ml,mli}` (same shape as
+  `definition_msg`).
+- Add tests in "type-definition" group:
+  - `test_type_definition_capability_advertised`: check initialize
+    response has `typeDefinitionProvider: true`.
+  - `test_type_definition_returns_null_for_primitive`: cursor on `42`
+    (type is int) → null.
+  - `test_type_definition_returns_null_for_symbol`: cursor on a plain
+    symbol with no named type → null.
+  - `test_type_definition_empty_file`: empty doc → null.
 
 ## Checklist
 
 | # | Task | Status |
 |---|------|--------|
-| 1 | Protocol types and capability change | Done |
-| 2 | Expose is_builtin_symbol and add handler | Done |
-| 3 | Tests | Done |
+| 1 | Protocol type and capability | Done |
+| 2 | Handler and type lookup | Not started |
+| 3 | Tests | Not started |

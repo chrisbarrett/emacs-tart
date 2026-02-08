@@ -63,6 +63,7 @@ type server_capabilities = {
   folding_range_provider : bool;
   semantic_tokens_provider : bool;
   inlay_hint_provider : bool;
+  type_definition_provider : bool;
 }
 (** Server capabilities *)
 
@@ -277,6 +278,11 @@ let server_capabilities_to_json (caps : server_capabilities) : Yojson.Safe.t =
   in
   let fields =
     if caps.inlay_hint_provider then ("inlayHintProvider", `Bool true) :: fields
+    else fields
+  in
+  let fields =
+    if caps.type_definition_provider then
+      ("typeDefinitionProvider", `Bool true) :: fields
     else fields
   in
   `Assoc fields
@@ -508,6 +514,8 @@ let parse_definition_params (json : Yojson.Safe.t) : definition_params =
     }
   in
   { def_text_document = text_document; def_position = position }
+
+let parse_type_definition_params = parse_definition_params
 
 (** Definition result can be a single location, list of locations, or null *)
 type definition_result =
