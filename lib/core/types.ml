@@ -283,7 +283,7 @@ let rec to_string ty =
   | TForall (vars, body) ->
       Printf.sprintf "(forall (%s) %s)" (String.concat " " vars)
         (to_string body)
-  | TUnion [] -> "(Or)"
+  | TUnion [] -> "never"
   | TUnion types ->
       Printf.sprintf "(Or %s)" (String.concat " " (List.map to_string types))
   | TTuple types ->
@@ -487,6 +487,19 @@ let validation_error_to_string = function
     - (truthy | nil) - nil => truthy
     - (string | int | (list any)) - (string | (list any) | (vector any)) => int
     - (cons a (list a)) | nil) - nil => (cons a (list a)) *)
+let is_never ty =
+  match repr ty with TCon n -> n = Prim.never_name | _ -> false
+
+(** Filter [never] members from a list of union types and collapse the result:
+    empty → [Prim.never], singleton → the type itself, otherwise a [TUnion] with
+    no [never] inhabitants. *)
+let normalize_union members =
+  let filtered = List.filter (fun m -> not (is_never m)) members in
+  match filtered with
+  | [] -> Prim.never
+  | [ single ] -> single
+  | _ -> TUnion filtered
+
 let subtract_type (minuend : typ) (subtrahend : typ) : typ =
   let minuend = repr minuend in
   let subtrahend = repr subtrahend in
@@ -497,10 +510,7 @@ let subtract_type (minuend : typ) (subtrahend : typ) : typ =
     | _ -> equal m subtrahend
   in
   match minuend with
-  | TUnion members -> (
+  | TUnion members ->
       let remaining = List.filter (fun m -> not (is_subtracted m)) members in
-      match remaining with
-      | [] -> TUnion []
-      | [ single ] -> single
-      | _ -> TUnion remaining)
-  | _ -> if is_subtracted minuend then TUnion [] else minuend
+      normalize_union remaining
+  | _ -> if is_subtracted minuend then Prim.never else minuend

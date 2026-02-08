@@ -270,6 +270,15 @@ val literal_base_type : literal_value -> typ
 (** [literal_base_type v] returns the base Prim type for a literal value. E.g.,
     [LitInt _] → [Prim.int], [LitString _] → [Prim.string]. *)
 
+val is_never : typ -> bool
+(** [is_never ty] returns true if [ty] is the [never] bottom type (after
+    following links). *)
+
+val normalize_union : typ list -> typ
+(** [normalize_union members] filters [never] members from a union and collapses
+    the result: empty → [Prim.never], singleton → the single type, otherwise
+    [TUnion filtered]. *)
+
 val subtract_type : typ -> typ -> typ
 (** [subtract_type minuend subtrahend] returns [minuend - subtrahend].
 
@@ -280,6 +289,6 @@ val subtract_type : typ -> typ -> typ
 
     When the subtrahend is itself a union, each member of the minuend is removed
     if it equals any member of the subtrahend. For non-union minuends, returns
-    [TUnion []] (empty/never type) when matched, or [minuend] unchanged.
+    [Prim.never] when matched, or [minuend] unchanged.
 
     Uses structural equality after following type variable links. *)

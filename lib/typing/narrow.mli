@@ -50,7 +50,7 @@ val narrow_type : typ -> typ -> typ
     - [any ∩ T] → [T]
 
     For non-union types, returns [original] when it overlaps with [target], or
-    [TUnion []] (empty) when disjoint. *)
+    [Prim.never] when disjoint. *)
 
 val analyze_single_guard : string -> Syntax.Sexp.t list -> guard_info option
 (** [analyze_single_guard fn_name args] checks whether a function call is a

@@ -59,20 +59,17 @@ let narrow_type (original : typ) (target : typ) : typ =
   else if equal original target then original
   else
     match original with
-    | TUnion members -> (
+    | TUnion members ->
         (* Filter union members to those that overlap with target *)
         let overlapping =
           List.filter (fun m -> not (Unify.types_disjoint m target)) members
         in
-        match overlapping with
-        | [] -> TUnion []
-        | [ single ] -> single
-        | _ -> TUnion overlapping)
+        normalize_union overlapping
     | _ ->
         (* Non-union original: if not disjoint with target, keep original;
            otherwise empty (the type cannot satisfy the predicate) *)
         if not (Unify.types_disjoint original target) then original
-        else TUnion []
+        else Prim.never
 
 (** Try to extract a single predicate from a call expression. *)
 let analyze_single_predicate (fn_name : string) (args : Syntax.Sexp.t list)

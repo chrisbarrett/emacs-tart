@@ -83,7 +83,7 @@ let test_union_empty_intersection () =
   let original = TUnion [ Prim.string; Prim.symbol ] in
   let result = Narrow.narrow_type original Prim.int in
   Alcotest.(check string)
-    "(string | symbol) ∩ int = empty" "(Or)" (to_string result)
+    "(string | symbol) ∩ int = empty" "never" (to_string result)
 
 let test_bool_truthy () =
   setup ();
@@ -106,7 +106,7 @@ let test_nonunion_disjoint_empty () =
   (* string ∩ int → empty (disjoint types, contradiction) *)
   let result = Narrow.narrow_type Prim.string Prim.int in
   Alcotest.(check string)
-    "string ∩ int = empty (disjoint)" "(Or)" (to_string result)
+    "string ∩ int = empty (disjoint)" "never" (to_string result)
 
 let test_truthy_nonunion () =
   setup ();
@@ -119,7 +119,7 @@ let test_nil_truthy () =
   (* nil ∩ truthy → empty (nil is disjoint with truthy, contradiction) *)
   let result = Narrow.narrow_type Prim.nil Prim.truthy in
   Alcotest.(check string)
-    "nil ∩ truthy = empty (disjoint)" "(Or)" (to_string result)
+    "nil ∩ truthy = empty (disjoint)" "never" (to_string result)
 
 (* =============================================================================
    narrow_type: union target (multi-type predicates)
@@ -143,7 +143,7 @@ let test_union_intersect_no_overlap () =
   let target = TUnion [ list_of Prim.any; Prim.string ] in
   let result = Narrow.narrow_type original target in
   Alcotest.(check string)
-    "no overlap with union target" "(Or)" (to_string result)
+    "no overlap with union target" "never" (to_string result)
 
 let test_union_intersect_full_overlap () =
   setup ();
@@ -173,7 +173,7 @@ let test_subtract_union_single_type () =
   (* string - (string | int) → empty *)
   let result = subtract_type Prim.string (TUnion [ Prim.string; Prim.int ]) in
   Alcotest.(check string)
-    "subtract union from single type" "(Or)" (to_string result)
+    "subtract union from single type" "never" (to_string result)
 
 let test_subtract_union_no_match () =
   setup ();
