@@ -110,6 +110,40 @@ _Symbols whose behavior can't be captured soundly (dynamic dispatch, eval-based)
   `(symbol symbol any) -> any` because the return type equals the
   input value type, but tart has no dependent typing to express this
 
+### `nil` is not `(list a)`
+- **Location:** type system
+- **Issue:** In Emacs Lisp, `nil` is the empty list — `(listp nil)`
+  returns `t`. However, the type checker models `nil` as `Nil`, a
+  distinct type from `(list a)`. This causes false positives wherever
+  code passes literal `nil` as a list argument, e.g.
+  `(append sequence nil)` or `(nreverse result)` when `result` is
+  initialized to `nil`. Additionally, `(list a)` includes `nil` but
+  cannot be passed to functions expecting `(cons b c)`, so patterns
+  like `(setcar (cdr xs) val)` fail because `cdr` returns `(list a)`
+  which might be `nil`
+- **Suggested feature:** Subtyping `Nil <: (list a)` for all `a`, and
+  refinement types or non-nil list type `(cons a (list a))`
+
+### `list` heterogeneous construction
+- **Location:** type system
+- **Issue:** `list` is polymorphic `[a] (&rest a) -> (list a)`, but
+  Emacs Lisp frequently builds heterogeneous lists for code-as-data:
+  `(list 'setq place value)`. The first arg `'setq` (symbol) fixes
+  `a = symbol`, then subsequent non-symbol args fail. This pattern is
+  pervasive in macro-defining code
+- **Suggested feature:** Tuple type or heterogeneous list support
+
+### Unsupported special forms
+- **Location:** parser
+- **Issue:** The following forms are not understood by the parser,
+  causing all bindings inside their bodies to appear as undefined
+  variables: `cl-defgeneric`, `cl-defmethod`, `gv-define-setter`,
+  `gv-define-expander`, `pcase-defmacro`, `declare-function`,
+  `define-minor-mode`, `cl--defalias`. These account for the majority
+  of errors when validating `seq.el` (422/482) and `cl-lib.el`
+  (155/235)
+- **Suggested feature:** Parser support for these forms
+
 ## ergonomic
 
 _Symbols that are typeable but awkward (excessive annotations at call sites)._

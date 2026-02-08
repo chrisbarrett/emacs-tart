@@ -154,10 +154,17 @@
   ((_) -> nil))
 
 ;; (setcar CELL NEWCAR) - destructive update
-(defun setcar [a] ((cons any any) a) -> a)
+;; Accepts (list a) in addition to (cons b c) because a non-empty list
+;; is a cons cell, and callers frequently pass (nthcdr ...) results.
+(defun setcar [a b c]
+  (((cons b c) a) -> a)
+  (((list a) a) -> a))
 
 ;; (setcdr CELL NEWCDR) - destructive update
-(defun setcdr [a] ((cons any any) a) -> a)
+;; Accepts (list a) in addition to (cons b c) for the same reason.
+(defun setcdr [a b c]
+  (((cons b c) a) -> a)
+  (((list a) a) -> a))
 
 ;; ===========================================================================
 ;; Array operations
