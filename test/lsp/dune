@@ -44,3 +44,8 @@
  (name code_action_test)
  (modules code_action_test)
  (libraries tart.lsp alcotest))
+
+(test
+ (name folding_test)
+ (modules folding_test)
+ (libraries tart.lsp alcotest))
