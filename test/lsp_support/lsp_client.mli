@@ -12,12 +12,13 @@ val make_message :
 val initialize_msg :
   ?id:int ->
   ?root_uri:string ->
+  ?capabilities:Yojson.Safe.t ->
   ?initialization_options:Yojson.Safe.t ->
   unit ->
   string
-(** [initialize_msg ?id ?root_uri ?initialization_options ()] builds an
-    initialize request. Defaults: [id = 1], [root_uri] omitted,
-    [initialization_options] omitted. *)
+(** [initialize_msg ?id ?root_uri ?capabilities ?initialization_options ()]
+    builds an initialize request. Defaults: [id = 1], [root_uri] omitted,
+    [capabilities = \{\}], [initialization_options] omitted. *)
 
 val initialized_msg : unit -> string
 (** Notification sent after initialize response is received. *)
@@ -122,6 +123,10 @@ val workspace_symbol_msg : id:int -> query:string -> unit -> string
 val did_change_watched_files_msg : changes:(string * int) list -> unit -> string
 (** workspace/didChangeWatchedFiles notification. Each change is a [(uri, type)]
     pair where type is 1=created, 2=changed, 3=deleted. *)
+
+val cancel_request_msg : id:int -> unit -> string
+(** [$/cancelRequest] notification. Signals that a pending request with the
+    given [id] should be cancelled. *)
 
 val did_change_configuration_msg : settings:Yojson.Safe.t -> unit -> string
 (** workspace/didChangeConfiguration notification. *)

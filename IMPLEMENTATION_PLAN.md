@@ -203,4 +203,4 @@ Add `unix` to dune libraries.
 | 3 | Debounce timer | Done |
 | 4 | Request cancellation | Done |
 | 5 | Progress reporting | Done |
-| 6 | Tests | Not started |
+| 6 | Tests | Done |

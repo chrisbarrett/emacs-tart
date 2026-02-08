@@ -2607,6 +2607,141 @@ let test_watched_file_open_ignored () =
     "only one diagnostic notification" 1
     (List.length diag_notifications)
 
+(** {1 Concurrency Tests} *)
+
+let test_cancel_unknown_request () =
+  (* Sending $/cancelRequest for an unknown ID should not crash *)
+  let result =
+    run_initialized_session
+      [
+        cancel_request_msg ~id:999 ();
+        did_open_msg ~uri:"file:///test.el" ~text:"(+ 1 2)" ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code
+
+let test_cancel_no_params () =
+  (* $/cancelRequest without params should not crash *)
+  let result =
+    run_initialized_session [ make_message ~method_:"$/cancelRequest" () ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code
+
+let test_debounce_ms_setting () =
+  (* didChangeConfiguration with debounceMs should be accepted *)
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el" ~text:"(+ 1 2)" ();
+        did_change_configuration_msg
+          ~settings:(`Assoc [ ("tart.diagnostics.debounceMs", `Int 500) ])
+          ();
+        hover_msg ~id:2 ~uri:"file:///test.el" ~line:0 ~character:1 ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  (* Server still functional after config change *)
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "No hover response after debounceMs change"
+  | Some json ->
+      Alcotest.(check bool)
+        "hover works after debounceMs change" true
+        (response_result json <> `Null)
+
+let test_debounce_ms_negative_ignored () =
+  (* Negative debounceMs should be silently ignored *)
+  let result =
+    run_initialized_session
+      [
+        did_change_configuration_msg
+          ~settings:(`Assoc [ ("tart.diagnostics.debounceMs", `Int (-100)) ])
+          ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code
+
+let test_progress_notifications () =
+  (* When client advertises workDoneProgress, apply_settings sends
+     progress notifications during full invalidation *)
+  let result =
+    run_session
+      [
+        initialize_msg ~id:1
+          ~capabilities:
+            (`Assoc [ ("window", `Assoc [ ("workDoneProgress", `Bool true) ]) ])
+          ();
+        initialized_msg ();
+        did_open_msg ~uri:"file:///a.el" ~text:"(+ 1 2)" ();
+        did_change_configuration_msg
+          ~settings:(`Assoc [ ("tart.emacsVersion", `String "30.1") ])
+          ();
+        shutdown_msg ~id:99 ();
+        exit_msg ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  (* Should have window/workDoneProgress/create request *)
+  let create_req =
+    find_request ~method_:"window/workDoneProgress/create" result.messages
+  in
+  Alcotest.(check bool)
+    "has progress create request" true
+    (Option.is_some create_req);
+  (* Should have $/progress notifications *)
+  let progress = find_all_notifications ~method_:"$/progress" result.messages in
+  Alcotest.(check bool)
+    "has progress notifications" true
+    (List.length progress >= 1)
+
+let test_progress_not_sent_without_capability () =
+  (* Without workDoneProgress capability, no progress messages should appear *)
+  let result =
+    run_session
+      [
+        initialize_msg ~id:1 ();
+        initialized_msg ();
+        did_open_msg ~uri:"file:///a.el" ~text:"(+ 1 2)" ();
+        did_change_configuration_msg
+          ~settings:(`Assoc [ ("tart.emacsVersion", `String "30.1") ])
+          ();
+        shutdown_msg ~id:99 ();
+        exit_msg ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  let create_req =
+    find_request ~method_:"window/workDoneProgress/create" result.messages
+  in
+  Alcotest.(check bool)
+    "no progress create request" true
+    (Option.is_none create_req);
+  let progress = find_all_notifications ~method_:"$/progress" result.messages in
+  Alcotest.(check int) "no progress notifications" 0 (List.length progress)
+
+let test_rapid_changes_final_state () =
+  (* Send 3 rapid didChange messages. Final diagnostics should reflect the
+     last version. This exercises the coalescing/debounce path. *)
+  let uri = "file:///test.el" in
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri ~text:"(+ 1 2)" ();
+        did_change_full_msg ~uri ~version:2 ~text:"(+ 1 \"bad\")" ();
+        did_change_full_msg ~uri ~version:3 ~text:"(+ 1 3)" ();
+        did_change_full_msg ~uri ~version:4 ~text:"(+ 1 \"also-bad\")" ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  (* Final diagnostics should show type error from the last change *)
+  match find_last_diagnostics ~uri result.messages with
+  | None -> Alcotest.fail "No final diagnostics"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let diags = json |> member "params" |> member "diagnostics" |> to_list in
+      Alcotest.(check bool)
+        "final diagnostics have errors" true
+        (List.length diags > 0)
+
 (** {1 Test Registration} *)
 
 let () =
@@ -2871,5 +3006,22 @@ let () =
             test_watched_tart_file_invalidates_dependent;
           Alcotest.test_case "open file events ignored" `Quick
             test_watched_file_open_ignored;
+        ] );
+      ( "concurrency",
+        [
+          Alcotest.test_case "cancel unknown request" `Quick
+            test_cancel_unknown_request;
+          Alcotest.test_case "cancel without params" `Quick
+            test_cancel_no_params;
+          Alcotest.test_case "debounceMs setting" `Quick
+            test_debounce_ms_setting;
+          Alcotest.test_case "negative debounceMs ignored" `Quick
+            test_debounce_ms_negative_ignored;
+          Alcotest.test_case "progress notifications" `Quick
+            test_progress_notifications;
+          Alcotest.test_case "no progress without capability" `Quick
+            test_progress_not_sent_without_capability;
+          Alcotest.test_case "rapid changes final state" `Quick
+            test_rapid_changes_final_state;
         ] );
     ]
