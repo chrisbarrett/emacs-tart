@@ -244,4 +244,4 @@ All log output goes to stderr. Command results (diagnostics, types, reports, exp
 
 ## Deferred
 
-- **Structured logging R9** (debug-level unification tracing): infrastructure is ready, but call sites in the unification/constraint-solving hot loop are not yet instrumented. These are added incrementally as specific debugging needs arise.
+None.

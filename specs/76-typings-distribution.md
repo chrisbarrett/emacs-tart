@@ -108,11 +108,21 @@ Each entry records the symbol name, source location, category, description, and
 The `--verbose` flag shows per-file signature counts and sample matches for
 debugging.
 
+## Current Status
+
+C-core typings cover 54 files. Lisp-core typings cover 35 files. C-layer
+symbol coverage is ~29% (1414/4804 public symbols). Many existing signatures
+use `any` where more precise types are possible via multi-clause dispatch,
+polymorphism, and union types.
+
 ## Deferred
 
-- Backfill of 29.x typings.
-- Remaining C source files beyond the initial core set are ongoing.
-- GUI backend typings (ns/w32/pgtk/x11).
-- Third-party and built-in library typings: ht.el, map.el, subr-x, process
-  management, rx.el, expanded cl-lib coverage (see
-  [Spec 20](./.archive/20-expanded-stdlib.md) for the original plan).
+- **Signature precision**: existing c-core and lisp-core typings use `any`
+  broadly. Multi-clause dispatch, polymorphism, and union types can express
+  precise return types for different argument patterns.
+- **Remaining C source files**: ~70% of public C-layer symbols lack signatures.
+- **Validation against Emacs lisp/**: running `./tart check` against Emacs's
+  own Lisp files to surface incorrect signatures and document untypeable cases.
+- **29.x typings backfill**: 29.1 and 30.1 directories are copies of 31.0;
+  version-specific differences not yet audited.
+- **GUI backend typings**: ns.c (macOS), w32.c (Windows), pgtk.c, x11.c.

@@ -343,11 +343,10 @@ that is suggested.
 
 ## Deferred
 
-- **Error codes**: many codes are reserved but not yet assigned to diagnostics
-  (E0103, E0105, E0202, E0203, E0401, E0402, E0500--E0503, E0600--E0602,
-  E0700, E0701, E0800--E0802, E0902). These are assigned incrementally as the
-  features that emit them are implemented.
-- **Info severity**: reserved in the type but no features currently emit Info
-  diagnostics.
-- **Clause diagnostics**: carry user-authored advisory messages from `.tart`
-  signatures rather than compiler error codes.
+- **Error codes**: all codes listed above are defined in the `diagnostic.ml`
+  enum. Codes for implemented features (E0001--E0008, E0100--E0104, E0200--E0201,
+  E0300--E0302, E0400, E0800--E0802, E0900--E0903) are actively emitted.
+  Remaining codes are assigned incrementally as the features that emit them are
+  implemented.
+- **Info severity**: defined in the type and mapped to LSP Information severity.
+  No features currently emit Info diagnostics.

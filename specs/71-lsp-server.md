@@ -111,7 +111,7 @@ files are reported as warnings.
 
 ## Goto Definition
 
-`textDocument/definition` resolves symbols to their definition location. Two
+`textDocument/definition` resolves symbols to their definition location. Three
 resolution strategies apply in order:
 
 1. **Local definitions** — `defun`, `defvar`, `defconst` forms in the current
@@ -119,21 +119,17 @@ resolution strategies apply in order:
 2. **Signature lookup** — searches sibling `.tart` files, then the configured
    search path (typings, requires, autoloads). Uses prefix-based lookup for
    module-qualified names.
+3. **Cross-file `.el` lookup** — searches all other open `.el` documents for
+   `defun`, `defvar`, `defconst` definitions matching the target name.
 
-Returns a single location or null.
-
-**Limitation:** does not scan `.el` files other than the current document. A
-symbol defined in another `.el` file is only reachable if it has a `.tart`
-signature.
+Returns a single location or null. Local definitions take priority over
+signature results, which take priority over cross-file `.el` results.
 
 ## Find References
 
-`textDocument/references` walks the AST of the current document and collects
-all symbol occurrences matching the target name.
-
-**Limitation:** current-document only. No workspace-wide search, no scoping
-analysis — every textual occurrence of the name in the document is returned
-regardless of binding context.
+`textDocument/references` walks the AST of all open `.el` documents and collects
+symbol occurrences matching the target name. Results from the origin document
+appear first.
 
 ## Code Actions
 
@@ -173,8 +169,9 @@ Candidates are deduplicated, preferring entries with type information.
 Functions show their parameter list as detail text. Completion kinds
 distinguish functions, variables, and constants.
 
-**Limitation:** not scope-aware at the cursor — all typed bindings are offered
-regardless of local visibility.
+Completions are scope-aware: bindings from `let`, `let*`, `lambda`, `defun`,
+`if-let`, `dolist`, and `dotimes` are only offered when the cursor is within
+their lexical scope. `let*` respects sequential visibility.
 
 ## Signature Help
 
@@ -201,11 +198,9 @@ over just the name.
 
 ## Rename
 
-`textDocument/rename` renames all occurrences of a symbol within the current
-document.
-
-**Limitation:** current-document only. Does not rename across the workspace or
-in `.tart` signature files.
+`textDocument/rename` renames all occurrences of a symbol across the workspace.
+References are found via workspace-wide search across all open `.el` documents.
+Results are grouped by URI into separate text document edits.
 
 ## Concurrency & Cancellation
 
@@ -296,7 +291,9 @@ document. The server advertises the following token types:
 Token modifiers: `definition`, `declaration`, `readonly`.
 
 Delta updates via `textDocument/semanticTokens/full/delta` reduce payload size
-after incremental edits.
+after incremental edits. The server caches the previous token array and result
+ID per document; delta responses use prefix/suffix matching to produce a minimal
+edit list. On cache miss the server falls back to a full response.
 
 ## Inlay Hints
 
@@ -392,24 +389,56 @@ protocol layer end-to-end:
 - **Regression tests** cover known edge cases: empty files, files with only
   comments, malformed JSON-RPC, oversized messages, and rapid open/close cycles.
 
-## Deferred
+## Call Hierarchy
 
-- **Call hierarchy** (`callHierarchy/incomingCalls`,
-  `callHierarchy/outgoingCalls`): requires a workspace-wide call graph.
-- **Type hierarchy** (`typeHierarchy/supertypes`, `typeHierarchy/subtypes`):
-  requires subtype relationship tracking.
-- **Code lens**: no clear use case identified yet.
-- **Linked editing ranges**: not applicable to Elisp.
-- **On-type formatting**: Elisp formatting conventions are better handled by
-  `indent-region`.
-- **Pull-based diagnostics** (`textDocument/diagnostic`): the push model is
-  sufficient for current scale. Migrate if the protocol deprecates
-  `publishDiagnostics`.
-- **Dynamic registration**: not needed while the server's feature set is static.
-- **Workspace-wide find-references**: references are currently scoped to the
-  open document.
-- **Cross-file goto-definition for `.el` targets**: definition resolution
-  reaches `.tart` signatures but not other `.el` files.
-- **Workspace-wide rename**: rename is currently single-document.
-- **Scope-aware completion**: completions are not filtered by lexical scope at
-  the cursor.
+`textDocument/prepareCallHierarchy` finds the `defun` at the cursor position.
+`callHierarchy/incomingCalls` searches all open `.el` documents for functions
+that call the target. `callHierarchy/outgoingCalls` extracts callee names from
+the target function's body and resolves them to `defun` definitions across the
+workspace.
+
+## Type Hierarchy
+
+`textDocument/prepareTypeHierarchy` infers the type at the cursor and returns a
+type hierarchy item. `typeHierarchy/supertypes` and `typeHierarchy/subtypes`
+implement the numeric tower (`Int <: Num`, `Float <: Num`). Source locations
+from `.tart` signatures are included when available.
+
+## Code Lens
+
+`textDocument/codeLens` produces two lenses per top-level definition (`defun`,
+`defvar`, `defconst`):
+
+1. **Reference count** — workspace-wide count of symbol references.
+2. **Signature status** — whether a `.tart` signature exists for the definition.
+
+## Linked Editing Ranges
+
+`textDocument/linkedEditingRange` returns linked ranges for variables bound by
+`let`, `let*`, `defun`, `defmacro`, `cl-defun`, `lambda`, and `closure` forms.
+The binding site and all body references are linked, enabling simultaneous
+rename. Markers (`&rest`, `&optional`) are excluded.
+
+## On-Type Formatting
+
+`textDocument/onTypeFormatting` triggers on `)` and newline:
+
+- **Newline**: inserts indentation proportional to paren nesting depth (2 spaces
+  per level). No edit at top level.
+- **Close paren**: inserts a trailing newline when a top-level form closes. No
+  edit for nested close parens.
+
+## Pull-Based Diagnostics
+
+`textDocument/diagnostic` provides pull-based diagnostics alongside the existing
+push model. Unchanged reports are returned when the `previousResultId` matches
+the cached result, avoiding redundant type-checking. Full reports include a
+unique `resultId` for subsequent delta requests.
+
+## Dynamic Registration
+
+The server dynamically registers capabilities when the client advertises
+`dynamicRegistration` support. Static capabilities are omitted from the
+`initialize` response for features the client will register dynamically. A
+`client/registerCapability` request is sent during `initialized` with
+appropriate `registerOptions` (trigger characters, token legends, etc.).
