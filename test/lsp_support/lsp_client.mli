@@ -89,6 +89,10 @@ val inlay_hint_msg :
   string
 (** textDocument/inlayHint request. *)
 
+val prepare_rename_msg :
+  id:int -> uri:string -> line:int -> character:int -> unit -> string
+(** textDocument/prepareRename request. *)
+
 val rename_msg :
   id:int ->
   uri:string ->

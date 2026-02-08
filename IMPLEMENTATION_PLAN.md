@@ -122,4 +122,4 @@ instead of `true`.
 |---|------|--------|
 | 1 | Protocol types and capability change | Done |
 | 2 | Expose is_builtin_symbol and add handler | Done |
-| 3 | Tests | Not started |
+| 3 | Tests | Done |

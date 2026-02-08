@@ -1477,6 +1477,96 @@ let test_rename_has_correct_uri () =
       let uri = text_doc |> member "uri" |> to_string in
       Alcotest.(check string) "uri matches" "file:///my-project/test.el" uri
 
+(** {1 Prepare Rename Tests} *)
+
+let test_prepare_rename_symbol () =
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el" ~text:"(defun foo () 42)\n(foo)" ();
+        prepare_rename_msg ~id:2 ~uri:"file:///test.el" ~line:0 ~character:7 ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "No prepare rename response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      Alcotest.(check bool) "result is not null" true (result <> `Null);
+      let placeholder = result |> member "placeholder" |> to_string in
+      Alcotest.(check string) "placeholder is symbol name" "foo" placeholder;
+      let range = result |> member "range" in
+      let start = range |> member "start" in
+      let start_line = start |> member "line" |> to_int in
+      let start_char = start |> member "character" |> to_int in
+      Alcotest.(check int) "start line" 0 start_line;
+      Alcotest.(check int) "start character" 7 start_char
+
+let test_prepare_rename_builtin () =
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el" ~text:"(+ 1 2)" ();
+        prepare_rename_msg ~id:2 ~uri:"file:///test.el" ~line:0 ~character:1 ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "No prepare rename response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      Alcotest.(check bool) "result is null for builtin" true (result = `Null)
+
+let test_prepare_rename_keyword () =
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el" ~text:"(list :foo 1)" ();
+        prepare_rename_msg ~id:2 ~uri:"file:///test.el" ~line:0 ~character:6 ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "No prepare rename response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      Alcotest.(check bool) "result is null for keyword" true (result = `Null)
+
+let test_prepare_rename_number () =
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el" ~text:"(+ 42 1)" ();
+        prepare_rename_msg ~id:2 ~uri:"file:///test.el" ~line:0 ~character:3 ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "No prepare rename response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      Alcotest.(check bool) "result is null for number" true (result = `Null)
+
+let test_prepare_rename_string () =
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el" ~text:{|(message "hello")|} ();
+        prepare_rename_msg ~id:2 ~uri:"file:///test.el" ~line:0 ~character:9 ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "No prepare rename response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      Alcotest.(check bool) "result is null for string" true (result = `Null)
+
 (** {1 UTF-16 Position Tests} *)
 
 (** Diagnostics for code with CJK characters report UTF-16 positions, not byte
@@ -2198,6 +2288,14 @@ let () =
           Alcotest.test_case "not on symbol" `Quick test_rename_not_on_symbol;
           Alcotest.test_case "has correct uri" `Quick
             test_rename_has_correct_uri;
+        ] );
+      ( "prepare-rename",
+        [
+          Alcotest.test_case "symbol" `Quick test_prepare_rename_symbol;
+          Alcotest.test_case "builtin" `Quick test_prepare_rename_builtin;
+          Alcotest.test_case "keyword" `Quick test_prepare_rename_keyword;
+          Alcotest.test_case "number" `Quick test_prepare_rename_number;
+          Alcotest.test_case "string" `Quick test_prepare_rename_string;
         ] );
       ( "sync-recovery",
         [
