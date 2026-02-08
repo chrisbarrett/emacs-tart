@@ -142,38 +142,53 @@ let filename_of_uri (uri : string) : string =
     String.sub uri 7 (String.length uri - 7)
   else uri
 
-(** Convert a source location span to an LSP range. Note: Loc.span has 1-based
-    lines and 0-based columns. LSP uses 0-based lines and 0-based characters
-    (UTF-16 code units, but we approximate with bytes). *)
-let range_of_span (span : Syntax.Location.span) : Protocol.range =
+(** Convert a source location span to an LSP range. Loc.span has 1-based lines
+    and byte-offset columns. LSP uses 0-based lines and UTF-16 code-unit
+    characters. *)
+let range_of_span ~(text : string) (span : Syntax.Location.span) :
+    Protocol.range =
+  let start_line = span.start_pos.line - 1 in
+  let end_line = span.end_pos.line - 1 in
+  let start_char =
+    match Document.line_text_at text start_line with
+    | Some line_text ->
+        Document.utf16_offset_of_byte ~line_text ~byte_offset:span.start_pos.col
+    | None -> span.start_pos.col
+  in
+  let end_char =
+    match Document.line_text_at text end_line with
+    | Some line_text ->
+        Document.utf16_offset_of_byte ~line_text ~byte_offset:span.end_pos.col
+    | None -> span.end_pos.col
+  in
   {
-    Protocol.start =
-      {
-        line = span.start_pos.line - 1;
-        (* Convert to 0-based *)
-        character = span.start_pos.col;
-      };
-    end_ = { line = span.end_pos.line - 1; character = span.end_pos.col };
+    Protocol.start = { line = start_line; character = start_char };
+    end_ = { line = end_line; character = end_char };
   }
 
 (** Convert a source location span to an LSP location.
 
     Creates a location with a file:// URI from the span's file path. *)
-let location_of_span (span : Syntax.Location.span) : Protocol.location =
+let location_of_span ~(text : string) (span : Syntax.Location.span) :
+    Protocol.location =
   let uri = "file://" ^ span.start_pos.file in
-  { Protocol.uri; range = range_of_span span }
+  { Protocol.uri; range = range_of_span ~text span }
 
 (** Convert a related location to LSP DiagnosticRelatedInformation.
 
     Skips locations with dummy spans (used for notes without source locations).
 *)
-let related_info_of_related_location (rel : Typing.Diagnostic.related_location)
-    : Protocol.diagnostic_related_information option =
+let related_info_of_related_location ~(text : string)
+    (rel : Typing.Diagnostic.related_location) :
+    Protocol.diagnostic_related_information option =
   (* Skip dummy spans - these are notes without specific locations *)
   if rel.span.start_pos.file = "<generated>" then None
   else
     Some
-      { Protocol.location = location_of_span rel.span; message = rel.message }
+      {
+        Protocol.location = location_of_span ~text rel.span;
+        message = rel.message;
+      }
 
 (** Convert a Typing.Diagnostic.t to an LSP diagnostic.
 
@@ -182,8 +197,8 @@ let related_info_of_related_location (rel : Typing.Diagnostic.related_location)
     - Error code → diagnostic code string
     - Related locations → relatedInformation (skipping dummy spans)
     - Help suggestions → appended to message with "help: " prefix *)
-let lsp_diagnostic_of_diagnostic (d : Typing.Diagnostic.t) : Protocol.diagnostic
-    =
+let lsp_diagnostic_of_diagnostic ~(text : string) (d : Typing.Diagnostic.t) :
+    Protocol.diagnostic =
   let severity =
     match d.severity with
     | Typing.Diagnostic.Error -> Protocol.Error
@@ -208,10 +223,10 @@ let lsp_diagnostic_of_diagnostic (d : Typing.Diagnostic.t) : Protocol.diagnostic
   in
   (* Convert related locations to LSP format, filtering out dummy spans *)
   let related_information =
-    List.filter_map related_info_of_related_location d.related
+    List.filter_map (related_info_of_related_location ~text) d.related
   in
   {
-    Protocol.range = range_of_span d.span;
+    Protocol.range = range_of_span ~text d.span;
     severity = Some severity;
     code;
     message;
@@ -220,10 +235,10 @@ let lsp_diagnostic_of_diagnostic (d : Typing.Diagnostic.t) : Protocol.diagnostic
   }
 
 (** Convert a parse error to an LSP diagnostic *)
-let lsp_diagnostic_of_parse_error (err : Syntax.Read.parse_error) :
-    Protocol.diagnostic =
+let lsp_diagnostic_of_parse_error ~(text : string)
+    (err : Syntax.Read.parse_error) : Protocol.diagnostic =
   {
-    Protocol.range = range_of_span err.span;
+    Protocol.range = range_of_span ~text err.span;
     severity = Some Protocol.Error;
     code = None;
     message = err.message;
@@ -232,8 +247,8 @@ let lsp_diagnostic_of_parse_error (err : Syntax.Read.parse_error) :
   }
 
 (** Convert a signature error to an LSP diagnostic *)
-let lsp_diagnostic_of_sig_error (err : Sig.Search_path.sig_error) :
-    Protocol.diagnostic =
+let lsp_diagnostic_of_sig_error ~(text : string)
+    (err : Sig.Search_path.sig_error) : Protocol.diagnostic =
   let message =
     match err.kind with
     | Sig.Search_path.LexerError msg -> msg
@@ -242,7 +257,7 @@ let lsp_diagnostic_of_sig_error (err : Sig.Search_path.sig_error) :
     | Sig.Search_path.IOError msg -> msg
   in
   {
-    Protocol.range = range_of_span err.span;
+    Protocol.range = range_of_span ~text err.span;
     severity = Some Protocol.Error;
     code = None;
     message;
@@ -262,7 +277,7 @@ let check_tart_document (text : string) (uri : string) :
   let parse_result = Syntax.Read.parse_string ~filename text in
   (* Check for lexer errors first *)
   if parse_result.errors <> [] then
-    List.map lsp_diagnostic_of_parse_error parse_result.errors
+    List.map (lsp_diagnostic_of_parse_error ~text) parse_result.errors
   else
     (* Parse the signature *)
     let basename = Filename.basename filename in
@@ -275,7 +290,7 @@ let check_tart_document (text : string) (uri : string) :
     | Error errors ->
         List.map
           (fun (e : Sig.Sig_parser.parse_error) ->
-            lsp_diagnostic_of_sig_error
+            lsp_diagnostic_of_sig_error ~text
               { path = filename; kind = ParseError e.message; span = e.span })
           errors
     | Ok sig_file ->
@@ -285,7 +300,7 @@ let check_tart_document (text : string) (uri : string) :
         in
         List.map
           (fun (e : Sig.Sig_loader.load_error) ->
-            lsp_diagnostic_of_sig_error
+            lsp_diagnostic_of_sig_error ~text
               {
                 path = filename;
                 kind = ValidationError e.message;
@@ -348,7 +363,7 @@ let check_document ~(config : Typing.Module_check.config)
   let parse_result = Syntax.Read.parse_string ~filename text in
   (* Collect parse errors *)
   let parse_diagnostics =
-    List.map lsp_diagnostic_of_parse_error parse_result.errors
+    List.map (lsp_diagnostic_of_parse_error ~text) parse_result.errors
   in
   (* If we have sexps, type-check them *)
   let type_diagnostics, stats =
@@ -364,7 +379,8 @@ let check_document ~(config : Typing.Module_check.config)
       let typing_diagnostics =
         Typing.Module_check.diagnostics_of_result check_result
       in
-      (List.map lsp_diagnostic_of_diagnostic typing_diagnostics, Some stats)
+      ( List.map (lsp_diagnostic_of_diagnostic ~text) typing_diagnostics,
+        Some stats )
   in
   (parse_diagnostics @ type_diagnostics, stats)
 
@@ -731,7 +747,9 @@ let handle_hover (server : t) (params : Yojson.Safe.t option) :
                             value = Printf.sprintf "```elisp\n%s\n```" type_str;
                           };
                         range =
-                          Some (range_of_span (Syntax.Sexp.span_of ctx.target));
+                          Some
+                            (range_of_span ~text:doc.text
+                               (Syntax.Sexp.span_of ctx.target));
                       }
                     in
                     Ok (Protocol.hover_to_json hover))))
@@ -906,7 +924,7 @@ let handle_definition (server : t) (params : Yojson.Safe.t option) :
                         Log.debug "Found local definition at %s:%d:%d"
                           span.start_pos.file span.start_pos.line
                           span.start_pos.col;
-                        let loc = location_of_span span in
+                        let loc = location_of_span ~text:doc.text span in
                         Ok
                           (Protocol.definition_result_to_json
                              (Protocol.DefLocation loc))
@@ -924,7 +942,18 @@ let handle_definition (server : t) (params : Yojson.Safe.t option) :
                               "Found definition in signature at %s:%d:%d"
                               span.start_pos.file span.start_pos.line
                               span.start_pos.col;
-                            let loc = location_of_span span in
+                            (* Read the target file's text for UTF-16 conversion *)
+                            let target_text =
+                              try
+                                let ic =
+                                  In_channel.open_text span.start_pos.file
+                                in
+                                let content = In_channel.input_all ic in
+                                In_channel.close ic;
+                                content
+                              with _ -> ""
+                            in
+                            let loc = location_of_span ~text:target_text span in
                             Ok
                               (Protocol.definition_result_to_json
                                  (Protocol.DefLocation loc))
@@ -981,7 +1010,9 @@ let handle_references (server : t) (params : Yojson.Safe.t option) :
                     let ref_spans = find_references name parse_result.sexps in
                     Log.debug "Found %d references" (List.length ref_spans);
                     (* Convert spans to locations *)
-                    let locations = List.map location_of_span ref_spans in
+                    let locations =
+                      List.map (location_of_span ~text:doc.text) ref_spans
+                    in
                     Ok (Protocol.references_result_to_json (Some locations)))))
 
 (** Handle textDocument/codeAction request.
@@ -1012,8 +1043,10 @@ let handle_code_action (server : t) (params : Yojson.Safe.t option) :
           Log.debug "Document not found: %s" uri;
           Ok (Protocol.code_action_result_to_json (Some []))
       | Some doc ->
-          Code_action.handle ~range_of_span ~config:server.module_config ~uri
-            ~doc_text:doc.text ~range ~context)
+          Code_action.handle
+            ~range_of_span:(range_of_span ~text:doc.text)
+            ~config:server.module_config ~uri ~doc_text:doc.text ~range ~context
+      )
 
 (** {1 Document Symbols} *)
 
@@ -1021,27 +1054,14 @@ let handle_code_action (server : t) (params : Yojson.Safe.t option) :
 
     For defun, extracts function with type from environment if available. For
     defvar/defconst, extracts variable/constant with its span. *)
-let rec extract_symbol_from_def (sexp : Syntax.Sexp.t) :
+let rec extract_symbol_from_def ~(text : string) (sexp : Syntax.Sexp.t) :
     Protocol.document_symbol option =
   let open Syntax.Sexp in
   match sexp with
   | List (Symbol ("defun", _) :: Symbol (name, name_span) :: args :: body, span)
     ->
       (* Get the selection range from the name symbol *)
-      let selection_range =
-        {
-          Protocol.start =
-            {
-              line = name_span.start_pos.line - 1;
-              character = name_span.start_pos.col;
-            };
-          end_ =
-            {
-              line = name_span.end_pos.line - 1;
-              character = name_span.end_pos.col;
-            };
-        }
-      in
+      let selection_range = range_of_span ~text name_span in
       (* Extract parameter names for detail *)
       let param_detail =
         match args with
@@ -1061,7 +1081,8 @@ let rec extract_symbol_from_def (sexp : Syntax.Sexp.t) :
       in
       (* Look for nested defuns in the body *)
       let children =
-        List.filter_map extract_symbol_from_def
+        List.filter_map
+          (extract_symbol_from_def ~text)
           (List.concat_map (function List (elems, _) -> elems | _ -> []) body)
       in
       Some
@@ -1069,74 +1090,35 @@ let rec extract_symbol_from_def (sexp : Syntax.Sexp.t) :
           Protocol.ds_name = name;
           ds_detail = Some param_detail;
           ds_kind = Protocol.SKFunction;
-          ds_range = range_of_span span;
+          ds_range = range_of_span ~text span;
           ds_selection_range = selection_range;
           ds_children = children;
         }
   | List (Symbol ("defvar", _) :: Symbol (name, name_span) :: _, span) ->
-      let selection_range =
-        {
-          Protocol.start =
-            {
-              line = name_span.start_pos.line - 1;
-              character = name_span.start_pos.col;
-            };
-          end_ =
-            {
-              line = name_span.end_pos.line - 1;
-              character = name_span.end_pos.col;
-            };
-        }
-      in
+      let selection_range = range_of_span ~text name_span in
       Some
         {
           Protocol.ds_name = name;
           ds_detail = None;
           ds_kind = Protocol.SKVariable;
-          ds_range = range_of_span span;
+          ds_range = range_of_span ~text span;
           ds_selection_range = selection_range;
           ds_children = [];
         }
   | List (Symbol ("defconst", _) :: Symbol (name, name_span) :: _, span) ->
-      let selection_range =
-        {
-          Protocol.start =
-            {
-              line = name_span.start_pos.line - 1;
-              character = name_span.start_pos.col;
-            };
-          end_ =
-            {
-              line = name_span.end_pos.line - 1;
-              character = name_span.end_pos.col;
-            };
-        }
-      in
+      let selection_range = range_of_span ~text name_span in
       Some
         {
           Protocol.ds_name = name;
           ds_detail = None;
           ds_kind = Protocol.SKConstant;
-          ds_range = range_of_span span;
+          ds_range = range_of_span ~text span;
           ds_selection_range = selection_range;
           ds_children = [];
         }
   | List (Symbol ("defmacro", _) :: Symbol (name, name_span) :: args :: _, span)
     ->
-      let selection_range =
-        {
-          Protocol.start =
-            {
-              line = name_span.start_pos.line - 1;
-              character = name_span.start_pos.col;
-            };
-          end_ =
-            {
-              line = name_span.end_pos.line - 1;
-              character = name_span.end_pos.col;
-            };
-        }
-      in
+      let selection_range = range_of_span ~text name_span in
       let param_detail =
         match args with
         | List (params, _) ->
@@ -1159,7 +1141,7 @@ let rec extract_symbol_from_def (sexp : Syntax.Sexp.t) :
           ds_detail = Some param_detail;
           ds_kind = Protocol.SKMethod;
           (* Use Method for macros to distinguish from functions *)
-          ds_range = range_of_span span;
+          ds_range = range_of_span ~text span;
           ds_selection_range = selection_range;
           ds_children = [];
         }
@@ -1195,7 +1177,9 @@ let handle_document_symbol (server : t) (params : Yojson.Safe.t option) :
             Ok (Protocol.document_symbol_result_to_json (Some [])))
           else
             let symbols =
-              List.filter_map extract_symbol_from_def parse_result.sexps
+              List.filter_map
+                (extract_symbol_from_def ~text:doc.text)
+                parse_result.sexps
             in
             Log.debug "Found %d symbols" (List.length symbols);
             Ok (Protocol.document_symbol_result_to_json (Some symbols)))
@@ -1316,7 +1300,7 @@ let handle_rename (server : t) (params : Yojson.Safe.t option) :
                         List.map
                           (fun span : Protocol.text_edit ->
                             {
-                              te_range = range_of_span span;
+                              te_range = range_of_span ~text:doc.text span;
                               new_text = new_name;
                             })
                           ref_spans
