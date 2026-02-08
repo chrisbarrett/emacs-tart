@@ -136,6 +136,7 @@ let capabilities () : Protocol.server_capabilities =
     completion_provider = true;
     signature_help_provider = true;
     rename_provider = true;
+    folding_range_provider = true;
   }
 
 (** Convert a source location span to an LSP range. Loc.span has 1-based lines

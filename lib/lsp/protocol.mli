@@ -53,6 +53,7 @@ type server_capabilities = {
   completion_provider : bool;
   signature_help_provider : bool;
   rename_provider : bool;
+  folding_range_provider : bool;
 }
 (** Server capabilities *)
 
@@ -415,3 +416,32 @@ type rename_result = workspace_edit option
 
 val rename_result_to_json : rename_result -> Yojson.Safe.t
 (** Encode rename result to JSON *)
+
+(** {1 Folding Ranges} *)
+
+(** Folding range kind as defined by LSP *)
+type folding_range_kind = FRComment | FRImports | FRRegion
+
+type folding_range = {
+  fr_start_line : int;
+  fr_start_character : int option;
+  fr_end_line : int;
+  fr_end_character : int option;
+  fr_kind : folding_range_kind option;
+}
+(** A folding range represents a region that can be collapsed *)
+
+type folding_range_params = { frp_text_document : string }
+(** Folding range request params *)
+
+type folding_range_result = folding_range list option
+(** Folding range result is a list of ranges or null *)
+
+val parse_folding_range_params : Yojson.Safe.t -> folding_range_params
+(** Parse folding range params from JSON *)
+
+val folding_range_to_json : folding_range -> Yojson.Safe.t
+(** Encode a folding range to JSON *)
+
+val folding_range_result_to_json : folding_range_result -> Yojson.Safe.t
+(** Encode folding range result to JSON *)

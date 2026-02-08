@@ -57,6 +57,7 @@ type server_capabilities = {
   completion_provider : bool;
   signature_help_provider : bool;
   rename_provider : bool;
+  folding_range_provider : bool;
 }
 (** Server capabilities *)
 
@@ -183,6 +184,11 @@ let server_capabilities_to_json (caps : server_capabilities) : Yojson.Safe.t =
   in
   let fields =
     if caps.rename_provider then ("renameProvider", `Bool true) :: fields
+    else fields
+  in
+  let fields =
+    if caps.folding_range_provider then
+      ("foldingRangeProvider", `Bool true) :: fields
     else fields
   in
   `Assoc fields
@@ -1021,3 +1027,64 @@ type rename_result = workspace_edit option
 
 let rename_result_to_json (result : rename_result) : Yojson.Safe.t =
   match result with Some edit -> workspace_edit_to_json edit | None -> `Null
+
+(** {1 Folding Ranges} *)
+
+type folding_range_kind =
+  | FRComment
+  | FRImports
+  | FRRegion  (** Folding range kind as defined by LSP *)
+
+type folding_range = {
+  fr_start_line : int;
+  fr_start_character : int option;
+  fr_end_line : int;
+  fr_end_character : int option;
+  fr_kind : folding_range_kind option;
+}
+(** A folding range represents a region that can be collapsed *)
+
+type folding_range_params = { frp_text_document : string }
+(** Folding range request params *)
+
+type folding_range_result = folding_range list option
+(** Folding range result is a list of ranges or null *)
+
+let folding_range_kind_to_string = function
+  | FRComment -> "comment"
+  | FRImports -> "imports"
+  | FRRegion -> "region"
+
+let parse_folding_range_params (json : Yojson.Safe.t) : folding_range_params =
+  let open Yojson.Safe.Util in
+  {
+    frp_text_document =
+      json |> member "textDocument" |> member "uri" |> to_string;
+  }
+
+let folding_range_to_json (fr : folding_range) : Yojson.Safe.t =
+  let fields =
+    [ ("startLine", `Int fr.fr_start_line); ("endLine", `Int fr.fr_end_line) ]
+  in
+  let fields =
+    match fr.fr_start_character with
+    | Some c -> ("startCharacter", `Int c) :: fields
+    | None -> fields
+  in
+  let fields =
+    match fr.fr_end_character with
+    | Some c -> ("endCharacter", `Int c) :: fields
+    | None -> fields
+  in
+  let fields =
+    match fr.fr_kind with
+    | Some k -> ("kind", `String (folding_range_kind_to_string k)) :: fields
+    | None -> fields
+  in
+  `Assoc fields
+
+let folding_range_result_to_json (result : folding_range_result) : Yojson.Safe.t
+    =
+  match result with
+  | Some ranges -> `List (List.map folding_range_to_json ranges)
+  | None -> `Null
