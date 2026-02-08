@@ -68,10 +68,10 @@
 ;; ===========================================================================
 
 ;; (beginning-of-buffer &optional ARG) - move to beginning of buffer
-(defun beginning-of-buffer (&optional any) -> nil)
+(defun beginning-of-buffer (&optional (int | nil)) -> nil)
 
 ;; (end-of-buffer &optional ARG) - move to end of buffer
-(defun end-of-buffer (&optional any) -> nil)
+(defun end-of-buffer (&optional (int | nil)) -> nil)
 
 ;; (goto-line LINE &optional BUFFER RELATIVE-LINE) - go to line number
 (defun goto-line (int &optional buffer bool) -> nil)
@@ -96,19 +96,19 @@
 ;; ===========================================================================
 
 ;; (kill-region START END &optional REGION) - kill text between START and END
-(defun kill-region (int int &optional any) -> nil)
+(defun kill-region (int int &optional bool) -> nil)
 
 ;; (copy-region-as-kill START END &optional REGION) - copy text to kill ring
-(defun copy-region-as-kill (int int &optional any) -> nil)
+(defun copy-region-as-kill (int int &optional bool) -> nil)
 
 ;; (kill-ring-save START END &optional REGION) - save region to kill ring
-(defun kill-ring-save (int int &optional any) -> nil)
+(defun kill-ring-save (int int &optional bool) -> nil)
 
 ;; (yank &optional ARG) - insert most recent kill
-(defun yank (&optional any) -> nil)
+(defun yank (&optional (int | nil)) -> nil)
 
 ;; (yank-pop &optional ARG) - replace yanked text with previous kill
-(defun yank-pop (&optional any) -> nil)
+(defun yank-pop (&optional (int | nil)) -> nil)
 
 ;; (kill-line &optional ARG) - kill rest of line
 (defun kill-line (&optional int) -> nil)
@@ -130,7 +130,7 @@
 (defun indent-according-to-mode () -> nil)
 
 ;; (indent-for-tab-command &optional ARG) - indent line or region
-(defun indent-for-tab-command (&optional any) -> nil)
+(defun indent-for-tab-command (&optional (int | nil)) -> nil)
 
 ;; (indent-rigidly START END ARG &optional INTERACTIVE) - indent region
 (defun indent-rigidly (int int int &optional bool) -> nil)
@@ -150,7 +150,7 @@
 ;; ===========================================================================
 
 ;; (fill-paragraph &optional JUSTIFY REGION) - fill paragraph
-(defun fill-paragraph (&optional any bool) -> nil)
+(defun fill-paragraph (&optional bool bool) -> nil)
 
 ;; (set-fill-column ARG) - set fill column
 (defun set-fill-column (int) -> nil)
@@ -173,7 +173,7 @@
 (defun shell-command (string &optional (buffer | string | bool) (buffer | string)) -> (int | nil))
 
 ;; (shell-command-on-region START END COMMAND &optional OUTPUT-BUFFER REPLACE ERROR-BUFFER DISPLAY-ERROR-BUFFER REGION-NONCONTIGUOUS-P)
-(defun shell-command-on-region (int int string &optional any bool any bool bool) -> (int | nil))
+(defun shell-command-on-region (int int string &optional (buffer | string | bool) bool (buffer | string) bool bool) -> (int | nil))
 
 ;; ===========================================================================
 ;; Completion
@@ -211,7 +211,7 @@
 ;; ===========================================================================
 
 ;; (transpose-subr MOVER &optional ARG) - generic transpose function
-(defun transpose-subr (any &optional int) -> nil)
+(defun transpose-subr ((any -> any) &optional int) -> nil)
 
 ;; (transpose-chars ARG) - transpose characters before point
 (defun transpose-chars (int) -> nil)
