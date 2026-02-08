@@ -74,6 +74,7 @@ type server_capabilities = {
   call_hierarchy_provider : bool;
   type_hierarchy_provider : bool;
   code_lens_provider : bool;
+  linked_editing_range_provider : bool;
 }
 (** Server capabilities *)
 
@@ -329,6 +330,11 @@ let server_capabilities_to_json (caps : server_capabilities) : Yojson.Safe.t =
   in
   let fields =
     if caps.code_lens_provider then ("codeLensProvider", `Assoc []) :: fields
+    else fields
+  in
+  let fields =
+    if caps.linked_editing_range_provider then
+      ("linkedEditingRangeProvider", `Bool true) :: fields
     else fields
   in
   `Assoc fields
@@ -1517,6 +1523,48 @@ let code_lens_to_json (lens : code_lens) : Yojson.Safe.t =
 let code_lens_result_to_json (result : code_lens list option) : Yojson.Safe.t =
   match result with
   | Some lenses -> `List (List.map code_lens_to_json lenses)
+  | None -> `Null
+
+(** {1 Linked Editing Ranges} *)
+
+type linked_editing_range_params = {
+  ler_text_document : string;
+  ler_position : position;
+}
+(** Linked editing range request params *)
+
+type linked_editing_ranges = {
+  ranges : range list;
+  word_pattern : string option;
+}
+(** Linked editing ranges result *)
+
+let parse_linked_editing_range_params (json : Yojson.Safe.t) :
+    linked_editing_range_params =
+  let open Yojson.Safe.Util in
+  let text_document =
+    json |> member "textDocument" |> member "uri" |> to_string
+  in
+  let pos_json = json |> member "position" in
+  let position =
+    {
+      line = pos_json |> member "line" |> to_int;
+      character = pos_json |> member "character" |> to_int;
+    }
+  in
+  { ler_text_document = text_document; ler_position = position }
+
+let linked_editing_ranges_to_json (result : linked_editing_ranges option) :
+    Yojson.Safe.t =
+  match result with
+  | Some r ->
+      let fields = [ ("ranges", `List (List.map range_to_json r.ranges)) ] in
+      let fields =
+        match r.word_pattern with
+        | Some p -> ("wordPattern", `String p) :: fields
+        | None -> fields
+      in
+      `Assoc fields
   | None -> `Null
 
 (** {1 File Watching} *)

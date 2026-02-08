@@ -265,6 +265,11 @@ let code_lens_msg ~id ~uri () =
     ~params:(`Assoc [ ("textDocument", `Assoc [ ("uri", `String uri) ]) ])
     ()
 
+let linked_editing_range_msg ~id ~uri ~line ~character () =
+  make_message ~id:(`Int id) ~method_:"textDocument/linkedEditingRange"
+    ~params:(position_params ~uri ~line ~character)
+    ()
+
 (* {1 Message Parsing} *)
 
 let parse_messages (output : string) : Yojson.Safe.t list =

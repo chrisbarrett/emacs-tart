@@ -70,6 +70,7 @@ type server_capabilities = {
   call_hierarchy_provider : bool;
   type_hierarchy_provider : bool;
   code_lens_provider : bool;
+  linked_editing_range_provider : bool;
 }
 (** Server capabilities *)
 
@@ -739,6 +740,28 @@ val code_lens_to_json : code_lens -> Yojson.Safe.t
 
 val code_lens_result_to_json : code_lens list option -> Yojson.Safe.t
 (** Encode code lens result to JSON *)
+
+(** {1 Linked Editing Ranges} *)
+
+type linked_editing_range_params = {
+  ler_text_document : string;
+  ler_position : position;
+}
+(** Linked editing range request params *)
+
+type linked_editing_ranges = {
+  ranges : range list;
+  word_pattern : string option;
+}
+(** Linked editing ranges result with ranges that should be edited together. *)
+
+val parse_linked_editing_range_params :
+  Yojson.Safe.t -> linked_editing_range_params
+(** Parse linked editing range params from JSON *)
+
+val linked_editing_ranges_to_json :
+  linked_editing_ranges option -> Yojson.Safe.t
+(** Encode linked editing ranges result to JSON *)
 
 (** {1 File Watching} *)
 

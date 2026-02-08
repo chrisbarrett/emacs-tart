@@ -3466,6 +3466,110 @@ let test_code_lens_missing_signature () =
       let title = sig_lens |> member "command" |> member "title" |> to_string in
       Alcotest.(check string) "missing signature" "missing signature" title
 
+(** {1 Linked Editing Ranges} *)
+
+let test_linked_editing_capability_advertised () =
+  let result =
+    run_session [ initialize_msg ~id:1 (); shutdown_msg ~id:2 (); exit_msg () ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:1 result.messages with
+  | None -> Alcotest.fail "No initialize response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let caps = json |> member "result" |> member "capabilities" in
+      let provider = caps |> member "linkedEditingRangeProvider" in
+      Alcotest.(check bool)
+        "linkedEditingRangeProvider present" true
+        (provider = `Bool true)
+
+let test_linked_editing_let_binding () =
+  (* (let ((x 1)) (+ x 2))
+      0123456789012345678901
+     Cursor on x in the body at character 16 *)
+  let text = "(let ((x 1)) (+ x 2))" in
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el" ~text ();
+        linked_editing_range_msg ~id:2 ~uri:"file:///test.el" ~line:0
+          ~character:16 ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "No linked editing response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result_json = json |> member "result" in
+      Alcotest.(check bool) "result is not null" true (result_json <> `Null);
+      let ranges = result_json |> member "ranges" |> to_list in
+      (* Should have 2 ranges: the binding (x) and the reference (x) *)
+      Alcotest.(check int) "two ranges" 2 (List.length ranges)
+
+let test_linked_editing_not_on_symbol () =
+  let text = "(+ 1 2)" in
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el" ~text ();
+        linked_editing_range_msg ~id:2 ~uri:"file:///test.el" ~line:0
+          ~character:3 ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "No linked editing response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result_json = json |> member "result" in
+      Alcotest.(check bool) "result is null" true (result_json = `Null)
+
+let test_linked_editing_defun_params () =
+  (* (defun my-fn (x) (+ x 1))
+      0         1         2
+      0123456789012345678901234
+     Cursor on x in the body at character 20 *)
+  let text = "(defun my-fn (x) (+ x 1))" in
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el" ~text ();
+        linked_editing_range_msg ~id:2 ~uri:"file:///test.el" ~line:0
+          ~character:20 ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "No linked editing response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result_json = json |> member "result" in
+      Alcotest.(check bool) "result is not null" true (result_json <> `Null);
+      let ranges = result_json |> member "ranges" |> to_list in
+      (* Should have 2 ranges: the param (x) and the body reference (x) *)
+      Alcotest.(check int) "two ranges" 2 (List.length ranges)
+
+let test_linked_editing_no_binding () =
+  (* Symbol is not a let binding or param, so no linked ranges *)
+  let text = "(message \"hello\")" in
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el" ~text ();
+        linked_editing_range_msg ~id:2 ~uri:"file:///test.el" ~line:0
+          ~character:1 ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "No linked editing response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result_json = json |> member "result" in
+      (* No let binding scope, so null *)
+      Alcotest.(check bool) "result is null" true (result_json = `Null)
+
 (** {1 Test Registration} *)
 
 let () =
@@ -3804,5 +3908,17 @@ let () =
             test_code_lens_reference_count;
           Alcotest.test_case "missing signature" `Quick
             test_code_lens_missing_signature;
+        ] );
+      ( "linked-editing",
+        [
+          Alcotest.test_case "capability advertised" `Quick
+            test_linked_editing_capability_advertised;
+          Alcotest.test_case "let binding" `Quick
+            test_linked_editing_let_binding;
+          Alcotest.test_case "not on symbol" `Quick
+            test_linked_editing_not_on_symbol;
+          Alcotest.test_case "defun params" `Quick
+            test_linked_editing_defun_params;
+          Alcotest.test_case "no binding" `Quick test_linked_editing_no_binding;
         ] );
     ]

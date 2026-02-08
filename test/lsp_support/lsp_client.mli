@@ -154,6 +154,10 @@ val subtypes_msg : id:int -> item:Yojson.Safe.t -> unit -> string
 val code_lens_msg : id:int -> uri:string -> unit -> string
 (** textDocument/codeLens request. *)
 
+val linked_editing_range_msg :
+  id:int -> uri:string -> line:int -> character:int -> unit -> string
+(** textDocument/linkedEditingRange request. *)
+
 (** {1 Session Runners} *)
 
 type session_result = {

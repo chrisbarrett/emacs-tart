@@ -189,6 +189,7 @@ let capabilities () : Protocol.server_capabilities =
     call_hierarchy_provider = true;
     type_hierarchy_provider = true;
     code_lens_provider = true;
+    linked_editing_range_provider = true;
   }
 
 (** Require non-None params, returning an invalid-params error otherwise. *)
@@ -2017,6 +2018,131 @@ let handle_code_lens (server : t) (params : Yojson.Safe.t option) :
   Log.debug "Returning %d code lenses" (List.length lenses);
   Ok (Protocol.code_lens_result_to_json (Some lenses))
 
+(** {1 Linked Editing Ranges} *)
+
+(** Find the enclosing let/let* form and extract linked editing ranges for a
+    binding variable. When the cursor is on a symbol that matches a let binding
+    name, returns ranges for the binding site and all references in the body.
+    For defun parameter names, returns the param and body references. *)
+let find_linked_ranges_in_let ~(text : string) (name : string)
+    (sexps : Syntax.Sexp.t list) : Protocol.range list =
+  let open Syntax.Sexp in
+  (* Collect all spans for a given name within a list of sexps *)
+  let collect_refs name sexps =
+    find_references name sexps
+    |> List.map (fun span -> range_of_span ~text span)
+  in
+  (* Walk sexps looking for let/let* forms containing a binding named [name] *)
+  let rec search_sexps (sexps : t list) : Protocol.range list option =
+    List.find_map search_sexp sexps
+  and search_sexp (sexp : t) : Protocol.range list option =
+    match sexp with
+    | List (Symbol (("let" | "let*"), _) :: List (bindings, _) :: body, _) -> (
+        (* Check if any binding matches the target name *)
+        let matching_binding =
+          List.find_map
+            (fun binding ->
+              match binding with
+              | List (Symbol (n, span) :: _, _) when n = name ->
+                  Some (range_of_span ~text span)
+              | _ -> None)
+            bindings
+        in
+        match matching_binding with
+        | Some binding_range ->
+            (* Found a matching binding; collect all references in the body *)
+            let body_refs = collect_refs name body in
+            Some (binding_range :: body_refs)
+        | None -> (
+            (* No matching binding; recurse into bindings and body *)
+            let in_bindings = search_sexps bindings in
+            match in_bindings with
+            | Some _ -> in_bindings
+            | None -> search_sexps body))
+    | List
+        ( Symbol (("defun" | "defmacro" | "cl-defun" | "cl-defmethod"), _)
+          :: _name_sexp
+          :: List (params, _)
+          :: body,
+          _ ) -> (
+        (* Check if the name matches a parameter *)
+        let matching_param =
+          List.find_map
+            (fun p ->
+              match p with
+              | Symbol (n, span)
+                when n = name && not (String.length n > 0 && n.[0] = '&') ->
+                  Some (range_of_span ~text span)
+              | _ -> None)
+            params
+        in
+        match matching_param with
+        | Some param_range ->
+            let body_refs = collect_refs name body in
+            Some (param_range :: body_refs)
+        | None -> search_sexps body)
+    | List (Symbol (("lambda" | "closure"), _) :: List (params, _) :: body, _)
+      -> (
+        let matching_param =
+          List.find_map
+            (fun p ->
+              match p with
+              | Symbol (n, span)
+                when n = name && not (String.length n > 0 && n.[0] = '&') ->
+                  Some (range_of_span ~text span)
+              | _ -> None)
+            params
+        in
+        match matching_param with
+        | Some param_range ->
+            let body_refs = collect_refs name body in
+            Some (param_range :: body_refs)
+        | None -> search_sexps body)
+    | List (children, _) -> search_sexps children
+    | Vector (children, _) -> search_sexps children
+    | Curly (children, _) -> search_sexps children
+    | Cons (car, cdr, _) -> (
+        match search_sexp car with Some r -> Some r | None -> search_sexp cdr)
+    | Symbol _ | Int _ | Float _ | String _ | Char _ | Keyword _ | Error _ ->
+        None
+  in
+  match search_sexps sexps with Some ranges -> ranges | None -> []
+
+(** Handle textDocument/linkedEditingRange request *)
+let handle_linked_editing_range (_server : t) (params : Yojson.Safe.t option) :
+    (Yojson.Safe.t, Rpc.response_error) result =
+  require_params "linkedEditingRange" params @@ fun json ->
+  let ler_params = Protocol.parse_linked_editing_range_params json in
+  let uri = ler_params.ler_text_document in
+  let line = ler_params.ler_position.line in
+  Log.debug "Linked editing range request at %s:%d:%d" uri line
+    ler_params.ler_position.character;
+  let null = Protocol.linked_editing_ranges_to_json None in
+  with_document _server ~uri ~not_found:null @@ fun doc ->
+  let col =
+    Document.utf16_col_to_byte ~text:doc.text ~line
+      ~col:ler_params.ler_position.character
+  in
+  with_sexp_at_cursor ~doc ~uri ~line ~col ~not_found:null
+  @@ fun parse_result ctx ->
+  match symbol_name_of_sexp ctx.target with
+  | None ->
+      Log.debug "Target is not a symbol";
+      Ok null
+  | Some name ->
+      Log.debug "Finding linked editing ranges for: %s" name;
+      let ranges =
+        find_linked_ranges_in_let ~text:doc.text name parse_result.sexps
+      in
+      if List.length ranges < 2 then (
+        Log.debug "No linked ranges found (fewer than 2 occurrences)";
+        Ok null)
+      else (
+        Log.debug "Found %d linked ranges" (List.length ranges);
+        Ok
+          (Protocol.linked_editing_ranges_to_json
+             (Some { ranges; word_pattern = None })))
+
 (** Dispatch a request to its handler *)
 let dispatch_request (server : t) (msg : Rpc.message) :
     (Yojson.Safe.t, Rpc.response_error) result =
@@ -2050,6 +2176,8 @@ let dispatch_request (server : t) (msg : Rpc.message) :
   | "typeHierarchy/supertypes" -> handle_supertypes server msg.params
   | "typeHierarchy/subtypes" -> handle_subtypes server msg.params
   | "textDocument/codeLens" -> handle_code_lens server msg.params
+  | "textDocument/linkedEditingRange" ->
+      handle_linked_editing_range server msg.params
   | _ ->
       Error
         {
