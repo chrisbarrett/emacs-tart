@@ -397,10 +397,10 @@ any order, interleaved with other work.
 | 1 | Integration test harness | `test/lsp_integration/{lsp_client,integration_test}.{ml,mli}`, `dune` | — | Done |
 | 2 | UTF-16 positions | — | `document.ml`, `server.ml`, `protocol.ml` | Done |
 | 3 | Incremental sync recovery | — | `document.ml`, `server.ml` | Done |
-| 4 | Concurrent requests | `lib/lsp/worker.{ml,mli}` | `server.ml` | Not started |
-| 5 | Request cancellation | — | `server.ml` | Stub only |
-| 6 | Debounce & coalescing | — | `server.ml` | Partial (dedup + version staleness done; timer debounce needs task 4) |
-| 7 | Progress reporting | — | `server.ml`, `protocol.ml` | Not started |
+| 4 | Concurrent requests | `lib/lsp/worker.{ml,mli}` | `server.ml` | Done |
+| 5 | Request cancellation | — | `server.ml` | Done |
+| 6 | Debounce & coalescing | — | `server.ml` | Done |
+| 7 | Progress reporting | — | `server.ml`, `protocol.ml` | Done |
 | 8 | File watching | — | `server.ml`, `protocol.ml` | Done |
 | 9 | Workspace configuration | — | `server.ml`, `protocol.ml` | Done |
 | 10 | Document save events | — | `server.ml`, `protocol.ml` | Done |
