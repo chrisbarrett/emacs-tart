@@ -482,6 +482,18 @@ let publish_diagnostics (server : t) (uri : string) (version : int option) :
               ~method_:"textDocument/publishDiagnostics"
               ~params:(Protocol.publish_diagnostics_params_to_json params)))
 
+(** Schedule a diagnostic check for the given URI.
+
+    Looks up the document and publishes diagnostics with the current version.
+    This centralises the five call sites that were previously inlining
+    [publish_diagnostics server uri (Some doc.version)]. In a future task this
+    helper will enqueue work items for a background domain instead of running
+    the check synchronously. *)
+let schedule_check (server : t) (uri : string) : unit =
+  match Document.get_doc server.documents uri with
+  | None -> ()
+  | Some doc -> publish_diagnostics server uri (Some doc.version)
+
 (** Apply user settings, rebuilding the module config and rechecking all open
     documents.
 
@@ -515,12 +527,7 @@ let apply_settings (server : t) (settings : Protocol.tart_settings) : unit =
   (* Invalidate all caches and re-publish diagnostics for every open document *)
   Form_cache.invalidate_all server.form_cache;
   let open_uris = Document.list_uris server.documents in
-  List.iter
-    (fun uri ->
-      match Document.get_doc server.documents uri with
-      | Some doc -> publish_diagnostics server uri (Some doc.version)
-      | None -> ())
-    open_uris
+  List.iter (fun uri -> schedule_check server uri) open_uris
 
 (** Handle initialize request *)
 let handle_initialize (server : t) (params : Yojson.Safe.t option) :
@@ -630,10 +637,7 @@ let invalidate_dependents (server : t) ~uri : unit =
     List.iter
       (fun dep_uri ->
         Form_cache.invalidate_document server.form_cache dep_uri;
-        match Document.get_doc server.documents dep_uri with
-        | Some dep_doc ->
-            publish_diagnostics server dep_uri (Some dep_doc.version)
-        | None -> ())
+        schedule_check server dep_uri)
       dependent_uris)
 
 (** Handle textDocument/didOpen notification *)
@@ -654,7 +658,7 @@ let handle_did_open (server : t) (params : Yojson.Safe.t option) : unit =
         Signature_tracker.set server.signature_tracker ~uri ~text;
       Log.debug "Opened document: %s (version %d)" uri version;
       (* Publish diagnostics for the newly opened document *)
-      publish_diagnostics server uri (Some version)
+      schedule_check server uri
 
 (** Handle textDocument/didChange notification *)
 let handle_did_change (server : t) (params : Yojson.Safe.t option) : unit =
@@ -685,7 +689,7 @@ let handle_did_change (server : t) (params : Yojson.Safe.t option) : unit =
                   ~text:doc.text
           | None -> ());
           (* Publish diagnostics for the changed document *)
-          publish_diagnostics server uri (Some version);
+          schedule_check server uri;
           invalidate_dependents server ~uri
       | Error e -> Log.info "Error applying changes to %s: %s" uri e)
 
@@ -704,9 +708,7 @@ let handle_did_save (server : t) (params : Yojson.Safe.t option) : unit =
       (* Invalidate form cache to force a full re-check *)
       Form_cache.invalidate_document server.form_cache uri;
       (* Re-publish diagnostics with a fresh check *)
-      (match Document.get_doc server.documents uri with
-      | Some doc -> publish_diagnostics server uri (Some doc.version)
-      | None -> ());
+      schedule_check server uri;
       (* Cascade to dependents *)
       invalidate_dependents server ~uri
 

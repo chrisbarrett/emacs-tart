@@ -198,7 +198,7 @@ Add `unix` to dune libraries.
 
 | # | Task | Status |
 |---|------|--------|
-| 1 | Extract `schedule_check` abstraction | Not started |
+| 1 | Extract `schedule_check` abstraction | Done |
 | 2 | Worker module + async check loop | Not started |
 | 3 | Debounce timer | Not started |
 | 4 | Request cancellation | Not started |
