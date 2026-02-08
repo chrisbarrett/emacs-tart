@@ -222,6 +222,47 @@ let generate_virtual_clauses (env : Env.t) (clauses : Env.loaded_clause list)
                   row.row_fields))
   | _ -> []
 
+(** Look up stored clauses and type variable names for a function.
+
+    Returns [Some (clauses, tvar_names)] when the function has multi-clause
+    overloads stored in the environment. This is the common lookup pattern
+    used by clause dispatch and virtual clause generation. *)
+let lookup_stored_clauses_and_vars (name : string) (env : Env.t) :
+    (Env.loaded_clause list * string list) option =
+  match Env.lookup_fn_clauses name env with
+  | Some clauses -> (
+      match Env.lookup_fn name env with
+      | Some (Env.Poly (vars, _)) -> Some (clauses, vars)
+      | Some (Env.Mono _) -> Some (clauses, [])
+      | None -> None)
+  | None -> None
+
+(** Look up clauses and type variable names, synthesizing a single clause
+    from the function type when no stored clauses exist.
+
+    Extends {!lookup_stored_clauses_and_vars} by constructing a clause from
+    the function's arrow type for single-clause polymorphic functions that
+    don't store clause lists. Used by virtual clause generation. *)
+let lookup_clauses_and_vars_with_synthesis (name : string) (env : Env.t) :
+    (Env.loaded_clause list * string list) option =
+  match lookup_stored_clauses_and_vars name env with
+  | Some _ as result -> result
+  | None -> (
+      match Env.lookup_fn name env with
+      | Some (Env.Poly (vars, ty)) -> (
+          match ty with
+          | TArrow (params, ret) | TForall (_, TArrow (params, ret)) ->
+              let clause =
+                {
+                  Env.lc_params = params;
+                  lc_return = ret;
+                  lc_diagnostic = None;
+                }
+              in
+              Some ([ clause ], vars)
+          | _ -> None)
+      | _ -> None)
+
 let rec infer (env : Env.t) (sexp : Syntax.Sexp.t) : result =
   let open Syntax.Sexp in
   match sexp with
@@ -1588,16 +1629,10 @@ and infer_application env fn args span =
   let clause_result =
     match fn_name with
     | Some name -> (
-        match Env.lookup_fn_clauses name env with
-        | Some clauses -> (
-            match Env.lookup_fn name env with
-            | Some (Env.Poly (vars, _)) ->
-                Clause_dispatch.try_dispatch env ~tvar_names:vars ~clauses
-                  ~arg_types ~arg_literals ~loc:span
-            | Some (Env.Mono _) ->
-                Clause_dispatch.try_dispatch env ~tvar_names:[] ~clauses
-                  ~arg_types ~arg_literals ~loc:span
-            | _ -> None)
+        match lookup_stored_clauses_and_vars name env with
+        | Some (clauses, vars) ->
+            Clause_dispatch.try_dispatch env ~tvar_names:vars ~clauses
+              ~arg_types ~arg_literals ~loc:span
         | None -> None)
     | None -> None
   in
@@ -1615,35 +1650,7 @@ and infer_application env fn args span =
     | None -> (
         match fn_name with
         | Some name -> (
-            (* Get clauses from env, or synthesize from function type for
-               single-clause functions *)
-            let clauses_and_vars =
-              match Env.lookup_fn_clauses name env with
-              | Some clauses -> (
-                  match Env.lookup_fn name env with
-                  | Some (Env.Poly (vars, _)) -> Some (clauses, vars)
-                  | _ -> None)
-              | None -> (
-                  (* Single-clause functions without diagnostics don't store
-                     clauses. Synthesize a clause from the function type for
-                     virtual clause generation. *)
-                  match Env.lookup_fn name env with
-                  | Some (Env.Poly (vars, ty)) -> (
-                      match ty with
-                      | TArrow (params, ret) | TForall (_, TArrow (params, ret))
-                        ->
-                          let clause =
-                            {
-                              Env.lc_params = params;
-                              lc_return = ret;
-                              lc_diagnostic = None;
-                            }
-                          in
-                          Some ([ clause ], vars)
-                      | _ -> None)
-                  | _ -> None)
-            in
-            match clauses_and_vars with
+            match lookup_clauses_and_vars_with_synthesis name env with
             | Some (clauses, vars) -> (
                 let virtual_clauses =
                   generate_virtual_clauses env clauses arg_types
@@ -1651,11 +1658,6 @@ and infer_application env fn args span =
                 match virtual_clauses with
                 | [] -> None
                 | _ ->
-                    (* Try virtual clauses only — no generic fallback. If no
-                       virtual clause matches, row dispatch handles it. Pass
-                       original tvar_names so remaining params (e.g. optional
-                       params referencing type variables) are properly
-                       instantiated. *)
                     Clause_dispatch.try_dispatch env ~tvar_names:vars
                       ~clauses:virtual_clauses ~arg_types ~arg_literals
                       ~loc:span)
