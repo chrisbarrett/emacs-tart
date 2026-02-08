@@ -10,7 +10,9 @@
 ;; ===========================================================================
 
 ;; (buffer-live-p OBJ) - test if buffer is live
-(defun buffer-live-p (any) -> bool)
+(defun buffer-live-p
+  ((buffer) -> bool)
+  ((_) -> nil))
 
 ;; (buffer-list &optional FRAME) - return list of all live buffers
 (defun buffer-list (&optional frame) -> (list buffer))
@@ -23,7 +25,9 @@
 ;; ===========================================================================
 
 ;; (get-buffer BUFFER-OR-NAME) - return buffer by name or nil
-(defun get-buffer ((string | buffer)) -> (buffer | nil))
+(defun get-buffer
+  ((buffer) -> buffer)
+  ((string) -> (buffer | nil)))
 
 ;; (get-file-buffer FILENAME) - find buffer visiting file
 (defun get-file-buffer (string) -> (buffer | nil))
@@ -42,7 +46,7 @@
 ;; ===========================================================================
 
 ;; (get-buffer-create BUFFER-OR-NAME &optional INHIBIT-BUFFER-HOOKS) - get or create buffer
-(defun get-buffer-create ((string | buffer) &optional any) -> buffer)
+(defun get-buffer-create ((string | buffer) &optional bool) -> buffer)
 
 ;; (make-indirect-buffer BASE-BUFFER NAME &optional CLONE INHIBIT-BUFFER-HOOKS) - create indirect buffer
 (defun make-indirect-buffer (buffer string &optional any any) -> buffer)
@@ -94,10 +98,10 @@
 (defun buffer-modified-p (&optional buffer) -> bool)
 
 ;; (set-buffer-modified-p FLAG) - set buffer modification flag
-(defun set-buffer-modified-p (any) -> nil)
+(defun set-buffer-modified-p (bool) -> nil)
 
 ;; (restore-buffer-modified-p FLAG) - restore modified flag without redisplay
-(defun restore-buffer-modified-p (any) -> nil)
+(defun restore-buffer-modified-p (bool) -> nil)
 
 ;; (buffer-modified-tick &optional BUFFER) - return modification count
 (defun buffer-modified-tick (&optional buffer) -> int)
@@ -146,7 +150,7 @@
 (defun buffer-swap-text (buffer) -> nil)
 
 ;; (set-buffer-multibyte FLAG) - set multibyte mode
-(defun set-buffer-multibyte (any) -> any)
+(defun set-buffer-multibyte (bool) -> bool)
 
 ;; ===========================================================================
 ;; Mode line
