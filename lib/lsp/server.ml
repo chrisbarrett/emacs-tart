@@ -1436,6 +1436,17 @@ let handle_rename (server : t) (params : Yojson.Safe.t option) :
         in
         Ok (Protocol.rename_result_to_json (Some workspace_edit))
 
+(** Handle workspace/symbol request.
+
+    Returns symbols matching the query across all open documents. Delegates to
+    {!Workspace_symbols}. *)
+let handle_workspace_symbol (server : t) (params : Yojson.Safe.t option) :
+    (Yojson.Safe.t, Rpc.response_error) result =
+  require_params "workspace symbol" params @@ fun json ->
+  let ws_params = Protocol.parse_workspace_symbol_params json in
+  Log.debug "Workspace symbol request: query=%S" ws_params.ws_query;
+  Workspace_symbols.handle ~documents:server.documents ~query:ws_params.ws_query
+
 (** Dispatch a request to its handler *)
 let dispatch_request (server : t) (msg : Rpc.message) :
     (Yojson.Safe.t, Rpc.response_error) result =
@@ -1457,6 +1468,7 @@ let dispatch_request (server : t) (msg : Rpc.message) :
       handle_semantic_tokens server msg.params
   | "textDocument/inlayHint" -> handle_inlay_hints server msg.params
   | "textDocument/typeDefinition" -> handle_type_definition server msg.params
+  | "workspace/symbol" -> handle_workspace_symbol server msg.params
   | _ ->
       Error
         {

@@ -195,6 +195,11 @@ let rename_msg ~id ~uri ~line ~character ~new_name () =
          ])
     ()
 
+let workspace_symbol_msg ~id ~query () =
+  make_message ~id:(`Int id) ~method_:"workspace/symbol"
+    ~params:(`Assoc [ ("query", `String query) ])
+    ()
+
 (* {1 Message Parsing} *)
 
 let parse_messages (output : string) : Yojson.Safe.t list =

@@ -107,6 +107,9 @@ val rename_msg :
   string
 (** textDocument/rename request. *)
 
+val workspace_symbol_msg : id:int -> query:string -> unit -> string
+(** workspace/symbol request. *)
+
 (** {1 Session Runners} *)
 
 type session_result = {

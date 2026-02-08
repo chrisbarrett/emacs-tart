@@ -2209,6 +2209,123 @@ let test_type_definition_empty_file () =
       Alcotest.(check bool)
         "result is null for empty file" true (result_field = `Null)
 
+(** {1 Workspace Symbols Tests} *)
+
+let test_workspace_symbol_capability_advertised () =
+  let result =
+    run_session [ initialize_msg ~id:1 (); shutdown_msg ~id:2 (); exit_msg () ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:1 result.messages with
+  | None -> Alcotest.fail "No initialize response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let caps = json |> member "result" |> member "capabilities" in
+      Alcotest.(check bool)
+        "workspaceSymbolProvider" true
+        (caps |> member "workspaceSymbolProvider" |> to_bool)
+
+let test_workspace_symbol_defun_found () =
+  let text = "(defun my-greet (name)\n  (message name))" in
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el" ~text ();
+        workspace_symbol_msg ~id:2 ~query:"greet" ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "No workspace symbol response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let symbols = json |> member "result" |> to_list in
+      Alcotest.(check bool) "at least one symbol" true (List.length symbols >= 1);
+      let first = List.hd symbols in
+      Alcotest.(check string)
+        "symbol name" "my-greet"
+        (first |> member "name" |> to_string);
+      (* SKFunction = 12 *)
+      Alcotest.(check int)
+        "kind is function" 12
+        (first |> member "kind" |> to_int);
+      let container = first |> member "containerName" |> to_string in
+      Alcotest.(check string) "container name" "test" container
+
+let test_workspace_symbol_query_filtering () =
+  let text = "(defun foo-bar ())\n(defvar baz-qux 42)" in
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el" ~text ();
+        workspace_symbol_msg ~id:2 ~query:"foo" ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "No workspace symbol response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let symbols = json |> member "result" |> to_list in
+      Alcotest.(check int) "only matching symbol" 1 (List.length symbols);
+      Alcotest.(check string)
+        "symbol name" "foo-bar"
+        (List.hd symbols |> member "name" |> to_string)
+
+let test_workspace_symbol_empty_query () =
+  let text = "(defun aaa ())\n(defvar bbb 1)" in
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el" ~text ();
+        workspace_symbol_msg ~id:2 ~query:"" ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "No workspace symbol response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let symbols = json |> member "result" |> to_list in
+      Alcotest.(check bool) "returns all symbols" true (List.length symbols >= 2)
+
+let test_workspace_symbol_empty_workspace () =
+  let result =
+    run_initialized_session [ workspace_symbol_msg ~id:2 ~query:"foo" () ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "No workspace symbol response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let symbols = json |> member "result" |> to_list in
+      Alcotest.(check int) "no symbols" 0 (List.length symbols)
+
+let test_workspace_symbol_tart_file () =
+  let text = "(defun greet (string) -> string)" in
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///mymod.tart" ~text ();
+        workspace_symbol_msg ~id:2 ~query:"greet" ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "No workspace symbol response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let symbols = json |> member "result" |> to_list in
+      Alcotest.(check bool) "at least one symbol" true (List.length symbols >= 1);
+      let first = List.hd symbols in
+      Alcotest.(check string)
+        "symbol name" "greet"
+        (first |> member "name" |> to_string);
+      (* SKFunction = 12 *)
+      Alcotest.(check int)
+        "kind is function" 12
+        (first |> member "kind" |> to_int)
+
 (** {1 Test Registration} *)
 
 let () =
@@ -2429,5 +2546,20 @@ let () =
             test_inlay_hint_defun_return_type;
           Alcotest.test_case "let binding" `Quick test_inlay_hint_let_binding;
           Alcotest.test_case "empty file" `Quick test_inlay_hint_empty_file;
+        ] );
+      ( "workspace-symbols",
+        [
+          Alcotest.test_case "capability advertised" `Quick
+            test_workspace_symbol_capability_advertised;
+          Alcotest.test_case "defun symbol found" `Quick
+            test_workspace_symbol_defun_found;
+          Alcotest.test_case "query filtering" `Quick
+            test_workspace_symbol_query_filtering;
+          Alcotest.test_case "empty query returns all" `Quick
+            test_workspace_symbol_empty_query;
+          Alcotest.test_case "empty workspace" `Quick
+            test_workspace_symbol_empty_workspace;
+          Alcotest.test_case "tart file symbols" `Quick
+            test_workspace_symbol_tart_file;
         ] );
     ]
