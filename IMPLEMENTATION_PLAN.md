@@ -1,121 +1,87 @@
-# Spec 76 — Typings Precision: lisp-core Foundational Files
+# Spec 76 — Validation Against Emacs lisp/
 
-Improve the 4 highest-priority lisp-core files by replacing `any` with precise
-types where the type system supports it. Validate changes against the test suite.
+Validate the tightened signatures from Iterations 1–3 by running `./tart check`
+against real Emacs Lisp source files. Fix signature bugs, document type system
+gaps, and add regression fixtures for any parser issues discovered.
 
 Derived from [Spec 76](./specs/76-typings-distribution.md) deferred items and
-[.ralph/IMPLEMENTATION_PLAN.md](./.ralph/IMPLEMENTATION_PLAN.md) Iteration 3.
+[.ralph/IMPLEMENTATION_PLAN.md](./.ralph/IMPLEMENTATION_PLAN.md) Iteration 4.
+
+Source files are obtained by decompressing Emacs 30.2 `.el.gz` from the Nix
+store to `/tmp/tart-validation/`. The `--emacs-version 31.0` flag is used
+since typings target 31.0 (signatures are forward-compatible with 30.x for this
+validation pass).
 
 ---
 
-## Task 1 — Precision audit: subr.tart
+## Task 1 — Validate seq.el and cl-lib.el
 
-Tighten signatures in `typings/emacs/31.0/lisp-core/subr.tart`:
+These two files exercise the polymorphic signatures added in Iteration 3.
 
-- `fixnump`: multi-clause predicate `((int) -> bool) ((_) -> nil)` — fixnum is
-  a subtype of int
-- `bignump`: multi-clause predicate `((int) -> bool) ((_) -> nil)`
-- `add-hook`: FN param from `any` to `(symbol | (any -> any))` — hooks take
-  function values or symbol names
-- `remove-hook`: FN param from `any` to `(symbol | (any -> any))`
-- `kbd`: return from `any` to `(string | (vector any))` — returns a key sequence
-  (string or vector)
-- `char-displayable-p`: return from `any` to `bool`
-- `with-case-table`: TABLE from `any` to `char-table`
-- `with-syntax-table`: TABLE from `any` to `char-table`
+Decompress from Nix store and run:
+```
+./tart check --emacs-version 31.0 /tmp/tart-validation/seq.el
+./tart check --emacs-version 31.0 /tmp/tart-validation/cl-lib.el
+```
 
-Note: most macros (`when`, `unless`, `dolist`, `if-let*`, etc.) use `&rest any ->
-any` because body return types are genuinely dynamic; the type checker handles
-these via special-form logic. Leave those unchanged.
+For each error:
+- **Signature bug** → fix the `.tart` file
+- **Type system gap** → document in `typings/emacs/BUGS.md`
+- **Parser issue** → add regression fixture under `test/fixtures/typing/`
 
 **Verify:** `nix develop --command dune test --force 2>&1`
 
 ---
 
-## Task 2 — Precision audit: simple.tart
+## Task 2 — Validate subr.el and simple.el
 
-Tighten signatures in `typings/emacs/31.0/lisp-core/simple.tart`:
+These two files exercise the core lisp-core signatures tightened in Iteration 3.
 
-- `beginning-of-buffer`: ARG from `any` to `(int | nil)` — prefix arg is numeric
-- `end-of-buffer`: ARG from `any` to `(int | nil)`
-- `kill-region`: REGION from `any` to `bool`
-- `copy-region-as-kill`: REGION from `any` to `bool`
-- `kill-ring-save`: REGION from `any` to `bool`
-- `yank`: ARG from `any` to `(int | nil)` — prefix arg
-- `yank-pop`: ARG from `any` to `(int | nil)`
-- `fill-paragraph`: JUSTIFY from `any` to `bool`
-- `indent-for-tab-command`: ARG from `any` to `(int | nil)`
-- `shell-command-on-region`: OUTPUT-BUFFER from `any` to
-  `(buffer | string | bool)`, ERROR-BUFFER from `any` to `(buffer | string)`
-- `transpose-subr`: MOVER from `any` to `(any -> any)` — it takes a movement
-  function
+```
+./tart check --emacs-version 31.0 /tmp/tart-validation/subr.el
+./tart check --emacs-version 31.0 /tmp/tart-validation/simple.el
+```
 
-Note: simple.tart is already quite precise. Most remaining `any` params are
-genuinely used as non-nil boolean flags. Leave those.
+Same triage process: fix signature bugs, document gaps, add fixtures.
 
 **Verify:** `nix develop --command dune test --force 2>&1`
 
 ---
 
-## Task 3 — Precision audit: seq.tart
+## Task 3 — Validate files.el and startup.el
 
-Tighten signatures in `typings/emacs/31.0/lisp-core/seq.tart`:
+These files heavily exercise fileio.tart, buffer.tart, and editfns.tart
+signatures from Iteration 2.
 
-The seq.el library operates generically over lists, vectors, and strings. The
-current signatures use `(list any) | (vector any) | string` unions with `any`
-element types. Where polymorphism improves precision (higher-order functions),
-tighten:
+```
+./tart check --emacs-version 31.0 /tmp/tart-validation/files.el
+./tart check --emacs-version 31.0 /tmp/tart-validation/startup.el
+```
 
-- `seq-map`: polymorphic `[a b] (((a) -> b) ((list a) | (vector a) | string))
-  -> (list b)` — preserves element type through the mapping function
-- `seq-filter`: polymorphic `[a] (((a) -> any) ((list a) | (vector a) | string))
-  -> (list a)` — filter always returns a list in seq.el
-- `seq-remove`: same pattern as seq-filter
-- `seq-reduce`: polymorphic `[a b] (((b a) -> b) ((list a) | (vector a) |
-  string) b) -> b`
-- `seq-find`: polymorphic `[a] (((a) -> any) ((list a) | (vector a) | string)
-  &optional a) -> (a | nil)`
-- `seq-do`: polymorphic `[a] (((a) -> any) ((list a) | (vector a) | string))
-  -> ((list a) | (vector a) | string)`
-- `seq-some`: polymorphic `[a] (((a) -> any) ((list a) | (vector a) | string))
-  -> any` (returns the predicate's result, not the element)
-- `seq-every-p`: polymorphic `[a] (((a) -> any) ((list a) | (vector a) |
-  string)) -> bool`
-- `seq-count`: polymorphic `[a] (((a) -> any) ((list a) | (vector a) | string))
-  -> int`
-- `seq-sort`: polymorphic `[a] (((a a) -> any) ((list a) | (vector a) | string))
-  -> ((list a) | (vector a) | string)`
-- `seq-group-by`: polymorphic `[a b] (((a) -> b) ((list a) | (vector a) |
-  string)) -> (list (cons b (list a)))`
+Same triage process.
 
 **Verify:** `nix develop --command dune test --force 2>&1`
 
 ---
 
-## Task 4 — Precision audit: cl-lib.tart
+## Task 4 — Validate minibuffer.el and window.el
 
-Tighten signatures in `typings/emacs/31.0/lisp-core/cl-lib.tart`:
+```
+./tart check --emacs-version 31.0 /tmp/tart-validation/minibuffer.el
+./tart check --emacs-version 31.0 /tmp/tart-validation/window.el
+```
 
-- `cl-remove-if`: polymorphic `[a] (((a) -> any) (list a) &rest any) -> (list a)`
-- `cl-remove-if-not`: polymorphic `[a] (((a) -> any) (list a) &rest any) ->
-  (list a)`
-- `cl-find-if`: polymorphic `[a] (((a) -> any) ((list a) | (vector a) | string)
-  &rest any) -> (a | nil)`
-- `cl-first` through `cl-tenth`: polymorphic `[a] ((list a)) -> (a | nil)` —
-  they can return nil for short lists
-- `cl-pushnew`: tighten to `[a] (a any &rest any) -> (list a)`
-
-Note: `cl-loop`, `cl-case`, `cl-typecase`, `cl-block` etc. are macros with
-genuinely dynamic return types. Leave as `any`.
+Same triage process.
 
 **Verify:** `nix develop --command dune test --force 2>&1`
 
 ---
 
-## Task 5 — Verify and document
+## Task 5 — Update BUGS.md and verify
 
-- Run full test suite
-- Update `typings/emacs/BUGS.md` if any new untypeable cases are found
-- No 29.1/30.1 version dirs have lisp-core content; sync not needed
+- Review all newly discovered gaps from Tasks 1–4
+- Consolidate entries in `typings/emacs/BUGS.md`
+- Run full test suite to confirm no regressions
+- Count remaining errors per file and document status
 
 **Verify:** `nix develop --command dune test --force 2>&1`
