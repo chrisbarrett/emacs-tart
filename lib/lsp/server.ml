@@ -1012,6 +1012,32 @@ let find_references (name : string) (sexps : Syntax.Sexp.t list) :
   in
   List.fold_left collect_sexp [] sexps |> List.rev
 
+(** Find a definition in another open [.el] document.
+
+    Searches all open documents (excluding [origin_uri] and [.tart] files) for a
+    top-level [defun], [defvar], or [defconst] matching [name]. Returns the
+    first match as an LSP location. *)
+let find_definition_in_workspace (server : t) ~(origin_uri : string)
+    (name : string) : Protocol.location option =
+  let uris = Document.list_uris server.documents in
+  let other_uris =
+    List.filter
+      (fun u -> u <> origin_uri && not (Signature_tracker.is_tart_file u))
+      uris
+  in
+  List.find_map
+    (fun uri ->
+      match Document.get_doc server.documents uri with
+      | None -> None
+      | Some doc -> (
+          let filename = Uri.to_filename uri in
+          let parse_result = Syntax.Read.parse_string ~filename doc.text in
+          let defs = extract_definitions parse_result.sexps in
+          match List.assoc_opt name defs with
+          | Some span -> Some (location_of_span ~text:doc.text span)
+          | None -> None))
+    other_uris
+
 (** Handle textDocument/definition request *)
 let handle_definition (server : t) (params : Yojson.Safe.t option) :
     (Yojson.Safe.t, Rpc.response_error) result =
@@ -1058,9 +1084,22 @@ let handle_definition (server : t) (params : Yojson.Safe.t option) :
               let target_text = read_file_safe span.start_pos.file in
               let loc = location_of_span ~text:target_text span in
               Ok (Protocol.definition_result_to_json (Protocol.DefLocation loc))
-          | None ->
-              Log.debug "No definition found for: %s" name;
-              Ok (Protocol.definition_result_to_json Protocol.DefNull)))
+          | None -> (
+              (* Not found in signatures - try other open .el files *)
+              Log.debug
+                "Not found in signatures, trying other open .el files for: %s"
+                name;
+              match
+                find_definition_in_workspace server ~origin_uri:uri name
+              with
+              | Some loc ->
+                  Log.debug "Found definition in another .el file";
+                  Ok
+                    (Protocol.definition_result_to_json
+                       (Protocol.DefLocation loc))
+              | None ->
+                  Log.debug "No definition found for: %s" name;
+                  Ok (Protocol.definition_result_to_json Protocol.DefNull))))
 
 (** Handle textDocument/typeDefinition request.
 

@@ -609,6 +609,76 @@ let test_definition_cross_file_defvar () =
           "uri points to .tart file" true
           (contains_string ~needle:".tart" result_uri)
 
+let test_definition_cross_file_el () =
+  (* a.el defines (defun my-fn ...), b.el calls (my-fn).
+     Goto-definition from b.el should resolve to a.el. *)
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///a.el" ~text:"(defun my-fn () 42)" ();
+        did_open_msg ~uri:"file:///b.el" ~text:"(my-fn)" ();
+        definition_msg ~id:2 ~uri:"file:///b.el" ~line:0 ~character:1 ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "No definition response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      Alcotest.(check bool)
+        "result is not null (found cross-file .el definition)" true
+        (result <> `Null);
+      let result_uri = result |> member "uri" |> to_string in
+      Alcotest.(check string) "uri points to a.el" "file:///a.el" result_uri;
+      let range = result |> member "range" in
+      let start_line = range |> member "start" |> member "line" |> to_int in
+      Alcotest.(check int) "definition on line 0" 0 start_line
+
+let test_definition_cross_file_el_defvar () =
+  (* a.el defines (defvar my-var ...), b.el uses my-var.
+     Goto-definition from b.el should resolve to a.el. *)
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///a.el" ~text:"(defvar my-var 99)" ();
+        did_open_msg ~uri:"file:///b.el" ~text:"my-var" ();
+        definition_msg ~id:2 ~uri:"file:///b.el" ~line:0 ~character:0 ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "No definition response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      Alcotest.(check bool)
+        "result is not null (found cross-file .el defvar)" true (result <> `Null);
+      let result_uri = result |> member "uri" |> to_string in
+      Alcotest.(check string) "uri points to a.el" "file:///a.el" result_uri
+
+let test_definition_prefers_local () =
+  (* Both a.el and b.el define my-fn. Goto-definition from b.el should resolve
+     locally in b.el, not jump to a.el. *)
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///a.el" ~text:"(defun my-fn () 1)" ();
+        did_open_msg ~uri:"file:///b.el" ~text:"(defun my-fn () 2)\n(my-fn)" ();
+        definition_msg ~id:2 ~uri:"file:///b.el" ~line:1 ~character:1 ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "No definition response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      Alcotest.(check bool) "result is not null" true (result <> `Null);
+      let result_uri = result |> member "uri" |> to_string in
+      Alcotest.(check string)
+        "uri points to b.el (local preferred)" "file:///b.el" result_uri
+
 (** {1 Find References Tests} *)
 
 let test_references_all_occurrences () =
@@ -2839,6 +2909,12 @@ let () =
             test_definition_cross_file;
           Alcotest.test_case "cross-file defvar" `Quick
             test_definition_cross_file_defvar;
+          Alcotest.test_case "cross-file .el defun" `Quick
+            test_definition_cross_file_el;
+          Alcotest.test_case "cross-file .el defvar" `Quick
+            test_definition_cross_file_el_defvar;
+          Alcotest.test_case "prefers local definition" `Quick
+            test_definition_prefers_local;
         ] );
       ( "references",
         [
