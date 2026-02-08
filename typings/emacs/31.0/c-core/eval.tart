@@ -96,7 +96,12 @@
     (note "argument is not a function type; this always returns nil")))
 
 ;; (commandp FN &optional FOR-CALL-INTERACTIVELY) - test if command
-(defun commandp (any &optional any) -> bool)
+;; Commands are interactive functions or symbols whose function cell is interactive.
+(defun commandp
+  (((((&rest any) -> any)) &optional any) -> bool)
+  ((symbol &optional any) -> bool)
+  ((_ &optional any) -> nil
+    (note "argument is not a function or symbol; this always returns nil")))
 
 ;; (called-interactively-p KIND) - test if called interactively
 ;; KIND is 'interactive for M-x only, 'any for any interactive call
@@ -118,7 +123,9 @@
 ;; ===========================================================================
 
 ;; (autoload FN FILE &optional DOCSTRING INTERACTIVE TYPE) - set up autoload
-(defun autoload (symbol string &optional (string | nil) any any) -> symbol)
+;; INTERACTIVE is non-nil if the function is a command (or a list of applicable modes).
+;; TYPE is 'macro or 'keymap when the autoload is not a plain function.
+(defun autoload (symbol string &optional (string | nil) (bool | (list symbol)) (symbol | nil)) -> symbol)
 
 ;; (autoload-do-load FN &optional MACRO-ONLY IMMEDIATE-LOAD) - load autoload
 (defun autoload-do-load (any &optional any any) -> any)
