@@ -249,6 +249,10 @@ let rec unify ?(invariant = false) ?(context = Constraint_solving) t1 t2 loc :
             | Ok () ->
                 tv := Link link_ty;
                 Ok ()))
+    (* Never is the bottom type - subtype of every type.
+       never <: T for all T, so unification always succeeds. *)
+    | TCon n, _ when n = Prim.never_name -> Ok ()
+    | _, TCon n when n = Prim.never_name -> Ok ()
     (* Any (truthy | nil) is the top type - unifies with anything, EXCEPT in
        invariant contexts (inside type application arguments). This enforces
        invariance for parameterized types: (list int) does NOT unify with
@@ -806,6 +810,9 @@ let rec types_disjoint t1 t2 : bool =
     match (t1, t2) with
     (* Type variables: conservatively non-disjoint *)
     | TVar _, _ | _, TVar _ -> false
+    (* Never is uninhabited: disjoint with everything *)
+    | TCon n, _ when n = Prim.never_name -> true
+    | _, TCon n when n = Prim.never_name -> true
     (* Any overlaps with everything *)
     | _ when is_any t1 || is_any t2 -> false
     (* Base types: disjoint if different and no subtype relationship *)

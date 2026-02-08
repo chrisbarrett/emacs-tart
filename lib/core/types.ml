@@ -157,6 +157,7 @@ module Prim = struct
 
   let float_name = intrinsic "Float"
   let num_name = intrinsic "Num"
+  let never_name = intrinsic "Never"
 
   (** Type constructors *)
   let int = TCon int_name

@@ -149,6 +149,7 @@ module Prim : sig
 
   val float_name : string
   val num_name : string
+  val never_name : string
 
   val int : typ
   (** Type constructors *)
