@@ -79,7 +79,7 @@ val error_code_to_string : error_code -> string
 (** Format an error code for display. *)
 
 (** Severity level for diagnostics. *)
-type severity = Error | Warning | Hint
+type severity = Error | Warning | Info | Hint
 
 type related_location = { span : Syntax.Location.span; message : string }
 (** A related location with context. *)

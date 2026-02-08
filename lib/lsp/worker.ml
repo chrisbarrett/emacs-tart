@@ -145,6 +145,7 @@ let lsp_diagnostic_of_diagnostic ~(text : string) (d : Typing.Diagnostic.t) :
     match d.severity with
     | Typing.Diagnostic.Error -> Protocol.Error
     | Typing.Diagnostic.Warning -> Protocol.Warning
+    | Typing.Diagnostic.Info -> Protocol.Information
     | Typing.Diagnostic.Hint -> Protocol.Hint
   in
   let message =

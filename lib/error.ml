@@ -28,6 +28,10 @@ let is_warning = function
   | Type d -> d.Diagnostic.severity = Diagnostic.Warning
   | Parse _ | Eval _ | Io _ | File _ | Cli _ -> false
 
+let is_info = function
+  | Type d -> d.Diagnostic.severity = Diagnostic.Info
+  | Parse _ | Eval _ | Io _ | File _ | Cli _ -> false
+
 let is_hint = function
   | Type d -> d.Diagnostic.severity = Diagnostic.Hint
   | Parse _ | Eval _ | Io _ | File _ | Cli _ -> false

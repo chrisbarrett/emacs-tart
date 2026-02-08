@@ -137,7 +137,7 @@ let error_code_to_string = function
   | RedundantGuard -> "E0903"
 
 (** Severity level for diagnostics *)
-type severity = Error | Warning | Hint
+type severity = Error | Warning | Info | Hint
 
 type related_location = { span : Loc.span; message : string }
 (** A related location with context *)
@@ -764,7 +764,7 @@ let all_spans (d : t) : Loc.span list =
 
 (** Check if a diagnostic is an error (vs warning/hint) *)
 let is_error (d : t) : bool =
-  match d.severity with Error -> true | Warning | Hint -> false
+  match d.severity with Error -> true | Warning | Info | Hint -> false
 
 (** Count errors in a list of diagnostics *)
 let count_errors (ds : t list) : int = List.length (List.filter is_error ds)

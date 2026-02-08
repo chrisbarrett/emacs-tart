@@ -35,6 +35,9 @@ val is_error : t -> bool
 val is_warning : t -> bool
 (** [is_warning err] returns [true] for Warning-severity type diagnostics. *)
 
+val is_info : t -> bool
+(** [is_info err] returns [true] for Info-severity type diagnostics. *)
+
 val is_hint : t -> bool
 (** [is_hint err] returns [true] for Hint-severity type diagnostics. *)
 

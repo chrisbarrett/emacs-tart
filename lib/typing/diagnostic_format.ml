@@ -28,12 +28,14 @@ let format_span (span : Loc.span) : string =
 let severity_to_int = function
   | Diagnostic.Error -> 1
   | Diagnostic.Warning -> 2
+  | Diagnostic.Info -> 3
   | Diagnostic.Hint -> 4
 
 (** Format severity for display *)
 let format_severity = function
   | Diagnostic.Error -> "error"
   | Diagnostic.Warning -> "warning"
+  | Diagnostic.Info -> "info"
   | Diagnostic.Hint -> "hint"
 
 (** Convert error code to error type string for header. *)
