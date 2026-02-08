@@ -122,5 +122,5 @@ dedup cache doesn't suppress them after reopen).
 | # | Task | Status |
 |---|------|--------|
 | 1 | Track last-published diagnostics per URI | Done |
-| 2 | Version staleness check | Not started |
-| 3 | Clear last-published diagnostics on close | Not started |
+| 2 | Version staleness check | Done |
+| 3 | Clear last-published diagnostics on close | Done |

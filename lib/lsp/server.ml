@@ -385,48 +385,59 @@ let publish_diagnostics (server : t) (uri : string) (version : int option) :
     unit =
   match Document.get_doc server.documents uri with
   | None -> ()
-  | Some doc ->
-      (* Check file type and use appropriate checker *)
-      let is_tart = Signature_tracker.is_tart_file uri in
-      let diagnostics, stats =
-        if is_tart then
-          (* For .tart files, check signature syntax and validation *)
-          (check_tart_document doc.text uri, None)
-        else
-          (* For .el files, do full type checking *)
-          check_document ~config:server.module_config ~cache:server.form_cache
-            ~sig_tracker:server.signature_tracker uri doc.text
-      in
-      (* Check for dependency cycles (only for .el files) *)
-      let cycle_diagnostics =
-        if is_tart then []
-        else Graph_tracker.check_cycles_for_module server.dependency_graph ~uri
-      in
-      let all_diagnostics = diagnostics @ cycle_diagnostics in
-      (* Log cache statistics at debug level *)
-      (match stats with
-      | Some s ->
-          Log.debug "Type check: %d forms total, %d cached, %d re-checked"
-            s.total_forms s.cached_forms s.checked_forms
-      | None -> ());
-      (* Suppress identical diagnostics *)
-      let dominated =
-        match Hashtbl.find_opt server.last_diagnostics uri with
-        | Some prev -> Protocol.diagnostics_equal prev all_diagnostics
-        | None -> false
-      in
-      if dominated then Log.debug "Suppressing identical diagnostics for %s" uri
-      else (
-        Hashtbl.replace server.last_diagnostics uri all_diagnostics;
-        let params : Protocol.publish_diagnostics_params =
-          { uri; version; diagnostics = all_diagnostics }
-        in
-        Log.debug "Publishing %d diagnostics for %s"
-          (List.length all_diagnostics)
-          uri;
-        Rpc.write_notification server.oc
-          ~method_:"textDocument/publishDiagnostics"
-          ~params:(Protocol.publish_diagnostics_params_to_json params))
+  | Some doc -> (
+      (* Version staleness check: if a specific version triggered this check,
+         verify the document hasn't been updated since. Discard stale results. *)
+      match version with
+      | Some v when v <> doc.version ->
+          Log.debug
+            "Discarding stale diagnostics for %s (checked v%d, current v%d)" uri
+            v doc.version
+      | _ ->
+          (* Check file type and use appropriate checker *)
+          let is_tart = Signature_tracker.is_tart_file uri in
+          let diagnostics, stats =
+            if is_tart then
+              (* For .tart files, check signature syntax and validation *)
+              (check_tart_document doc.text uri, None)
+            else
+              (* For .el files, do full type checking *)
+              check_document ~config:server.module_config
+                ~cache:server.form_cache ~sig_tracker:server.signature_tracker
+                uri doc.text
+          in
+          (* Check for dependency cycles (only for .el files) *)
+          let cycle_diagnostics =
+            if is_tart then []
+            else
+              Graph_tracker.check_cycles_for_module server.dependency_graph ~uri
+          in
+          let all_diagnostics = diagnostics @ cycle_diagnostics in
+          (* Log cache statistics at debug level *)
+          (match stats with
+          | Some s ->
+              Log.debug "Type check: %d forms total, %d cached, %d re-checked"
+                s.total_forms s.cached_forms s.checked_forms
+          | None -> ());
+          (* Suppress identical diagnostics *)
+          let dominated =
+            match Hashtbl.find_opt server.last_diagnostics uri with
+            | Some prev -> Protocol.diagnostics_equal prev all_diagnostics
+            | None -> false
+          in
+          if dominated then
+            Log.debug "Suppressing identical diagnostics for %s" uri
+          else (
+            Hashtbl.replace server.last_diagnostics uri all_diagnostics;
+            let params : Protocol.publish_diagnostics_params =
+              { uri; version; diagnostics = all_diagnostics }
+            in
+            Log.debug "Publishing %d diagnostics for %s"
+              (List.length all_diagnostics)
+              uri;
+            Rpc.write_notification server.oc
+              ~method_:"textDocument/publishDiagnostics"
+              ~params:(Protocol.publish_diagnostics_params_to_json params)))
 
 (** Handle initialize request *)
 let handle_initialize (server : t) (params : Yojson.Safe.t option) :

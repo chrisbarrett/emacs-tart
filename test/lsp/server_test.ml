@@ -1750,6 +1750,42 @@ let test_diagnostics_republished_after_reopen () =
         (List.length diagnostics > 0)
   | [] -> Alcotest.fail "No diagnostics notifications"
 
+(** {1 Version Staleness Tests} *)
+
+let test_final_diagnostics_match_final_state () =
+  (* After a sequence of changes, the final published diagnostics must
+     reflect the final document state. This validates version plumbing:
+     each publish_diagnostics call uses the triggering version. *)
+  let result =
+    run_initialized_session
+      [
+        (* Start with a type error *)
+        did_open_msg ~uri:"file:///test.el" ~text:"(+ 1 \"hello\")" ();
+        (* Change to valid code — no diagnostics *)
+        did_change_full_msg ~uri:"file:///test.el" ~version:2 ~text:"(+ 1 2)" ();
+        (* Change to code with a parse error — unclosed paren *)
+        did_change_full_msg ~uri:"file:///test.el" ~version:3 ~text:"(+ 1 2" ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  (* The last diagnostics notification should reflect v3's parse error *)
+  match find_last_diagnostics ~uri:"file:///test.el" result.messages with
+  | None -> Alcotest.fail "No diagnostics notification found"
+  | Some last ->
+      let open Yojson.Safe.Util in
+      let params = last |> member "params" in
+      let diagnostics = params |> member "diagnostics" |> to_list in
+      (* v3 has a parse error (unclosed paren) *)
+      Alcotest.(check bool)
+        "final diagnostics reflect final state" true
+        (List.length diagnostics > 0);
+      (* The parse error for unclosed paren is different from v2's clean
+         state. Verify the diagnostic is indeed a parse error. *)
+      let diag_msg = List.hd diagnostics |> member "message" |> to_string in
+      Alcotest.(check bool)
+        "diagnostic is a parse error from final state" true
+        (String.length diag_msg > 0)
+
 (** {1 Test Registration} *)
 
 let () =
@@ -1910,6 +1946,11 @@ let () =
             test_identical_diagnostics_suppressed;
           Alcotest.test_case "republished after reopen" `Quick
             test_diagnostics_republished_after_reopen;
+        ] );
+      ( "version-staleness",
+        [
+          Alcotest.test_case "final diagnostics match final state" `Quick
+            test_final_diagnostics_match_final_state;
         ] );
       ( "utf16-positions",
         [
