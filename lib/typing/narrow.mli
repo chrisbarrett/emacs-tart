@@ -84,3 +84,15 @@ val analyze_condition : Syntax.Sexp.t -> Core.Type_env.t -> condition_analysis
 
     Per inline-only restriction, only direct calls are recognized. Stored
     results do not enable narrowing (Spec 52 R12, Spec 49 R17). *)
+
+val analyze_or_exit : Syntax.Sexp.t -> Core.Type_env.t -> predicate_info list
+(** [analyze_or_exit sexp env] detects the [never]-exit narrowing pattern in
+    [or] expressions (Spec 52 R5).
+
+    When an [or] form contains a predicate call followed by a branch that
+    returns [never] (e.g., [(or (stringp x) (error "Expected string"))]),
+    execution can only continue past the [or] if the predicate was truthy.
+    Returns the predicate narrowings that should be applied to subsequent code.
+
+    Used by [infer_progn] to thread narrowed environments after [or]
+    expressions. *)

@@ -688,7 +688,12 @@ and infer_let_star env bindings body span =
 
     Hard require forms [(require 'X)] extend the environment for subsequent
     expressions in the progn (Spec 49 R5). Soft requires [(require 'X nil t)]
-    do not extend the environment. *)
+    do not extend the environment.
+
+    Or-expressions with never-exit branches narrow subsequent code (Spec 52
+    R5). When [(or (pred x) (error "..."))] is encountered, [x] is narrowed
+    by [pred] for subsequent forms because execution can only continue past
+    the [or] if [pred] was truthy. *)
 and infer_progn env exprs span =
   match exprs with
   | [] -> pure Prim.nil
@@ -700,6 +705,16 @@ and infer_progn env exprs span =
         match Narrow.detect_hard_require e with
         | Some feature_name -> Env.load_feature feature_name env
         | None -> env
+      in
+      (* Or-expression never-exit narrows env for subsequent forms
+         (Spec 52 R5) *)
+      let rest_env =
+        match Narrow.analyze_or_exit e rest_env with
+        | [] -> rest_env
+        | preds ->
+            List.fold_left
+              (fun e p -> apply_predicate_then p e)
+              rest_env preds
       in
       let rest_result = infer_progn rest_env rest span in
       {

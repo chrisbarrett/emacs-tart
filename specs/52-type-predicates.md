@@ -209,17 +209,15 @@ Same narrowing infrastructure, different tracking:
 - [x] Type subtraction for else branches
 - [x] Cumulative narrowing in cond
 - [x] Predicates in and expressions
-- [ ] [R13] Add `never` bottom type to type system
-- [ ] [R13] Declare `error`, `signal`, `throw` as returning `never` in typings
-- [ ] [R5, R13] Predicates in or expressions — narrowing via `never`-return tracking
+- [x] [R13] Add `never` bottom type to type system
+- [x] [R13] Declare `error`, `signal`, `throw` as returning `never` in typings
+- [x] [R5, R13] Predicates in or expressions — narrowing via `never`-return tracking
 - [x] Union intersection for narrowing
 - [x] Inline-only restriction
 - [x] Standard library declarations
 
-**Status:** Complete except R5 and R13. Narrowing infrastructure complete
-(`narrow.ml`, `infer.ml`). Inline-only restriction verified (R12). Union
-intersection narrowing for multi-type predicates implemented. Declaration
-syntax superseded by [Spec 54](./54-multi-clause-signatures.md) multi-clause
-signatures. Standard library predicates migrated to multi-clause syntax.
-R5 (or-expression narrowing) requires R13 (`never`-return tracking), which
-is now specified above.
+**Status:** Complete. All requirements implemented. R13 (`never` bottom type)
+adds `never <: T` subtyping and `(T | never)` simplification. R5
+(or-expression narrowing) detects `(or (pred x) (error ...))` patterns where
+the alternative returns `never`, applying predicate narrowing to subsequent
+code via `infer_progn` environment threading.

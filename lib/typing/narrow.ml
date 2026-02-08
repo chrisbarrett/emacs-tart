@@ -234,3 +234,96 @@ let analyze_condition (condition : Syntax.Sexp.t) (env : Env.t) :
       | Some (`Guard g) -> Guard g
       | None -> NoPredicate)
   | _ -> NoPredicate
+
+(** Extract the return type from a type scheme, if it is a function type.
+
+    Handles [TArrow], [TForall(_, TArrow ...)], and multi-clause functions
+    (where all clauses must agree on returning [never]). *)
+let fn_return_type_from_scheme (scheme : Env.scheme) : typ option =
+  match scheme with
+  | Mono (TArrow (_, ret)) -> Some (repr ret)
+  | Poly (_, TArrow (_, ret)) -> Some (repr ret)
+  | _ -> None
+
+(** Check whether a function call expression returns [never].
+
+    Looks up the function name in the env and checks if its declared return type
+    is [never]. Also checks multi-clause functions: returns [true] only if all
+    clauses return [never]. *)
+let call_returns_never (fn_name : string) (env : Env.t) : bool =
+  (* Check multi-clause functions first *)
+  match Env.lookup_fn_clauses fn_name env with
+  | Some clauses ->
+      clauses <> []
+      && List.for_all
+           (fun (c : Env.loaded_clause) -> is_never c.lc_return)
+           clauses
+  | None -> (
+      match Env.lookup_fn fn_name env with
+      | Some scheme -> (
+          match fn_return_type_from_scheme scheme with
+          | Some ret -> is_never ret
+          | None -> false)
+      | None -> false)
+
+(** Analyze an [or] expression for the never-exit narrowing pattern (Spec 52
+    R5).
+
+    Detects forms like [(or (stringp x) (error "Expected string"))] where a
+    predicate branch precedes a branch that returns [never]. When this pattern
+    is found, the predicate's narrowing applies to subsequent code because if
+    execution continues past the [or], the predicate must have been truthy.
+
+    When multiple predicate branches test the same variable, the narrowing is
+    the union of their narrowed types. When predicates test different variables,
+    no narrowing is applied (we cannot determine which predicate was truthy).
+
+    Returns the predicate narrowings that should be applied after the [or]
+    expression. *)
+let analyze_or_exit (sexp : Syntax.Sexp.t) (env : Env.t) : predicate_info list =
+  match sexp with
+  | Syntax.Sexp.List (Syntax.Sexp.Symbol ("or", _) :: or_args, _) -> (
+      (* Check if any branch is a call to a function returning never.
+         If so, collect predicates from all preceding branches. *)
+      let has_never_branch =
+        List.exists
+          (fun arg ->
+            match arg with
+            | Syntax.Sexp.List (Syntax.Sexp.Symbol (fn_name, _) :: _, _) ->
+                call_returns_never fn_name env
+            | _ -> false)
+          or_args
+      in
+      if not has_never_branch then []
+      else
+        (* Collect predicate narrowings from non-never branches *)
+        let preds =
+          List.filter_map
+            (fun arg ->
+              match arg with
+              | Syntax.Sexp.List (Syntax.Sexp.Symbol (fn_name, _) :: args, _) ->
+                  if call_returns_never fn_name env then None
+                  else analyze_single_predicate fn_name args env
+              | _ -> None)
+            or_args
+        in
+        (* Group by variable name. Only narrow when all predicates test the
+           same variable — with multiple variables we cannot determine which
+           predicate was truthy. *)
+        match preds with
+        | [] -> []
+        | [ _ ] -> preds
+        | _ ->
+            let all_same_var =
+              let first = (List.hd preds).var_name in
+              List.for_all (fun p -> p.var_name = first) preds
+            in
+            if all_same_var then
+              (* Merge narrowings into a single union predicate *)
+              let var_name = (List.hd preds).var_name in
+              let narrowed_type =
+                TUnion (List.map (fun p -> p.narrowed_type) preds)
+              in
+              [ { var_name; narrowed_type } ]
+            else [])
+  | _ -> []
