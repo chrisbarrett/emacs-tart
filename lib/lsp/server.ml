@@ -12,6 +12,7 @@ type t = {
   ic : In_channel.t;
   oc : Out_channel.t;
   mutable state : state;
+  mutable position_encoding : Protocol.position_encoding;
   documents : Document.t;
   form_cache : Form_cache.t;
   dependency_graph : Graph.Dependency_graph.t;
@@ -92,6 +93,7 @@ let create ~ic ~oc () : t =
     ic;
     oc;
     state = Uninitialized;
+    position_encoding = Protocol.UTF16;
     documents = Document.create ();
     form_cache = Form_cache.create ();
     dependency_graph = Graph.Dependency_graph.create ();
@@ -424,7 +426,7 @@ let handle_initialize (server : t) (params : Yojson.Safe.t option) :
             {
               Protocol.process_id = None;
               root_uri = None;
-              capabilities = { text_document = None };
+              capabilities = { text_document = None; general = None };
             }
       in
       Log.info "Initializing (root: %s)"
@@ -435,9 +437,16 @@ let handle_initialize (server : t) (params : Yojson.Safe.t option) :
           Log.debug "Detected Emacs version: %s"
             (Sig.Emacs_version.version_to_string v)
       | None -> Log.debug "Emacs version not detected, using latest typings");
+      (* Negotiate position encoding *)
+      let encoding =
+        Protocol.negotiate_position_encoding init_params.capabilities
+      in
+      server.position_encoding <- encoding;
+      Log.debug "Position encoding: %s"
+        (Protocol.position_encoding_to_string encoding);
       server.state <- Initialized { root_uri = init_params.root_uri };
       let result : Protocol.initialize_result =
-        { capabilities = capabilities () }
+        { capabilities = capabilities (); position_encoding = encoding }
       in
       let server_info : Protocol.server_info =
         { name = "tart"; version = Some "0.1.0" }

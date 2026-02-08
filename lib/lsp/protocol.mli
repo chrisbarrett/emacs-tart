@@ -3,12 +3,21 @@
     Defines request/response types for the Language Server Protocol. Phase 1:
     initialize, initialized, shutdown. *)
 
+(** {1 Position Encoding} *)
+
+(** Position encoding negotiated during initialization *)
+type position_encoding = UTF16 | UTF32
+
 (** {1 Initialize Request} *)
+
+type general_client_capabilities = { position_encodings : string list option }
+(** General client capabilities, including position encoding support *)
 
 type client_capabilities = {
   text_document : text_document_client_capabilities option;
+  general : general_client_capabilities option;
 }
-(** Client capabilities (simplified for Phase 1) *)
+(** Client capabilities *)
 
 and text_document_client_capabilities = {
   synchronization : text_document_sync_client_capabilities option;
@@ -47,8 +56,20 @@ type server_capabilities = {
 }
 (** Server capabilities *)
 
-type initialize_result = { capabilities : server_capabilities }
+type initialize_result = {
+  capabilities : server_capabilities;
+  position_encoding : position_encoding;
+}
 (** Initialize result *)
+
+val negotiate_position_encoding : client_capabilities -> position_encoding
+(** Negotiate position encoding from client capabilities.
+
+    Prefers UTF-32 if advertised by the client (no conversion needed for
+    byte-indexed columns), otherwise defaults to UTF-16 per the LSP spec. *)
+
+val position_encoding_to_string : position_encoding -> string
+(** Convert a position encoding to the LSP protocol string. *)
 
 (** {1 JSON Parsing} *)
 

@@ -3,13 +3,20 @@
     Defines request/response types for the Language Server Protocol. Phase 1:
     initialize, initialized, shutdown. *)
 
+(** {1 Position Encoding} *)
+
+type position_encoding = UTF16 | UTF32
+
 (** {1 Initialize Request} *)
+
+type general_client_capabilities = { position_encodings : string list option }
+(** General client capabilities, including position encoding support *)
 
 type client_capabilities = {
   text_document : text_document_client_capabilities option;
+  general : general_client_capabilities option;
 }
-(** Client capabilities (simplified for Phase 1). We parse just what we need and
-    ignore the rest. *)
+(** Client capabilities. We parse just what we need and ignore the rest. *)
 
 and text_document_client_capabilities = {
   synchronization : text_document_sync_client_capabilities option;
@@ -53,10 +60,24 @@ type server_capabilities = {
 }
 (** Server capabilities *)
 
-type initialize_result = { capabilities : server_capabilities }
+type initialize_result = {
+  capabilities : server_capabilities;
+  position_encoding : position_encoding;
+}
 (** Initialize result *)
 
 (** {1 JSON Parsing} *)
+
+let position_encoding_to_string = function
+  | UTF16 -> "utf-16"
+  | UTF32 -> "utf-32"
+
+let negotiate_position_encoding (caps : client_capabilities) : position_encoding
+    =
+  match caps.general with
+  | Some { position_encodings = Some encodings } ->
+      if List.mem "utf-32" encodings then UTF32 else UTF16
+  | _ -> UTF16
 
 (** Parse client capabilities from JSON *)
 let parse_client_capabilities (json : Yojson.Safe.t) : client_capabilities =
@@ -78,7 +99,18 @@ let parse_client_capabilities (json : Yojson.Safe.t) : client_capabilities =
         in
         Some { synchronization }
   in
-  { text_document }
+  let general =
+    match json |> member "general" with
+    | `Null -> None
+    | gen ->
+        let position_encodings =
+          match gen |> member "positionEncodings" with
+          | `List encodings -> Some (List.filter_map to_string_option encodings)
+          | _ -> None
+        in
+        Some { position_encodings }
+  in
+  { text_document; general }
 
 (** Parse initialize params from JSON *)
 let parse_initialize_params (json : Yojson.Safe.t) : initialize_params =
@@ -97,7 +129,7 @@ let parse_initialize_params (json : Yojson.Safe.t) : initialize_params =
   in
   let capabilities =
     match json |> member "capabilities" with
-    | `Null -> { text_document = None }
+    | `Null -> { text_document = None; general = None }
     | caps -> parse_client_capabilities caps
   in
   { process_id; root_uri; capabilities }
@@ -157,7 +189,12 @@ let server_capabilities_to_json (caps : server_capabilities) : Yojson.Safe.t =
 
 (** Encode initialize result to JSON *)
 let initialize_result_to_json (result : initialize_result) : Yojson.Safe.t =
-  `Assoc [ ("capabilities", server_capabilities_to_json result.capabilities) ]
+  `Assoc
+    [
+      ("capabilities", server_capabilities_to_json result.capabilities);
+      ( "positionEncoding",
+        `String (position_encoding_to_string result.position_encoding) );
+    ]
 
 (** {1 Server Info} *)
 
@@ -180,6 +217,8 @@ let initialize_response_to_json ~(result : initialize_result)
   `Assoc
     [
       ("capabilities", server_capabilities_to_json result.capabilities);
+      ( "positionEncoding",
+        `String (position_encoding_to_string result.position_encoding) );
       ("serverInfo", server_info_to_json server_info);
     ]
 
