@@ -4,6 +4,9 @@
     violations) and refactorings (extract function) triggered by
     textDocument/codeAction requests. *)
 
+val is_builtin_symbol : string -> bool
+(** Check if a symbol is a builtin that should not be renamed or extracted. *)
+
 val type_to_sig_string : Core.Types.typ -> string
 (** Convert a type to .tart signature format string. *)
 

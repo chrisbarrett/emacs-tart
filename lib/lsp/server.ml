@@ -1369,6 +1369,66 @@ let handle_inlay_hints (server : t) (params : Yojson.Safe.t option) :
 
 (** {1 Rename} *)
 
+(** Handle textDocument/prepareRename request.
+
+    Validates whether the symbol at the cursor can be renamed. Returns the
+    symbol's range and name as placeholder for renameable user-defined symbols,
+    or null for builtins, keywords, literals, and comments. *)
+let handle_prepare_rename (server : t) (params : Yojson.Safe.t option) :
+    (Yojson.Safe.t, Rpc.response_error) result =
+  match params with
+  | None ->
+      Error
+        {
+          Rpc.code = Rpc.invalid_params;
+          message = "Missing prepare rename params";
+          data = None;
+        }
+  | Some json -> (
+      let prp = Protocol.parse_prepare_rename_params json in
+      let uri = prp.prp_text_document in
+      let line = prp.prp_position.line in
+      Log.debug "Prepare rename request at %s:%d:%d" uri line
+        prp.prp_position.character;
+      match Document.get_doc server.documents uri with
+      | None ->
+          Log.debug "Document not found: %s" uri;
+          Ok `Null
+      | Some doc -> (
+          let col =
+            Document.utf16_col_to_byte ~text:doc.text ~line
+              ~col:prp.prp_position.character
+          in
+          let filename = Uri.to_filename uri in
+          let parse_result = Syntax.Read.parse_string ~filename doc.text in
+          if parse_result.sexps = [] then (
+            Log.debug "No S-expressions parsed";
+            Ok `Null)
+          else
+            match
+              Syntax.Sexp.find_with_context_in_forms ~line ~col
+                parse_result.sexps
+            with
+            | None ->
+                Log.debug "No S-expression at position";
+                Ok `Null
+            | Some ctx -> (
+                match ctx.target with
+                | Syntax.Sexp.Symbol (name, span)
+                  when not (Code_action.is_builtin_symbol name) ->
+                    Log.debug "Prepare rename: symbol '%s' is renameable" name;
+                    let result : Protocol.prepare_rename_result =
+                      {
+                        prr_range = range_of_span ~text:doc.text span;
+                        prr_placeholder = name;
+                      }
+                    in
+                    Ok (Protocol.prepare_rename_result_to_json (Some result))
+                | _ ->
+                    Log.debug
+                      "Prepare rename: target is not a renameable symbol";
+                    Ok (Protocol.prepare_rename_result_to_json None))))
+
 (** Handle textDocument/rename request.
 
     Renames all occurrences of a symbol within the document. Uses
@@ -1461,6 +1521,7 @@ let dispatch_request (server : t) (msg : Rpc.message) :
   | "textDocument/documentSymbol" -> handle_document_symbol server msg.params
   | "textDocument/completion" -> handle_completion server msg.params
   | "textDocument/signatureHelp" -> handle_signature_help server msg.params
+  | "textDocument/prepareRename" -> handle_prepare_rename server msg.params
   | "textDocument/rename" -> handle_rename server msg.params
   | "textDocument/foldingRange" -> handle_folding_range server msg.params
   | "textDocument/semanticTokens/full" ->
