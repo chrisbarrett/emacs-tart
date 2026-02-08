@@ -270,6 +270,20 @@ let linked_editing_range_msg ~id ~uri ~line ~character () =
     ~params:(position_params ~uri ~line ~character)
     ()
 
+let on_type_formatting_msg ~id ~uri ~line ~character ~ch () =
+  make_message ~id:(`Int id) ~method_:"textDocument/onTypeFormatting"
+    ~params:
+      (`Assoc
+         [
+           ("textDocument", `Assoc [ ("uri", `String uri) ]);
+           ( "position",
+             `Assoc [ ("line", `Int line); ("character", `Int character) ] );
+           ("ch", `String ch);
+           ( "options",
+             `Assoc [ ("tabSize", `Int 2); ("insertSpaces", `Bool true) ] );
+         ])
+    ()
+
 (* {1 Message Parsing} *)
 
 let parse_messages (output : string) : Yojson.Safe.t list =

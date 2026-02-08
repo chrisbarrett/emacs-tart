@@ -75,6 +75,7 @@ type server_capabilities = {
   type_hierarchy_provider : bool;
   code_lens_provider : bool;
   linked_editing_range_provider : bool;
+  document_on_type_formatting_provider : bool;
 }
 (** Server capabilities *)
 
@@ -335,6 +336,17 @@ let server_capabilities_to_json (caps : server_capabilities) : Yojson.Safe.t =
   let fields =
     if caps.linked_editing_range_provider then
       ("linkedEditingRangeProvider", `Bool true) :: fields
+    else fields
+  in
+  let fields =
+    if caps.document_on_type_formatting_provider then
+      ( "documentOnTypeFormattingProvider",
+        `Assoc
+          [
+            ("firstTriggerCharacter", `String ")");
+            ("moreTriggerCharacter", `List [ `String "\n" ]);
+          ] )
+      :: fields
     else fields
   in
   `Assoc fields
@@ -1565,6 +1577,37 @@ let linked_editing_ranges_to_json (result : linked_editing_ranges option) :
         | None -> fields
       in
       `Assoc fields
+  | None -> `Null
+
+(** {1 On-Type Formatting} *)
+
+type on_type_formatting_params = {
+  otf_text_document : string;
+  otf_position : position;
+  otf_ch : string;
+}
+(** On-type formatting request params *)
+
+let parse_on_type_formatting_params (json : Yojson.Safe.t) :
+    on_type_formatting_params =
+  let open Yojson.Safe.Util in
+  let text_document =
+    json |> member "textDocument" |> member "uri" |> to_string
+  in
+  let pos_json = json |> member "position" in
+  let position =
+    {
+      line = pos_json |> member "line" |> to_int;
+      character = pos_json |> member "character" |> to_int;
+    }
+  in
+  let ch = json |> member "ch" |> to_string in
+  { otf_text_document = text_document; otf_position = position; otf_ch = ch }
+
+let on_type_formatting_result_to_json (result : text_edit list option) :
+    Yojson.Safe.t =
+  match result with
+  | Some edits -> `List (List.map text_edit_to_json edits)
   | None -> `Null
 
 (** {1 File Watching} *)

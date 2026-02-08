@@ -190,6 +190,7 @@ let capabilities () : Protocol.server_capabilities =
     type_hierarchy_provider = true;
     code_lens_provider = true;
     linked_editing_range_provider = true;
+    document_on_type_formatting_provider = true;
   }
 
 (** Require non-None params, returning an invalid-params error otherwise. *)
@@ -2143,6 +2144,125 @@ let handle_linked_editing_range (_server : t) (params : Yojson.Safe.t option) :
           (Protocol.linked_editing_ranges_to_json
              (Some { ranges; word_pattern = None })))
 
+(** Compute paren depth at a position in text.
+
+    Counts unmatched opening parens up to the given byte offset, ignoring parens
+    inside strings and comments. *)
+let paren_depth_at ~(text : string) ~(offset : int) : int =
+  let depth = ref 0 in
+  let in_string = ref false in
+  let in_comment = ref false in
+  let i = ref 0 in
+  while !i < offset && !i < String.length text do
+    let c = text.[!i] in
+    if !in_comment then (if c = '\n' then in_comment := false)
+    else if !in_string then (
+      if c = '\\' && !i + 1 < String.length text then
+        i := !i + 1 (* skip escaped char *)
+      else if c = '"' then in_string := false)
+    else if c = ';' then in_comment := true
+    else if c = '"' then in_string := true
+    else if c = '(' then incr depth
+    else if c = ')' then decr depth;
+    i := !i + 1
+  done;
+  max 0 !depth
+
+(** Handle textDocument/onTypeFormatting request *)
+let handle_on_type_formatting (_server : t) (params : Yojson.Safe.t option) :
+    (Yojson.Safe.t, Rpc.response_error) result =
+  require_params "onTypeFormatting" params @@ fun json ->
+  let otf_params = Protocol.parse_on_type_formatting_params json in
+  let uri = otf_params.otf_text_document in
+  let line = otf_params.otf_position.line in
+  let ch = otf_params.otf_ch in
+  Log.debug "On-type formatting request at %s:%d:%d ch=%S" uri line
+    otf_params.otf_position.character ch;
+  let null = Protocol.on_type_formatting_result_to_json None in
+  with_document _server ~uri ~not_found:null @@ fun doc ->
+  let text = doc.text in
+  match ch with
+  | "\n" ->
+      (* Compute indentation for the new line based on paren depth *)
+      let lines = String.split_on_char '\n' text in
+      (* Compute byte offset at the start of the line where user pressed enter *)
+      let offset =
+        let rec count_offset lines_remaining n cur =
+          match lines_remaining with
+          | [] -> cur
+          | l :: rest ->
+              if n = 0 then cur
+              else count_offset rest (n - 1) (cur + String.length l + 1)
+        in
+        count_offset lines line 0
+      in
+      let depth = paren_depth_at ~text ~offset in
+      let indent = depth * 2 in
+      let indent_str = String.make indent ' ' in
+      (* Set leading whitespace on the new line *)
+      let edit : Protocol.text_edit =
+        {
+          te_range =
+            { start = { line; character = 0 }; end_ = { line; character = 0 } };
+          new_text = indent_str;
+        }
+      in
+      if indent > 0 then (
+        Log.debug "Inserting %d spaces of indentation at line %d" indent line;
+        Ok (Protocol.on_type_formatting_result_to_json (Some [ edit ])))
+      else (
+        Log.debug "No indentation needed (depth 0)";
+        Ok null)
+  | ")" ->
+      (* If closing paren balances a top-level form, insert a trailing newline *)
+      let col =
+        Document.utf16_col_to_byte ~text ~line
+          ~col:otf_params.otf_position.character
+      in
+      (* Compute byte offset of the closing paren *)
+      let offset =
+        let rec count_offset lines_remaining n cur =
+          match lines_remaining with
+          | [] -> cur
+          | l :: rest ->
+              if n = 0 then cur + col
+              else count_offset rest (n - 1) (cur + String.length l + 1)
+        in
+        count_offset (String.split_on_char '\n' text) line 0
+      in
+      (* Check depth after this closing paren (which reduces depth by 1) *)
+      let depth_after = paren_depth_at ~text ~offset in
+      if depth_after = 0 then
+        (* Check if there's already a newline after the position *)
+        let has_trailing_newline =
+          offset < String.length text
+          && (text.[offset] = '\n'
+             || (offset + 1 < String.length text && text.[offset] = '\r'))
+        in
+        if has_trailing_newline then (
+          Log.debug "Top-level close paren already has trailing newline";
+          Ok null)
+        else (
+          Log.debug "Top-level close paren — inserting trailing newline";
+          let edit : Protocol.text_edit =
+            {
+              te_range =
+                {
+                  start =
+                    { line; character = otf_params.otf_position.character };
+                  end_ = { line; character = otf_params.otf_position.character };
+                };
+              new_text = "\n";
+            }
+          in
+          Ok (Protocol.on_type_formatting_result_to_json (Some [ edit ])))
+      else (
+        Log.debug "Close paren at depth %d (not top-level)" depth_after;
+        Ok null)
+  | _ ->
+      Log.debug "Unhandled trigger character: %S" ch;
+      Ok null
+
 (** Dispatch a request to its handler *)
 let dispatch_request (server : t) (msg : Rpc.message) :
     (Yojson.Safe.t, Rpc.response_error) result =
@@ -2178,6 +2298,8 @@ let dispatch_request (server : t) (msg : Rpc.message) :
   | "textDocument/codeLens" -> handle_code_lens server msg.params
   | "textDocument/linkedEditingRange" ->
       handle_linked_editing_range server msg.params
+  | "textDocument/onTypeFormatting" ->
+      handle_on_type_formatting server msg.params
   | _ ->
       Error
         {

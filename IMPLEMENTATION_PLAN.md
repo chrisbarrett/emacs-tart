@@ -599,6 +599,6 @@ Tasks 1–3, 5–6, 8–9, 11, 13–16 are independent and can proceed in parall
 | 11 | Type hierarchy                  | 71   | `type_hierarchy.{ml,mli}` | `protocol.ml`, `server.ml`                       | Done        |
 | 12 | Code lens                       | 71   | `code_lens.{ml,mli}`      | `protocol.ml`, `server.ml`                       | Done        |
 | 13 | Linked editing ranges           | 71   | —                         | `server.ml`, `protocol.ml`                       | Done        |
-| 14 | On-type formatting              | 71   | —                         | `server.ml`, `protocol.ml`                       | Not started |
+| 14 | On-type formatting              | 71   | —                         | `server.ml`, `protocol.ml`                       | Done        |
 | 15 | Pull-based diagnostics          | 71   | —                         | `server.ml`, `protocol.ml`                       | Not started |
 | 16 | Dynamic registration            | 71   | —                         | `server.ml`, `protocol.ml`                       | Not started |

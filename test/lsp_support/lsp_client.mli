@@ -158,6 +158,16 @@ val linked_editing_range_msg :
   id:int -> uri:string -> line:int -> character:int -> unit -> string
 (** textDocument/linkedEditingRange request. *)
 
+val on_type_formatting_msg :
+  id:int ->
+  uri:string ->
+  line:int ->
+  character:int ->
+  ch:string ->
+  unit ->
+  string
+(** textDocument/onTypeFormatting request. *)
+
 (** {1 Session Runners} *)
 
 type session_result = {

@@ -3570,6 +3570,133 @@ let test_linked_editing_no_binding () =
       (* No let binding scope, so null *)
       Alcotest.(check bool) "result is null" true (result_json = `Null)
 
+(** {1 On-Type Formatting} *)
+
+let test_on_type_formatting_capability_advertised () =
+  let result =
+    run_session [ initialize_msg ~id:1 (); shutdown_msg ~id:2 (); exit_msg () ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  let init_resp = List.nth result.messages 0 in
+  let open Yojson.Safe.Util in
+  let caps = init_resp |> member "result" |> member "capabilities" in
+  let provider = caps |> member "documentOnTypeFormattingProvider" in
+  Alcotest.(check bool) "provider present" true (provider <> `Null);
+  let first_trigger = provider |> member "firstTriggerCharacter" |> to_string in
+  Alcotest.(check string) "first trigger" ")" first_trigger;
+  let more = provider |> member "moreTriggerCharacter" |> to_list in
+  Alcotest.(check int) "more triggers count" 1 (List.length more);
+  Alcotest.(check string) "more trigger" "\n" (List.hd more |> to_string)
+
+let test_on_type_formatting_newline_indentation () =
+  (* (defun my-fn (x)\n  |
+     After pressing enter inside the defun body, we're at depth 1 so expect
+     2 spaces of indentation *)
+  let text = "(defun my-fn (x)\n)" in
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el" ~text ();
+        on_type_formatting_msg ~id:2 ~uri:"file:///test.el" ~line:1 ~character:0
+          ~ch:"\n" ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "no response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result_json = json |> member "result" in
+      Alcotest.(check bool) "result not null" true (result_json <> `Null);
+      let edits = result_json |> to_list in
+      Alcotest.(check int) "one edit" 1 (List.length edits);
+      let edit = List.hd edits in
+      let new_text = edit |> member "newText" |> to_string in
+      Alcotest.(check string) "2 spaces" "  " new_text
+
+let test_on_type_formatting_newline_top_level () =
+  (* At top level (depth 0), no indentation needed *)
+  let text = "(defun my-fn (x) x)\n" in
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el" ~text ();
+        on_type_formatting_msg ~id:2 ~uri:"file:///test.el" ~line:1 ~character:0
+          ~ch:"\n" ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "no response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result_json = json |> member "result" in
+      Alcotest.(check bool) "result is null" true (result_json = `Null)
+
+let test_on_type_formatting_close_paren_top_level () =
+  (* Closing paren that balances to depth 0 should insert trailing newline *)
+  let text = "(defun my-fn (x) x)" in
+  (* Position is after the closing paren, at col 20 *)
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el" ~text ();
+        on_type_formatting_msg ~id:2 ~uri:"file:///test.el" ~line:0
+          ~character:20 ~ch:")" ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "no response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result_json = json |> member "result" in
+      Alcotest.(check bool) "result not null" true (result_json <> `Null);
+      let edits = result_json |> to_list in
+      Alcotest.(check int) "one edit" 1 (List.length edits);
+      let edit = List.hd edits in
+      let new_text = edit |> member "newText" |> to_string in
+      Alcotest.(check string) "trailing newline" "\n" new_text
+
+let test_on_type_formatting_close_paren_nested () =
+  (* Closing paren that does NOT balance to depth 0 — no edit *)
+  let text = "(defun my-fn (x) (+ x 1))" in
+  (* The ) at position 24 closes the (+ x 1) but we're still inside defun *)
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el" ~text ();
+        on_type_formatting_msg ~id:2 ~uri:"file:///test.el" ~line:0
+          ~character:24 ~ch:")" ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "no response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result_json = json |> member "result" in
+      Alcotest.(check bool) "result is null" true (result_json = `Null)
+
+let test_on_type_formatting_close_paren_already_newline () =
+  (* Top-level close paren but already has trailing newline *)
+  let text = "(defun my-fn (x) x)\n" in
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el" ~text ();
+        on_type_formatting_msg ~id:2 ~uri:"file:///test.el" ~line:0
+          ~character:20 ~ch:")" ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "no response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result_json = json |> member "result" in
+      Alcotest.(check bool) "result is null" true (result_json = `Null)
+
 (** {1 Test Registration} *)
 
 let () =
@@ -3920,5 +4047,20 @@ let () =
           Alcotest.test_case "defun params" `Quick
             test_linked_editing_defun_params;
           Alcotest.test_case "no binding" `Quick test_linked_editing_no_binding;
+        ] );
+      ( "on-type-formatting",
+        [
+          Alcotest.test_case "capability advertised" `Quick
+            test_on_type_formatting_capability_advertised;
+          Alcotest.test_case "newline indentation" `Quick
+            test_on_type_formatting_newline_indentation;
+          Alcotest.test_case "newline top level" `Quick
+            test_on_type_formatting_newline_top_level;
+          Alcotest.test_case "close paren top level" `Quick
+            test_on_type_formatting_close_paren_top_level;
+          Alcotest.test_case "close paren nested" `Quick
+            test_on_type_formatting_close_paren_nested;
+          Alcotest.test_case "close paren already newline" `Quick
+            test_on_type_formatting_close_paren_already_newline;
         ] );
     ]

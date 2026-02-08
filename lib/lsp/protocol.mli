@@ -71,6 +71,7 @@ type server_capabilities = {
   type_hierarchy_provider : bool;
   code_lens_provider : bool;
   linked_editing_range_provider : bool;
+  document_on_type_formatting_provider : bool;
 }
 (** Server capabilities *)
 
@@ -762,6 +763,21 @@ val parse_linked_editing_range_params :
 val linked_editing_ranges_to_json :
   linked_editing_ranges option -> Yojson.Safe.t
 (** Encode linked editing ranges result to JSON *)
+
+(** {1 On-Type Formatting} *)
+
+type on_type_formatting_params = {
+  otf_text_document : string;
+  otf_position : position;
+  otf_ch : string;
+}
+(** On-type formatting request params *)
+
+val parse_on_type_formatting_params : Yojson.Safe.t -> on_type_formatting_params
+(** Parse on-type formatting params from JSON *)
+
+val on_type_formatting_result_to_json : text_edit list option -> Yojson.Safe.t
+(** Encode on-type formatting result to JSON *)
 
 (** {1 File Watching} *)
 
