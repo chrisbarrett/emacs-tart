@@ -518,6 +518,27 @@ let handle_exit (server : t) : [ `Exit of int ] =
       Log.info "Exiting (no shutdown request)";
       `Exit 1
 
+(** Invalidate caches and re-publish diagnostics for all open documents that
+    depend on the module identified by [uri]. *)
+let invalidate_dependents (server : t) ~uri : unit =
+  let module_id = Graph_tracker.module_id_of_uri uri in
+  let open_uris = Document.list_uris server.documents in
+  let dependent_uris =
+    Graph_tracker.dependent_uris server.dependency_graph ~module_id ~open_uris
+  in
+  if dependent_uris <> [] then (
+    Log.debug "Invalidating %d dependents of %s"
+      (List.length dependent_uris)
+      module_id;
+    List.iter
+      (fun dep_uri ->
+        Form_cache.invalidate_document server.form_cache dep_uri;
+        match Document.get_doc server.documents dep_uri with
+        | Some dep_doc ->
+            publish_diagnostics server dep_uri (Some dep_doc.version)
+        | None -> ())
+      dependent_uris)
+
 (** Handle textDocument/didOpen notification *)
 let handle_did_open (server : t) (params : Yojson.Safe.t option) : unit =
   match params with
@@ -568,27 +589,7 @@ let handle_did_change (server : t) (params : Yojson.Safe.t option) : unit =
           | None -> ());
           (* Publish diagnostics for the changed document *)
           publish_diagnostics server uri (Some version);
-          (* Invalidation cascade: invalidate caches and re-check dependents *)
-          let module_id = Graph_tracker.module_id_of_uri uri in
-          let open_uris = Document.list_uris server.documents in
-          let dependent_uris =
-            Graph_tracker.dependent_uris server.dependency_graph ~module_id
-              ~open_uris
-          in
-          if dependent_uris <> [] then (
-            Log.debug "Invalidating %d dependents of %s"
-              (List.length dependent_uris)
-              module_id;
-            List.iter
-              (fun dep_uri ->
-                (* Invalidate the cache for this dependent *)
-                Form_cache.invalidate_document server.form_cache dep_uri;
-                (* Re-publish diagnostics *)
-                match Document.get_doc server.documents dep_uri with
-                | Some dep_doc ->
-                    publish_diagnostics server dep_uri (Some dep_doc.version)
-                | None -> ())
-              dependent_uris)
+          invalidate_dependents server ~uri
       | Error e -> Log.info "Error applying changes to %s: %s" uri e)
 
 (** Handle textDocument/didClose notification *)
@@ -603,21 +604,7 @@ let handle_did_close (server : t) (params : Yojson.Safe.t option) : unit =
       let is_tart = Signature_tracker.is_tart_file uri in
       if is_tart then (
         Signature_tracker.remove server.signature_tracker uri;
-        (* Re-check dependents since they'll now read from disk *)
-        let module_id = Graph_tracker.module_id_of_uri uri in
-        let open_uris = Document.list_uris server.documents in
-        let dependent_uris =
-          Graph_tracker.dependent_uris server.dependency_graph ~module_id
-            ~open_uris
-        in
-        List.iter
-          (fun dep_uri ->
-            Form_cache.invalidate_document server.form_cache dep_uri;
-            match Document.get_doc server.documents dep_uri with
-            | Some dep_doc ->
-                publish_diagnostics server dep_uri (Some dep_doc.version)
-            | None -> ())
-          dependent_uris);
+        invalidate_dependents server ~uri);
       Document.close_doc server.documents ~uri;
       (* Also clear the form cache for this document *)
       Form_cache.remove_document server.form_cache uri;
