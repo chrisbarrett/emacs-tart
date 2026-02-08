@@ -346,7 +346,7 @@
 (defun add-to-list (symbol any &optional bool any) -> (list any))
 
 ;; (alist-get KEY ALIST &optional DEFAULT REMOVE TESTFN) - get alist value
-(defun alist-get [k v] (k (list (cons k v)) &optional v bool any) -> (v | nil))
+(defun alist-get [k v] (k (list (cons k v)) &optional any any any) -> (v | nil))
 
 ;; (assq-delete-all KEY ALIST) - delete all entries with KEY using eq
 (defun assq-delete-all [k v] (k (list (cons k v))) -> (list (cons k v)))

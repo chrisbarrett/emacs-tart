@@ -10,4 +10,4 @@
 ;; ===========================================================================
 
 ;; (map-elt MAP KEY &optional DEFAULT) - look up KEY in MAP
-(defun map-elt [v] ((map v) any &optional v) -> (v | nil))
+(defun map-elt [v] ((map v) any &optional any) -> (v | nil))

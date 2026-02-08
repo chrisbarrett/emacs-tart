@@ -262,7 +262,7 @@
   ((_) -> nil))
 
 ;; (gethash KEY TABLE &optional DEFAULT) - get value
-(defun gethash [k v] (k (hash-table k v) &optional (v | nil)) -> (v | nil))
+(defun gethash [k v] (k (hash-table k v) &optional any) -> (v | nil))
 
 ;; (puthash KEY VALUE TABLE) - put value
 (defun puthash [k v] (k v (hash-table k v)) -> v)
