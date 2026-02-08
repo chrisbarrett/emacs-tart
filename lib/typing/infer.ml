@@ -174,15 +174,22 @@ type union_fn_result =
 (** Generate virtual clauses from row fields for row-aware clause dispatch.
 
     When a clause has a row-typed container parameter and the call-site argument
-    has a concrete row type, generates a virtual clause per row field. Each
-    virtual clause has a [PLiteral] for the key parameter and returns the
-    field's type directly (not [(v | nil)]).
+    has a concrete row type, generates virtual clauses implementing the Spec 11
+    R4 decision table:
 
-    This enables clause dispatch to handle row field lookup declaratively,
-    replacing the procedural row dispatch for Cases 1-2 of the Spec 11 R4
-    decision table. *)
+    - Cases 1-2: Per-field clauses with [PLiteral] key and exact field return
+      type for each field present in the row.
+    - Case 3: Literal key absent from closed row, no default → returns [nil].
+    - Case 4: Literal key absent from closed row, with default → returns the
+      default argument's type.
+    - Case 5: Literal key absent from open row → generates a clause with an
+      extended row containing the key, returning [(T | nil)].
+
+    [arg_literals] provides the literal values of call-site arguments.
+    [arg_types] provides the inferred types of call-site arguments. *)
 let generate_virtual_clauses (env : Env.t) (clauses : Env.loaded_clause list)
-    (arg_types : typ list) : Env.loaded_clause list =
+    (arg_types : typ list) (arg_literals : string option list) :
+    Env.loaded_clause list =
   match clauses with
   | [ clause ] -> (
       match Row_dispatch.analyze_clause clause with
@@ -196,30 +203,119 @@ let generate_virtual_clauses (env : Env.t) (clauses : Env.loaded_clause list)
             match Row_dispatch.detect_container_in_type container_ty with
             | None -> []
             | Some (kind, row) ->
-                List.filter_map
-                  (fun (field_name, field_ty) ->
-                    let row_var = fresh_tvar (Env.current_level env) in
-                    let virtual_row =
-                      open_row [ (field_name, field_ty) ] row_var
-                    in
-                    let container_param =
-                      Row_dispatch.build_expected_container kind virtual_row
-                    in
-                    let params =
-                      List.mapi
-                        (fun i p ->
-                          if i = container_index then PPositional container_param
-                          else if i = key_index then PLiteral field_name
-                          else p)
-                        clause.lc_params
-                    in
-                    Some
-                      {
-                        Env.lc_params = params;
-                        lc_return = field_ty;
-                        lc_diagnostic = None;
-                      })
-                  row.row_fields))
+                (* Cases 1-2: per-field clauses for fields present in the row *)
+                let field_clauses =
+                  List.filter_map
+                    (fun (field_name, field_ty) ->
+                      let row_var = fresh_tvar (Env.current_level env) in
+                      let virtual_row =
+                        open_row [ (field_name, field_ty) ] row_var
+                      in
+                      let container_param =
+                        Row_dispatch.build_expected_container kind virtual_row
+                      in
+                      let params =
+                        List.mapi
+                          (fun i p ->
+                            if i = container_index then
+                              PPositional container_param
+                            else if i = key_index then PLiteral field_name
+                            else p)
+                          clause.lc_params
+                      in
+                      Some
+                        {
+                          Env.lc_params = params;
+                          lc_return = field_ty;
+                          lc_diagnostic = None;
+                        })
+                    row.row_fields
+                in
+                (* Cases 3-5: absent-key clauses when a literal key is not in
+                   the row. Detect the call-site key literal and check whether
+                   it appears among the row's fields. *)
+                let absent_key_clauses =
+                  let key_literal =
+                    if key_index < List.length arg_literals then
+                      List.nth arg_literals key_index
+                    else None
+                  in
+                  match key_literal with
+                  | None -> [] (* No literal key — skip absent-key handling *)
+                  | Some key_name ->
+                      let key_in_row =
+                        List.exists
+                          (fun (n, _) -> n = key_name)
+                          row.row_fields
+                      in
+                      if key_in_row then []
+                        (* Key found — Cases 1-2 clauses handle it *)
+                      else
+                        (* Key absent from row *)
+                        let max_idx = max container_index key_index in
+                        let rest_arg_types =
+                          List.filteri (fun i _ -> i > max_idx) arg_types
+                        in
+                        (match row.row_var with
+                        | None ->
+                            (* Cases 3-4: closed row, key absent *)
+                            let result_ty =
+                              if Row_dispatch.has_default kind then
+                                match rest_arg_types with
+                                | default_ty :: _ -> default_ty
+                                | [] -> Prim.nil
+                              else Prim.nil
+                            in
+                            let params =
+                              List.mapi
+                                (fun i p ->
+                                  if i = container_index then
+                                    PPositional container_ty
+                                  else if i = key_index then PLiteral key_name
+                                  else p)
+                                clause.lc_params
+                            in
+                            [
+                              {
+                                Env.lc_params = params;
+                                lc_return = result_ty;
+                                lc_diagnostic = None;
+                              };
+                            ]
+                        | Some _ ->
+                            (* Case 5: open row, key absent — extend row with
+                               {key: T & r'} and return (T | nil) *)
+                            let field_ty =
+                              fresh_tvar (Env.current_level env)
+                            in
+                            let row_var =
+                              fresh_tvar (Env.current_level env)
+                            in
+                            let virtual_row =
+                              open_row [ (key_name, field_ty) ] row_var
+                            in
+                            let container_param =
+                              Row_dispatch.build_expected_container kind
+                                virtual_row
+                            in
+                            let params =
+                              List.mapi
+                                (fun i p ->
+                                  if i = container_index then
+                                    PPositional container_param
+                                  else if i = key_index then PLiteral key_name
+                                  else p)
+                                clause.lc_params
+                            in
+                            [
+                              {
+                                Env.lc_params = params;
+                                lc_return = option_of field_ty;
+                                lc_diagnostic = None;
+                              };
+                            ])
+                in
+                field_clauses @ absent_key_clauses))
   | _ -> []
 
 (** Look up stored clauses and type variable names for a function.
@@ -1639,11 +1735,10 @@ and infer_application env fn args span =
 
   (* Try virtual clause dispatch for row-typed accessors. When a function's
      signature has a row-typed container parameter and the call-site argument
-     has a concrete row type, generate virtual clauses from the row fields.
-     Each virtual clause has a PLiteral key param and returns the field type
-     directly, handling Cases 1-2 of the Spec 11 R4 decision table. Virtual
-     clauses are tried only when regular clause dispatch didn't match, and
-     before falling through to the procedural row dispatch. *)
+     has a concrete row type, generate virtual clauses implementing the Spec 11
+     R4 decision table (Cases 1-5). Virtual clauses are tried only when regular
+     clause dispatch didn't match, and before falling through to the procedural
+     row dispatch. *)
   let virtual_clause_result =
     match clause_result with
     | Some _ -> None (* Regular clause dispatch already succeeded *)
@@ -1653,7 +1748,7 @@ and infer_application env fn args span =
             match lookup_clauses_and_vars_with_synthesis name env with
             | Some (clauses, vars) -> (
                 let virtual_clauses =
-                  generate_virtual_clauses env clauses arg_types
+                  generate_virtual_clauses env clauses arg_types arg_literals
                 in
                 match virtual_clauses with
                 | [] -> None
