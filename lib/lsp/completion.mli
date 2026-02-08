@@ -13,6 +13,13 @@ val collect_local_completions :
 (** Collect completion candidates from definitions in the document. Extracts
     function and variable names from defun/defvar/defconst forms. *)
 
+val collect_scoped_bindings :
+  line:int -> col:int -> Syntax.Sexp.t list -> string list
+(** [collect_scoped_bindings ~line ~col sexps] walks the AST depth-first to find
+    variable bindings lexically visible at the cursor position. Considers [let],
+    [let*], [lambda], [defun], [dolist], [dotimes], and related forms. Position
+    is 0-based (LSP convention). *)
+
 val collect_env_completions : Core.Type_env.t -> Protocol.completion_item list
 (** Collect completion candidates from a type environment. Creates completion
     items for all bound names with their types. *)

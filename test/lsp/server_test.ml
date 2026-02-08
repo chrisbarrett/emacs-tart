@@ -1384,6 +1384,78 @@ let test_completion_filters_by_prefix () =
         "other excluded" true
         (not (List.mem "other" labels))
 
+let test_completion_scope_aware_let_body () =
+  (* Inside a let body, the let-bound variable should appear *)
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el"
+          ~text:"(let ((my-local 42))\n  (+ my-l 1))" ();
+        completion_msg ~id:2 ~uri:"file:///test.el" ~line:1 ~character:8 ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "No completion response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      let items = result |> to_list in
+      let labels =
+        List.map (fun item -> item |> member "label" |> to_string) items
+      in
+      Alcotest.(check bool)
+        "my-local visible in let body" true
+        (List.mem "my-local" labels)
+
+let test_completion_scope_aware_outside_let () =
+  (* Outside the let body, the let-bound variable should NOT appear *)
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el"
+          ~text:"(let ((inner-var 42))\n  (+ inner-var 1))\n(+ inne 1)" ();
+        completion_msg ~id:2 ~uri:"file:///test.el" ~line:2 ~character:7 ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "No completion response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      let items = result |> to_list in
+      let labels =
+        List.map (fun item -> item |> member "label" |> to_string) items
+      in
+      Alcotest.(check bool)
+        "inner-var not visible outside let" true
+        (not (List.mem "inner-var" labels))
+
+let test_completion_scope_aware_defun_params () =
+  (* Inside a defun body, parameters should appear in completions *)
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el"
+          ~text:"(defun my-fn (my-param)\n  (+ my-p 1))" ();
+        completion_msg ~id:2 ~uri:"file:///test.el" ~line:1 ~character:8 ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "No completion response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      let items = result |> to_list in
+      let labels =
+        List.map (fun item -> item |> member "label" |> to_string) items
+      in
+      Alcotest.(check bool)
+        "my-param visible in defun body" true
+        (List.mem "my-param" labels)
+
 (** {1 Signature Help Tests} *)
 
 let test_signature_help_shows_function_signature () =
@@ -3018,6 +3090,12 @@ let () =
             test_completion_capability_advertised;
           Alcotest.test_case "filters by prefix" `Quick
             test_completion_filters_by_prefix;
+          Alcotest.test_case "scope-aware let body" `Quick
+            test_completion_scope_aware_let_body;
+          Alcotest.test_case "scope-aware outside let" `Quick
+            test_completion_scope_aware_outside_let;
+          Alcotest.test_case "scope-aware defun params" `Quick
+            test_completion_scope_aware_defun_params;
         ] );
       ( "signature-help",
         [

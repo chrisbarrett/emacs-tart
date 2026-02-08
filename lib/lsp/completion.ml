@@ -92,6 +92,154 @@ let collect_local_completions (sexps : Syntax.Sexp.t list) :
       | _ -> None)
     sexps
 
+(** Extract variable names from let binding clauses.
+
+    Given [((x 1) (y 2) z)], returns [["x"; "y"; "z"]]. *)
+let extract_let_bindings (bindings : Syntax.Sexp.t) : string list =
+  let open Syntax.Sexp in
+  match bindings with
+  | List (clauses, _) ->
+      List.filter_map
+        (fun clause ->
+          match clause with
+          | List (Symbol (name, _) :: _, _) -> Some name
+          | Symbol (name, _) -> Some name
+          | _ -> None)
+        clauses
+  | _ -> []
+
+(** Extract parameter names from a lambda/defun argument list.
+
+    Given [(x y &optional z)], returns [["x"; "y"; "z"]]. *)
+let extract_params (args : Syntax.Sexp.t) : string list =
+  let open Syntax.Sexp in
+  let rec collect = function
+    | [] -> []
+    | Symbol ("&optional", _) :: rest -> collect rest
+    | Symbol ("&rest", _) :: rest -> collect rest
+    | Symbol ("&key", _) :: rest -> collect rest
+    | Symbol (name, _) :: rest -> name :: collect rest
+    | _ :: rest -> collect rest
+  in
+  match args with List (elems, _) -> collect elems | _ -> []
+
+(** Collect bindings visible at the cursor position by walking the AST.
+
+    Traverses the S-expression tree depth-first, tracking which [let]/[let*]/
+    [lambda]/[defun] binding scopes the cursor falls within. Returns only those
+    local variable bindings that are lexically visible at [(line, col)]. *)
+let collect_scoped_bindings ~(line : int) ~(col : int)
+    (sexps : Syntax.Sexp.t list) : string list =
+  let open Syntax.Sexp in
+  let contains span = Syntax.Location.contains_position span ~line ~col in
+  let rec walk_forms (forms : t list) : string list = List.concat_map walk forms
+  and walk (sexp : t) : string list =
+    match sexp with
+    | List
+        (Symbol ((("let" | "let*") as form), _) :: bindings_sexp :: body, span)
+      when contains span ->
+        (* Check if cursor is in body *)
+        let body_bindings =
+          if cursor_in_body body then extract_let_bindings bindings_sexp
+          else if form = "let*" then
+            (* For let*, earlier bindings are visible in later binding values *)
+            collect_let_star_bindings_at_cursor bindings_sexp
+          else []
+        in
+        (* Recurse into bindings values and body *)
+        let inner = walk_let_children bindings_sexp body in
+        body_bindings @ inner
+    | List (Symbol (("lambda" | "closure"), _) :: args :: body, span)
+      when contains span ->
+        let params = if cursor_in_body body then extract_params args else [] in
+        params @ walk_forms body
+    | List
+        ( Symbol (("defun" | "defsubst" | "defmacro"), _)
+          :: Symbol (_, _)
+          :: args :: body,
+          span )
+      when contains span ->
+        let params = if cursor_in_body body then extract_params args else [] in
+        params @ walk_forms body
+    | List
+        ( Symbol (("if-let" | "if-let*" | "when-let" | "when-let*"), _)
+          :: bindings_sexp :: body,
+          span )
+      when contains span ->
+        let body_bindings =
+          if cursor_in_body body then extract_let_bindings bindings_sexp else []
+        in
+        body_bindings @ walk_let_children bindings_sexp body
+    | List
+        ( Symbol (("dolist" | "dotimes"), _)
+          :: List (Symbol (var, _) :: _, _)
+          :: body,
+          span )
+      when contains span ->
+        let var_binding = if cursor_in_body body then [ var ] else [] in
+        var_binding @ walk_forms body
+    | List (_, span) when contains span -> walk_children sexp
+    | _ -> []
+  and cursor_in_body (body : t list) : bool =
+    match body with
+    | [] -> false
+    | _ ->
+        let first_span = span_of (List.hd body) in
+        let last_span = span_of (List.nth body (List.length body - 1)) in
+        let body_span = Syntax.Location.merge first_span last_span in
+        contains body_span
+  and walk_children (sexp : t) : string list =
+    match sexp with
+    | List (elems, _) -> walk_forms elems
+    | Vector (elems, _) -> walk_forms elems
+    | Curly (elems, _) -> walk_forms elems
+    | Cons (car, cdr, _) -> walk car @ walk cdr
+    | _ -> []
+  and walk_let_children (bindings_sexp : t) (body : t list) : string list =
+    let binding_inner =
+      match bindings_sexp with
+      | List (clauses, _) ->
+          List.concat_map
+            (fun clause ->
+              match clause with
+              | List (_ :: value :: _, _) -> walk value
+              | _ -> [])
+            clauses
+      | _ -> []
+    in
+    binding_inner @ walk_forms body
+  and collect_let_star_bindings_at_cursor (bindings_sexp : t) : string list =
+    (* In let*, each binding value sees all preceding bindings *)
+    match bindings_sexp with
+    | List (clauses, _) ->
+        let rec scan acc = function
+          | [] -> []
+          | clause :: rest ->
+              let value_span =
+                match clause with
+                | List (_ :: value :: _, _) -> Some (span_of value)
+                | _ -> None
+              in
+              let cursor_in_value =
+                match value_span with
+                | Some span -> contains span
+                | None -> false
+              in
+              if cursor_in_value then acc
+              else
+                let name =
+                  match clause with
+                  | List (Symbol (name, _) :: _, _) -> [ name ]
+                  | Symbol (name, _) -> [ name ]
+                  | _ -> []
+                in
+                scan (acc @ name) rest
+        in
+        scan [] clauses
+    | _ -> []
+  in
+  walk_forms sexps
+
 (** Collect completion candidates from a type environment.
 
     Creates completion items for all bound names with their types. *)
@@ -164,9 +312,25 @@ let handle ~(config : Typing.Module_check.config) ~(uri : string)
 
   let parse_result = Syntax.Read.parse_string ~filename doc_text in
 
-  (* Collect local definitions *)
+  (* Collect top-level definitions (always visible) *)
   let local_items = collect_local_completions parse_result.sexps in
   Log.debug "Found %d local completions" (List.length local_items);
+
+  (* Collect scope-aware bindings (let/let*/lambda/defun params) *)
+  let scoped_names = collect_scoped_bindings ~line ~col parse_result.sexps in
+  let scoped_items =
+    List.map
+      (fun name ->
+        {
+          Protocol.ci_label = name;
+          ci_kind = Some Protocol.CIKVariable;
+          ci_detail = None;
+          ci_documentation = None;
+          ci_insert_text = None;
+        })
+      scoped_names
+  in
+  Log.debug "Found %d scoped completions" (List.length scoped_items);
 
   (* Type-check to get environment with signatures *)
   let check_result =
@@ -186,7 +350,7 @@ let handle ~(config : Typing.Module_check.config) ~(uri : string)
   Log.debug "Found %d env completions" (List.length env_items);
 
   (* Combine, deduplicate, and filter *)
-  let all_items = local_items @ sig_items @ env_items in
+  let all_items = scoped_items @ local_items @ sig_items @ env_items in
   let filtered = filter_by_prefix prefix all_items in
   let deduped = deduplicate_completions filtered in
   Log.debug "Returning %d completions" (List.length deduped);
