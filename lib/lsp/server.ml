@@ -191,37 +191,8 @@ let with_sexp_at_cursor ~(doc : Document.doc) ~(uri : string) ~(line : int)
         Ok not_found
     | Some ctx -> f parse_result ctx
 
-(** Convert a source location span to an LSP range. Loc.span has 1-based lines
-    and byte-offset columns. LSP uses 0-based lines and UTF-16 code-unit
-    characters. *)
-let range_of_span ~(text : string) (span : Syntax.Location.span) :
-    Protocol.range =
-  let start_line = span.start_pos.line - 1 in
-  let end_line = span.end_pos.line - 1 in
-  let start_char =
-    match Document.line_text_at text start_line with
-    | Some line_text ->
-        Document.utf16_offset_of_byte ~line_text ~byte_offset:span.start_pos.col
-    | None -> span.start_pos.col
-  in
-  let end_char =
-    match Document.line_text_at text end_line with
-    | Some line_text ->
-        Document.utf16_offset_of_byte ~line_text ~byte_offset:span.end_pos.col
-    | None -> span.end_pos.col
-  in
-  {
-    Protocol.start = { line = start_line; character = start_char };
-    end_ = { line = end_line; character = end_char };
-  }
-
-(** Convert a source location span to an LSP location.
-
-    Creates a location with a file:// URI from the span's file path. *)
-let location_of_span ~(text : string) (span : Syntax.Location.span) :
-    Protocol.location =
-  let uri = Uri.of_filename span.start_pos.file in
-  { Protocol.uri; range = range_of_span ~text span }
+let range_of_span = Span_conv.range_of_span
+let location_of_span = Span_conv.location_of_span
 
 (** Convert a related location to LSP DiagnosticRelatedInformation.
 

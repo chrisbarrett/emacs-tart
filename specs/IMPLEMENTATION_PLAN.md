@@ -404,7 +404,7 @@ any order, interleaved with other work.
 | 8 | File watching | — | `server.ml`, `protocol.ml` | Not started |
 | 9 | Workspace configuration | — | `server.ml`, `protocol.ml` | Not started |
 | 10 | Document save events | — | `server.ml`, `protocol.ml` | Not started |
-| 11 | Workspace symbols | — | `server.ml`, `protocol.ml` | Not started |
+| 11 | Workspace symbols | `lib/lsp/workspace_symbols.{ml,mli}` | `server.ml`, `protocol.ml` | Done |
 | 12 | Semantic tokens | `lib/lsp/semantic_tokens.{ml,mli}` | `server.ml`, `protocol.ml` | Done |
 | 13 | Inlay hints | `lib/lsp/inlay_hints.{ml,mli}` | `server.ml`, `protocol.ml` | Done |
 | 14 | Prepare rename | — | `server.ml`, `protocol.ml` | Done |

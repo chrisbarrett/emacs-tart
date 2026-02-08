@@ -3,28 +3,7 @@
     Provides cross-file symbol lookup across all open [.el] and [.tart]
     documents, triggered by workspace/symbol requests. *)
 
-(** Convert a {!Syntax.Location.span} to a {!Protocol.range}, using [text] for
-    UTF-16 column conversion. *)
-let range_of_span ~(text : string) (span : Syntax.Location.span) :
-    Protocol.range =
-  let start_line = span.start_pos.line - 1 in
-  let end_line = span.end_pos.line - 1 in
-  let start_char =
-    match Document.line_text_at text start_line with
-    | Some line_text ->
-        Document.utf16_offset_of_byte ~line_text ~byte_offset:span.start_pos.col
-    | None -> span.start_pos.col
-  in
-  let end_char =
-    match Document.line_text_at text end_line with
-    | Some line_text ->
-        Document.utf16_offset_of_byte ~line_text ~byte_offset:span.end_pos.col
-    | None -> span.end_pos.col
-  in
-  {
-    Protocol.start = { line = start_line; character = start_char };
-    end_ = { line = end_line; character = end_char };
-  }
+let range_of_span = Span_conv.range_of_span
 
 (** Derive a container name from a URI.
 
