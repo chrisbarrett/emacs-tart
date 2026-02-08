@@ -207,8 +207,205 @@ document.
 **Limitation:** current-document only. Does not rename across the workspace or
 in `.tart` signature files.
 
+## Concurrency & Cancellation
+
+The server processes requests concurrently. Long-running operations (type
+checking triggered by `didChange`, workspace-wide symbol search) run on
+background fibers. The main loop remains responsive to new requests while
+background work executes.
+
+`$/cancelRequest` cancels in-flight requests. When a request is cancelled, any
+in-progress computation is abandoned and the server responds with error code
+`-32800`. Rapid successive `didChange` notifications coalesce: only the latest
+document version triggers a type-check cycle. Intermediate versions are skipped.
+
+A version counter on each document tracks edit sequence. Before publishing
+diagnostics, the server verifies the document version hasn't advanced; stale
+results are discarded silently.
+
+## Progress Reporting
+
+Long-running operations emit `$/progress` notifications using work-done progress
+tokens. Two categories:
+
+| Operation           | Token pattern         | Granularity                  |
+| ------------------- | --------------------- | ---------------------------- |
+| Initial type-check  | `tart/initialCheck`   | Per-file progress (N of M files) |
+| Invalidation cascade| `tart/recheck`        | Per-dependent progress       |
+
+The server sends `window/workDoneProgress/create` before the first progress
+notification. Each sequence includes `begin`, zero or more `report`, and `end`
+messages. Cancellable operations set `cancellable = true`.
+
+## File Watching
+
+The server registers for `workspace/didChangeWatchedFiles` notifications
+covering `**/*.el` and `**/*.tart` patterns. When an external change is
+detected:
+
+1. If the file is open in the editor, the notification is ignored (buffer
+   contents take precedence).
+2. If the file is closed, the server re-reads from disk, updates the dependency
+   graph, and re-publishes diagnostics for affected dependents.
+
+This handles branch switches, code generation, `git stash pop`, and other
+out-of-editor file mutations.
+
+## Workspace Configuration
+
+The server supports `workspace/didChangeConfiguration` notifications.
+Configurable settings:
+
+| Setting                             | Type       | Default       | Effect                                        |
+| ----------------------------------- | ---------- | ------------- | --------------------------------------------- |
+| `tart.emacsVersion`                 | `string`   | Auto-detected | Target Emacs version for type checking        |
+| `tart.searchPath`                   | `string[]` | `[]`          | Additional directories for signature lookup   |
+| `tart.diagnostics.debounceMs`       | `number`   | `200`         | Debounce interval for diagnostic publishing   |
+
+When configuration changes, the server invalidates affected caches and
+re-checks open documents against the new settings without requiring a restart.
+
+## Workspace Symbols
+
+`workspace/symbol` returns symbols matching a query string across all open
+documents and loaded signatures. Results include:
+
+- `defun`, `defvar`, `defconst`, `defmacro` forms from open `.el` files.
+- Declarations from loaded `.tart` signature files.
+
+Matching is case-insensitive prefix-based. Each result includes the symbol's
+kind, location, and containing module name.
+
+## Semantic Tokens
+
+`textDocument/semanticTokens/full` returns token classifications for the entire
+document. The server advertises the following token types:
+
+| Token type  | Applied to                                                   |
+| ----------- | ------------------------------------------------------------ |
+| `function`  | Function names in `defun` forms and call positions          |
+| `variable`  | Variable names in `defvar`/`defconst` and reference positions |
+| `macro`     | Macro names in `defmacro` forms and call positions          |
+| `parameter` | Lambda and function parameters                               |
+| `keyword`   | Special forms (`if`, `let`, `progn`, `setq`, etc.)           |
+| `string`    | String literals                                              |
+| `number`    | Numeric literals                                             |
+| `comment`   | Comments                                                     |
+| `type`      | Type names in `.tart` files                                  |
+
+Token modifiers: `definition`, `declaration`, `readonly`.
+
+Delta updates via `textDocument/semanticTokens/full/delta` reduce payload size
+after incremental edits.
+
+## Inlay Hints
+
+`textDocument/inlayHint` returns inline type annotations for:
+
+- `let`/`let*` bindings — shows inferred type after the variable name.
+- Function parameters at call sites — shows parameter name when the argument is
+  a literal or complex expression.
+- `defun` return types — shows inferred return type when no `.tart` signature
+  exists.
+
+Hints are non-intrusive: they are suppressed when an explicit `.tart` signature
+already provides the type information, and when the type is trivially obvious
+(e.g., a string literal bound to a variable).
+
+## Prepare Rename
+
+`textDocument/prepareRename` validates that the cursor is on a renameable symbol
+before the client opens the rename dialog. Returns the range of the symbol and
+its current name, or an error if the position is not renameable (e.g., on a
+keyword, inside a string literal, or on a built-in).
+
+## Type Definition
+
+`textDocument/typeDefinition` navigates from a value to the definition of its
+type. If the type checker resolves a symbol to a named type (e.g., a struct or
+an opaque type defined in a `.tart` file), the server returns the location of
+that type's declaration.
+
+Returns null for primitive types (`integer`, `string`, `symbol`, etc.) that
+have no user-visible definition.
+
+## Folding Ranges
+
+`textDocument/foldingRange` returns fold regions for:
+
+- Top-level forms (`defun`, `defvar`, `defconst`, `defmacro`, `defcustom`).
+- `let`/`let*` binding blocks.
+- Comment blocks (consecutive `;`-prefixed lines).
+- String literals spanning multiple lines.
+
+## Document Save Events
+
+The server handles `textDocument/didSave` notifications. On save:
+
+1. Runs a full (non-incremental) type-check pass for the saved document.
+2. Re-reads any non-open files that may have changed on disk (e.g., generated
+   files).
+3. Publishes updated diagnostics.
+
+The full check on save catches issues that incremental checking may miss due to
+stale partial state.
+
+## Robustness
+
+**UTF-16 position encoding.** Position arithmetic correctly handles multi-byte
+characters (emoji, CJK, combining characters) by converting between UTF-8 byte
+offsets and UTF-16 code units at the protocol boundary. The server advertises
+`utf-16` as its position encoding (or negotiates `utf-32` if the client supports
+`positionEncoding`).
+
+**Incremental sync recovery.** If the server detects that its document state is
+inconsistent (e.g., an edit range falls outside the document bounds), it logs a
+warning and requests the client to re-send the full document by closing and
+reopening. This prevents silent state divergence.
+
+**Debounce and coalescing.** Rapid `didChange` notifications within the
+debounce window are coalesced. The server tracks a pending-check flag per
+document and only starts a new type-check cycle when the debounce timer expires.
+If a check is already running for a document, it is cancelled before starting a
+new one.
+
+**Identical diagnostics suppression.** Before publishing diagnostics, the server
+compares the new diagnostic set against the last published set for that
+document. If they are identical, the publish is suppressed to avoid unnecessary
+client-side rendering.
+
+## Testing
+
+The LSP server has a dedicated integration test suite that exercises the
+protocol layer end-to-end:
+
+- **Protocol tests** send raw JSON-RPC messages over a pipe and assert response
+  structure, error codes, and notification content.
+- **Document sync tests** verify that incremental edits produce correct document
+  state, including multi-byte character handling.
+- **Diagnostic tests** confirm that editing a file produces expected diagnostics
+  and that fixes clear them.
+- **Navigation tests** verify hover, goto-definition, references, and workspace
+  symbols return correct locations.
+- **Cancellation tests** confirm that cancelled requests return error code
+  `-32800` and that in-progress work is abandoned.
+- **Regression tests** cover known edge cases: empty files, files with only
+  comments, malformed JSON-RPC, oversized messages, and rapid open/close cycles.
+
 ## Deferred
 
+- **Call hierarchy** (`callHierarchy/incomingCalls`,
+  `callHierarchy/outgoingCalls`): requires a workspace-wide call graph.
+- **Type hierarchy** (`typeHierarchy/supertypes`, `typeHierarchy/subtypes`):
+  requires subtype relationship tracking.
+- **Code lens**: no clear use case identified yet.
+- **Linked editing ranges**: not applicable to Elisp.
+- **On-type formatting**: Elisp formatting conventions are better handled by
+  `indent-region`.
+- **Pull-based diagnostics** (`textDocument/diagnostic`): the push model is
+  sufficient for current scale. Migrate if the protocol deprecates
+  `publishDiagnostics`.
+- **Dynamic registration**: not needed while the server's feature set is static.
 - **Workspace-wide find-references**: references are currently scoped to the
   open document.
 - **Cross-file goto-definition for `.el` targets**: definition resolution
