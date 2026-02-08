@@ -260,6 +260,11 @@ let subtypes_msg ~id ~(item : Yojson.Safe.t) () =
     ~params:(`Assoc [ ("item", item) ])
     ()
 
+let code_lens_msg ~id ~uri () =
+  make_message ~id:(`Int id) ~method_:"textDocument/codeLens"
+    ~params:(`Assoc [ ("textDocument", `Assoc [ ("uri", `String uri) ]) ])
+    ()
+
 (* {1 Message Parsing} *)
 
 let parse_messages (output : string) : Yojson.Safe.t list =

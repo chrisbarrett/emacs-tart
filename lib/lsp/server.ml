@@ -188,6 +188,7 @@ let capabilities () : Protocol.server_capabilities =
     workspace_symbol_provider = true;
     call_hierarchy_provider = true;
     type_hierarchy_provider = true;
+    code_lens_provider = true;
   }
 
 (** Require non-None params, returning an invalid-params error otherwise. *)
@@ -1941,6 +1942,81 @@ let handle_subtypes (server : t) (params : Yojson.Safe.t option) :
   Log.debug "Found %d subtypes" (List.length items);
   Ok (Protocol.type_hierarchy_subtypes_result_to_json (Some items))
 
+(** {1 Code Lens} *)
+
+(** Handle textDocument/codeLens request.
+
+    Returns code lenses for all top-level definitions showing reference counts
+    and signature availability. *)
+let handle_code_lens (server : t) (params : Yojson.Safe.t option) :
+    (Yojson.Safe.t, Rpc.response_error) result =
+  require_params "code lens" params @@ fun json ->
+  let p = Protocol.parse_code_lens_params json in
+  let uri = p.clp_text_document in
+  Log.debug "Code lens request for %s" uri;
+  let null = Protocol.code_lens_result_to_json (Some []) in
+  with_document server ~uri ~not_found:null @@ fun doc ->
+  let filename = Uri.to_filename uri in
+  let parse_result = Syntax.Read.parse_string ~filename doc.text in
+  let defs = Code_lens.extract_definitions ~text:doc.text parse_result.sexps in
+  let lenses =
+    List.concat_map
+      (fun (def : Code_lens.definition_info) ->
+        (* Reference count lens *)
+        let ref_count =
+          let locations =
+            find_references_in_workspace server ~origin_uri:uri def.name
+          in
+          List.length locations
+        in
+        let ref_title =
+          if ref_count = 1 then "1 reference"
+          else Printf.sprintf "%d references" ref_count
+        in
+        let ref_lens : Protocol.code_lens =
+          {
+            cl_range = def.range;
+            cl_command =
+              Some
+                {
+                  cmd_title = ref_title;
+                  cmd_command = "tart.showReferences";
+                  cmd_arguments =
+                    [
+                      `String uri;
+                      `Assoc
+                        [
+                          ("line", `Int def.selection_range.start.line);
+                          ("character", `Int def.selection_range.start.character);
+                        ];
+                    ];
+                };
+          }
+        in
+        (* Signature status lens *)
+        let has_signature =
+          find_definition_in_signatures ~config:server.module_config ~filename
+            def.name
+          |> Option.is_some
+        in
+        let sig_title =
+          if has_signature then "signature \xE2\x9C\x93"
+          else "missing signature"
+        in
+        let sig_lens : Protocol.code_lens =
+          {
+            cl_range = def.range;
+            cl_command =
+              Some
+                { cmd_title = sig_title; cmd_command = ""; cmd_arguments = [] };
+          }
+        in
+        [ ref_lens; sig_lens ])
+      defs
+  in
+  Log.debug "Returning %d code lenses" (List.length lenses);
+  Ok (Protocol.code_lens_result_to_json (Some lenses))
+
 (** Dispatch a request to its handler *)
 let dispatch_request (server : t) (msg : Rpc.message) :
     (Yojson.Safe.t, Rpc.response_error) result =
@@ -1973,6 +2049,7 @@ let dispatch_request (server : t) (msg : Rpc.message) :
       handle_type_hierarchy_prepare server msg.params
   | "typeHierarchy/supertypes" -> handle_supertypes server msg.params
   | "typeHierarchy/subtypes" -> handle_subtypes server msg.params
+  | "textDocument/codeLens" -> handle_code_lens server msg.params
   | _ ->
       Error
         {

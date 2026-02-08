@@ -151,6 +151,9 @@ val supertypes_msg : id:int -> item:Yojson.Safe.t -> unit -> string
 val subtypes_msg : id:int -> item:Yojson.Safe.t -> unit -> string
 (** typeHierarchy/subtypes request. *)
 
+val code_lens_msg : id:int -> uri:string -> unit -> string
+(** textDocument/codeLens request. *)
+
 (** {1 Session Runners} *)
 
 type session_result = {

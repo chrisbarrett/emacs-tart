@@ -3344,6 +3344,128 @@ let test_type_hierarchy_supertypes_no_parent () =
       let items = result |> to_list in
       Alcotest.(check int) "no supertypes" 0 (List.length items)
 
+(** {1 Code Lens Tests} *)
+
+let test_code_lens_capability_advertised () =
+  let result =
+    run_session [ initialize_msg ~id:1 (); shutdown_msg ~id:2 (); exit_msg () ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:1 result.messages with
+  | None -> Alcotest.fail "No initialize response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let caps = json |> member "result" |> member "capabilities" in
+      let code_lens = caps |> member "codeLensProvider" in
+      Alcotest.(check bool) "codeLensProvider present" true (code_lens <> `Null)
+
+let test_code_lens_defun () =
+  let text = "(defun my-fn () 42)" in
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el" ~text ();
+        code_lens_msg ~id:2 ~uri:"file:///test.el" ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "No code lens response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result_json = json |> member "result" in
+      Alcotest.(check bool) "result is not null" true (result_json <> `Null);
+      let lenses = result_json |> to_list in
+      (* Two lenses per definition: reference count + signature status *)
+      Alcotest.(check int) "two lenses" 2 (List.length lenses);
+      let ref_lens = List.nth lenses 0 in
+      let ref_cmd = ref_lens |> member "command" in
+      let ref_title = ref_cmd |> member "title" |> to_string in
+      Alcotest.(check bool)
+        "ref lens has references" true
+        (contains_string ~needle:"reference" ref_title);
+      let sig_lens = List.nth lenses 1 in
+      let sig_cmd = sig_lens |> member "command" in
+      let sig_title = sig_cmd |> member "title" |> to_string in
+      Alcotest.(check bool)
+        "sig lens present" true
+        (contains_string ~needle:"signature" sig_title)
+
+let test_code_lens_multiple_defs () =
+  let text = "(defun fn-a () 1)\n(defvar my-var 2)\n(defconst my-const 3)" in
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el" ~text ();
+        code_lens_msg ~id:2 ~uri:"file:///test.el" ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "No code lens response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let lenses = json |> member "result" |> to_list in
+      (* 3 definitions * 2 lenses each = 6 *)
+      Alcotest.(check int) "six lenses" 6 (List.length lenses)
+
+let test_code_lens_empty_file () =
+  let text = "" in
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el" ~text ();
+        code_lens_msg ~id:2 ~uri:"file:///test.el" ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "No code lens response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let lenses = json |> member "result" |> to_list in
+      Alcotest.(check int) "no lenses" 0 (List.length lenses)
+
+let test_code_lens_reference_count () =
+  (* my-fn is referenced 3 times total: definition + 2 call sites *)
+  let text = "(defun my-fn () 42)\n(my-fn)\n(my-fn)" in
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el" ~text ();
+        code_lens_msg ~id:2 ~uri:"file:///test.el" ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "No code lens response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let lenses = json |> member "result" |> to_list in
+      Alcotest.(check int) "two lenses" 2 (List.length lenses);
+      let ref_lens = List.nth lenses 0 in
+      let title = ref_lens |> member "command" |> member "title" |> to_string in
+      Alcotest.(check string) "3 references" "3 references" title
+
+let test_code_lens_missing_signature () =
+  let text = "(defun unknown-fn () 42)" in
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el" ~text ();
+        code_lens_msg ~id:2 ~uri:"file:///test.el" ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "No code lens response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let lenses = json |> member "result" |> to_list in
+      let sig_lens = List.nth lenses 1 in
+      let title = sig_lens |> member "command" |> member "title" |> to_string in
+      Alcotest.(check string) "missing signature" "missing signature" title
+
 (** {1 Test Registration} *)
 
 let () =
@@ -3669,5 +3791,18 @@ let () =
             test_type_hierarchy_subtypes_num;
           Alcotest.test_case "supertypes no parent" `Quick
             test_type_hierarchy_supertypes_no_parent;
+        ] );
+      ( "code-lens",
+        [
+          Alcotest.test_case "capability advertised" `Quick
+            test_code_lens_capability_advertised;
+          Alcotest.test_case "defun lens" `Quick test_code_lens_defun;
+          Alcotest.test_case "multiple definitions" `Quick
+            test_code_lens_multiple_defs;
+          Alcotest.test_case "empty file" `Quick test_code_lens_empty_file;
+          Alcotest.test_case "reference count" `Quick
+            test_code_lens_reference_count;
+          Alcotest.test_case "missing signature" `Quick
+            test_code_lens_missing_signature;
         ] );
     ]

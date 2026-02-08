@@ -69,6 +69,7 @@ type server_capabilities = {
   workspace_symbol_provider : bool;
   call_hierarchy_provider : bool;
   type_hierarchy_provider : bool;
+  code_lens_provider : bool;
 }
 (** Server capabilities *)
 
@@ -714,6 +715,30 @@ val type_hierarchy_supertypes_result_to_json :
 val type_hierarchy_subtypes_result_to_json :
   type_hierarchy_item list option -> Yojson.Safe.t
 (** Encode subtypes result to JSON *)
+
+(** {1 Code Lens} *)
+
+type command = {
+  cmd_title : string;
+  cmd_command : string;
+  cmd_arguments : Yojson.Safe.t list;
+}
+(** An LSP command. *)
+
+type code_lens = { cl_range : range; cl_command : command option }
+(** A code lens represents a command displayed inline in source code. *)
+
+type code_lens_params = { clp_text_document : string }
+(** Code lens request params *)
+
+val parse_code_lens_params : Yojson.Safe.t -> code_lens_params
+(** Parse code lens params from JSON *)
+
+val code_lens_to_json : code_lens -> Yojson.Safe.t
+(** Encode a code lens to JSON *)
+
+val code_lens_result_to_json : code_lens list option -> Yojson.Safe.t
+(** Encode code lens result to JSON *)
 
 (** {1 File Watching} *)
 

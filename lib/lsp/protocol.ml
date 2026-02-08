@@ -73,6 +73,7 @@ type server_capabilities = {
   workspace_symbol_provider : bool;
   call_hierarchy_provider : bool;
   type_hierarchy_provider : bool;
+  code_lens_provider : bool;
 }
 (** Server capabilities *)
 
@@ -324,6 +325,10 @@ let server_capabilities_to_json (caps : server_capabilities) : Yojson.Safe.t =
   let fields =
     if caps.type_hierarchy_provider then
       ("typeHierarchyProvider", `Bool true) :: fields
+    else fields
+  in
+  let fields =
+    if caps.code_lens_provider then ("codeLensProvider", `Assoc []) :: fields
     else fields
   in
   `Assoc fields
@@ -1465,6 +1470,53 @@ let workspace_symbol_result_to_json (result : workspace_symbol_result) :
     Yojson.Safe.t =
   match result with
   | Some symbols -> `List (List.map symbol_information_to_json symbols)
+  | None -> `Null
+
+(** {1 Code Lens} *)
+
+type command = {
+  cmd_title : string;
+  cmd_command : string;
+  cmd_arguments : Yojson.Safe.t list;
+}
+(** An LSP command. *)
+
+type code_lens = { cl_range : range; cl_command : command option }
+(** A code lens represents a command displayed inline in source code. *)
+
+type code_lens_params = { clp_text_document : string }
+(** Code lens request params *)
+
+let parse_code_lens_params (json : Yojson.Safe.t) : code_lens_params =
+  let open Yojson.Safe.Util in
+  {
+    clp_text_document =
+      json |> member "textDocument" |> member "uri" |> to_string;
+  }
+
+let command_to_json (cmd : command) : Yojson.Safe.t =
+  let fields =
+    [ ("title", `String cmd.cmd_title); ("command", `String cmd.cmd_command) ]
+  in
+  let fields =
+    match cmd.cmd_arguments with
+    | [] -> fields
+    | args -> fields @ [ ("arguments", `List args) ]
+  in
+  `Assoc fields
+
+let code_lens_to_json (lens : code_lens) : Yojson.Safe.t =
+  let fields = [ ("range", range_to_json lens.cl_range) ] in
+  let fields =
+    match lens.cl_command with
+    | Some cmd -> ("command", command_to_json cmd) :: fields
+    | None -> fields
+  in
+  `Assoc fields
+
+let code_lens_result_to_json (result : code_lens list option) : Yojson.Safe.t =
+  match result with
+  | Some lenses -> `List (List.map code_lens_to_json lenses)
   | None -> `Null
 
 (** {1 File Watching} *)
