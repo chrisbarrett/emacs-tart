@@ -40,16 +40,23 @@ val cache_dir : unit -> string
 
 **Verify:** `XDG_CACHE_HOME=/tmp/test ./tart check file.el && ls /tmp/test/tart/`
 
-### R2: Content-based key
+### R2: Content-based key with dependency hashing
 
-**Given** binary + input paths **When** computing key **Then** sha256 of concatenated contents
+**Given** binary + input + dependencies **When** computing key **Then** sha256
+of concatenated contents including transitive dependencies
 
 ```ocaml
-val compute_key : binary:string -> input:string -> string
+val compute_key : binary:string -> input:string -> deps:string list -> string
 (* => 64-char hex string *)
 ```
 
-**Verify:** `dune test`; same inputs = same key; different = different
+The key must incorporate the content of all transitive dependencies (`.tart`
+signature files, prelude, etc.) so that changing a typing file invalidates
+cached results for all `.el` files that depend on it. The dependency list
+comes from the dependency graph ([Spec 27](./27-dependency-graph.md)).
+
+**Verify:** `dune test`; same inputs = same key; different = different;
+changing a `.tart` file invalidates dependents
 
 ### R3: Store results
 
@@ -184,5 +191,8 @@ Eviction must never block type-checking. Partial cleanup is acceptable.
 
 ## Status
 
-Complete (except integration into type-checking pipeline, which depends on
-diagnostic serialisation format).
+Complete (except integration into type-checking pipeline). Diagnostic
+serialisation format is provided by [Spec 35](./35-structured-errors.md)
+(structured errors) and [Spec 47](./47-error-codes.md) (error codes). Cache
+key computation needs updating to include transitive dependency hashing (R2)
+before integration.

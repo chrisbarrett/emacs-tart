@@ -63,10 +63,16 @@ All narrowings combine.
 
 ### R5: Predicates in `or` early-exit
 
+Requires R13 (`never`-return tracking).
+
 ```elisp
 (or (stringp x) (error "Expected string"))
 (upcase x)   ; x : string
 ```
+
+When `error` is known to return `never`, the `or` form can only continue past
+the second branch if the first branch was truthy. This narrows `x` to `string`
+in subsequent code.
 
 ### R6-R7: User predicates, specific parameter
 
@@ -135,6 +141,32 @@ Declare in `typings/emacs/*/c-core/data.tart` using multi-clause syntax
 (defun booleanp ((bool) -> t) ((_) -> nil))
 ```
 
+### R13: `never`-return tracking
+
+Functions that unconditionally signal (e.g., `error`, `signal`, `throw`) return
+the bottom type `never`. This enables R5: when the alternative branch of an `or`
+returns `never`, execution can only reach subsequent code if the predicate branch
+was truthy.
+
+```lisp
+;; In typings:
+(defun error (string &rest any) -> never)
+(defun signal (symbol any) -> never)
+(defun throw (symbol any) -> never)
+```
+
+**Requirements:**
+
+1. `never` is a bottom type: subtype of every type (`never <: T` for all `T`)
+2. `(T | never)` simplifies to `T`
+3. Functions declared with return type `never` propagate non-return through
+   `or`, `cond`, and `if` branches
+4. When all branches of an `or` except one return `never`, the surviving
+   branch's narrowing effects apply to subsequent code
+
+**Verify:** `dune test`; `(or (stringp x) (error "bad"))` narrows `x` to
+`string` after the `or`
+
 ## Non-Requirements
 
 - Multi-parameter narrowing
@@ -177,15 +209,17 @@ Same narrowing infrastructure, different tracking:
 - [x] Type subtraction for else branches
 - [x] Cumulative narrowing in cond
 - [x] Predicates in and expressions
-- [ ] Predicates in or expressions (R5) — deferred; requires `never`-return tracking
+- [ ] [R13] Add `never` bottom type to type system
+- [ ] [R13] Declare `error`, `signal`, `throw` as returning `never` in typings
+- [ ] [R5, R13] Predicates in or expressions — narrowing via `never`-return tracking
 - [x] Union intersection for narrowing
 - [x] Inline-only restriction
 - [x] Standard library declarations
 
-**Status:** Complete (except R5). Narrowing infrastructure complete
+**Status:** Complete except R5 and R13. Narrowing infrastructure complete
 (`narrow.ml`, `infer.ml`). Inline-only restriction verified (R12). Union
 intersection narrowing for multi-type predicates implemented. Declaration
 syntax superseded by [Spec 54](./54-multi-clause-signatures.md) multi-clause
 signatures. Standard library predicates migrated to multi-clause syntax.
-R5 (or-expression progn narrowing) requires `never`-return tracking and is
-deferred to a future spec.
+R5 (or-expression narrowing) requires R13 (`never`-return tracking), which
+is now specified above.

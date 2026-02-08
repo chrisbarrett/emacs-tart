@@ -159,21 +159,37 @@ matches → infer `plist : (plist k v)`, `key : k`, return `(v | nil)`
 
 **Verify:** `dune test`; generic clause serves as fallback
 
-### R5: Remove hard-coded row inference functions
+### R5: Row-aware clause dispatch
 
-**Given** the functions in `infer.ml`:
+The hard-coded row inference functions (`infer_alist_get_row`,
+`infer_plist_get_row`, `infer_map_elt_row`, `infer_gethash_row` in
+`row_dispatch.ml`, ~374 lines total) perform row-aware unification
+procedurally. To replace them with `.tart` signatures, clause dispatch must
+learn to do the same thing declaratively.
 
-- `infer_alist_get_row` (lines 1584–1697)
-- `infer_plist_get_row` (lines 1703–1786)
-- `infer_map_elt_row` (lines 1793–1880)
-- `infer_gethash_row` (lines 1887–1975)
+**Enhancement:** During `Clause_matching` unification, when a literal key
+argument meets a row-typed container parameter, trigger row field lookup
+instead of plain type variable matching.
 
-**When** R1–R4 are implemented and signatures are migrated to `.tart` files
-**Then** these functions can be removed **Then** pattern-match arms (lines
-227–256) fall through to generic function application
+Specifically, clause dispatch must handle:
 
-**Verify:** After migration, run `dune test`; all row-typed tests pass without
-special-case code
+1. **Row field lookup**: When a clause parameter is `(plist {k T | r})` and the
+   call-site key is a literal `:name`, look up `:name` in the row's field list
+   and bind `T` to the field's type
+2. **Open row extension**: When the literal key is absent from an open row
+   `{... & r}`, generate a constraint extending `r` with `{key: T & r'}`
+3. **Closed row rejection**: When the literal key is absent from a closed row,
+   fail the clause match (allowing fallthrough to generic clause)
+4. **Default argument type binding**: Return types may reference type variables
+   bound to optional parameters, extracting the actual argument's type
+
+**Given** these enhancements **When** signatures are migrated to `.tart` files
+**Then** the hard-coded row inference functions can be removed **Then** all
+7 cases of the [Spec 11](./11-adt-system.md) R4 decision table are covered
+by clause dispatch alone
+
+**Verify:** After migration, `dune test`; all row-typed test fixtures pass
+without special-case code
 
 ### R6: Preserve existing decision table semantics
 
@@ -383,13 +399,18 @@ Where `infer_application` now:
 - [x] [R2] Verify row unification during clause matching
 - [x] [R3] Test closed row rejection in clause matching
 - [x] [R4] Verify fallthrough to generic clause
+- [ ] [R5] Enhance clause dispatch with row field lookup during unification
+- [ ] [R5] Handle open row extension and closed row rejection in clause matching
 - [ ] [R5] Migrate `plist-get`, `alist-get`, `gethash`, `map-elt` to
       multi-clause `.tart` signatures
-- [ ] [R5] Remove hard-coded row inference functions from `infer.ml`
+- [ ] [R5] Remove hard-coded row inference functions from `row_dispatch.ml`
 - [x] [R6] Run all existing row-typed test fixtures; verify decision table
       semantics preserved
 - [x] [R7] Document literal matching in clause selection
 
-**Status:** Core dispatch implemented. R5 (signature migration and intrinsic
-removal) deferred—requires resolving plist↔list subsumption interaction with
-clause dispatch.
+**Status:** Core dispatch implemented (R1–R4, R6–R7). R5 reframed: the
+hard-coded row inference functions perform row-aware unification procedurally;
+clause dispatch must learn row field lookup during `Clause_matching` context
+to replace them. The plist↔list subsumption suppression (`context <>
+Clause_matching` in `unify.ml`) remains correct—the enhancement is to the
+clause matcher's unification strategy, not to the subsumption rules.
