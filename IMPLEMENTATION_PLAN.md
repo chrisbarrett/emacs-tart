@@ -169,4 +169,4 @@ three helpers above target only the mechanical scaffolding.
 |---|------|--------|
 | 1 | `require_params` helper | Done |
 | 2 | `with_document` helper | Done |
-| 3 | `with_sexp_at_cursor` helper | Not started |
+| 3 | `with_sexp_at_cursor` helper | Done |
