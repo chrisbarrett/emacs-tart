@@ -1,6 +1,6 @@
 # Spec 74 — Emacs Development Mode
 
-> Consolidates specs: [10](./.archive/10-emacs-integration.md), [14](./.archive/14-tart-el.md), [23](./.archive/23-binary-installation.md), [65](./.archive/65-download-security.md), [63](./.archive/63-tart-minor-mode-lifecycle.md), [64](./.archive/64-self-typing.md)
+> Consolidates specs: [10](./.archive/10-emacs-integration.md), [14](./.archive/14-tart-el.md), [22](./.archive/22-ci-releases.md), [23](./.archive/23-binary-installation.md), [65](./.archive/65-download-security.md), [63](./.archive/63-tart-minor-mode-lifecycle.md), [64](./.archive/64-self-typing.md)
 
 ## Overview
 
@@ -184,6 +184,46 @@ curl.
 - Asset not found for platform: error listing supported platforms
 - GitHub rate limit: suggest setting `GITHUB_TOKEN`
 
+## Release Pipeline
+
+`.github/workflows/release.yml` builds tart binaries on tag push and attaches
+them to a GitHub Release. This is the supply side of the binary installation
+flow above.
+
+### Trigger
+
+The workflow runs on pushes matching `v*` tags:
+
+```yaml
+on:
+  push:
+    tags: ['v*']
+```
+
+### Build matrix
+
+Each target platform builds via `nix build .#default` with Nix caching:
+
+| OS | Arch | Runner | Asset name |
+|----|------|--------|------------|
+| darwin | arm64 | `macos-latest` | `tart-darwin-arm64` |
+| darwin | x86_64 | `macos-13` | `tart-darwin-x86_64` |
+| linux | x86_64 | `ubuntu-latest` | `tart-linux-x86_64` |
+| linux | arm64 | `ubuntu-24.04-arm` | `tart-linux-arm64` |
+
+### Release creation
+
+The release job uses `softprops/action-gh-release` to create the GitHub
+Release and attach all 4 binaries. Tags matching `v*-rc*`, `v*-alpha*`, or
+`v*-beta*` produce a pre-release.
+
+### Asset naming convention
+
+Asset names follow the pattern `tart-{os}-{arch}`, matching the platform
+detection table in [Binary Installation](#binary-installation) above. The
+Emacs install command downloads the asset whose name matches the detected
+platform.
+
 ## Download Security
 
 ### Risky local variables
@@ -237,6 +277,7 @@ reproduction where possible.
 | `lisp/tart-mode.el` | Minor mode, REPL, eglot, binary installation, download security |
 | `lisp/tart.tart` | Signatures for `tart.el` public API |
 | `lisp/tart-mode.tart` | Signatures for `tart-mode.el` public API |
+| `.github/workflows/release.yml` | CI release pipeline (tag-triggered binary builds) |
 
 ## Deferred
 

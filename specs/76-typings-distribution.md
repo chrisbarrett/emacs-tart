@@ -1,6 +1,6 @@
 # Spec 76 — Typings Distribution
 
-> Consolidates specs: [24](./.archive/24-versioned-typings.md), [32](./.archive/32-emacs-core-typings.md)
+> Consolidates specs: [20](./.archive/20-expanded-stdlib.md), [24](./.archive/24-versioned-typings.md), [32](./.archive/32-emacs-core-typings.md)
 
 ## Overview
 
@@ -113,4 +113,6 @@ debugging.
 - Backfill of 29.x typings.
 - Remaining C source files beyond the initial core set are ongoing.
 - GUI backend typings (ns/w32/pgtk/x11).
-- Third-party package typings (dash, s, etc.) in a separate repository.
+- Third-party and built-in library typings: ht.el, map.el, subr-x, process
+  management, rx.el, expanded cl-lib coverage (see
+  [Spec 20](./.archive/20-expanded-stdlib.md) for the original plan).
