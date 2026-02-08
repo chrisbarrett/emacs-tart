@@ -4,19 +4,22 @@
 
 ## Overview
 
-The LSP server provides IDE integration via a JSON-RPC stdio transport, with
-document synchronization, diagnostics, hover, signature file tracking, and a
-dependency graph for incremental invalidation. It targets Eglot compatibility
-and maintains sub-second feedback loops: hover responses arrive within 100 ms
-and diagnostics publish within 500 ms of the last edit.
+The LSP server provides IDE integration via a JSON-RPC stdio transport. It
+covers document synchronization, diagnostics, hover, goto definition, find
+references, code actions, completion, signature help, document symbols, rename,
+signature file tracking, and a dependency graph for incremental invalidation. It
+targets Eglot compatibility and maintains sub-second feedback loops: hover
+responses arrive within 100 ms and diagnostics publish within 500 ms of the
+last edit.
 
 ## Protocol & Transport
 
 The server communicates over stdin/stdout using JSON-RPC 2.0 with
 `Content-Length` headers. It implements the standard LSP lifecycle:
 
-- **initialize** — returns server capabilities (incremental sync kind 2,
-  hover provider)
+- **initialize** — returns server capabilities (incremental sync, hover,
+  definition, references, code actions, completion, signature help, document
+  symbols, rename)
 - **initialized** — no-op acknowledgement
 - **shutdown** / **exit** — orderly teardown
 
@@ -106,7 +109,110 @@ open `.el` files.
 Dependency cycles in `.tart` files are reported as errors. Cycles in `.el`
 files are reported as warnings.
 
+## Goto Definition
+
+`textDocument/definition` resolves symbols to their definition location. Two
+resolution strategies apply in order:
+
+1. **Local definitions** — `defun`, `defvar`, `defconst` forms in the current
+   document.
+2. **Signature lookup** — searches sibling `.tart` files, then the configured
+   search path (typings, requires, autoloads). Uses prefix-based lookup for
+   module-qualified names.
+
+Returns a single location or null.
+
+**Limitation:** does not scan `.el` files other than the current document. A
+symbol defined in another `.el` file is only reachable if it has a `.tart`
+signature.
+
+## Find References
+
+`textDocument/references` walks the AST of the current document and collects
+all symbol occurrences matching the target name.
+
+**Limitation:** current-document only. No workspace-wide search, no scoping
+analysis — every textual occurrence of the name in the document is returned
+regardless of binding context.
+
+## Code Actions
+
+`textDocument/codeAction` offers three actions:
+
+| Action | Kind | Trigger |
+|--------|------|---------|
+| Add missing signature | QuickFix | Function lacks a `.tart` declaration |
+| Extract function | RefactorExtract | User selects an expression |
+| Version constraint fix | QuickFix | E0900/E0901 diagnostics |
+
+**Add missing signature** infers the function's type and proposes inserting a
+`defun` declaration into the sibling `.tart` file.
+
+**Extract function** collects free variables in the selection (filtering out
+builtins and accounting for binding forms like `let`, `lambda`, `defun`),
+generates a new `defun`, and replaces the selection with a call.
+
+**Version constraint fixes** offer three alternatives when a function is
+unavailable at the declared minimum Emacs version:
+
+- Bump the `Package-Requires` minimum version.
+- Wrap the call in a `(when (fboundp 'fn) ...)` guard.
+- Downgrade the minimum version (for removed functions).
+
+All actions produce workspace edits, which may span multiple files.
+
+## Completion
+
+`textDocument/completion` returns prefix-matched candidates drawn from:
+
+1. Local definitions in the current document.
+2. Functions and variables from loaded signatures.
+3. Bindings from the typed environment (builtins, type-checked names).
+
+Candidates are deduplicated, preferring entries with type information.
+Functions show their parameter list as detail text. Completion kinds
+distinguish functions, variables, and constants.
+
+**Limitation:** not scope-aware at the cursor — all typed bindings are offered
+regardless of local visibility.
+
+## Signature Help
+
+`textDocument/signatureHelp` activates inside function calls. It locates the
+enclosing call form, identifies the active argument position, and returns the
+function's signature with the active parameter highlighted. Handles
+`&optional`, `&rest`, and `&key` parameter markers. Polymorphic types are
+unwrapped before display.
+
+## Document Symbols
+
+`textDocument/documentSymbol` returns a hierarchical list of definitions:
+
+| Form | Symbol kind |
+|------|-------------|
+| `defun` | Function |
+| `defvar` | Variable |
+| `defconst` | Constant |
+| `defmacro` | Method (to distinguish from functions) |
+
+Nested definitions (e.g. a `defun` inside another `defun`) are included as
+children. Each symbol carries the range of the whole form and a selection range
+over just the name.
+
+## Rename
+
+`textDocument/rename` renames all occurrences of a symbol within the current
+document.
+
+**Limitation:** current-document only. Does not rename across the workspace or
+in `.tart` signature files.
+
 ## Deferred
 
-- **LSP Phase 2** (goto-definition, find-references, code actions): scoped
-  out.
+- **Workspace-wide find-references**: references are currently scoped to the
+  open document.
+- **Cross-file goto-definition for `.el` targets**: definition resolution
+  reaches `.tart` signatures but not other `.el` files.
+- **Workspace-wide rename**: rename is currently single-document.
+- **Scope-aware completion**: completions are not filtered by lexical scope at
+  the cursor.
