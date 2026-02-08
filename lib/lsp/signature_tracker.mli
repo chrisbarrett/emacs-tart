@@ -32,7 +32,7 @@ val mem : t -> string -> bool
 (** {1 Filename/URI Helpers} *)
 
 val filename_of_uri : string -> string
-(** Extract filename from a file:// URI *)
+(** @deprecated Use {!Uri.to_filename} instead. *)
 
 val is_tart_file : string -> bool
 (** Check if a URI points to a .tart file *)

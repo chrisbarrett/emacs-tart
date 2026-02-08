@@ -55,10 +55,10 @@ let test_mem () =
 let test_filename_of_uri () =
   Alcotest.(check string)
     "file:// uri" "/path/to/foo.tart"
-    (Tracker.filename_of_uri "file:///path/to/foo.tart");
+    (Lsp.Uri.to_filename "file:///path/to/foo.tart");
   Alcotest.(check string)
     "non-file uri" "http://example.com"
-    (Tracker.filename_of_uri "http://example.com")
+    (Lsp.Uri.to_filename "http://example.com")
 
 let test_is_tart_file () =
   Alcotest.(check bool)

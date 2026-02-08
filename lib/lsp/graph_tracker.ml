@@ -22,13 +22,7 @@ let module_id_of_filename (filename : string) : Dep_graph.module_id =
     Filename.chop_suffix basename ".tart"
   else basename
 
-(** Extract filename from a file:// URI.
-
-    Returns the path portion, or the raw URI if not a file:// URI. *)
-let filename_of_uri (uri : string) : string =
-  if String.length uri > 7 && String.sub uri 0 7 = "file://" then
-    String.sub uri 7 (String.length uri - 7)
-  else uri
+let filename_of_uri = Uri.to_filename
 
 (** {1 Dependency Extraction} *)
 

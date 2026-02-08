@@ -396,7 +396,7 @@ any order, interleaved with other work.
 |---|------|-----------|-------------------|--------|
 | 1 | Integration test harness | `test/lsp_integration/{lsp_client,integration_test}.{ml,mli}`, `dune` | — | Done |
 | 2 | UTF-16 positions | — | `document.ml`, `server.ml`, `protocol.ml` | Done |
-| 3 | Incremental sync recovery | — | `document.ml`, `server.ml` | Partial |
+| 3 | Incremental sync recovery | — | `document.ml`, `server.ml` | Done |
 | 4 | Concurrent requests | `lib/lsp/worker.{ml,mli}` | `server.ml` | Not started |
 | 5 | Request cancellation | — | `server.ml` | Stub only |
 | 6 | Debounce & coalescing | — | `server.ml` | Not started |

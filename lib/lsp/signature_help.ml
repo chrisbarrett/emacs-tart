@@ -135,7 +135,7 @@ let signature_of_function_type (fn_name : string) (ty : Core.Types.typ)
 let handle ~(config : Typing.Module_check.config) ~(uri : string)
     ~(doc_text : string) ~(line : int) ~(col : int) :
     (Yojson.Safe.t, Rpc.response_error) result =
-  let filename = Graph_tracker.filename_of_uri uri in
+  let filename = Uri.to_filename uri in
   let parse_result = Syntax.Read.parse_string ~filename doc_text in
   if parse_result.sexps = [] then (
     Log.debug "No S-expressions parsed";

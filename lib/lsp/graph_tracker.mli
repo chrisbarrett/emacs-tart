@@ -17,9 +17,7 @@ val module_id_of_filename : string -> Graph.Dependency_graph.module_id
 *)
 
 val filename_of_uri : string -> string
-(** Extract filename from a file:// URI.
-
-    Returns the path portion, or the raw URI if not a file:// URI. *)
+(** @deprecated Use {!Uri.to_filename} instead. *)
 
 (** {1 Graph Updates} *)
 

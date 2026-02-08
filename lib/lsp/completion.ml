@@ -158,7 +158,7 @@ let deduplicate_completions (items : Protocol.completion_item list) :
 let handle ~(config : Typing.Module_check.config) ~(uri : string)
     ~(doc_text : string) ~(line : int) ~(col : int) :
     (Yojson.Safe.t, Rpc.response_error) result =
-  let filename = Graph_tracker.filename_of_uri uri in
+  let filename = Uri.to_filename uri in
   let prefix, _ = extract_prefix_at_position doc_text line col in
   Log.debug "Completion prefix: '%s'" prefix;
 

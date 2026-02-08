@@ -135,13 +135,6 @@ let capabilities () : Protocol.server_capabilities =
     rename_provider = true;
   }
 
-(** Extract filename from a file:// URI. Returns the path portion, or the raw
-    URI if not a file:// URI. *)
-let filename_of_uri (uri : string) : string =
-  if String.length uri > 7 && String.sub uri 0 7 = "file://" then
-    String.sub uri 7 (String.length uri - 7)
-  else uri
-
 (** Convert a source location span to an LSP range. Loc.span has 1-based lines
     and byte-offset columns. LSP uses 0-based lines and UTF-16 code-unit
     characters. *)
@@ -171,7 +164,7 @@ let range_of_span ~(text : string) (span : Syntax.Location.span) :
     Creates a location with a file:// URI from the span's file path. *)
 let location_of_span ~(text : string) (span : Syntax.Location.span) :
     Protocol.location =
-  let uri = "file://" ^ span.start_pos.file in
+  let uri = Uri.of_filename span.start_pos.file in
   { Protocol.uri; range = range_of_span ~text span }
 
 (** Convert a related location to LSP DiagnosticRelatedInformation.
@@ -273,7 +266,7 @@ let lsp_diagnostic_of_sig_error ~(text : string)
     - Validation errors (unbound type variables, invalid types) *)
 let check_tart_document (text : string) (uri : string) :
     Protocol.diagnostic list =
-  let filename = filename_of_uri uri in
+  let filename = Uri.to_filename uri in
   let parse_result = Syntax.Read.parse_string ~filename text in
   (* Check for lexer errors first *)
   if parse_result.errors <> [] then
@@ -347,7 +340,7 @@ let read_sibling_sig_content ~(sig_tracker : Signature_tracker.t)
 let check_document ~(config : Typing.Module_check.config)
     ~(cache : Form_cache.t) ~(sig_tracker : Signature_tracker.t) (uri : string)
     (text : string) : Protocol.diagnostic list * Form_cache.check_stats option =
-  let filename = filename_of_uri uri in
+  let filename = Uri.to_filename uri in
   (* Enrich config with Package-Requires declared version from document text *)
   let config =
     match Sig.Package_header.parse_package_requires text with
@@ -716,7 +709,7 @@ let handle_hover (server : t) (params : Yojson.Safe.t option) :
             Document.utf16_col_to_byte ~text:doc.text ~line
               ~col:hover_params.position.character
           in
-          let filename = filename_of_uri uri in
+          let filename = Uri.to_filename uri in
           let parse_result = Syntax.Read.parse_string ~filename doc.text in
           if parse_result.sexps = [] then (
             Log.debug "No S-expressions parsed";
@@ -905,7 +898,7 @@ let handle_definition (server : t) (params : Yojson.Safe.t option) :
             Document.utf16_col_to_byte ~text:doc.text ~line
               ~col:def_params.def_position.character
           in
-          let filename = filename_of_uri uri in
+          let filename = Uri.to_filename uri in
           let parse_result = Syntax.Read.parse_string ~filename doc.text in
           if parse_result.sexps = [] then (
             Log.debug "No S-expressions parsed";
@@ -998,7 +991,7 @@ let handle_references (server : t) (params : Yojson.Safe.t option) :
             Document.utf16_col_to_byte ~text:doc.text ~line
               ~col:ref_params.ref_position.character
           in
-          let filename = filename_of_uri uri in
+          let filename = Uri.to_filename uri in
           let parse_result = Syntax.Read.parse_string ~filename doc.text in
           if parse_result.sexps = [] then (
             Log.debug "No S-expressions parsed";
@@ -1200,7 +1193,7 @@ let handle_document_symbol (server : t) (params : Yojson.Safe.t option) :
           Log.debug "Document not found: %s" uri;
           Ok (Protocol.document_symbol_result_to_json None)
       | Some doc ->
-          let filename = filename_of_uri uri in
+          let filename = Uri.to_filename uri in
           let parse_result = Syntax.Read.parse_string ~filename doc.text in
           if parse_result.sexps = [] then (
             Log.debug "No S-expressions parsed";
@@ -1309,7 +1302,7 @@ let handle_rename (server : t) (params : Yojson.Safe.t option) :
             Document.utf16_col_to_byte ~text:doc.text ~line
               ~col:rename_params.rp_position.character
           in
-          let filename = filename_of_uri uri in
+          let filename = Uri.to_filename uri in
           let parse_result = Syntax.Read.parse_string ~filename doc.text in
           if parse_result.sexps = [] then (
             Log.debug "No S-expressions parsed";

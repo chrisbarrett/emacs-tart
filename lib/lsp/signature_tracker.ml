@@ -27,19 +27,16 @@ let mem (tracker : t) (uri : string) : bool = Hashtbl.mem tracker uri
 
 (** {1 Filename/URI Helpers} *)
 
-let filename_of_uri (uri : string) : string =
-  if String.length uri > 7 && String.sub uri 0 7 = "file://" then
-    String.sub uri 7 (String.length uri - 7)
-  else uri
+let filename_of_uri = Uri.to_filename
 
 let is_tart_file (uri : string) : bool =
-  Filename.check_suffix (filename_of_uri uri) ".tart"
+  Filename.check_suffix (Uri.to_filename uri) ".tart"
 
 (** Get the module name from a .tart URI.
 
     For "file:///path/to/foo.tart", returns "foo". *)
 let module_name_of_uri (uri : string) : string option =
-  let filename = filename_of_uri uri in
+  let filename = Uri.to_filename uri in
   if is_tart_file uri then
     Some (Filename.chop_suffix (Filename.basename filename) ".tart")
   else None
@@ -49,7 +46,7 @@ let module_name_of_uri (uri : string) : string option =
     Given a path like "/path/to/foo.tart", looks up the buffer by converting to
     file:// URI format. *)
 let get_by_path (tracker : t) (path : string) : string option =
-  let uri = "file://" ^ path in
+  let uri = Uri.of_filename path in
   get tracker uri
 
 (** {1 Dependent .el File Helpers} *)
@@ -58,8 +55,8 @@ let get_by_path (tracker : t) (path : string) : string option =
 
     For "file:///path/to/foo.tart", returns "file:///path/to/foo.el". *)
 let sibling_el_uri (tart_uri : string) : string option =
-  let filename = filename_of_uri tart_uri in
+  let filename = Uri.to_filename tart_uri in
   if is_tart_file tart_uri then
     let el_path = Filename.chop_suffix filename ".tart" ^ ".el" in
-    Some ("file://" ^ el_path)
+    Some (Uri.of_filename el_path)
   else None

@@ -434,7 +434,7 @@ let generate_add_signature_action ~(name : string) ~(ty : Core.Types.typ)
     ~(tart_path : string) ~(tart_content : string option) :
     Protocol.code_action option =
   let signature_str = generate_defun_signature name ty in
-  let tart_uri = "file://" ^ tart_path in
+  let tart_uri = Uri.of_filename tart_path in
 
   (* Calculate the position to insert - append at end of file *)
   let insert_pos, new_text =
@@ -855,11 +855,7 @@ let handle ~(range_of_span : Syntax.Location.span -> Protocol.range)
     ~(config : Typing.Module_check.config) ~(uri : string) ~(doc_text : string)
     ~(range : Protocol.range) ~(context : Protocol.code_action_context) :
     (Yojson.Safe.t, Rpc.response_error) result =
-  let filename =
-    if String.length uri > 7 && String.sub uri 0 7 = "file://" then
-      String.sub uri 7 (String.length uri - 7)
-    else uri
-  in
+  let filename = Uri.to_filename uri in
   let parse_result = Syntax.Read.parse_string ~filename doc_text in
 
   if parse_result.sexps = [] then

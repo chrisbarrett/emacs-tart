@@ -32,13 +32,11 @@ let test_module_id_from_other () =
   Alcotest.(check string) "other file" "baz.txt" id
 
 let test_filename_of_uri () =
-  let filename = Lsp.Graph_tracker.filename_of_uri "file:///path/to/foo.el" in
+  let filename = Lsp.Uri.to_filename "file:///path/to/foo.el" in
   Alcotest.(check string) "extract path" "/path/to/foo.el" filename
 
 let test_filename_of_uri_non_file () =
-  let filename =
-    Lsp.Graph_tracker.filename_of_uri "http://example.com/foo.el"
-  in
+  let filename = Lsp.Uri.to_filename "http://example.com/foo.el" in
   Alcotest.(check string) "non-file URI" "http://example.com/foo.el" filename
 
 (* =============================================================================
