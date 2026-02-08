@@ -67,6 +67,7 @@ type server_capabilities = {
   inlay_hint_provider : bool;
   type_definition_provider : bool;
   workspace_symbol_provider : bool;
+  call_hierarchy_provider : bool;
 }
 (** Server capabilities *)
 
@@ -614,6 +615,61 @@ type workspace_symbol_result = symbol_information list option
 
 val workspace_symbol_result_to_json : workspace_symbol_result -> Yojson.Safe.t
 (** Encode workspace symbol result to JSON *)
+
+(** {1 Call Hierarchy} *)
+
+type call_hierarchy_item = {
+  chi_name : string;
+  chi_kind : symbol_kind;
+  chi_uri : string;
+  chi_range : range;
+  chi_selection_range : range;
+  chi_data : Yojson.Safe.t option;
+}
+(** A call hierarchy item representing a function or callable symbol. *)
+
+type call_hierarchy_prepare_params = {
+  chpp_text_document : string;
+  chpp_position : position;
+}
+(** Params for callHierarchy/prepare. *)
+
+type call_hierarchy_incoming_call = {
+  chic_from : call_hierarchy_item;
+  chic_from_ranges : range list;
+}
+(** An incoming call: a caller and the ranges from which it calls the target. *)
+
+type call_hierarchy_outgoing_call = {
+  choc_to : call_hierarchy_item;
+  choc_from_ranges : range list;
+}
+(** An outgoing call: a callee and the ranges in the caller that invoke it. *)
+
+val parse_call_hierarchy_prepare_params :
+  Yojson.Safe.t -> call_hierarchy_prepare_params
+(** Parse callHierarchy/prepare params from JSON *)
+
+val parse_incoming_calls_params : Yojson.Safe.t -> call_hierarchy_item
+(** Parse callHierarchy/incomingCalls params, returning the item. *)
+
+val parse_outgoing_calls_params : Yojson.Safe.t -> call_hierarchy_item
+(** Parse callHierarchy/outgoingCalls params, returning the item. *)
+
+val call_hierarchy_item_to_json : call_hierarchy_item -> Yojson.Safe.t
+(** Encode a call hierarchy item to JSON *)
+
+val call_hierarchy_prepare_result_to_json :
+  call_hierarchy_item list option -> Yojson.Safe.t
+(** Encode prepare call hierarchy result to JSON *)
+
+val call_hierarchy_incoming_calls_result_to_json :
+  call_hierarchy_incoming_call list option -> Yojson.Safe.t
+(** Encode incoming calls result to JSON *)
+
+val call_hierarchy_outgoing_calls_result_to_json :
+  call_hierarchy_outgoing_call list option -> Yojson.Safe.t
+(** Encode outgoing calls result to JSON *)
 
 (** {1 File Watching} *)
 

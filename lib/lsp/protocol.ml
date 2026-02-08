@@ -71,6 +71,7 @@ type server_capabilities = {
   inlay_hint_provider : bool;
   type_definition_provider : bool;
   workspace_symbol_provider : bool;
+  call_hierarchy_provider : bool;
 }
 (** Server capabilities *)
 
@@ -312,6 +313,11 @@ let server_capabilities_to_json (caps : server_capabilities) : Yojson.Safe.t =
   let fields =
     if caps.workspace_symbol_provider then
       ("workspaceSymbolProvider", `Bool true) :: fields
+    else fields
+  in
+  let fields =
+    if caps.call_hierarchy_provider then
+      ("callHierarchyProvider", `Bool true) :: fields
     else fields
   in
   `Assoc fields
@@ -842,6 +848,35 @@ let symbol_kind_to_int = function
   | SKEvent -> 24
   | SKOperator -> 25
   | SKTypeParameter -> 26
+
+let symbol_kind_of_int = function
+  | 1 -> SKFile
+  | 2 -> SKModule
+  | 3 -> SKNamespace
+  | 4 -> SKPackage
+  | 5 -> SKClass
+  | 6 -> SKMethod
+  | 7 -> SKProperty
+  | 8 -> SKField
+  | 9 -> SKConstructor
+  | 10 -> SKEnum
+  | 11 -> SKInterface
+  | 12 -> SKFunction
+  | 13 -> SKVariable
+  | 14 -> SKConstant
+  | 15 -> SKString
+  | 16 -> SKNumber
+  | 17 -> SKBoolean
+  | 18 -> SKArray
+  | 19 -> SKObject
+  | 20 -> SKKey
+  | 21 -> SKNull
+  | 22 -> SKEnumMember
+  | 23 -> SKStruct
+  | 24 -> SKEvent
+  | 25 -> SKOperator
+  | 26 -> SKTypeParameter
+  | _ -> SKVariable
 
 type document_symbol = {
   ds_name : string;
@@ -1522,6 +1557,136 @@ let parse_did_change_configuration_params (json : Yojson.Safe.t) :
     did_change_configuration_params =
   let open Yojson.Safe.Util in
   { dcc_settings = json |> member "settings" }
+
+(** {1 Call Hierarchy} *)
+
+type call_hierarchy_item = {
+  chi_name : string;
+  chi_kind : symbol_kind;
+  chi_uri : string;
+  chi_range : range;
+  chi_selection_range : range;
+  chi_data : Yojson.Safe.t option;
+}
+(** A call hierarchy item representing a function or callable symbol. *)
+
+type call_hierarchy_prepare_params = {
+  chpp_text_document : string;
+  chpp_position : position;
+}
+(** Params for callHierarchy/prepare. *)
+
+type call_hierarchy_incoming_call = {
+  chic_from : call_hierarchy_item;
+  chic_from_ranges : range list;
+}
+(** An incoming call: a caller and the ranges from which it calls the target. *)
+
+type call_hierarchy_outgoing_call = {
+  choc_to : call_hierarchy_item;
+  choc_from_ranges : range list;
+}
+(** An outgoing call: a callee and the ranges in the caller that invoke it. *)
+
+let parse_call_hierarchy_prepare_params (json : Yojson.Safe.t) :
+    call_hierarchy_prepare_params =
+  let open Yojson.Safe.Util in
+  let text_document =
+    json |> member "textDocument" |> member "uri" |> to_string
+  in
+  let pos_json = json |> member "position" in
+  let position =
+    {
+      line = pos_json |> member "line" |> to_int;
+      character = pos_json |> member "character" |> to_int;
+    }
+  in
+  { chpp_text_document = text_document; chpp_position = position }
+
+let parse_call_hierarchy_item_json (json : Yojson.Safe.t) : call_hierarchy_item
+    =
+  let open Yojson.Safe.Util in
+  let parse_pos j =
+    {
+      line = j |> member "line" |> to_int;
+      character = j |> member "character" |> to_int;
+    }
+  in
+  let parse_range j =
+    {
+      start = parse_pos (j |> member "start");
+      end_ = parse_pos (j |> member "end");
+    }
+  in
+  let kind_int = json |> member "kind" |> to_int in
+  let kind = symbol_kind_of_int kind_int in
+  {
+    chi_name = json |> member "name" |> to_string;
+    chi_kind = kind;
+    chi_uri = json |> member "uri" |> to_string;
+    chi_range = parse_range (json |> member "range");
+    chi_selection_range = parse_range (json |> member "selectionRange");
+    chi_data = (match json |> member "data" with `Null -> None | d -> Some d);
+  }
+
+let parse_incoming_calls_params (json : Yojson.Safe.t) : call_hierarchy_item =
+  let open Yojson.Safe.Util in
+  parse_call_hierarchy_item_json (json |> member "item")
+
+let parse_outgoing_calls_params (json : Yojson.Safe.t) : call_hierarchy_item =
+  let open Yojson.Safe.Util in
+  parse_call_hierarchy_item_json (json |> member "item")
+
+let call_hierarchy_item_to_json (item : call_hierarchy_item) : Yojson.Safe.t =
+  let fields =
+    [
+      ("name", `String item.chi_name);
+      ("kind", `Int (symbol_kind_to_int item.chi_kind));
+      ("uri", `String item.chi_uri);
+      ("range", range_to_json item.chi_range);
+      ("selectionRange", range_to_json item.chi_selection_range);
+    ]
+  in
+  let fields =
+    match item.chi_data with
+    | Some d -> fields @ [ ("data", d) ]
+    | None -> fields
+  in
+  `Assoc fields
+
+let call_hierarchy_prepare_result_to_json
+    (result : call_hierarchy_item list option) : Yojson.Safe.t =
+  match result with
+  | Some items -> `List (List.map call_hierarchy_item_to_json items)
+  | None -> `Null
+
+let call_hierarchy_incoming_call_to_json (call : call_hierarchy_incoming_call) :
+    Yojson.Safe.t =
+  `Assoc
+    [
+      ("from", call_hierarchy_item_to_json call.chic_from);
+      ("fromRanges", `List (List.map range_to_json call.chic_from_ranges));
+    ]
+
+let call_hierarchy_incoming_calls_result_to_json
+    (result : call_hierarchy_incoming_call list option) : Yojson.Safe.t =
+  match result with
+  | Some calls -> `List (List.map call_hierarchy_incoming_call_to_json calls)
+  | None -> `Null
+
+let call_hierarchy_outgoing_call_to_json (call : call_hierarchy_outgoing_call) :
+    Yojson.Safe.t =
+  `Assoc
+    [
+      ("to", call_hierarchy_item_to_json call.choc_to);
+      ("fromRanges", `List (List.map range_to_json call.choc_from_ranges));
+    ]
+
+let call_hierarchy_outgoing_calls_result_to_json
+    (result : call_hierarchy_outgoing_call list option) : Yojson.Safe.t =
+  match result with
+  | Some calls -> `List (List.map call_hierarchy_outgoing_call_to_json calls)
+  | None -> `Null
 
 (** {1 Work-Done Progress} *)
 

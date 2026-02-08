@@ -186,6 +186,7 @@ let capabilities () : Protocol.server_capabilities =
     inlay_hint_provider = true;
     type_definition_provider = true;
     workspace_symbol_provider = true;
+    call_hierarchy_provider = true;
   }
 
 (** Require non-None params, returning an invalid-params error otherwise. *)
@@ -1597,6 +1598,213 @@ let handle_workspace_symbol (server : t) (params : Yojson.Safe.t option) :
   Log.debug "Workspace symbol request: query=%S" ws_params.ws_query;
   Workspace_symbols.handle ~documents:server.documents ~query:ws_params.ws_query
 
+(** {1 Call Hierarchy} *)
+
+(** Handle textDocument/prepareCallHierarchy request.
+
+    Returns a [CallHierarchyItem] for the function at the cursor, or null if the
+    cursor is not on a function name. *)
+let handle_call_hierarchy_prepare (server : t) (params : Yojson.Safe.t option) :
+    (Yojson.Safe.t, Rpc.response_error) result =
+  require_params "prepare call hierarchy" params @@ fun json ->
+  let p = Protocol.parse_call_hierarchy_prepare_params json in
+  let uri = p.chpp_text_document in
+  let line = p.chpp_position.line in
+  Log.debug "Prepare call hierarchy at %s:%d:%d" uri line
+    p.chpp_position.character;
+  let null = Protocol.call_hierarchy_prepare_result_to_json None in
+  with_document server ~uri ~not_found:null @@ fun doc ->
+  let col =
+    Document.utf16_col_to_byte ~text:doc.text ~line
+      ~col:p.chpp_position.character
+  in
+  with_sexp_at_cursor ~doc ~uri ~line ~col ~not_found:null
+  @@ fun parse_result _ctx ->
+  (* Find the defun at the cursor position *)
+  let defuns =
+    Call_hierarchy.extract_defun_infos ~uri ~text:doc.text parse_result.sexps
+  in
+  let matching =
+    List.find_opt
+      (fun (d : Call_hierarchy.defun_info) ->
+        let sr = d.selection_range in
+        (line > sr.start.line
+        || (line = sr.start.line && col >= sr.start.character))
+        && (line < sr.end_.line
+           || (line = sr.end_.line && col <= sr.end_.character)))
+      defuns
+  in
+  match matching with
+  | None ->
+      Log.debug "No function definition at cursor";
+      Ok null
+  | Some d ->
+      Log.debug "Found function: %s" d.name;
+      let item : Protocol.call_hierarchy_item =
+        {
+          chi_name = d.name;
+          chi_kind = Protocol.SKFunction;
+          chi_uri = uri;
+          chi_range = d.range;
+          chi_selection_range = d.selection_range;
+          chi_data = None;
+        }
+      in
+      Ok (Protocol.call_hierarchy_prepare_result_to_json (Some [ item ]))
+
+(** Handle callHierarchy/incomingCalls request.
+
+    Finds all callers of the target function across all open [.el] documents. *)
+let handle_incoming_calls (server : t) (params : Yojson.Safe.t option) :
+    (Yojson.Safe.t, Rpc.response_error) result =
+  require_params "incoming calls" params @@ fun json ->
+  let item = Protocol.parse_incoming_calls_params json in
+  let target_name = item.chi_name in
+  Log.debug "Incoming calls for: %s" target_name;
+  let uris = Document.list_uris server.documents in
+  let calls =
+    List.concat_map
+      (fun uri ->
+        match Document.get_doc server.documents uri with
+        | None -> []
+        | Some doc ->
+            if Signature_tracker.is_tart_file uri then []
+            else
+              let filename = Uri.to_filename uri in
+              let parse_result = Syntax.Read.parse_string ~filename doc.text in
+              let defuns =
+                Call_hierarchy.extract_defun_infos ~uri ~text:doc.text
+                  parse_result.sexps
+              in
+              List.filter_map
+                (fun (d : Call_hierarchy.defun_info) ->
+                  let call_spans =
+                    Call_hierarchy.find_call_sites ~callee:target_name d.body
+                  in
+                  if call_spans = [] then None
+                  else
+                    let from_ranges =
+                      List.map (range_of_span ~text:doc.text) call_spans
+                    in
+                    Some
+                      {
+                        Protocol.chic_from =
+                          {
+                            chi_name = d.name;
+                            chi_kind = Protocol.SKFunction;
+                            chi_uri = uri;
+                            chi_range = d.range;
+                            chi_selection_range = d.selection_range;
+                            chi_data = None;
+                          };
+                        chic_from_ranges = from_ranges;
+                      })
+                defuns)
+      uris
+  in
+  Log.debug "Found %d incoming callers" (List.length calls);
+  Ok (Protocol.call_hierarchy_incoming_calls_result_to_json (Some calls))
+
+(** Handle callHierarchy/outgoingCalls request.
+
+    Finds all functions called from the body of the target function. *)
+let handle_outgoing_calls (server : t) (params : Yojson.Safe.t option) :
+    (Yojson.Safe.t, Rpc.response_error) result =
+  require_params "outgoing calls" params @@ fun json ->
+  let item = Protocol.parse_outgoing_calls_params json in
+  let target_uri = item.chi_uri in
+  let target_name = item.chi_name in
+  Log.debug "Outgoing calls for: %s in %s" target_name target_uri;
+  let null = Protocol.call_hierarchy_outgoing_calls_result_to_json (Some []) in
+  with_document server ~uri:target_uri ~not_found:null @@ fun doc ->
+  let filename = Uri.to_filename target_uri in
+  let parse_result = Syntax.Read.parse_string ~filename doc.text in
+  let defuns =
+    Call_hierarchy.extract_defun_infos ~uri:target_uri ~text:doc.text
+      parse_result.sexps
+  in
+  match
+    List.find_opt
+      (fun (d : Call_hierarchy.defun_info) -> d.name = target_name)
+      defuns
+  with
+  | None ->
+      Log.debug "Function %s not found in %s" target_name target_uri;
+      Ok null
+  | Some defun ->
+      let callees = Call_hierarchy.find_callees_in_body defun.body in
+      (* Group call sites by callee name *)
+      let by_name = Hashtbl.create 16 in
+      List.iter
+        (fun (name, span) ->
+          let existing =
+            match Hashtbl.find_opt by_name name with
+            | Some spans -> spans
+            | None -> []
+          in
+          Hashtbl.replace by_name name (span :: existing))
+        callees;
+      (* Build outgoing call items. Try to resolve each callee to a defun_info
+         across all open documents for accurate range info. *)
+      let all_uris = Document.list_uris server.documents in
+      let calls =
+        Hashtbl.fold
+          (fun callee_name spans acc ->
+            let from_ranges =
+              List.map (range_of_span ~text:doc.text) (List.rev spans)
+            in
+            (* Try to resolve callee definition *)
+            let callee_item =
+              List.find_map
+                (fun u ->
+                  match Document.get_doc server.documents u with
+                  | None -> None
+                  | Some d ->
+                      if Signature_tracker.is_tart_file u then None
+                      else
+                        let fn = Uri.to_filename u in
+                        let pr = Syntax.Read.parse_string ~filename:fn d.text in
+                        let defs =
+                          Call_hierarchy.extract_defun_infos ~uri:u ~text:d.text
+                            pr.sexps
+                        in
+                        List.find_opt
+                          (fun (di : Call_hierarchy.defun_info) ->
+                            di.name = callee_name)
+                          defs)
+                all_uris
+            in
+            let to_item : Protocol.call_hierarchy_item =
+              match callee_item with
+              | Some ci ->
+                  {
+                    chi_name = ci.name;
+                    chi_kind = Protocol.SKFunction;
+                    chi_uri = ci.uri;
+                    chi_range = ci.range;
+                    chi_selection_range = ci.selection_range;
+                    chi_data = None;
+                  }
+              | None ->
+                  (* Callee not found as a defun — use a synthetic item with
+                     the first call site as the range *)
+                  let first_range = List.hd from_ranges in
+                  {
+                    chi_name = callee_name;
+                    chi_kind = Protocol.SKFunction;
+                    chi_uri = target_uri;
+                    chi_range = first_range;
+                    chi_selection_range = first_range;
+                    chi_data = None;
+                  }
+            in
+            { Protocol.choc_to = to_item; choc_from_ranges = from_ranges }
+            :: acc)
+          by_name []
+      in
+      Log.debug "Found %d outgoing callees" (List.length calls);
+      Ok (Protocol.call_hierarchy_outgoing_calls_result_to_json (Some calls))
+
 (** Dispatch a request to its handler *)
 let dispatch_request (server : t) (msg : Rpc.message) :
     (Yojson.Safe.t, Rpc.response_error) result =
@@ -1621,6 +1829,10 @@ let dispatch_request (server : t) (msg : Rpc.message) :
   | "textDocument/inlayHint" -> handle_inlay_hints server msg.params
   | "textDocument/typeDefinition" -> handle_type_definition server msg.params
   | "workspace/symbol" -> handle_workspace_symbol server msg.params
+  | "textDocument/prepareCallHierarchy" ->
+      handle_call_hierarchy_prepare server msg.params
+  | "callHierarchy/incomingCalls" -> handle_incoming_calls server msg.params
+  | "callHierarchy/outgoingCalls" -> handle_outgoing_calls server msg.params
   | _ ->
       Error
         {

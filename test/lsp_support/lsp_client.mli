@@ -131,6 +131,16 @@ val cancel_request_msg : id:int -> unit -> string
 val did_change_configuration_msg : settings:Yojson.Safe.t -> unit -> string
 (** workspace/didChangeConfiguration notification. *)
 
+val call_hierarchy_prepare_msg :
+  id:int -> uri:string -> line:int -> character:int -> unit -> string
+(** textDocument/prepareCallHierarchy request. *)
+
+val incoming_calls_msg : id:int -> item:Yojson.Safe.t -> unit -> string
+(** callHierarchy/incomingCalls request. *)
+
+val outgoing_calls_msg : id:int -> item:Yojson.Safe.t -> unit -> string
+(** callHierarchy/outgoingCalls request. *)
+
 (** {1 Session Runners} *)
 
 type session_result = {

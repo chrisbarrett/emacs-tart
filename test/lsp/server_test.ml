@@ -2962,6 +2962,205 @@ let test_rapid_changes_final_state () =
         "final diagnostics have errors" true
         (List.length diags > 0)
 
+(** {1 Call Hierarchy Tests} *)
+
+let test_call_hierarchy_capability_advertised () =
+  let result =
+    run_session [ initialize_msg ~id:1 (); shutdown_msg ~id:2 (); exit_msg () ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:1 result.messages with
+  | None -> Alcotest.fail "No initialize response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let caps = json |> member "result" |> member "capabilities" in
+      Alcotest.(check bool)
+        "callHierarchyProvider" true
+        (caps |> member "callHierarchyProvider" |> to_bool)
+
+let test_call_hierarchy_prepare_on_defun () =
+  let text = "(defun my-fn () 42)" in
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el" ~text ();
+        call_hierarchy_prepare_msg ~id:2 ~uri:"file:///test.el" ~line:0
+          ~character:7 ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "No prepare response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      Alcotest.(check bool) "result is not null" true (result <> `Null);
+      let items = result |> to_list in
+      Alcotest.(check int) "one item" 1 (List.length items);
+      let item = List.hd items in
+      Alcotest.(check string) "name" "my-fn" (item |> member "name" |> to_string);
+      (* SKFunction = 12 *)
+      Alcotest.(check int) "kind" 12 (item |> member "kind" |> to_int)
+
+let test_call_hierarchy_prepare_not_on_defun () =
+  let text = "(+ 1 2)" in
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el" ~text ();
+        call_hierarchy_prepare_msg ~id:2 ~uri:"file:///test.el" ~line:0
+          ~character:1 ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "No prepare response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      Alcotest.(check bool) "result is null" true (result = `Null)
+
+let test_call_hierarchy_incoming_calls () =
+  (* caller calls callee; requesting incoming calls for callee should find caller *)
+  let a_text = "(defun caller () (callee))" in
+  let b_text = "(defun callee () 42)" in
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///a.el" ~text:a_text ();
+        did_open_msg ~uri:"file:///b.el" ~text:b_text ();
+        call_hierarchy_prepare_msg ~id:2 ~uri:"file:///b.el" ~line:0
+          ~character:7 ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "No prepare response"
+  | Some json -> (
+      let open Yojson.Safe.Util in
+      let items = json |> member "result" |> to_list in
+      Alcotest.(check int) "one prepare item" 1 (List.length items);
+      let callee_item = List.hd items in
+      (* Now ask for incoming calls *)
+      let result2 =
+        run_initialized_session
+          [
+            did_open_msg ~uri:"file:///a.el" ~text:a_text ();
+            did_open_msg ~uri:"file:///b.el" ~text:b_text ();
+            incoming_calls_msg ~id:2 ~item:callee_item ();
+          ]
+      in
+      Alcotest.(check int) "exit code 2" 0 result2.exit_code;
+      match find_response ~id:2 result2.messages with
+      | None -> Alcotest.fail "No incoming calls response"
+      | Some json2 ->
+          let result2_field = json2 |> member "result" in
+          Alcotest.(check bool)
+            "result is not null" true (result2_field <> `Null);
+          let calls = result2_field |> to_list in
+          Alcotest.(check int) "one incoming caller" 1 (List.length calls);
+          let call = List.hd calls in
+          let from = call |> member "from" in
+          Alcotest.(check string)
+            "caller name" "caller"
+            (from |> member "name" |> to_string);
+          let from_ranges = call |> member "fromRanges" |> to_list in
+          Alcotest.(check bool)
+            "has from ranges" true
+            (List.length from_ranges > 0))
+
+let test_call_hierarchy_outgoing_calls () =
+  (* caller calls callee; requesting outgoing calls for caller should find callee *)
+  let a_text = "(defun caller () (callee))" in
+  let b_text = "(defun callee () 42)" in
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///a.el" ~text:a_text ();
+        did_open_msg ~uri:"file:///b.el" ~text:b_text ();
+        call_hierarchy_prepare_msg ~id:2 ~uri:"file:///a.el" ~line:0
+          ~character:7 ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "No prepare response"
+  | Some json -> (
+      let open Yojson.Safe.Util in
+      let items = json |> member "result" |> to_list in
+      Alcotest.(check int) "one prepare item" 1 (List.length items);
+      let caller_item = List.hd items in
+      (* Now ask for outgoing calls *)
+      let result2 =
+        run_initialized_session
+          [
+            did_open_msg ~uri:"file:///a.el" ~text:a_text ();
+            did_open_msg ~uri:"file:///b.el" ~text:b_text ();
+            outgoing_calls_msg ~id:2 ~item:caller_item ();
+          ]
+      in
+      Alcotest.(check int) "exit code 2" 0 result2.exit_code;
+      match find_response ~id:2 result2.messages with
+      | None -> Alcotest.fail "No outgoing calls response"
+      | Some json2 ->
+          let result2_field = json2 |> member "result" in
+          Alcotest.(check bool)
+            "result is not null" true (result2_field <> `Null);
+          let calls = result2_field |> to_list in
+          Alcotest.(check bool) "has outgoing calls" true (List.length calls > 0);
+          let callee_names =
+            List.map
+              (fun c -> c |> member "to" |> member "name" |> to_string)
+              calls
+          in
+          Alcotest.(check bool)
+            "callee in outgoing" true
+            (List.mem "callee" callee_names))
+
+let test_call_hierarchy_cross_file_incoming () =
+  (* Two files: a.el defines (defun caller () (shared-fn))
+     b.el defines (defun shared-fn () 99)
+     Incoming calls for shared-fn should find caller in a.el *)
+  let a_text = "(defun caller () (shared-fn))" in
+  let b_text = "(defun shared-fn () 99)" in
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///a.el" ~text:a_text ();
+        did_open_msg ~uri:"file:///b.el" ~text:b_text ();
+        call_hierarchy_prepare_msg ~id:2 ~uri:"file:///b.el" ~line:0
+          ~character:7 ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "No prepare response"
+  | Some json -> (
+      let open Yojson.Safe.Util in
+      let items = json |> member "result" |> to_list in
+      let item = List.hd items in
+      let result2 =
+        run_initialized_session
+          [
+            did_open_msg ~uri:"file:///a.el" ~text:a_text ();
+            did_open_msg ~uri:"file:///b.el" ~text:b_text ();
+            incoming_calls_msg ~id:2 ~item ();
+          ]
+      in
+      Alcotest.(check int) "exit code 2" 0 result2.exit_code;
+      match find_response ~id:2 result2.messages with
+      | None -> Alcotest.fail "No incoming calls response"
+      | Some json2 ->
+          let calls = json2 |> member "result" |> to_list in
+          Alcotest.(check int) "one incoming caller" 1 (List.length calls);
+          let caller = List.hd calls |> member "from" in
+          Alcotest.(check string)
+            "caller name" "caller"
+            (caller |> member "name" |> to_string);
+          Alcotest.(check string)
+            "caller uri" "file:///a.el"
+            (caller |> member "uri" |> to_string))
+
 (** {1 Test Registration} *)
 
 let () =
@@ -3257,5 +3456,20 @@ let () =
             test_progress_not_sent_without_capability;
           Alcotest.test_case "rapid changes final state" `Quick
             test_rapid_changes_final_state;
+        ] );
+      ( "call-hierarchy",
+        [
+          Alcotest.test_case "capability advertised" `Quick
+            test_call_hierarchy_capability_advertised;
+          Alcotest.test_case "prepare on defun" `Quick
+            test_call_hierarchy_prepare_on_defun;
+          Alcotest.test_case "prepare not on defun" `Quick
+            test_call_hierarchy_prepare_not_on_defun;
+          Alcotest.test_case "incoming calls" `Quick
+            test_call_hierarchy_incoming_calls;
+          Alcotest.test_case "outgoing calls" `Quick
+            test_call_hierarchy_outgoing_calls;
+          Alcotest.test_case "cross-file incoming" `Quick
+            test_call_hierarchy_cross_file_incoming;
         ] );
     ]

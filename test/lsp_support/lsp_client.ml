@@ -230,6 +230,21 @@ let did_change_configuration_msg ~(settings : Yojson.Safe.t) () =
     ~params:(`Assoc [ ("settings", settings) ])
     ()
 
+let call_hierarchy_prepare_msg ~id ~uri ~line ~character () =
+  make_message ~id:(`Int id) ~method_:"textDocument/prepareCallHierarchy"
+    ~params:(position_params ~uri ~line ~character)
+    ()
+
+let incoming_calls_msg ~id ~(item : Yojson.Safe.t) () =
+  make_message ~id:(`Int id) ~method_:"callHierarchy/incomingCalls"
+    ~params:(`Assoc [ ("item", item) ])
+    ()
+
+let outgoing_calls_msg ~id ~(item : Yojson.Safe.t) () =
+  make_message ~id:(`Int id) ~method_:"callHierarchy/outgoingCalls"
+    ~params:(`Assoc [ ("item", item) ])
+    ()
+
 (* {1 Message Parsing} *)
 
 let parse_messages (output : string) : Yojson.Safe.t list =
