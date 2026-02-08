@@ -588,9 +588,9 @@ Tasks 1–3, 5–6, 8–9, 11, 13–16 are independent and can proceed in parall
 | -- | ------------------------------- | ---- | ------------------------- | ------------------------------------------------ | ----------- |
 | 1  | Debug-level unification tracing | 72   | —                         | `unify.ml`                                       | Done        |
 | 2  | Reserved error codes            | 73   | —                         | `diagnostic.ml`, `diagnostic.mli`                | Done        |
-| 3  | Info severity                   | 73   | —                         | `diagnostic.ml`, `diagnostic.mli`, `server.ml`   | Not started |
-| 4  | Clause diagnostics in LSP       | 73   | —                         | `diagnostic.ml`, `diagnostic.mli`, `server.ml`   | Not started |
-| 5  | Workspace-wide find-references  | 71   | —                         | `server.ml`                                      | Not started |
+| 3  | Info severity                   | 73   | —                         | `diagnostic.ml`, `diagnostic.mli`, `worker.ml`   | Done        |
+| 4  | Clause diagnostics in LSP       | 73   | —                         | `diagnostic.ml`, `diagnostic.mli`, `server.ml`   | Done        |
+| 5  | Workspace-wide find-references  | 71   | —                         | `server.ml`                                      | Done        |
 | 6  | Cross-file goto-definition      | 71   | —                         | `server.ml`                                      | Not started |
 | 7  | Workspace-wide rename           | 71   | —                         | `server.ml`                                      | Not started |
 | 8  | Scope-aware completion          | 71   | —                         | `completion.ml`                                  | Not started |

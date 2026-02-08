@@ -708,6 +708,38 @@ let test_references_defvar () =
       let locations = result |> to_list in
       Alcotest.(check int) "found 3 references" 3 (List.length locations)
 
+let test_references_cross_file () =
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///a.el"
+          ~text:"(defun shared-fn () 42)\n(shared-fn)" ();
+        did_open_msg ~uri:"file:///b.el" ~text:"(shared-fn)\n(shared-fn)" ();
+        references_msg ~id:2 ~uri:"file:///a.el" ~line:0 ~character:7 ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "No references response found"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      Alcotest.(check bool) "result is not null" true (result <> `Null);
+      let locations = result |> to_list in
+      (* 2 in a.el (defun name + call) + 2 in b.el *)
+      Alcotest.(check int) "found 4 references" 4 (List.length locations);
+      let uris =
+        List.map (fun loc -> loc |> member "uri" |> to_string) locations
+      in
+      let a_count =
+        List.length (List.filter (fun u -> u = "file:///a.el") uris)
+      in
+      let b_count =
+        List.length (List.filter (fun u -> u = "file:///b.el") uris)
+      in
+      Alcotest.(check int) "2 refs in a.el" 2 a_count;
+      Alcotest.(check int) "2 refs in b.el" 2 b_count
+
 (** {1 Code Action Tests} *)
 
 let test_code_action_returns_empty_list () =
@@ -2818,6 +2850,7 @@ let () =
             test_references_not_on_symbol;
           Alcotest.test_case "have uris" `Quick test_references_have_uris;
           Alcotest.test_case "defvar" `Quick test_references_defvar;
+          Alcotest.test_case "cross-file" `Quick test_references_cross_file;
         ] );
       ( "code-action",
         [

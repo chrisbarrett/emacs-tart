@@ -1117,6 +1117,32 @@ let handle_type_definition (server : t) (params : Yojson.Safe.t option) :
               Log.debug "No type definition found for: %s" tcon_name;
               Ok (Protocol.definition_result_to_json Protocol.DefNull)))
 
+(** Find all references to a symbol across all open documents.
+
+    Iterates every open document, parses its sexps, and collects all occurrences
+    of [name]. Returns a flat list of LSP locations spanning multiple files. The
+    [origin_uri] document appears first in results. *)
+let find_references_in_workspace (server : t) ~(origin_uri : string)
+    (name : string) : Protocol.location list =
+  let uris = Document.list_uris server.documents in
+  (* Put origin document first so its results come first *)
+  let sorted_uris =
+    let origin, rest = List.partition (fun u -> u = origin_uri) uris in
+    origin @ rest
+  in
+  List.concat_map
+    (fun uri ->
+      match Document.get_doc server.documents uri with
+      | None -> []
+      | Some doc ->
+          if Signature_tracker.is_tart_file uri then []
+          else
+            let filename = Uri.to_filename uri in
+            let parse_result = Syntax.Read.parse_string ~filename doc.text in
+            let ref_spans = find_references name parse_result.sexps in
+            List.map (location_of_span ~text:doc.text) ref_spans)
+    sorted_uris
+
 (** Handle textDocument/references request *)
 let handle_references (server : t) (params : Yojson.Safe.t option) :
     (Yojson.Safe.t, Rpc.response_error) result =
@@ -1133,7 +1159,7 @@ let handle_references (server : t) (params : Yojson.Safe.t option) :
       ~col:ref_params.ref_position.character
   in
   with_sexp_at_cursor ~doc ~uri ~line ~col ~not_found:ref_null
-  @@ fun parse_result ctx ->
+  @@ fun _parse_result ctx ->
   (* Extract symbol name from the target sexp *)
   match symbol_name_of_sexp ctx.target with
   | None ->
@@ -1141,11 +1167,11 @@ let handle_references (server : t) (params : Yojson.Safe.t option) :
       Ok (Protocol.references_result_to_json None)
   | Some name ->
       Log.debug "Finding references to: %s" name;
-      (* Find all references in the document *)
-      let ref_spans = find_references name parse_result.sexps in
-      Log.debug "Found %d references" (List.length ref_spans);
-      (* Convert spans to locations *)
-      let locations = List.map (location_of_span ~text:doc.text) ref_spans in
+      (* Find all references across all open documents *)
+      let locations =
+        find_references_in_workspace server ~origin_uri:uri name
+      in
+      Log.debug "Found %d references across workspace" (List.length locations);
       Ok (Protocol.references_result_to_json (Some locations))
 
 (** Handle textDocument/codeAction request.
