@@ -374,5 +374,39 @@
   "tart-install-directory is marked as risky local variable."
   (should (get 'tart-install-directory 'risky-local-variable)))
 
+;;; Safe-Version Predicate Tests (Spec 65, R2)
+
+(ert-deftest tart-mode-safe-version-p-semver ()
+  "Accepts a standard semver string."
+  (should (tart--safe-version-p "0.2.0")))
+
+(ert-deftest tart-mode-safe-version-p-pre-release ()
+  "Accepts semver with pre-release suffix."
+  (should (tart--safe-version-p "1.0.0-rc1")))
+
+(ert-deftest tart-mode-safe-version-p-date-suffix ()
+  "Accepts semver with date pre-release suffix."
+  (should (tart--safe-version-p "2.3.1-20250601")))
+
+(ert-deftest tart-mode-safe-version-p-latest ()
+  "Accepts the symbol `latest'."
+  (should (tart--safe-version-p 'latest)))
+
+(ert-deftest tart-mode-safe-version-p-rejects-path-traversal ()
+  "Rejects path-traversal payloads."
+  (should-not (tart--safe-version-p "../../foo")))
+
+(ert-deftest tart-mode-safe-version-p-rejects-incomplete-semver ()
+  "Rejects incomplete version strings."
+  (should-not (tart--safe-version-p "0.1")))
+
+(ert-deftest tart-mode-safe-version-p-rejects-empty-string ()
+  "Rejects the empty string."
+  (should-not (tart--safe-version-p "")))
+
+(ert-deftest tart-mode-safe-version-p-rejects-non-string ()
+  "Rejects non-string, non-symbol values."
+  (should-not (tart--safe-version-p 42)))
+
 (provide 'tart-mode-tests)
 ;;; tart-mode-tests.el ends here

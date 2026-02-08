@@ -70,6 +70,16 @@ When a string, use directly (absolute path or command on `exec-path')."
 
 (put 'tart-executable 'risky-local-variable t)
 
+(defun tart--safe-version-p (v)
+  "Return non-nil if V is a safe value for `tart-version'.
+Accepts the symbol `latest' or a strict semver string matching
+X.Y.Z with an optional pre-release suffix."
+  (or (eq v 'latest)
+      (and (stringp v)
+           (string-match-p
+            "\\`[0-9]+\\.[0-9]+\\.[0-9]+\\(?:-[A-Za-z0-9][A-Za-z0-9.-]*\\)?\\'"
+            v))))
+
 (defcustom tart-version 'latest
   "Tart version to install.
 When `latest', installs the most recent GitHub release.
@@ -78,7 +88,7 @@ This can be set in .dir-locals.el to pin a project to a specific version."
   :type '(choice (const :tag "Latest" latest)
                  (string :tag "Specific version"))
   :group 'tart
-  :safe (lambda (v) (or (eq v 'latest) (stringp v))))
+  :safe #'tart--safe-version-p)
 
 (defcustom tart-lsp-args nil
   "Additional arguments to pass to `tart lsp'.
