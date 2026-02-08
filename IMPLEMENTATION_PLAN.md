@@ -1,112 +1,102 @@
-# Implementation Plan — UTF-16 Position Encoding
+# Implementation Plan — Incremental Sync Recovery
 
-> Source: [Spec 71](./specs/71-lsp-server.md), task 2 from
+> Source: [Spec 71](./specs/71-lsp-server.md) §Robustness, task 3 from
 > [specs/IMPLEMENTATION_PLAN.md](./specs/IMPLEMENTATION_PLAN.md)
 
-## Context
+## Problem
 
-The LSP protocol uses UTF-16 code units for character offsets within lines.
-The tart server currently approximates with byte offsets throughout:
+When a client sends an incremental `didChange` with positions outside the
+document bounds, `apply_single_change` returns `Error` and the server logs the
+message but otherwise ignores the edit. The document is left at the old version,
+creating silent state divergence — every subsequent incremental edit is applied
+against stale text, compounding the problem.
 
-- `server.ml:146` has a comment: "UTF-16 code units, but we approximate
-  with bytes."
-- `document.ml:81` `position_to_offset` treats `character` as a byte index.
-- All positions returned via `range_of_span` pass byte columns straight
-  through.
+The spec calls for two defences:
 
-The low-level conversion functions (`utf16_offset_of_byte` and
-`byte_offset_of_utf16`) are already implemented and tested in
-`document.{ml,mli}` with 7 unit tests. What remains is wiring them into the
-protocol flow.
+1. **Clamp** out-of-range edits to the document bounds so the edit can still be
+   applied (best-effort).
+2. **Detect version gaps** (incoming version ≠ stored version + 1) and log at
+   info level so operators can diagnose sync issues.
 
-There are two directions of conversion:
+## Current State
 
-1. **Inbound (client → server):** Positions in requests (`hover`,
-   `definition`, `references`, `completion`, `signatureHelp`, `rename`,
-   `codeAction`) and `didChange` edits carry UTF-16 character offsets that
-   must be converted to byte offsets before use.
-
-2. **Outbound (server → client):** All positions in responses and
-   notifications (`range_of_span`, code action edits, document symbols,
-   rename edits) carry byte column offsets that must be converted to UTF-16
-   before sending.
+- `position_to_offset` returns `None` for out-of-range positions.
+- `apply_single_change` propagates the `None` as `Error "... out of range"`.
+- `apply_changes` returns the first `Error` immediately.
+- `handle_did_change` in `server.ml` logs the error at info and drops the edit.
+- No version gap detection exists.
 
 ## Tasks
 
-### 1. Add `position_encoding` to server state and negotiate during initialize
+### Task 1 — Clamp out-of-range positions in `position_to_offset`
 
-Store the negotiated position encoding in the server record. Parse
-`general.positionEncodings` from client capabilities. Advertise the chosen
-encoding in the initialize response.
+**Files:** `lib/lsp/document.ml`, `lib/lsp/document.mli`
 
-**Changed files:**
+Change `position_to_offset` to never return `None`. When a position is past the
+end of the document, clamp to `String.length text`. When a character offset is
+past the end of a line, clamp to the line's byte length.
 
-| File | Change |
-|------|--------|
-| `protocol.mli` | Add `general_capabilities` with `position_encodings : string list option` to `client_capabilities`; add `position_encoding` field to `server_capabilities` |
-| `protocol.ml` | Parse `general.positionEncodings` in `parse_client_capabilities`; encode `positionEncoding` in `server_capabilities_to_json` |
-| `server.ml` | Add `position_encoding` field to `t`; negotiate encoding in `handle_initialize` |
+- Make `position_to_offset` return `int` (not `int option`).
+- Update `apply_single_change` to remove the `None` match arms.
+- Remove the `Error "Start/End position out of range"` paths — they become
+  unreachable.
+- Keep the `start > end` guard (invalid range).
+- Keep the `end_offset > String.length text` guard but change it to clamp
+  `end_offset` to `String.length text` rather than error.
 
-**Negotiation logic:** If client advertises `utf-32`, prefer it (no
-conversion needed — our byte offsets are effectively UTF-32 for ASCII, but
-we still need conversion for multi-byte). Otherwise use `utf-16` (the
-default). Store the result in `server.position_encoding`.
+**Tests:** Add to `test/lsp/document_test.ml`:
 
-### 2. Add `line_text_at` helper to `document.ml`
+- `test_edit_past_end_clamps`: edit with start/end beyond document end → clamps
+  to end, inserts at end.
+- `test_edit_past_line_end_clamps`: character offset beyond line length → clamps
+  to line end.
 
-The conversion functions need the text of a specific line. Add a helper
-that extracts line text by line number from a document's text.
+### Task 2 — Detect version gaps
 
-**Changed files:**
+**Files:** `lib/lsp/document.ml`, `lib/lsp/server.ml`
 
-| File | Change |
-|------|--------|
-| `document.mli` | Add `val line_text_at : string -> int -> string option` |
-| `document.ml` | Implement `line_text_at` — extract the nth (0-based) line from text |
+Add version gap detection to `apply_changes`:
 
-### 3. Wire UTF-16 conversion into `position_to_offset` (inbound)
+- Before applying, check if `version <> doc.version + 1`. If so, return an
+  enriched result that signals the gap (e.g., a separate variant or a warning
+  string alongside `Ok`).
+- In `handle_did_change`, log at info level when a version gap is detected:
+  `"Version gap on %s: expected %d, got %d"`.
+- Still apply the changes regardless — version gaps are informational, not
+  blocking.
 
-Make `position_to_offset` convert the `character` field from UTF-16 to
-bytes before using it as an index into line text.
+Design the return type as:
+```ocaml
+type apply_result = {
+  warning : string option;
+}
+```
 
-**Changed files:**
+Change `apply_changes` to return `(apply_result, string) result`. The `Ok`
+variant carries an optional warning string. `handle_did_change` logs the warning
+when present.
 
-| File | Change |
-|------|--------|
-| `document.ml` | In `position_to_offset`, convert `pos.character` from UTF-16 to byte offset using `byte_offset_of_utf16` |
-| `test/lsp/document_test.ml` | Add tests: incremental edit with multi-byte content using UTF-16 character positions |
+**Tests:** Add to `test/lsp/document_test.ml`:
 
-### 4. Wire UTF-16 conversion into `range_of_span` (outbound)
+- `test_version_gap_detected`: apply changes with version jump (1 → 5) →
+  succeeds with warning.
+- `test_version_sequential_no_warning`: apply changes with version 1 → 2 → no
+  warning.
 
-`range_of_span` converts `Syntax.Location.span` (which has byte columns)
-to `Protocol.range`. It needs the document text to convert byte columns to
-UTF-16. Thread the document text through and apply `utf16_offset_of_byte`.
+### Task 3 — End-to-end integration test
 
-**Changed files:**
+**Files:** `test/lsp/server_test.ml`
 
-| File | Change |
-|------|--------|
-| `server.ml` | Change `range_of_span` to accept `~text:string`; look up line text and convert byte columns to UTF-16. Update all call sites (diagnostics, hover, definition, references, code actions, document symbols, rename). |
+Add an end-to-end test in the server test suite:
 
-### 5. Add end-to-end LSP tests with multi-byte content
+- `test_edit_past_end_succeeds`: send `didChange` with a range extending past
+  document bounds → no crash, subsequent operations (hover, diagnostics) still
+  work on the clamped document.
 
-Add server-level tests that send multi-byte content (emoji, CJK) via
-didOpen and verify that diagnostics, hover, and other responses report
-positions in UTF-16 code units.
+## Checklist
 
-**Changed files:**
-
-| File | Change |
-|------|--------|
-| `test/lsp/server_test.ml` | Add tests: hover on multi-byte line returns UTF-16 positions; diagnostics for multi-byte content use UTF-16 positions |
-
-## Iteration Order
-
-1. **Task 1** — Protocol negotiation (types + parsing + server state)
-2. **Task 2** — `line_text_at` helper
-3. **Task 3** — Inbound conversion (`position_to_offset`)
-4. **Task 4** — Outbound conversion (`range_of_span`)
-5. **Task 5** — End-to-end tests
-
-Tasks 1–2 are prerequisites. Tasks 3–4 are the core work and can be done
-independently once 1–2 are in place. Task 5 validates the full round-trip.
+| # | Task | Status |
+|---|------|--------|
+| 1 | Clamp out-of-range positions | Not started |
+| 2 | Detect version gaps | Not started |
+| 3 | End-to-end integration test | Not started |

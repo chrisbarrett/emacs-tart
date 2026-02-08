@@ -394,8 +394,8 @@ any order, interleaved with other work.
 
 | # | Task | New files | Key changed files | Status |
 |---|------|-----------|-------------------|--------|
-| 1 | Integration test harness | `test/lsp_integration/{lsp_client,integration_test}.{ml,mli}`, `dune` | — | Not started |
-| 2 | UTF-16 positions | — | `document.ml`, `server.ml`, `protocol.ml` | Not started |
+| 1 | Integration test harness | `test/lsp_integration/{lsp_client,integration_test}.{ml,mli}`, `dune` | — | Done |
+| 2 | UTF-16 positions | — | `document.ml`, `server.ml`, `protocol.ml` | Done |
 | 3 | Incremental sync recovery | — | `document.ml`, `server.ml` | Partial |
 | 4 | Concurrent requests | `lib/lsp/worker.{ml,mli}` | `server.ml` | Not started |
 | 5 | Request cancellation | — | `server.ml` | Stub only |
