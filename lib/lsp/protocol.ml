@@ -15,6 +15,9 @@ type general_client_capabilities = { position_encodings : string list option }
 type window_client_capabilities = { work_done_progress : bool }
 (** Window-related client capabilities *)
 
+type dynamic_registration_capability = { dr_dynamic_registration : bool }
+(** A capability that supports dynamic registration. *)
+
 type client_capabilities = {
   text_document : text_document_client_capabilities option;
   general : general_client_capabilities option;
@@ -24,6 +27,25 @@ type client_capabilities = {
 
 and text_document_client_capabilities = {
   synchronization : text_document_sync_client_capabilities option;
+  hover : dynamic_registration_capability option;
+  completion : dynamic_registration_capability option;
+  signature_help : dynamic_registration_capability option;
+  definition : dynamic_registration_capability option;
+  type_definition : dynamic_registration_capability option;
+  references : dynamic_registration_capability option;
+  document_symbol : dynamic_registration_capability option;
+  code_action : dynamic_registration_capability option;
+  formatting : dynamic_registration_capability option;
+  rename : dynamic_registration_capability option;
+  folding_range : dynamic_registration_capability option;
+  semantic_tokens : dynamic_registration_capability option;
+  inlay_hint : dynamic_registration_capability option;
+  code_lens : dynamic_registration_capability option;
+  linked_editing_range : dynamic_registration_capability option;
+  on_type_formatting : dynamic_registration_capability option;
+  diagnostic : dynamic_registration_capability option;
+  call_hierarchy : dynamic_registration_capability option;
+  type_hierarchy : dynamic_registration_capability option;
 }
 
 and text_document_sync_client_capabilities = {
@@ -99,6 +121,20 @@ let negotiate_position_encoding (caps : client_capabilities) : position_encoding
       if List.mem "utf-32" encodings then UTF32 else UTF16
   | _ -> UTF16
 
+(** Parse a dynamic registration capability from a JSON sub-object. Returns
+    [Some {dr_dynamic_registration = b}] when the sub-object has a boolean
+    [dynamicRegistration] field, [None] when the sub-object is absent or lacks
+    the field. *)
+let parse_dynamic_registration (json : Yojson.Safe.t) (field : string) :
+    dynamic_registration_capability option =
+  let open Yojson.Safe.Util in
+  match json |> member field with
+  | `Null -> None
+  | obj -> (
+      match obj |> member "dynamicRegistration" with
+      | `Bool b -> Some { dr_dynamic_registration = b }
+      | _ -> None)
+
 (** Parse client capabilities from JSON *)
 let parse_client_capabilities (json : Yojson.Safe.t) : client_capabilities =
   let open Yojson.Safe.Util in
@@ -117,7 +153,31 @@ let parse_client_capabilities (json : Yojson.Safe.t) : client_capabilities =
               in
               Some { dynamic_registration }
         in
-        Some { synchronization }
+        Some
+          {
+            synchronization;
+            hover = parse_dynamic_registration td "hover";
+            completion = parse_dynamic_registration td "completion";
+            signature_help = parse_dynamic_registration td "signatureHelp";
+            definition = parse_dynamic_registration td "definition";
+            type_definition = parse_dynamic_registration td "typeDefinition";
+            references = parse_dynamic_registration td "references";
+            document_symbol = parse_dynamic_registration td "documentSymbol";
+            code_action = parse_dynamic_registration td "codeAction";
+            formatting = parse_dynamic_registration td "formatting";
+            rename = parse_dynamic_registration td "rename";
+            folding_range = parse_dynamic_registration td "foldingRange";
+            semantic_tokens = parse_dynamic_registration td "semanticTokens";
+            inlay_hint = parse_dynamic_registration td "inlayHint";
+            code_lens = parse_dynamic_registration td "codeLens";
+            linked_editing_range =
+              parse_dynamic_registration td "linkedEditingRange";
+            on_type_formatting =
+              parse_dynamic_registration td "onTypeFormatting";
+            diagnostic = parse_dynamic_registration td "diagnostic";
+            call_hierarchy = parse_dynamic_registration td "callHierarchy";
+            type_hierarchy = parse_dynamic_registration td "typeHierarchy";
+          }
   in
   let general =
     match json |> member "general" with
@@ -1747,6 +1807,36 @@ let register_file_watchers_json ~(id : string) : Yojson.Safe.t =
               ];
           ] );
     ]
+
+(** {1 Dynamic Registration} *)
+
+type registration = {
+  reg_id : string;
+  reg_method : string;
+  reg_register_options : Yojson.Safe.t option;
+}
+(** A single capability registration. *)
+
+let registration_to_json (reg : registration) : Yojson.Safe.t =
+  let fields =
+    [ ("id", `String reg.reg_id); ("method", `String reg.reg_method) ]
+  in
+  let fields =
+    match reg.reg_register_options with
+    | Some opts -> fields @ [ ("registerOptions", opts) ]
+    | None -> fields
+  in
+  `Assoc fields
+
+let register_capability_json (registrations : registration list) : Yojson.Safe.t
+    =
+  `Assoc
+    [ ("registrations", `List (List.map registration_to_json registrations)) ]
+
+(** Check if a client capability supports dynamic registration. *)
+let supports_dynamic_registration (cap : dynamic_registration_capability option)
+    : bool =
+  match cap with Some { dr_dynamic_registration = true } -> true | _ -> false
 
 (** {1 Workspace Configuration} *)
 

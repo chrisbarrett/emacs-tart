@@ -48,6 +48,9 @@ type t = {
           [textDocument/diagnostic]. Used to support [unchanged] reports. *)
   mutable next_diagnostic_result_id : int;
       (** Monotonic counter for generating unique diagnostic result IDs. *)
+  mutable client_capabilities : Protocol.client_capabilities;
+      (** Client capabilities received during initialization, used for dynamic
+          registration decisions in [handle_initialized]. *)
 }
 
 exception Cancelled
@@ -155,6 +158,8 @@ let create ~ic ~oc ?(debounce_ms = 200) () : t =
     semantic_tokens_cache = Semantic_tokens.create_cache ();
     diagnostic_result_ids = Hashtbl.create 16;
     next_diagnostic_result_id = 1;
+    client_capabilities =
+      { text_document = None; general = None; window = None };
   }
 
 (** Get the server's current state *)
@@ -175,30 +180,44 @@ let signature_tracker (server : t) : Signature_tracker.t =
 let emacs_version (server : t) : Sig.Emacs_version.version option =
   server.emacs_version
 
-(** Get server capabilities *)
-let capabilities () : Protocol.server_capabilities =
+(** Get server capabilities.
+
+    Features for which the client advertises [dynamicRegistration = true] are
+    omitted from the static response and will instead be registered via
+    [client/registerCapability] after [initialized]. *)
+let capabilities (caps : Protocol.client_capabilities) :
+    Protocol.server_capabilities =
+  let td = caps.text_document in
+  let dyn field =
+    match td with
+    | None -> false
+    | Some td_caps -> Protocol.supports_dynamic_registration (field td_caps)
+  in
   {
     text_document_sync =
       Some { open_close = true; change = Protocol.Incremental; save = true };
-    hover_provider = true;
-    definition_provider = true;
-    references_provider = true;
-    code_action_provider = true;
-    document_symbol_provider = true;
-    completion_provider = true;
-    signature_help_provider = true;
-    rename_provider = Some { prepare_provider = true };
-    folding_range_provider = true;
-    semantic_tokens_provider = true;
-    inlay_hint_provider = true;
-    type_definition_provider = true;
+    hover_provider = not (dyn (fun c -> c.hover));
+    definition_provider = not (dyn (fun c -> c.definition));
+    references_provider = not (dyn (fun c -> c.references));
+    code_action_provider = not (dyn (fun c -> c.code_action));
+    document_symbol_provider = not (dyn (fun c -> c.document_symbol));
+    completion_provider = not (dyn (fun c -> c.completion));
+    signature_help_provider = not (dyn (fun c -> c.signature_help));
+    rename_provider =
+      (if dyn (fun c -> c.rename) then None
+       else Some { prepare_provider = true });
+    folding_range_provider = not (dyn (fun c -> c.folding_range));
+    semantic_tokens_provider = not (dyn (fun c -> c.semantic_tokens));
+    inlay_hint_provider = not (dyn (fun c -> c.inlay_hint));
+    type_definition_provider = not (dyn (fun c -> c.type_definition));
     workspace_symbol_provider = true;
-    call_hierarchy_provider = true;
-    type_hierarchy_provider = true;
-    code_lens_provider = true;
-    linked_editing_range_provider = true;
-    document_on_type_formatting_provider = true;
-    diagnostic_provider = true;
+    call_hierarchy_provider = not (dyn (fun c -> c.call_hierarchy));
+    type_hierarchy_provider = not (dyn (fun c -> c.type_hierarchy));
+    code_lens_provider = not (dyn (fun c -> c.code_lens));
+    linked_editing_range_provider = not (dyn (fun c -> c.linked_editing_range));
+    document_on_type_formatting_provider =
+      not (dyn (fun c -> c.on_type_formatting));
+    diagnostic_provider = not (dyn (fun c -> c.diagnostic));
   }
 
 (** Require non-None params, returning an invalid-params error otherwise. *)
@@ -529,6 +548,8 @@ let handle_initialize (server : t) (params : Yojson.Safe.t option) :
       Log.debug "Position encoding: %s"
         (Protocol.position_encoding_to_string encoding);
       server.state <- Initialized { root_uri = init_params.root_uri };
+      (* Store client capabilities for dynamic registration *)
+      server.client_capabilities <- init_params.capabilities;
       (* Apply initializationOptions if provided *)
       (match init_params.initialization_options with
       | Some json ->
@@ -536,18 +557,96 @@ let handle_initialize (server : t) (params : Yojson.Safe.t option) :
           apply_settings server settings
       | None -> ());
       let result : Protocol.initialize_result =
-        { capabilities = capabilities (); position_encoding = encoding }
+        {
+          capabilities = capabilities init_params.capabilities;
+          position_encoding = encoding;
+        }
       in
       let server_info : Protocol.server_info =
         { name = "tart"; version = Some "0.1.0" }
       in
       Ok (Protocol.initialize_response_to_json ~result ~server_info)
 
+(** Build a list of registrations for capabilities the client supports
+    dynamically. Each entry is a method name plus optional registration options
+    JSON. The server omits these from the static capability response and instead
+    registers them here. *)
+let dynamic_registrations (caps : Protocol.client_capabilities) :
+    (string * Yojson.Safe.t option) list =
+  let td = caps.text_document in
+  let dyn field method_ opts =
+    match td with
+    | None -> None
+    | Some td_caps ->
+        if Protocol.supports_dynamic_registration (field td_caps) then
+          Some (method_, opts)
+        else None
+  in
+  List.filter_map Fun.id
+    [
+      dyn (fun c -> c.hover) "textDocument/hover" None;
+      dyn
+        (fun c -> c.completion)
+        "textDocument/completion"
+        (Some (`Assoc [ ("triggerCharacters", `List [ `String "(" ]) ]));
+      dyn
+        (fun c -> c.signature_help)
+        "textDocument/signatureHelp"
+        (Some
+           (`Assoc [ ("triggerCharacters", `List [ `String "("; `String " " ]) ]));
+      dyn (fun c -> c.definition) "textDocument/definition" None;
+      dyn (fun c -> c.type_definition) "textDocument/typeDefinition" None;
+      dyn (fun c -> c.references) "textDocument/references" None;
+      dyn (fun c -> c.document_symbol) "textDocument/documentSymbol" None;
+      dyn (fun c -> c.code_action) "textDocument/codeAction" None;
+      dyn
+        (fun c -> c.rename)
+        "textDocument/rename"
+        (Some (`Assoc [ ("prepareProvider", `Bool true) ]));
+      dyn (fun c -> c.folding_range) "textDocument/foldingRange" None;
+      dyn
+        (fun c -> c.semantic_tokens)
+        "textDocument/semanticTokens"
+        (Some
+           (`Assoc
+              [
+                ("full", `Assoc [ ("delta", `Bool true) ]);
+                ( "legend",
+                  Protocol.semantic_tokens_legend_to_json
+                    Protocol.semantic_tokens_legend );
+              ]));
+      dyn (fun c -> c.inlay_hint) "textDocument/inlayHint" None;
+      dyn (fun c -> c.code_lens) "textDocument/codeLens" (Some (`Assoc []));
+      dyn
+        (fun c -> c.linked_editing_range)
+        "textDocument/linkedEditingRange" None;
+      dyn
+        (fun c -> c.on_type_formatting)
+        "textDocument/onTypeFormatting"
+        (Some
+           (`Assoc
+              [
+                ("firstTriggerCharacter", `String ")");
+                ("moreTriggerCharacter", `List [ `String "\n" ]);
+              ]));
+      dyn
+        (fun c -> c.diagnostic)
+        "textDocument/diagnostic"
+        (Some
+           (`Assoc
+              [
+                ("interFileDependencies", `Bool true);
+                ("workspaceDiagnostics", `Bool false);
+              ]));
+      dyn (fun c -> c.call_hierarchy) "textDocument/prepareCallHierarchy" None;
+      dyn (fun c -> c.type_hierarchy) "textDocument/prepareTypeHierarchy" None;
+    ]
+
 (** Handle initialized notification.
 
-    Registers dynamic file watchers for [.el] and [.tart] files via
-    [client/registerCapability]. The client may ignore this if it doesn't
-    support dynamic registration. *)
+    Registers dynamic file watchers for [.el] and [.tart] files and any
+    capabilities for which the client advertised [dynamicRegistration = true]
+    via [client/registerCapability]. *)
 let handle_initialized (server : t) : unit =
   Log.info "Client confirmed initialization";
   (* Register file watchers for .el and .tart files *)
@@ -555,7 +654,29 @@ let handle_initialized (server : t) : unit =
   server.next_request_id <- id + 1;
   let params = Protocol.register_file_watchers_json ~id:(string_of_int id) in
   Rpc.write_request server.oc ~id ~method_:"client/registerCapability" ~params;
-  Log.debug "Registered file watchers (request id %d)" id
+  Log.debug "Registered file watchers (request id %d)" id;
+  (* Dynamically register capabilities the client opted into *)
+  let dyn_regs = dynamic_registrations server.client_capabilities in
+  if dyn_regs <> [] then (
+    let reg_id = server.next_request_id in
+    server.next_request_id <- reg_id + 1;
+    let registrations =
+      List.mapi
+        (fun i (method_, opts) ->
+          Protocol.
+            {
+              reg_id = Printf.sprintf "dyn-%d-%d" reg_id i;
+              reg_method = method_;
+              reg_register_options = opts;
+            })
+        dyn_regs
+    in
+    let params = Protocol.register_capability_json registrations in
+    Rpc.write_request server.oc ~id:reg_id ~method_:"client/registerCapability"
+      ~params;
+    Log.debug "Dynamically registered %d capabilities (request id %d)"
+      (List.length registrations)
+      reg_id)
 
 (** Handle shutdown request *)
 let handle_shutdown (server : t) : (Yojson.Safe.t, Rpc.response_error) result =

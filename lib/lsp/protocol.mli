@@ -16,6 +16,9 @@ type general_client_capabilities = { position_encodings : string list option }
 type window_client_capabilities = { work_done_progress : bool }
 (** Window-related client capabilities *)
 
+type dynamic_registration_capability = { dr_dynamic_registration : bool }
+(** A capability that supports dynamic registration. *)
+
 type client_capabilities = {
   text_document : text_document_client_capabilities option;
   general : general_client_capabilities option;
@@ -25,6 +28,25 @@ type client_capabilities = {
 
 and text_document_client_capabilities = {
   synchronization : text_document_sync_client_capabilities option;
+  hover : dynamic_registration_capability option;
+  completion : dynamic_registration_capability option;
+  signature_help : dynamic_registration_capability option;
+  definition : dynamic_registration_capability option;
+  type_definition : dynamic_registration_capability option;
+  references : dynamic_registration_capability option;
+  document_symbol : dynamic_registration_capability option;
+  code_action : dynamic_registration_capability option;
+  formatting : dynamic_registration_capability option;
+  rename : dynamic_registration_capability option;
+  folding_range : dynamic_registration_capability option;
+  semantic_tokens : dynamic_registration_capability option;
+  inlay_hint : dynamic_registration_capability option;
+  code_lens : dynamic_registration_capability option;
+  linked_editing_range : dynamic_registration_capability option;
+  on_type_formatting : dynamic_registration_capability option;
+  diagnostic : dynamic_registration_capability option;
+  call_hierarchy : dynamic_registration_capability option;
+  type_hierarchy : dynamic_registration_capability option;
 }
 
 and text_document_sync_client_capabilities = {
@@ -832,6 +854,26 @@ val register_file_watchers_json : id:string -> Yojson.Safe.t
 (** Build the [client/registerCapability] params JSON for registering
     [workspace/didChangeWatchedFiles] watchers with [**/*.el] and [**/*.tart]
     glob patterns. The [id] is used as the registration ID. *)
+
+(** {1 Dynamic Registration} *)
+
+type registration = {
+  reg_id : string;
+  reg_method : string;
+  reg_register_options : Yojson.Safe.t option;
+}
+(** A single capability registration sent via [client/registerCapability]. *)
+
+val registration_to_json : registration -> Yojson.Safe.t
+(** Encode a registration to JSON *)
+
+val register_capability_json : registration list -> Yojson.Safe.t
+(** Build the params for [client/registerCapability] from a list of
+    registrations. *)
+
+val supports_dynamic_registration :
+  dynamic_registration_capability option -> bool
+(** Check if a client capability supports dynamic registration. *)
 
 (** {1 Workspace Configuration} *)
 

@@ -3817,6 +3817,222 @@ let test_pull_diagnostic_matches_push () =
       let range = first |> member "range" in
       Alcotest.(check bool) "has range" true (range <> `Null)
 
+(** {1 Dynamic Registration Tests} *)
+
+let test_dynamic_registration_omits_static_capability () =
+  (* When the client advertises dynamicRegistration for completion, the
+     initialize response should omit completionProvider. *)
+  let caps =
+    `Assoc
+      [
+        ( "textDocument",
+          `Assoc
+            [ ("completion", `Assoc [ ("dynamicRegistration", `Bool true) ]) ]
+        );
+      ]
+  in
+  let result =
+    run_session
+      [
+        initialize_msg ~id:1 ~capabilities:caps ();
+        initialized_msg ();
+        shutdown_msg ~id:99 ();
+        exit_msg ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:1 result.messages with
+  | None -> Alcotest.fail "No initialize response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let server_caps = json |> member "result" |> member "capabilities" in
+      (* completionProvider should be absent *)
+      Alcotest.(check bool)
+        "completionProvider omitted" true
+        (server_caps |> member "completionProvider" = `Null)
+
+let test_dynamic_registration_sends_register_capability () =
+  (* When the client advertises dynamicRegistration for completion, the server
+     should send a client/registerCapability request after initialized. *)
+  let caps =
+    `Assoc
+      [
+        ( "textDocument",
+          `Assoc
+            [ ("completion", `Assoc [ ("dynamicRegistration", `Bool true) ]) ]
+        );
+      ]
+  in
+  let result =
+    run_session
+      [
+        initialize_msg ~id:1 ~capabilities:caps ();
+        initialized_msg ();
+        shutdown_msg ~id:99 ();
+        exit_msg ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  (* There should be at least two client/registerCapability requests:
+     one for file watchers and one for dynamic registrations *)
+  let regs =
+    List.filter
+      (fun msg ->
+        let open Yojson.Safe.Util in
+        msg |> member "method" |> to_string_option
+        = Some "client/registerCapability")
+      result.messages
+  in
+  Alcotest.(check bool)
+    "at least two registerCapability requests" true
+    (List.length regs >= 2);
+  (* The second one should contain completion registration *)
+  let last_reg = List.nth regs (List.length regs - 1) in
+  let open Yojson.Safe.Util in
+  let registrations =
+    last_reg |> member "params" |> member "registrations" |> to_list
+  in
+  let methods =
+    List.map (fun r -> r |> member "method" |> to_string) registrations
+  in
+  Alcotest.(check bool)
+    "has completion registration" true
+    (List.mem "textDocument/completion" methods)
+
+let test_dynamic_registration_not_sent_without_client_support () =
+  (* When the client does NOT advertise dynamicRegistration, only the
+     file watcher registration should be sent. *)
+  let result =
+    run_session
+      [
+        initialize_msg ~id:1 ();
+        initialized_msg ();
+        shutdown_msg ~id:99 ();
+        exit_msg ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  let regs =
+    List.filter
+      (fun msg ->
+        let open Yojson.Safe.Util in
+        msg |> member "method" |> to_string_option
+        = Some "client/registerCapability")
+      result.messages
+  in
+  (* Only the file watcher registration *)
+  Alcotest.(check int)
+    "exactly one registerCapability (file watchers only)" 1 (List.length regs)
+
+let test_dynamic_registration_multiple_capabilities () =
+  (* When the client advertises dynamicRegistration for multiple capabilities,
+     all are registered and omitted from static response. *)
+  let caps =
+    `Assoc
+      [
+        ( "textDocument",
+          `Assoc
+            [
+              ("completion", `Assoc [ ("dynamicRegistration", `Bool true) ]);
+              ("hover", `Assoc [ ("dynamicRegistration", `Bool true) ]);
+              ("definition", `Assoc [ ("dynamicRegistration", `Bool true) ]);
+            ] );
+      ]
+  in
+  let result =
+    run_session
+      [
+        initialize_msg ~id:1 ~capabilities:caps ();
+        initialized_msg ();
+        shutdown_msg ~id:99 ();
+        exit_msg ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:1 result.messages with
+  | None -> Alcotest.fail "No initialize response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let server_caps = json |> member "result" |> member "capabilities" in
+      (* All three should be absent from static capabilities *)
+      Alcotest.(check bool)
+        "completionProvider omitted" true
+        (server_caps |> member "completionProvider" = `Null);
+      Alcotest.(check bool)
+        "hoverProvider omitted or false" true
+        (server_caps |> member "hoverProvider" <> `Bool true);
+      Alcotest.(check bool)
+        "definitionProvider omitted or false" true
+        (server_caps |> member "definitionProvider" <> `Bool true);
+      (* Verify dynamic registration includes all three *)
+      let regs =
+        List.filter
+          (fun msg ->
+            msg |> member "method" |> to_string_option
+            = Some "client/registerCapability")
+          result.messages
+      in
+      let last_reg = List.nth regs (List.length regs - 1) in
+      let registrations =
+        last_reg |> member "params" |> member "registrations" |> to_list
+      in
+      let methods =
+        List.map (fun r -> r |> member "method" |> to_string) registrations
+      in
+      Alcotest.(check bool)
+        "has completion" true
+        (List.mem "textDocument/completion" methods);
+      Alcotest.(check bool)
+        "has hover" true
+        (List.mem "textDocument/hover" methods);
+      Alcotest.(check bool)
+        "has definition" true
+        (List.mem "textDocument/definition" methods)
+
+let test_dynamic_registration_with_options () =
+  (* Verify that completion registration includes triggerCharacters. *)
+  let caps =
+    `Assoc
+      [
+        ( "textDocument",
+          `Assoc
+            [ ("completion", `Assoc [ ("dynamicRegistration", `Bool true) ]) ]
+        );
+      ]
+  in
+  let result =
+    run_session
+      [
+        initialize_msg ~id:1 ~capabilities:caps ();
+        initialized_msg ();
+        shutdown_msg ~id:99 ();
+        exit_msg ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  let regs =
+    List.filter
+      (fun msg ->
+        let open Yojson.Safe.Util in
+        msg |> member "method" |> to_string_option
+        = Some "client/registerCapability")
+      result.messages
+  in
+  let last_reg = List.nth regs (List.length regs - 1) in
+  let open Yojson.Safe.Util in
+  let registrations =
+    last_reg |> member "params" |> member "registrations" |> to_list
+  in
+  let completion_reg =
+    List.find
+      (fun r -> r |> member "method" |> to_string = "textDocument/completion")
+      registrations
+  in
+  let opts = completion_reg |> member "registerOptions" in
+  Alcotest.(check bool) "has registerOptions" true (opts <> `Null);
+  let triggers = opts |> member "triggerCharacters" |> to_list in
+  Alcotest.(check bool) "has trigger characters" true (List.length triggers > 0)
+
 (** {1 Test Registration} *)
 
 let () =
@@ -4194,5 +4410,18 @@ let () =
           Alcotest.test_case "no errors" `Quick test_pull_diagnostic_no_errors;
           Alcotest.test_case "matches push" `Quick
             test_pull_diagnostic_matches_push;
+        ] );
+      ( "dynamic-registration",
+        [
+          Alcotest.test_case "omits static capability" `Quick
+            test_dynamic_registration_omits_static_capability;
+          Alcotest.test_case "sends registerCapability" `Quick
+            test_dynamic_registration_sends_register_capability;
+          Alcotest.test_case "not sent without client support" `Quick
+            test_dynamic_registration_not_sent_without_client_support;
+          Alcotest.test_case "multiple capabilities" `Quick
+            test_dynamic_registration_multiple_capabilities;
+          Alcotest.test_case "registration with options" `Quick
+            test_dynamic_registration_with_options;
         ] );
     ]
