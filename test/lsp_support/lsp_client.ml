@@ -173,6 +173,11 @@ let inlay_hint_msg ~id ~uri ~start_line ~start_character ~end_line
          ])
     ()
 
+let type_definition_msg ~id ~uri ~line ~character () =
+  make_message ~id:(`Int id) ~method_:"textDocument/typeDefinition"
+    ~params:(position_params ~uri ~line ~character)
+    ()
+
 let prepare_rename_msg ~id ~uri ~line ~character () =
   make_message ~id:(`Int id) ~method_:"textDocument/prepareRename"
     ~params:(position_params ~uri ~line ~character)

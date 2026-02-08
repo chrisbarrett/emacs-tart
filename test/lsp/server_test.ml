@@ -2140,6 +2140,75 @@ let test_inlay_hint_empty_file () =
       let hints = json |> member "result" |> to_list in
       Alcotest.(check int) "no hints" 0 (List.length hints)
 
+(** {1 Type Definition Tests} *)
+
+let test_type_definition_capability_advertised () =
+  let result =
+    run_session [ initialize_msg ~id:1 (); shutdown_msg ~id:2 (); exit_msg () ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:1 result.messages with
+  | None -> Alcotest.fail "No initialize response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let caps = json |> member "result" |> member "capabilities" in
+      Alcotest.(check bool)
+        "typeDefinitionProvider" true
+        (caps |> member "typeDefinitionProvider" |> to_bool)
+
+let test_type_definition_returns_null_for_primitive () =
+  (* Cursor on 42 — type is integer, a primitive with no user-visible definition *)
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el" ~text:"42" ();
+        type_definition_msg ~id:2 ~uri:"file:///test.el" ~line:0 ~character:0 ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "No type definition response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result_field = json |> member "result" in
+      Alcotest.(check bool)
+        "result is null for primitive" true (result_field = `Null)
+
+let test_type_definition_returns_null_for_symbol () =
+  (* Cursor on a symbol whose type is not a named user type *)
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el" ~text:"(+ 1 2)" ();
+        type_definition_msg ~id:2 ~uri:"file:///test.el" ~line:0 ~character:1 ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "No type definition response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result_field = json |> member "result" in
+      Alcotest.(check bool)
+        "result is null for function type" true (result_field = `Null)
+
+let test_type_definition_empty_file () =
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el" ~text:"" ();
+        type_definition_msg ~id:2 ~uri:"file:///test.el" ~line:0 ~character:0 ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "No type definition response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result_field = json |> member "result" in
+      Alcotest.(check bool)
+        "result is null for empty file" true (result_field = `Null)
+
 (** {1 Test Registration} *)
 
 let () =
@@ -2296,6 +2365,16 @@ let () =
           Alcotest.test_case "keyword" `Quick test_prepare_rename_keyword;
           Alcotest.test_case "number" `Quick test_prepare_rename_number;
           Alcotest.test_case "string" `Quick test_prepare_rename_string;
+        ] );
+      ( "type-definition",
+        [
+          Alcotest.test_case "capability advertised" `Quick
+            test_type_definition_capability_advertised;
+          Alcotest.test_case "null for primitive" `Quick
+            test_type_definition_returns_null_for_primitive;
+          Alcotest.test_case "null for symbol" `Quick
+            test_type_definition_returns_null_for_symbol;
+          Alcotest.test_case "empty file" `Quick test_type_definition_empty_file;
         ] );
       ( "sync-recovery",
         [

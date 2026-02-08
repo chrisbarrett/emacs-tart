@@ -121,4 +121,4 @@ and their parsers/encoders. Add `type_definition_provider : bool` to
 |---|------|--------|
 | 1 | Protocol type and capability | Done |
 | 2 | Handler and type lookup | Done |
-| 3 | Tests | Not started |
+| 3 | Tests | Done |
