@@ -72,6 +72,7 @@ type server_capabilities = {
   type_definition_provider : bool;
   workspace_symbol_provider : bool;
   call_hierarchy_provider : bool;
+  type_hierarchy_provider : bool;
 }
 (** Server capabilities *)
 
@@ -318,6 +319,11 @@ let server_capabilities_to_json (caps : server_capabilities) : Yojson.Safe.t =
   let fields =
     if caps.call_hierarchy_provider then
       ("callHierarchyProvider", `Bool true) :: fields
+    else fields
+  in
+  let fields =
+    if caps.type_hierarchy_provider then
+      ("typeHierarchyProvider", `Bool true) :: fields
     else fields
   in
   `Assoc fields
@@ -1686,6 +1692,108 @@ let call_hierarchy_outgoing_calls_result_to_json
     (result : call_hierarchy_outgoing_call list option) : Yojson.Safe.t =
   match result with
   | Some calls -> `List (List.map call_hierarchy_outgoing_call_to_json calls)
+  | None -> `Null
+
+(** {1 Type Hierarchy} *)
+
+type type_hierarchy_item = {
+  thi_name : string;
+  thi_kind : symbol_kind;
+  thi_uri : string;
+  thi_range : range;
+  thi_selection_range : range;
+  thi_data : Yojson.Safe.t option;
+}
+(** A type hierarchy item representing a named type. *)
+
+type type_hierarchy_prepare_params = {
+  thpp_text_document : string;
+  thpp_position : position;
+}
+(** Params for typeHierarchy/prepare. *)
+
+let parse_type_hierarchy_prepare_params (json : Yojson.Safe.t) :
+    type_hierarchy_prepare_params =
+  let open Yojson.Safe.Util in
+  let text_document =
+    json |> member "textDocument" |> member "uri" |> to_string
+  in
+  let pos_json = json |> member "position" in
+  let position =
+    {
+      line = pos_json |> member "line" |> to_int;
+      character = pos_json |> member "character" |> to_int;
+    }
+  in
+  { thpp_text_document = text_document; thpp_position = position }
+
+let parse_type_hierarchy_item_json (json : Yojson.Safe.t) : type_hierarchy_item
+    =
+  let open Yojson.Safe.Util in
+  let parse_pos j =
+    {
+      line = j |> member "line" |> to_int;
+      character = j |> member "character" |> to_int;
+    }
+  in
+  let parse_range j =
+    {
+      start = parse_pos (j |> member "start");
+      end_ = parse_pos (j |> member "end");
+    }
+  in
+  let kind_int = json |> member "kind" |> to_int in
+  let kind = symbol_kind_of_int kind_int in
+  {
+    thi_name = json |> member "name" |> to_string;
+    thi_kind = kind;
+    thi_uri = json |> member "uri" |> to_string;
+    thi_range = parse_range (json |> member "range");
+    thi_selection_range = parse_range (json |> member "selectionRange");
+    thi_data = (match json |> member "data" with `Null -> None | d -> Some d);
+  }
+
+let parse_supertypes_params (json : Yojson.Safe.t) : type_hierarchy_item =
+  let open Yojson.Safe.Util in
+  parse_type_hierarchy_item_json (json |> member "item")
+
+let parse_subtypes_params (json : Yojson.Safe.t) : type_hierarchy_item =
+  let open Yojson.Safe.Util in
+  parse_type_hierarchy_item_json (json |> member "item")
+
+let type_hierarchy_item_to_json (item : type_hierarchy_item) : Yojson.Safe.t =
+  let fields =
+    [
+      ("name", `String item.thi_name);
+      ("kind", `Int (symbol_kind_to_int item.thi_kind));
+      ("uri", `String item.thi_uri);
+      ("range", range_to_json item.thi_range);
+      ("selectionRange", range_to_json item.thi_selection_range);
+    ]
+  in
+  let fields =
+    match item.thi_data with
+    | Some d -> fields @ [ ("data", d) ]
+    | None -> fields
+  in
+  `Assoc fields
+
+let type_hierarchy_prepare_result_to_json
+    (result : type_hierarchy_item list option) : Yojson.Safe.t =
+  match result with
+  | Some items -> `List (List.map type_hierarchy_item_to_json items)
+  | None -> `Null
+
+let type_hierarchy_supertypes_result_to_json
+    (result : type_hierarchy_item list option) : Yojson.Safe.t =
+  match result with
+  | Some items -> `List (List.map type_hierarchy_item_to_json items)
+  | None -> `Null
+
+let type_hierarchy_subtypes_result_to_json
+    (result : type_hierarchy_item list option) : Yojson.Safe.t =
+  match result with
+  | Some items -> `List (List.map type_hierarchy_item_to_json items)
   | None -> `Null
 
 (** {1 Work-Done Progress} *)

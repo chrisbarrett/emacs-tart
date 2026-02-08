@@ -187,6 +187,7 @@ let capabilities () : Protocol.server_capabilities =
     type_definition_provider = true;
     workspace_symbol_provider = true;
     call_hierarchy_provider = true;
+    type_hierarchy_provider = true;
   }
 
 (** Require non-None params, returning an invalid-params error otherwise. *)
@@ -1805,6 +1806,141 @@ let handle_outgoing_calls (server : t) (params : Yojson.Safe.t option) :
       Log.debug "Found %d outgoing callees" (List.length calls);
       Ok (Protocol.call_hierarchy_outgoing_calls_result_to_json (Some calls))
 
+(** {1 Type Hierarchy} *)
+
+(** A zero-width range at position (0, 0), used for synthetic type hierarchy
+    items that represent built-in types without source locations. *)
+let zero_range : Protocol.range =
+  { start = { line = 0; character = 0 }; end_ = { line = 0; character = 0 } }
+
+(** Handle typeHierarchy/prepare request.
+
+    Infers the type at the cursor. If it resolves to a named type (TCon),
+    returns a [TypeHierarchyItem]. Returns null for non-named types. *)
+let handle_type_hierarchy_prepare (server : t) (params : Yojson.Safe.t option) :
+    (Yojson.Safe.t, Rpc.response_error) result =
+  require_params "prepare type hierarchy" params @@ fun json ->
+  let p = Protocol.parse_type_hierarchy_prepare_params json in
+  let uri = p.thpp_text_document in
+  let line = p.thpp_position.line in
+  Log.debug "Prepare type hierarchy at %s:%d:%d" uri line
+    p.thpp_position.character;
+  let null = Protocol.type_hierarchy_prepare_result_to_json None in
+  with_document server ~uri ~not_found:null @@ fun doc ->
+  let col =
+    Document.utf16_col_to_byte ~text:doc.text ~line
+      ~col:p.thpp_position.character
+  in
+  with_sexp_at_cursor ~doc ~uri ~line ~col ~not_found:null
+  @@ fun parse_result ctx ->
+  (* Type-check to get the inferred type *)
+  let check_result = Typing.Check.check_program parse_result.sexps in
+  match type_at_sexp check_result ctx with
+  | None ->
+      Log.debug "Could not infer type";
+      Ok null
+  | Some ty -> (
+      let extract_tcon_name (t : Core.Types.typ) : string option =
+        match Core.Types.repr t with
+        | Core.Types.TCon name -> Some name
+        | Core.Types.TApp (Core.Types.TCon name, _) -> Some name
+        | _ -> None
+      in
+      match extract_tcon_name ty with
+      | None ->
+          Log.debug "Type is not a named type: %s" (Core.Types.to_string ty);
+          Ok null
+      | Some tcon_name ->
+          Log.debug "Found type: %s" tcon_name;
+          let display_name = Core.Types.intrinsic_base_name tcon_name in
+          (* Try to find source location *)
+          let item_range, item_sel_range, item_uri =
+            match
+              find_type_definition_in_signatures ~config:server.module_config
+                tcon_name
+            with
+            | Some span ->
+                let target_text = read_file_safe span.start_pos.file in
+                let r = range_of_span ~text:target_text span in
+                let file_uri = "file://" ^ span.start_pos.file in
+                (r, r, file_uri)
+            | None -> (zero_range, zero_range, uri)
+          in
+          let item : Protocol.type_hierarchy_item =
+            {
+              thi_name = display_name;
+              thi_kind = Protocol.SKClass;
+              thi_uri = item_uri;
+              thi_range = item_range;
+              thi_selection_range = item_sel_range;
+              thi_data = Some (`String tcon_name);
+            }
+          in
+          Ok (Protocol.type_hierarchy_prepare_result_to_json (Some [ item ])))
+
+(** Build a type hierarchy item for a type info, using its type definition
+    location if available. *)
+let type_info_to_item ~(config : Typing.Module_check.config)
+    ~(fallback_uri : string) (info : Type_hierarchy.type_info) :
+    Protocol.type_hierarchy_item =
+  let item_range, item_sel_range, item_uri =
+    match find_type_definition_in_signatures ~config info.name with
+    | Some span ->
+        let target_text = read_file_safe span.start_pos.file in
+        let r = range_of_span ~text:target_text span in
+        let file_uri = "file://" ^ span.start_pos.file in
+        (r, r, file_uri)
+    | None -> (zero_range, zero_range, fallback_uri)
+  in
+  {
+    Protocol.thi_name = info.display_name;
+    thi_kind = Protocol.SKClass;
+    thi_uri = item_uri;
+    thi_range = item_range;
+    thi_selection_range = item_sel_range;
+    thi_data = Some (`String info.name);
+  }
+
+(** Handle typeHierarchy/supertypes request.
+
+    Returns the supertypes of the given type. For Int and Float, returns Num. *)
+let handle_supertypes (server : t) (params : Yojson.Safe.t option) :
+    (Yojson.Safe.t, Rpc.response_error) result =
+  require_params "supertypes" params @@ fun json ->
+  let item = Protocol.parse_supertypes_params json in
+  let tcon_name =
+    match item.thi_data with Some (`String name) -> name | _ -> item.thi_name
+  in
+  Log.debug "Supertypes for: %s" tcon_name;
+  let supertypes = Type_hierarchy.supertypes_of tcon_name in
+  let items =
+    List.map
+      (type_info_to_item ~config:server.module_config ~fallback_uri:item.thi_uri)
+      supertypes
+  in
+  Log.debug "Found %d supertypes" (List.length items);
+  Ok (Protocol.type_hierarchy_supertypes_result_to_json (Some items))
+
+(** Handle typeHierarchy/subtypes request.
+
+    Returns the subtypes of the given type. For Num, returns Int and Float. *)
+let handle_subtypes (server : t) (params : Yojson.Safe.t option) :
+    (Yojson.Safe.t, Rpc.response_error) result =
+  require_params "subtypes" params @@ fun json ->
+  let item = Protocol.parse_subtypes_params json in
+  let tcon_name =
+    match item.thi_data with Some (`String name) -> name | _ -> item.thi_name
+  in
+  Log.debug "Subtypes for: %s" tcon_name;
+  let subtypes = Type_hierarchy.subtypes_of tcon_name in
+  let items =
+    List.map
+      (type_info_to_item ~config:server.module_config ~fallback_uri:item.thi_uri)
+      subtypes
+  in
+  Log.debug "Found %d subtypes" (List.length items);
+  Ok (Protocol.type_hierarchy_subtypes_result_to_json (Some items))
+
 (** Dispatch a request to its handler *)
 let dispatch_request (server : t) (msg : Rpc.message) :
     (Yojson.Safe.t, Rpc.response_error) result =
@@ -1833,6 +1969,10 @@ let dispatch_request (server : t) (msg : Rpc.message) :
       handle_call_hierarchy_prepare server msg.params
   | "callHierarchy/incomingCalls" -> handle_incoming_calls server msg.params
   | "callHierarchy/outgoingCalls" -> handle_outgoing_calls server msg.params
+  | "textDocument/prepareTypeHierarchy" ->
+      handle_type_hierarchy_prepare server msg.params
+  | "typeHierarchy/supertypes" -> handle_supertypes server msg.params
+  | "typeHierarchy/subtypes" -> handle_subtypes server msg.params
   | _ ->
       Error
         {

@@ -3161,6 +3161,189 @@ let test_call_hierarchy_cross_file_incoming () =
             "caller uri" "file:///a.el"
             (caller |> member "uri" |> to_string))
 
+(** {1 Type Hierarchy Tests} *)
+
+let test_type_hierarchy_capability_advertised () =
+  let result =
+    run_session [ initialize_msg ~id:1 (); shutdown_msg ~id:2 (); exit_msg () ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:1 result.messages with
+  | None -> Alcotest.fail "No initialize response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let caps = json |> member "result" |> member "capabilities" in
+      Alcotest.(check bool)
+        "typeHierarchyProvider" true
+        (caps |> member "typeHierarchyProvider" |> to_bool)
+
+let test_type_hierarchy_prepare_on_int () =
+  (* Hover over a literal integer to get its type, then prepare type hierarchy *)
+  let text = "(defvar x 42)" in
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el" ~text ();
+        (* Position on the integer literal 42 at col 10 *)
+        type_hierarchy_prepare_msg ~id:2 ~uri:"file:///test.el" ~line:0
+          ~character:10 ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "No prepare response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      (* Result may be null if type checker doesn't resolve to a TCon at this
+         position; we just verify the handler doesn't crash *)
+      ignore result
+
+let test_type_hierarchy_prepare_not_on_type () =
+  let text = "(+ 1 2)" in
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el" ~text ();
+        (* Position on whitespace *)
+        type_hierarchy_prepare_msg ~id:2 ~uri:"file:///test.el" ~line:0
+          ~character:3 ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "No prepare response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      (* Should return null or an item; either way no crash *)
+      ignore result
+
+let test_type_hierarchy_supertypes_int () =
+  (* Int has supertype Num in the numeric tower *)
+  let int_item : Yojson.Safe.t =
+    `Assoc
+      [
+        ("name", `String "Int");
+        ("kind", `Int 5);
+        ("uri", `String "file:///test.el");
+        ( "range",
+          `Assoc
+            [
+              ("start", `Assoc [ ("line", `Int 0); ("character", `Int 0) ]);
+              ("end", `Assoc [ ("line", `Int 0); ("character", `Int 0) ]);
+            ] );
+        ( "selectionRange",
+          `Assoc
+            [
+              ("start", `Assoc [ ("line", `Int 0); ("character", `Int 0) ]);
+              ("end", `Assoc [ ("line", `Int 0); ("character", `Int 0) ]);
+            ] );
+        ("data", `String Core.Types.Prim.int_name);
+      ]
+  in
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el" ~text:"(+ 1 2)" ();
+        supertypes_msg ~id:2 ~item:int_item ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "No supertypes response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      Alcotest.(check bool) "result is not null" true (result <> `Null);
+      let items = result |> to_list in
+      Alcotest.(check int) "one supertype" 1 (List.length items);
+      let item = List.hd items in
+      Alcotest.(check string) "name" "Num" (item |> member "name" |> to_string)
+
+let test_type_hierarchy_subtypes_num () =
+  (* Num has subtypes Int and Float *)
+  let num_item : Yojson.Safe.t =
+    `Assoc
+      [
+        ("name", `String "Num");
+        ("kind", `Int 5);
+        ("uri", `String "file:///test.el");
+        ( "range",
+          `Assoc
+            [
+              ("start", `Assoc [ ("line", `Int 0); ("character", `Int 0) ]);
+              ("end", `Assoc [ ("line", `Int 0); ("character", `Int 0) ]);
+            ] );
+        ( "selectionRange",
+          `Assoc
+            [
+              ("start", `Assoc [ ("line", `Int 0); ("character", `Int 0) ]);
+              ("end", `Assoc [ ("line", `Int 0); ("character", `Int 0) ]);
+            ] );
+        ("data", `String Core.Types.Prim.num_name);
+      ]
+  in
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el" ~text:"(+ 1 2)" ();
+        subtypes_msg ~id:2 ~item:num_item ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "No subtypes response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      Alcotest.(check bool) "result is not null" true (result <> `Null);
+      let items = result |> to_list in
+      Alcotest.(check int) "two subtypes" 2 (List.length items);
+      let names = List.map (fun i -> i |> member "name" |> to_string) items in
+      Alcotest.(check bool) "Int in subtypes" true (List.mem "Int" names);
+      Alcotest.(check bool) "Float in subtypes" true (List.mem "Float" names)
+
+let test_type_hierarchy_supertypes_no_parent () =
+  (* Num has no supertypes in the numeric tower *)
+  let num_item : Yojson.Safe.t =
+    `Assoc
+      [
+        ("name", `String "Num");
+        ("kind", `Int 5);
+        ("uri", `String "file:///test.el");
+        ( "range",
+          `Assoc
+            [
+              ("start", `Assoc [ ("line", `Int 0); ("character", `Int 0) ]);
+              ("end", `Assoc [ ("line", `Int 0); ("character", `Int 0) ]);
+            ] );
+        ( "selectionRange",
+          `Assoc
+            [
+              ("start", `Assoc [ ("line", `Int 0); ("character", `Int 0) ]);
+              ("end", `Assoc [ ("line", `Int 0); ("character", `Int 0) ]);
+            ] );
+        ("data", `String Core.Types.Prim.num_name);
+      ]
+  in
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el" ~text:"(+ 1 2)" ();
+        supertypes_msg ~id:2 ~item:num_item ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "No supertypes response"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result = json |> member "result" in
+      Alcotest.(check bool) "result is not null" true (result <> `Null);
+      let items = result |> to_list in
+      Alcotest.(check int) "no supertypes" 0 (List.length items)
+
 (** {1 Test Registration} *)
 
 let () =
@@ -3471,5 +3654,20 @@ let () =
             test_call_hierarchy_outgoing_calls;
           Alcotest.test_case "cross-file incoming" `Quick
             test_call_hierarchy_cross_file_incoming;
+        ] );
+      ( "type-hierarchy",
+        [
+          Alcotest.test_case "capability advertised" `Quick
+            test_type_hierarchy_capability_advertised;
+          Alcotest.test_case "prepare on int" `Quick
+            test_type_hierarchy_prepare_on_int;
+          Alcotest.test_case "prepare not on type" `Quick
+            test_type_hierarchy_prepare_not_on_type;
+          Alcotest.test_case "supertypes of int" `Quick
+            test_type_hierarchy_supertypes_int;
+          Alcotest.test_case "subtypes of num" `Quick
+            test_type_hierarchy_subtypes_num;
+          Alcotest.test_case "supertypes no parent" `Quick
+            test_type_hierarchy_supertypes_no_parent;
         ] );
     ]

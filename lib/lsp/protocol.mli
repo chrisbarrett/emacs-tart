@@ -68,6 +68,7 @@ type server_capabilities = {
   type_definition_provider : bool;
   workspace_symbol_provider : bool;
   call_hierarchy_provider : bool;
+  type_hierarchy_provider : bool;
 }
 (** Server capabilities *)
 
@@ -670,6 +671,49 @@ val call_hierarchy_incoming_calls_result_to_json :
 val call_hierarchy_outgoing_calls_result_to_json :
   call_hierarchy_outgoing_call list option -> Yojson.Safe.t
 (** Encode outgoing calls result to JSON *)
+
+(** {1 Type Hierarchy} *)
+
+type type_hierarchy_item = {
+  thi_name : string;
+  thi_kind : symbol_kind;
+  thi_uri : string;
+  thi_range : range;
+  thi_selection_range : range;
+  thi_data : Yojson.Safe.t option;
+}
+(** A type hierarchy item representing a named type. *)
+
+type type_hierarchy_prepare_params = {
+  thpp_text_document : string;
+  thpp_position : position;
+}
+(** Params for typeHierarchy/prepare. *)
+
+val parse_type_hierarchy_prepare_params :
+  Yojson.Safe.t -> type_hierarchy_prepare_params
+(** Parse typeHierarchy/prepare params from JSON *)
+
+val parse_supertypes_params : Yojson.Safe.t -> type_hierarchy_item
+(** Parse typeHierarchy/supertypes params, returning the item. *)
+
+val parse_subtypes_params : Yojson.Safe.t -> type_hierarchy_item
+(** Parse typeHierarchy/subtypes params, returning the item. *)
+
+val type_hierarchy_item_to_json : type_hierarchy_item -> Yojson.Safe.t
+(** Encode a type hierarchy item to JSON *)
+
+val type_hierarchy_prepare_result_to_json :
+  type_hierarchy_item list option -> Yojson.Safe.t
+(** Encode prepare type hierarchy result to JSON *)
+
+val type_hierarchy_supertypes_result_to_json :
+  type_hierarchy_item list option -> Yojson.Safe.t
+(** Encode supertypes result to JSON *)
+
+val type_hierarchy_subtypes_result_to_json :
+  type_hierarchy_item list option -> Yojson.Safe.t
+(** Encode subtypes result to JSON *)
 
 (** {1 File Watching} *)
 

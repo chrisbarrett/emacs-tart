@@ -141,6 +141,16 @@ val incoming_calls_msg : id:int -> item:Yojson.Safe.t -> unit -> string
 val outgoing_calls_msg : id:int -> item:Yojson.Safe.t -> unit -> string
 (** callHierarchy/outgoingCalls request. *)
 
+val type_hierarchy_prepare_msg :
+  id:int -> uri:string -> line:int -> character:int -> unit -> string
+(** textDocument/prepareTypeHierarchy request. *)
+
+val supertypes_msg : id:int -> item:Yojson.Safe.t -> unit -> string
+(** typeHierarchy/supertypes request. *)
+
+val subtypes_msg : id:int -> item:Yojson.Safe.t -> unit -> string
+(** typeHierarchy/subtypes request. *)
+
 (** {1 Session Runners} *)
 
 type session_result = {

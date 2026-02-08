@@ -245,6 +245,21 @@ let outgoing_calls_msg ~id ~(item : Yojson.Safe.t) () =
     ~params:(`Assoc [ ("item", item) ])
     ()
 
+let type_hierarchy_prepare_msg ~id ~uri ~line ~character () =
+  make_message ~id:(`Int id) ~method_:"textDocument/prepareTypeHierarchy"
+    ~params:(position_params ~uri ~line ~character)
+    ()
+
+let supertypes_msg ~id ~(item : Yojson.Safe.t) () =
+  make_message ~id:(`Int id) ~method_:"typeHierarchy/supertypes"
+    ~params:(`Assoc [ ("item", item) ])
+    ()
+
+let subtypes_msg ~id ~(item : Yojson.Safe.t) () =
+  make_message ~id:(`Int id) ~method_:"typeHierarchy/subtypes"
+    ~params:(`Assoc [ ("item", item) ])
+    ()
+
 (* {1 Message Parsing} *)
 
 let parse_messages (output : string) : Yojson.Safe.t list =
