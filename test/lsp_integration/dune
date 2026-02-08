@@ -1,0 +1,19 @@
+(library
+ (name subprocess_client)
+ (modules subprocess_client)
+ (libraries unix str yojson))
+
+(test
+ (name integration_test)
+ (modules integration_test)
+ (libraries subprocess_client lsp_client alcotest)
+ (deps
+  %{bin:tart}
+  (source_tree %{project_root}/typings))
+ (action
+  (chdir
+   %{project_root}
+   (setenv
+    TART_BIN
+    %{bin:tart}
+    (run %{test})))))
