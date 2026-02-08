@@ -120,5 +120,5 @@ and their parsers/encoders. Add `type_definition_provider : bool` to
 | # | Task | Status |
 |---|------|--------|
 | 1 | Protocol type and capability | Done |
-| 2 | Handler and type lookup | Not started |
+| 2 | Handler and type lookup | Done |
 | 3 | Tests | Not started |

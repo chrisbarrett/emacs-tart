@@ -801,6 +801,52 @@ let find_definition_in_signature (name : string)
       | _ -> None)
     sig_ast.sig_decls
 
+(** Find a type definition in signature file declarations.
+
+    Returns the location span if a type with the given name is declared in the
+    signature (DType, DData, or DImportStruct). *)
+let find_type_definition_in_signature (name : string)
+    (sig_ast : Sig.Sig_ast.signature) : Syntax.Location.span option =
+  List.find_map
+    (fun decl ->
+      match decl with
+      | Sig.Sig_ast.DType d when d.type_name = name -> Some d.type_loc
+      | Sig.Sig_ast.DData d when d.data_name = name -> Some d.data_loc
+      | Sig.Sig_ast.DImportStruct d when d.struct_name = name ->
+          Some d.struct_loc
+      | _ -> None)
+    sig_ast.sig_decls
+
+(** Look up a type definition by its TCon name in loaded signatures.
+
+    Given a TCon name like "mymod/person", splits on "/", resolves the module
+    via the search path, and looks for a matching DType, DData, or
+    DImportStruct. Returns None for intrinsic or prelude types. *)
+let find_type_definition_in_signatures ~(config : Typing.Module_check.config)
+    (tcon_name : string) : Syntax.Location.span option =
+  (* Skip intrinsics *)
+  if Core.Types.is_intrinsic_name tcon_name then None (* Skip prelude types *)
+  else if String.length tcon_name > 8 && String.sub tcon_name 0 8 = "prelude."
+  then None
+  else
+    (* Split on "/" to get module_name and type_name *)
+    match String.index_opt tcon_name '/' with
+    | None -> None
+    | Some idx -> (
+        let module_name = String.sub tcon_name 0 idx in
+        let type_name =
+          String.sub tcon_name (idx + 1) (String.length tcon_name - idx - 1)
+        in
+        (* Find the module's .tart file *)
+        let search_path = Typing.Module_check.search_path config in
+        match Sig.Search_path.find_signature search_path module_name with
+        | Some sig_path -> (
+            match Sig.Search_path.parse_signature_file sig_path with
+            | Some sig_ast ->
+                find_type_definition_in_signature type_name sig_ast
+            | None -> None)
+        | None -> None)
+
 (** Look up a symbol definition in loaded signatures.
 
     Searches the sibling .tart file and any signatures from the search path.
@@ -976,6 +1022,103 @@ let handle_definition (server : t) (params : Yojson.Safe.t option) :
                                  (Protocol.DefLocation loc))
                         | None ->
                             Log.debug "No definition found for: %s" name;
+                            Ok
+                              (Protocol.definition_result_to_json
+                                 Protocol.DefNull))))))
+
+(** Handle textDocument/typeDefinition request.
+
+    Infers the type at the cursor. If it resolves to a named type (TCon) defined
+    in a .tart file, returns that type's declaration location. Returns null for
+    primitive, prelude, and non-named types. *)
+let handle_type_definition (server : t) (params : Yojson.Safe.t option) :
+    (Yojson.Safe.t, Rpc.response_error) result =
+  match params with
+  | None ->
+      Error
+        {
+          Rpc.code = Rpc.invalid_params;
+          message = "Missing type definition params";
+          data = None;
+        }
+  | Some json -> (
+      let def_params = Protocol.parse_type_definition_params json in
+      let uri = def_params.def_text_document in
+      let line = def_params.def_position.line in
+      Log.debug "Type definition request at %s:%d:%d" uri line
+        def_params.def_position.character;
+      match Document.get_doc server.documents uri with
+      | None ->
+          Log.debug "Document not found: %s" uri;
+          Ok (Protocol.definition_result_to_json Protocol.DefNull)
+      | Some doc -> (
+          let col =
+            Document.utf16_col_to_byte ~text:doc.text ~line
+              ~col:def_params.def_position.character
+          in
+          let filename = Uri.to_filename uri in
+          let parse_result = Syntax.Read.parse_string ~filename doc.text in
+          if parse_result.sexps = [] then (
+            Log.debug "No S-expressions parsed";
+            Ok (Protocol.definition_result_to_json Protocol.DefNull))
+          else
+            match
+              Syntax.Sexp.find_with_context_in_forms ~line ~col
+                parse_result.sexps
+            with
+            | None ->
+                Log.debug "No S-expression at position";
+                Ok (Protocol.definition_result_to_json Protocol.DefNull)
+            | Some ctx -> (
+                (* Type-check the document to get the environment *)
+                let check_result =
+                  Typing.Check.check_program parse_result.sexps
+                in
+                match type_at_sexp check_result ctx with
+                | None ->
+                    Log.debug "Could not infer type";
+                    Ok (Protocol.definition_result_to_json Protocol.DefNull)
+                | Some ty -> (
+                    (* Extract TCon name from the inferred type *)
+                    let extract_tcon_name (t : Core.Types.typ) : string option =
+                      match Core.Types.repr t with
+                      | Core.Types.TCon name -> Some name
+                      | Core.Types.TApp (Core.Types.TCon name, _) -> Some name
+                      | _ -> None
+                    in
+                    match extract_tcon_name ty with
+                    | None ->
+                        Log.debug "Type is not a named type: %s"
+                          (Core.Types.to_string ty);
+                        Ok (Protocol.definition_result_to_json Protocol.DefNull)
+                    | Some tcon_name -> (
+                        Log.debug "Looking for type definition of: %s" tcon_name;
+                        match
+                          find_type_definition_in_signatures
+                            ~config:server.module_config tcon_name
+                        with
+                        | Some span ->
+                            Log.debug "Found type definition at %s:%d:%d"
+                              span.start_pos.file span.start_pos.line
+                              span.start_pos.col;
+                            (* Read the target file's text for UTF-16 conversion *)
+                            let target_text =
+                              try
+                                let ic =
+                                  In_channel.open_text span.start_pos.file
+                                in
+                                let content = In_channel.input_all ic in
+                                In_channel.close ic;
+                                content
+                              with _ -> ""
+                            in
+                            let loc = location_of_span ~text:target_text span in
+                            Ok
+                              (Protocol.definition_result_to_json
+                                 (Protocol.DefLocation loc))
+                        | None ->
+                            Log.debug "No type definition found for: %s"
+                              tcon_name;
                             Ok
                               (Protocol.definition_result_to_json
                                  Protocol.DefNull))))))
@@ -1515,6 +1658,7 @@ let dispatch_request (server : t) (msg : Rpc.message) :
   | "textDocument/semanticTokens/full" ->
       handle_semantic_tokens server msg.params
   | "textDocument/inlayHint" -> handle_inlay_hints server msg.params
+  | "textDocument/typeDefinition" -> handle_type_definition server msg.params
   | _ ->
       Error
         {
