@@ -1,8 +1,8 @@
 (** Semantic token computation for the LSP server.
 
     Classifies AST nodes and comment lines into semantic tokens for
-    textDocument/semanticTokens/full requests. Tokens are delta-encoded as
-    specified by the LSP protocol. *)
+    textDocument/semanticTokens/full and textDocument/semanticTokens/full/delta
+    requests. Tokens are delta-encoded as specified by the LSP protocol. *)
 
 type raw_token = {
   rt_line : int;
@@ -274,13 +274,111 @@ let delta_encode (tokens : raw_token list) : int list =
   in
   encode 0 0 sorted []
 
-let handle ~(uri : string) ~(doc_text : string) :
-    (Yojson.Safe.t, Rpc.response_error) result =
-  let _ = uri in
+(** {1 Token Cache} *)
+
+type cache = {
+  entries : (string, string * int array) Hashtbl.t;
+      (** URI → (result_id, token_data) *)
+  mutable next_id : int;
+}
+(** Cache of previous token arrays, keyed by URI. Stores the result ID and the
+    flat int array from the last full or delta response. *)
+
+let create_cache () : cache = { entries = Hashtbl.create 16; next_id = 0 }
+
+let fresh_result_id (cache : cache) : string =
+  let id = cache.next_id in
+  cache.next_id <- id + 1;
+  string_of_int id
+
+(** Remove the cached entry for a URI (e.g., on document close). *)
+let invalidate (cache : cache) (uri : string) : unit =
+  Hashtbl.remove cache.entries uri
+
+(** {1 Delta Computation} *)
+
+(** Compute the minimal sequence of edits to transform [old_data] into
+    [new_data]. Each edit replaces a contiguous run of elements in the old
+    array. Edits are emitted from left to right with non-overlapping,
+    non-adjacent changed regions. *)
+let compute_edits (old_data : int array) (new_data : int array) :
+    Protocol.semantic_tokens_edit list =
+  let old_len = Array.length old_data in
+  let new_len = Array.length new_data in
+  let min_len = min old_len new_len in
+  (* Find common prefix length *)
+  let prefix =
+    let i = ref 0 in
+    while !i < min_len && old_data.(!i) = new_data.(!i) do
+      incr i
+    done;
+    !i
+  in
+  (* Find common suffix length (but don't overlap with prefix) *)
+  let suffix =
+    let s = ref 0 in
+    while
+      !s < min_len - prefix
+      && old_data.(old_len - 1 - !s) = new_data.(new_len - 1 - !s)
+    do
+      incr s
+    done;
+    !s
+  in
+  let old_mid = old_len - prefix - suffix in
+  let new_mid = new_len - prefix - suffix in
+  if old_mid = 0 && new_mid = 0 then []
+  else
+    let data =
+      if new_mid > 0 then Array.to_list (Array.sub new_data prefix new_mid)
+      else []
+    in
+    [
+      {
+        Protocol.ste_start = prefix;
+        ste_delete_count = old_mid;
+        ste_data = data;
+      };
+    ]
+
+(** Compute delta-encoded token data for a document. *)
+let compute_data (doc_text : string) : int list =
   let filename = "<semanticTokens>" in
   let parse_result = Syntax.Read.parse_string ~filename doc_text in
   let sexp_tokens = collect_sexp_tokens ~text:doc_text parse_result.sexps in
   let comment_tokens = collect_comment_tokens doc_text in
   let all_tokens = sexp_tokens @ comment_tokens in
-  let data = delta_encode all_tokens in
-  Ok (Protocol.semantic_tokens_result_to_json (Some { str_data = data }))
+  delta_encode all_tokens
+
+(** {1 Request Handlers} *)
+
+let handle ~(uri : string) ~(doc_text : string) ~(cache : cache) :
+    (Yojson.Safe.t, Rpc.response_error) result =
+  let _ = uri in
+  let data = compute_data doc_text in
+  let result_id = fresh_result_id cache in
+  let data_arr = Array.of_list data in
+  Hashtbl.replace cache.entries uri (result_id, data_arr);
+  Ok
+    (Protocol.semantic_tokens_result_to_json
+       (Some { str_result_id = result_id; str_data = data }))
+
+let handle_delta ~(uri : string) ~(doc_text : string)
+    ~(previous_result_id : string) ~(cache : cache) :
+    (Yojson.Safe.t, Rpc.response_error) result =
+  let new_data = compute_data doc_text in
+  let new_arr = Array.of_list new_data in
+  let result_id = fresh_result_id cache in
+  let response =
+    match Hashtbl.find_opt cache.entries uri with
+    | Some (cached_id, old_arr) when String.equal cached_id previous_result_id
+      ->
+        let edits = compute_edits old_arr new_arr in
+        Protocol.DeltaResponse
+          { stdr_result_id = result_id; stdr_edits = edits }
+    | _ ->
+        (* No cache hit or result ID mismatch: fall back to full response *)
+        Protocol.FullResponse { str_result_id = result_id; str_data = new_data }
+  in
+  Hashtbl.replace cache.entries uri (result_id, new_arr);
+  Ok (Protocol.semantic_tokens_delta_response_to_json (Some response))

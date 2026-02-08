@@ -506,8 +506,35 @@ type semantic_tokens_legend = {
 type semantic_tokens_params = { stp_text_document : string }
 (** Semantic tokens request params *)
 
-type semantic_tokens_result = { str_data : int list }
-(** The delta-encoded flat array of semantic tokens *)
+type semantic_tokens_result = { str_result_id : string; str_data : int list }
+(** The delta-encoded flat array of semantic tokens with a result ID for
+    subsequent delta requests. *)
+
+type semantic_tokens_delta_params = {
+  stdp_text_document : string;
+  stdp_previous_result_id : string;
+}
+(** Semantic tokens delta request params, referencing the previous result. *)
+
+type semantic_tokens_edit = {
+  ste_start : int;
+  ste_delete_count : int;
+  ste_data : int list;
+}
+(** A single edit within a semantic tokens delta response. Replaces
+    [ste_delete_count] elements at [ste_start] with [ste_data]. *)
+
+type semantic_tokens_delta_result = {
+  stdr_result_id : string;
+  stdr_edits : semantic_tokens_edit list;
+}
+(** Semantic tokens delta result with edits describing changes from the previous
+    token array. *)
+
+type semantic_tokens_delta_response =
+  | DeltaResponse of semantic_tokens_delta_result
+  | FullResponse of semantic_tokens_result
+      (** Response to a delta request: either a delta or a full fallback. *)
 
 val semantic_token_type_index : semantic_token_type -> int
 (** Index of a token type in the legend's tokenTypes array *)
@@ -521,12 +548,24 @@ val semantic_tokens_legend : semantic_tokens_legend
 val parse_semantic_tokens_params : Yojson.Safe.t -> semantic_tokens_params
 (** Parse semantic tokens params from JSON *)
 
+val parse_semantic_tokens_delta_params :
+  Yojson.Safe.t -> semantic_tokens_delta_params
+(** Parse semantic tokens delta params from JSON *)
+
 val semantic_tokens_legend_to_json : semantic_tokens_legend -> Yojson.Safe.t
 (** Encode semantic tokens legend to JSON *)
 
 val semantic_tokens_result_to_json :
   semantic_tokens_result option -> Yojson.Safe.t
-(** Encode semantic tokens result to JSON *)
+(** Encode semantic tokens result to JSON (includes [resultId]). *)
+
+val semantic_tokens_edit_to_json : semantic_tokens_edit -> Yojson.Safe.t
+(** Encode a semantic tokens edit to JSON *)
+
+val semantic_tokens_delta_response_to_json :
+  semantic_tokens_delta_response option -> Yojson.Safe.t
+(** Encode semantic tokens delta response to JSON. Returns a full response or a
+    delta response depending on the variant. *)
 
 (** {1 Inlay Hints} *)
 

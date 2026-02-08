@@ -40,6 +40,9 @@ type t = {
   mutable supports_work_done_progress : bool;
       (** Whether the client supports [window/workDoneProgress]. Parsed from
           [capabilities.window.workDoneProgress] during initialization. *)
+  semantic_tokens_cache : Semantic_tokens.cache;
+      (** Cache of previous semantic token arrays per URI, used for delta
+          computation in [textDocument/semanticTokens/full/delta]. *)
 }
 
 exception Cancelled
@@ -144,6 +147,7 @@ let create ~ic ~oc ?(debounce_ms = 200) () : t =
     pending_requests = Hashtbl.create 8;
     cancel_flag = Atomic.make false;
     supports_work_done_progress = false;
+    semantic_tokens_cache = Semantic_tokens.create_cache ();
   }
 
 (** Get the server's current state *)
@@ -734,6 +738,8 @@ let handle_did_close (server : t) (params : Yojson.Safe.t option) : unit =
       Document.close_doc server.documents ~uri;
       (* Also clear the form cache for this document *)
       Form_cache.remove_document server.form_cache uri;
+      (* Clear semantic tokens cache for this document *)
+      Semantic_tokens.invalidate server.semantic_tokens_cache uri;
       (* Keep graph entry on close - file still exists on disk (R4) *)
       Graph_tracker.close_document server.dependency_graph ~uri;
       Log.debug "Closed document: %s" uri;
@@ -1431,7 +1437,8 @@ let handle_folding_range (server : t) (params : Yojson.Safe.t option) :
 
 (** Handle textDocument/semanticTokens/full request.
 
-    Delegates to {!Semantic_tokens} module. *)
+    Delegates to {!Semantic_tokens} module. Caches the result for subsequent
+    delta requests. *)
 let handle_semantic_tokens (server : t) (params : Yojson.Safe.t option) :
     (Yojson.Safe.t, Rpc.response_error) result =
   require_params "semantic tokens" params @@ fun json ->
@@ -1440,7 +1447,27 @@ let handle_semantic_tokens (server : t) (params : Yojson.Safe.t option) :
   Log.debug "Semantic tokens request for %s" uri;
   with_document server ~uri
     ~not_found:(Protocol.semantic_tokens_result_to_json None)
-  @@ fun doc -> Semantic_tokens.handle ~uri ~doc_text:doc.text
+  @@ fun doc ->
+  Semantic_tokens.handle ~uri ~doc_text:doc.text
+    ~cache:server.semantic_tokens_cache
+
+(** Handle textDocument/semanticTokens/full/delta request.
+
+    Computes a delta from the previously cached token array, or falls back to a
+    full response when the cache misses. *)
+let handle_semantic_tokens_delta (server : t) (params : Yojson.Safe.t option) :
+    (Yojson.Safe.t, Rpc.response_error) result =
+  require_params "semantic tokens delta" params @@ fun json ->
+  let p = Protocol.parse_semantic_tokens_delta_params json in
+  let uri = p.stdp_text_document in
+  Log.debug "Semantic tokens delta request for %s (prev %s)" uri
+    p.stdp_previous_result_id;
+  with_document server ~uri
+    ~not_found:(Protocol.semantic_tokens_delta_response_to_json None)
+  @@ fun doc ->
+  Semantic_tokens.handle_delta ~uri ~doc_text:doc.text
+    ~previous_result_id:p.stdp_previous_result_id
+    ~cache:server.semantic_tokens_cache
 
 (** Handle textDocument/inlayHint request.
 
@@ -1589,6 +1616,8 @@ let dispatch_request (server : t) (msg : Rpc.message) :
   | "textDocument/foldingRange" -> handle_folding_range server msg.params
   | "textDocument/semanticTokens/full" ->
       handle_semantic_tokens server msg.params
+  | "textDocument/semanticTokens/full/delta" ->
+      handle_semantic_tokens_delta server msg.params
   | "textDocument/inlayHint" -> handle_inlay_hints server msg.params
   | "textDocument/typeDefinition" -> handle_type_definition server msg.params
   | "workspace/symbol" -> handle_workspace_symbol server msg.params

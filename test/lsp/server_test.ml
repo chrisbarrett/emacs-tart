@@ -2285,7 +2285,10 @@ let test_semantic_tokens_capability_advertised () =
       let open Yojson.Safe.Util in
       let caps = json |> member "result" |> member "capabilities" in
       let stp = caps |> member "semanticTokensProvider" in
-      Alcotest.(check bool) "has full" true (stp |> member "full" |> to_bool);
+      let full = stp |> member "full" in
+      Alcotest.(check bool)
+        "full has delta" true
+        (full |> member "delta" |> to_bool);
       let legend = stp |> member "legend" in
       let token_types = legend |> member "tokenTypes" |> to_list in
       Alcotest.(check bool) "has token types" true (List.length token_types > 0);

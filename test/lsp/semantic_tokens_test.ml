@@ -258,16 +258,33 @@ let test_delta_encode_empty () =
 
 (** {1 handle} *)
 
+let cache () = Semantic_tokens.create_cache ()
+
 let test_handle_empty () =
-  match Semantic_tokens.handle ~uri:"file:///tmp/test.el" ~doc_text:"" with
-  | Ok json ->
-      let s = Yojson.Safe.to_string json in
-      Alcotest.(check string) "empty data" {|{"data":[]}|} s
+  let c = cache () in
+  match
+    Semantic_tokens.handle ~uri:"file:///tmp/test.el" ~doc_text:"" ~cache:c
+  with
+  | Ok json -> (
+      match json with
+      | `Assoc fields -> (
+          (* resultId present *)
+          Alcotest.(check bool)
+            "has resultId" true
+            (List.mem_assoc "resultId" fields);
+          (* data is empty *)
+          match List.assoc_opt "data" fields with
+          | Some (`List []) -> ()
+          | _ -> Alcotest.fail "expected empty data")
+      | _ -> Alcotest.fail "expected assoc")
   | Error _ -> Alcotest.fail "expected Ok"
 
 let test_handle_defun () =
+  let c = cache () in
   let src = "(defun add (x y)\n  (+ x y))" in
-  match Semantic_tokens.handle ~uri:"file:///tmp/test.el" ~doc_text:src with
+  match
+    Semantic_tokens.handle ~uri:"file:///tmp/test.el" ~doc_text:src ~cache:c
+  with
   | Ok json -> (
       match json with
       | `Assoc fields -> (
@@ -279,8 +296,11 @@ let test_handle_defun () =
   | Error _ -> Alcotest.fail "expected Ok"
 
 let test_handle_multiline_sorted () =
+  let c = cache () in
   let src = "(defun foo ()\n  (+ 1 2))" in
-  match Semantic_tokens.handle ~uri:"file:///tmp/test.el" ~doc_text:src with
+  match
+    Semantic_tokens.handle ~uri:"file:///tmp/test.el" ~doc_text:src ~cache:c
+  with
   | Ok json -> (
       match json with
       | `Assoc fields -> (
@@ -305,6 +325,131 @@ let test_handle_multiline_sorted () =
           | _ -> Alcotest.fail "expected data field")
       | _ -> Alcotest.fail "expected assoc")
   | Error _ -> Alcotest.fail "expected Ok"
+
+(** {1 compute_edits} *)
+
+let test_compute_edits_identical () =
+  let data = [| 0; 0; 5; 4; 0 |] in
+  let edits = Semantic_tokens.compute_edits data data in
+  Alcotest.(check int) "no edits" 0 (List.length edits)
+
+let test_compute_edits_append () =
+  let old_data = [| 0; 0; 5; 4; 0 |] in
+  let new_data = [| 0; 0; 5; 4; 0; 1; 0; 3; 1; 0 |] in
+  let edits = Semantic_tokens.compute_edits old_data new_data in
+  Alcotest.(check int) "one edit" 1 (List.length edits);
+  let e = List.hd edits in
+  Alcotest.(check int) "start" 5 e.ste_start;
+  Alcotest.(check int) "delete count" 0 e.ste_delete_count;
+  Alcotest.(check (list int)) "inserted data" [ 1; 0; 3; 1; 0 ] e.ste_data
+
+let test_compute_edits_delete () =
+  let old_data = [| 0; 0; 5; 4; 0; 1; 0; 3; 1; 0 |] in
+  let new_data = [| 0; 0; 5; 4; 0 |] in
+  let edits = Semantic_tokens.compute_edits old_data new_data in
+  Alcotest.(check int) "one edit" 1 (List.length edits);
+  let e = List.hd edits in
+  Alcotest.(check int) "start" 5 e.ste_start;
+  Alcotest.(check int) "delete count" 5 e.ste_delete_count;
+  Alcotest.(check (list int)) "no data" [] e.ste_data
+
+let test_compute_edits_replace () =
+  let old_data = [| 0; 0; 5; 4; 0 |] in
+  let new_data = [| 0; 0; 3; 1; 0 |] in
+  let edits = Semantic_tokens.compute_edits old_data new_data in
+  Alcotest.(check int) "one edit" 1 (List.length edits);
+  let e = List.hd edits in
+  Alcotest.(check int) "start" 2 e.ste_start;
+  Alcotest.(check int) "delete count" 2 e.ste_delete_count;
+  Alcotest.(check (list int)) "replaced data" [ 3; 1 ] e.ste_data
+
+(** {1 handle_delta} *)
+
+let test_handle_delta_with_cache () =
+  let c = cache () in
+  let uri = "file:///tmp/delta.el" in
+  let src1 = "(defun foo () nil)" in
+  (* First: full request to populate cache *)
+  let result_id =
+    match Semantic_tokens.handle ~uri ~doc_text:src1 ~cache:c with
+    | Ok (`Assoc fields) -> (
+        match List.assoc_opt "resultId" fields with
+        | Some (`String id) -> id
+        | _ -> Alcotest.fail "expected resultId")
+    | _ -> Alcotest.fail "expected Ok"
+  in
+  (* Second: delta request with a modification that changes token data.
+     Adding a new line changes token positions, producing non-empty edits. *)
+  let src2 = "(defun foo ()\n  (+ 1 2)\n  nil)" in
+  (match
+     Semantic_tokens.handle_delta ~uri ~doc_text:src2
+       ~previous_result_id:result_id ~cache:c
+   with
+  | Ok (`Assoc fields) ->
+      (* Should have resultId and edits *)
+      Alcotest.(check bool)
+        "has resultId" true
+        (List.mem_assoc "resultId" fields);
+      Alcotest.(check bool) "has edits" true (List.mem_assoc "edits" fields);
+      let edits =
+        match List.assoc_opt "edits" fields with
+        | Some (`List e) -> e
+        | _ -> Alcotest.fail "expected edits array"
+      in
+      (* Adding new code lines should produce non-empty edits *)
+      Alcotest.(check bool) "edits non-empty" true (List.length edits > 0)
+  | Ok _ -> Alcotest.fail "expected assoc"
+  | Error _ -> Alcotest.fail "expected Ok");
+  ()
+
+let test_handle_delta_no_cache () =
+  let c = cache () in
+  let uri = "file:///tmp/nocache.el" in
+  let src = "(defun foo () nil)" in
+  (* Delta request without prior full request should fall back to full *)
+  match
+    Semantic_tokens.handle_delta ~uri ~doc_text:src
+      ~previous_result_id:"nonexistent" ~cache:c
+  with
+  | Ok (`Assoc fields) ->
+      (* Falls back to full: should have resultId and data (not edits) *)
+      Alcotest.(check bool)
+        "has resultId" true
+        (List.mem_assoc "resultId" fields);
+      Alcotest.(check bool) "has data" true (List.mem_assoc "data" fields);
+      Alcotest.(check bool) "no edits" false (List.mem_assoc "edits" fields)
+  | Ok _ -> Alcotest.fail "expected assoc"
+  | Error _ -> Alcotest.fail "expected Ok"
+
+let test_handle_delta_no_change () =
+  let c = cache () in
+  let uri = "file:///tmp/nochange.el" in
+  let src = "(defun foo () nil)" in
+  (* Full request *)
+  let result_id =
+    match Semantic_tokens.handle ~uri ~doc_text:src ~cache:c with
+    | Ok (`Assoc fields) -> (
+        match List.assoc_opt "resultId" fields with
+        | Some (`String id) -> id
+        | _ -> Alcotest.fail "expected resultId")
+    | _ -> Alcotest.fail "expected Ok"
+  in
+  (* Delta with same content → empty edits *)
+  (match
+     Semantic_tokens.handle_delta ~uri ~doc_text:src
+       ~previous_result_id:result_id ~cache:c
+   with
+  | Ok (`Assoc fields) ->
+      Alcotest.(check bool) "has edits" true (List.mem_assoc "edits" fields);
+      let edits =
+        match List.assoc_opt "edits" fields with
+        | Some (`List e) -> e
+        | _ -> Alcotest.fail "expected edits array"
+      in
+      Alcotest.(check int) "edits empty" 0 (List.length edits)
+  | Ok _ -> Alcotest.fail "expected assoc"
+  | Error _ -> Alcotest.fail "expected Ok");
+  ()
 
 (** {1 Test runner} *)
 
@@ -352,5 +497,19 @@ let () =
           Alcotest.test_case "defun document" `Quick test_handle_defun;
           Alcotest.test_case "multiline sorted" `Quick
             test_handle_multiline_sorted;
+        ] );
+      ( "compute-edits",
+        [
+          Alcotest.test_case "identical" `Quick test_compute_edits_identical;
+          Alcotest.test_case "append" `Quick test_compute_edits_append;
+          Alcotest.test_case "delete" `Quick test_compute_edits_delete;
+          Alcotest.test_case "replace" `Quick test_compute_edits_replace;
+        ] );
+      ( "handle-delta",
+        [
+          Alcotest.test_case "with cache" `Quick test_handle_delta_with_cache;
+          Alcotest.test_case "no cache fallback" `Quick
+            test_handle_delta_no_cache;
+          Alcotest.test_case "no change" `Quick test_handle_delta_no_change;
         ] );
     ]

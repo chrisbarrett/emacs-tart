@@ -294,7 +294,7 @@ let server_capabilities_to_json (caps : server_capabilities) : Yojson.Safe.t =
       ( "semanticTokensProvider",
         `Assoc
           [
-            ("full", `Bool true);
+            ("full", `Assoc [ ("delta", `Bool true) ]);
             ("legend", semantic_tokens_legend_to_json semantic_tokens_legend);
           ] )
       :: fields
@@ -1253,7 +1253,27 @@ let folding_range_result_to_json (result : folding_range_result) : Yojson.Safe.t
 (** {1 Semantic Tokens} *)
 
 type semantic_tokens_params = { stp_text_document : string }
-type semantic_tokens_result = { str_data : int list }
+type semantic_tokens_result = { str_result_id : string; str_data : int list }
+
+type semantic_tokens_delta_params = {
+  stdp_text_document : string;
+  stdp_previous_result_id : string;
+}
+
+type semantic_tokens_edit = {
+  ste_start : int;
+  ste_delete_count : int;
+  ste_data : int list;
+}
+
+type semantic_tokens_delta_result = {
+  stdr_result_id : string;
+  stdr_edits : semantic_tokens_edit list;
+}
+
+type semantic_tokens_delta_response =
+  | DeltaResponse of semantic_tokens_delta_result
+  | FullResponse of semantic_tokens_result
 
 let parse_semantic_tokens_params (json : Yojson.Safe.t) : semantic_tokens_params
     =
@@ -1263,10 +1283,53 @@ let parse_semantic_tokens_params (json : Yojson.Safe.t) : semantic_tokens_params
       json |> member "textDocument" |> member "uri" |> to_string;
   }
 
+let parse_semantic_tokens_delta_params (json : Yojson.Safe.t) :
+    semantic_tokens_delta_params =
+  let open Yojson.Safe.Util in
+  {
+    stdp_text_document =
+      json |> member "textDocument" |> member "uri" |> to_string;
+    stdp_previous_result_id = json |> member "previousResultId" |> to_string;
+  }
+
 let semantic_tokens_result_to_json (result : semantic_tokens_result option) :
     Yojson.Safe.t =
   match result with
-  | Some r -> `Assoc [ ("data", `List (List.map (fun i -> `Int i) r.str_data)) ]
+  | Some r ->
+      `Assoc
+        [
+          ("resultId", `String r.str_result_id);
+          ("data", `List (List.map (fun i -> `Int i) r.str_data));
+        ]
+  | None -> `Null
+
+let semantic_tokens_edit_to_json (edit : semantic_tokens_edit) : Yojson.Safe.t =
+  let fields =
+    [
+      ("start", `Int edit.ste_start); ("deleteCount", `Int edit.ste_delete_count);
+    ]
+  in
+  let fields =
+    if edit.ste_data = [] then fields
+    else fields @ [ ("data", `List (List.map (fun i -> `Int i) edit.ste_data)) ]
+  in
+  `Assoc fields
+
+let semantic_tokens_delta_response_to_json
+    (result : semantic_tokens_delta_response option) : Yojson.Safe.t =
+  match result with
+  | Some (DeltaResponse r) ->
+      `Assoc
+        [
+          ("resultId", `String r.stdr_result_id);
+          ("edits", `List (List.map semantic_tokens_edit_to_json r.stdr_edits));
+        ]
+  | Some (FullResponse r) ->
+      `Assoc
+        [
+          ("resultId", `String r.str_result_id);
+          ("data", `List (List.map (fun i -> `Int i) r.str_data));
+        ]
   | None -> `Null
 
 (** {1 Inlay Hints} *)

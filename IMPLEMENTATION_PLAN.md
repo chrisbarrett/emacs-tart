@@ -594,7 +594,7 @@ Tasks 1–3, 5–6, 8–9, 11, 13–16 are independent and can proceed in parall
 | 6  | Cross-file goto-definition      | 71   | —                         | `server.ml`                                      | Done        |
 | 7  | Workspace-wide rename           | 71   | —                         | `server.ml`                                      | Done        |
 | 8  | Scope-aware completion          | 71   | —                         | `completion.ml`                                  | Done        |
-| 9  | Semantic tokens delta           | 71   | —                         | `semantic_tokens.ml`, `protocol.ml`, `server.ml` | Not started |
+| 9  | Semantic tokens delta           | 71   | —                         | `semantic_tokens.ml`, `protocol.ml`, `server.ml` | Done        |
 | 10 | Call hierarchy                  | 71   | `call_hierarchy.{ml,mli}` | `protocol.ml`, `server.ml`                       | Not started |
 | 11 | Type hierarchy                  | 71   | `type_hierarchy.{ml,mli}` | `protocol.ml`, `server.ml`                       | Not started |
 | 12 | Code lens                       | 71   | `code_lens.{ml,mli}`      | `protocol.ml`, `server.ml`                       | Not started |
