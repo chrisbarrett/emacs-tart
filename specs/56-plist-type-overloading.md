@@ -399,7 +399,7 @@ Where `infer_application` now:
 - [x] [R2] Verify row unification during clause matching
 - [x] [R3] Test closed row rejection in clause matching
 - [x] [R4] Verify fallthrough to generic clause
-- [ ] [R5] Enhance clause dispatch with row field lookup during unification
+- [x] [R5] Enhance clause dispatch with row field lookup during unification
 - [ ] [R5] Handle open row extension and closed row rejection in clause matching
 - [ ] [R5] Migrate `plist-get`, `alist-get`, `gethash`, `map-elt` to
       multi-clause `.tart` signatures
@@ -408,9 +408,8 @@ Where `infer_application` now:
       semantics preserved
 - [x] [R7] Document literal matching in clause selection
 
-**Status:** Core dispatch implemented (R1–R4, R6–R7). R5 reframed: the
-hard-coded row inference functions perform row-aware unification procedurally;
-clause dispatch must learn row field lookup during `Clause_matching` context
-to replace them. The plist↔list subsumption suppression (`context <>
-Clause_matching` in `unify.ml`) remains correct—the enhancement is to the
-clause matcher's unification strategy, not to the subsumption rules.
+**Status:** Virtual clause generation for row field lookup implemented
+(R1–R5 row field lookup). `generate_virtual_clauses` in `infer.ml` generates
+per-field clauses from call-site row types, enabling clause dispatch to handle
+Cases 1-2 of the decision table. Remaining: open row extension, closed row
+rejection, `.tart` signature migration, and `row_dispatch.ml` removal.

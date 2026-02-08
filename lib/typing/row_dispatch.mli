@@ -28,6 +28,12 @@ val extract_hash_table_row : Core.Types.typ -> Core.Types.row option
 val extract_map_row : Core.Types.typ -> Core.Types.row option
 (** Extract a row type from a map supertype: [(Map TRow)]. *)
 
+val detect_container_in_type :
+  Core.Types.typ -> (container_kind * Core.Types.row) option
+(** [detect_container_in_type ty] tries to detect a row-typed container in an
+    argument's type. Returns [Some (kind, row)] if the type has a known
+    row-typed container type, [None] otherwise. *)
+
 val build_expected_container :
   container_kind -> Core.Types.typ -> Core.Types.typ
 (** [build_expected_container kind row] builds the expected container type for a

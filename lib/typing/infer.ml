@@ -171,6 +171,57 @@ type union_fn_result =
       (** Function IS a union of arrows, but args don't satisfy all variants.
           Carries the arrow variants for error constraint generation. *)
 
+(** Generate virtual clauses from row fields for row-aware clause dispatch.
+
+    When a clause has a row-typed container parameter and the call-site argument
+    has a concrete row type, generates a virtual clause per row field. Each
+    virtual clause has a [PLiteral] for the key parameter and returns the
+    field's type directly (not [(v | nil)]).
+
+    This enables clause dispatch to handle row field lookup declaratively,
+    replacing the procedural row dispatch for Cases 1-2 of the Spec 11 R4
+    decision table. *)
+let generate_virtual_clauses (env : Env.t) (clauses : Env.loaded_clause list)
+    (arg_types : typ list) : Env.loaded_clause list =
+  match clauses with
+  | [ clause ] -> (
+      match Row_dispatch.analyze_clause clause with
+      | None -> []
+      | Some config -> (
+          let container_index = config.cc_container_index in
+          let key_index = config.cc_key_index in
+          if container_index >= List.length arg_types then []
+          else
+            let container_ty = List.nth arg_types container_index in
+            match Row_dispatch.detect_container_in_type container_ty with
+            | None -> []
+            | Some (kind, row) ->
+                List.filter_map
+                  (fun (field_name, field_ty) ->
+                    let row_var = fresh_tvar (Env.current_level env) in
+                    let virtual_row =
+                      open_row [ (field_name, field_ty) ] row_var
+                    in
+                    let container_param =
+                      Row_dispatch.build_expected_container kind virtual_row
+                    in
+                    let params =
+                      List.mapi
+                        (fun i p ->
+                          if i = container_index then PPositional container_param
+                          else if i = key_index then PLiteral field_name
+                          else p)
+                        clause.lc_params
+                    in
+                    Some
+                      {
+                        Env.lc_params = params;
+                        lc_return = field_ty;
+                        lc_diagnostic = None;
+                      })
+                  row.row_fields))
+  | _ -> []
+
 let rec infer (env : Env.t) (sexp : Syntax.Sexp.t) : result =
   let open Syntax.Sexp in
   match sexp with
@@ -1518,13 +1569,6 @@ and infer_funcall env fn_expr args span =
         clause_diagnostics = quote_diag;
       }
 
-(** Extract the literal value from a call-site argument expression.
-
-    Returns [Some literal] for keywords and quoted symbols, matching the
-    convention used in {!Types.PLiteral}:
-    - Keywords [:name] produce [Some ":name"]
-    - Quoted symbols ['foo] produce [Some "foo"]
-    - All other expressions produce [None] *)
 (** Infer the type of a function application.
 
     Generates constraint: fn_type = (arg_types...) -> result_type.
@@ -1546,14 +1590,11 @@ and infer_application env fn args span =
     | Some name -> (
         match Env.lookup_fn_clauses name env with
         | Some clauses -> (
-            (* Get the tvar names from the function's scheme *)
             match Env.lookup_fn name env with
             | Some (Env.Poly (vars, _)) ->
                 Clause_dispatch.try_dispatch env ~tvar_names:vars ~clauses
                   ~arg_types ~arg_literals ~loc:span
             | Some (Env.Mono _) ->
-                (* Monomorphic function with clauses (e.g. single-clause with
-                   diagnostic) — dispatch with empty tvar list *)
                 Clause_dispatch.try_dispatch env ~tvar_names:[] ~clauses
                   ~arg_types ~arg_literals ~loc:span
             | _ -> None)
@@ -1561,14 +1602,76 @@ and infer_application env fn args span =
     | None -> None
   in
 
+  (* Try virtual clause dispatch for row-typed accessors. When a function's
+     signature has a row-typed container parameter and the call-site argument
+     has a concrete row type, generate virtual clauses from the row fields.
+     Each virtual clause has a PLiteral key param and returns the field type
+     directly, handling Cases 1-2 of the Spec 11 R4 decision table. Virtual
+     clauses are tried only when regular clause dispatch didn't match, and
+     before falling through to the procedural row dispatch. *)
+  let virtual_clause_result =
+    match clause_result with
+    | Some _ -> None (* Regular clause dispatch already succeeded *)
+    | None -> (
+        match fn_name with
+        | Some name -> (
+            (* Get clauses from env, or synthesize from function type for
+               single-clause functions *)
+            let clauses_and_vars =
+              match Env.lookup_fn_clauses name env with
+              | Some clauses -> (
+                  match Env.lookup_fn name env with
+                  | Some (Env.Poly (vars, _)) -> Some (clauses, vars)
+                  | _ -> None)
+              | None -> (
+                  (* Single-clause functions without diagnostics don't store
+                     clauses. Synthesize a clause from the function type for
+                     virtual clause generation. *)
+                  match Env.lookup_fn name env with
+                  | Some (Env.Poly (vars, ty)) -> (
+                      match ty with
+                      | TArrow (params, ret) | TForall (_, TArrow (params, ret))
+                        ->
+                          let clause =
+                            {
+                              Env.lc_params = params;
+                              lc_return = ret;
+                              lc_diagnostic = None;
+                            }
+                          in
+                          Some ([ clause ], vars)
+                      | _ -> None)
+                  | _ -> None)
+            in
+            match clauses_and_vars with
+            | Some (clauses, vars) -> (
+                let virtual_clauses =
+                  generate_virtual_clauses env clauses arg_types
+                in
+                match virtual_clauses with
+                | [] -> None
+                | _ ->
+                    (* Try virtual clauses only — no generic fallback. If no
+                       virtual clause matches, row dispatch handles it. Pass
+                       original tvar_names so remaining params (e.g. optional
+                       params referencing type variables) are properly
+                       instantiated. *)
+                    Clause_dispatch.try_dispatch env ~tvar_names:vars
+                      ~clauses:virtual_clauses ~arg_types ~arg_literals
+                      ~loc:span)
+            | None -> None)
+        | None -> None)
+  in
+
   (* Try row accessor dispatch for functions with row-typed container arguments
      and literal keys. This implements the decision table from Spec 11 R4–R8.
      Detection is signature-driven: any function receiving a row-typed container
-     benefits automatically. Only attempted when clause dispatch didn't match. *)
+     benefits automatically. Only attempted when neither clause dispatch nor
+     virtual clause dispatch matched. *)
   let row_accessor_result =
-    match clause_result with
-    | Some _ -> None (* Clause dispatch already succeeded *)
-    | None -> (
+    match (clause_result, virtual_clause_result) with
+    | Some _, _ | _, Some _ -> None
+    | None, None -> (
         (* First try: detect container from actual argument types (Cases 1-5) *)
         match
           Row_dispatch.try_dispatch env ~arg_types ~arg_literals ~args
@@ -1600,10 +1703,16 @@ and infer_application env fn args span =
             | None -> None))
   in
 
+  (* Merge clause and virtual clause results: prefer explicit clause dispatch,
+     then virtual clause dispatch *)
+  let effective_clause_result =
+    match clause_result with Some _ -> clause_result | None -> virtual_clause_result
+  in
+
   let result =
-    match (clause_result, row_accessor_result) with
+    match (effective_clause_result, row_accessor_result) with
     | Some (clause_ret_ty, clause_diag_opt), _ ->
-        (* Clause matched — use the clause's return type directly.
+        (* Clause or virtual clause matched — use the return type directly.
          Still need to emit fn_result constraints and arg constraints for
          the sub-expressions, but the return type is determined by the clause
          rather than by unifying the full merged function type. *)
