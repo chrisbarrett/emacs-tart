@@ -28,7 +28,8 @@
 (defun file-name-concat (string &rest string) -> string)
 
 ;; (expand-file-name NAME &optional DEFAULT-DIRECTORY) - expand to absolute path
-(defun expand-file-name (string &optional string) -> string)
+;; DEFAULT-DIRECTORY: nil means use `default-directory'
+(defun expand-file-name (string &optional (string | nil)) -> string)
 
 ;; (substitute-in-file-name FILENAME) - substitute environment variables
 (defun substitute-in-file-name (string) -> string)
@@ -54,7 +55,8 @@
 (defun make-temp-name (string) -> string)
 
 ;; (make-temp-file-internal PREFIX DIR-FLAG SUFFIX TEXT) - internal temp file creation
-(defun make-temp-file-internal (string any (string | nil) (string | nil)) -> string)
+;; DIR-FLAG: non-nil to create a directory instead of a file
+(defun make-temp-file-internal (string bool (string | nil) (string | nil)) -> string)
 
 ;; ===========================================================================
 ;; File existence and attribute predicates
@@ -174,19 +176,23 @@
 ;; ===========================================================================
 
 ;; (insert-file-contents FILENAME &optional VISIT BEG END REPLACE) - insert file contents
+;; VISIT: non-nil to set visited file name; REPLACE: non-nil to replace buffer contents
 ;; Returns (ABSOLUTE-FILE-NAME . BYTES-INSERTED)
-(defun insert-file-contents (string &optional any int int any) -> (cons string int))
+(defun insert-file-contents (string &optional bool int int bool) -> (cons string int))
 
 ;; (write-region START END FILENAME &optional APPEND VISIT LOCKNAME MUSTBENEW)
-;; Write region to file. Returns nil.
-(defun write-region (any any string &optional any any string symbol) -> nil)
+;; START/END: buffer positions, nil for point-min/point-max, or string to write directly
+;; APPEND: non-nil to append, or integer byte offset
+;; VISIT: non-nil to set visited file, or string for alternate file name
+(defun write-region ((int | string | nil) (int | string | nil) string &optional (bool | int | nil) (bool | string | nil) string symbol) -> nil)
 
 ;; ===========================================================================
 ;; Visited file modification tracking
 ;; ===========================================================================
 
 ;; (verify-visited-file-modtime &optional BUF) - check if file changed on disk
-(defun verify-visited-file-modtime (&optional any) -> bool)
+;; BUF: buffer to check, or nil for current buffer
+(defun verify-visited-file-modtime (&optional (buffer | nil)) -> bool)
 
 ;; (visited-file-modtime) - return modification time of visited file
 (defun visited-file-modtime () -> any)
@@ -222,13 +228,13 @@
 
 ;; (set-binary-mode STREAM MODE) - set binary/text mode for stream
 ;; STREAM is 'stdin, 'stdout, or 'stderr
-;; MODE is t for binary, nil for text
-(defun set-binary-mode (symbol any) -> any)
+;; MODE is t for binary, nil for text; returns previous mode
+(defun set-binary-mode (symbol bool) -> bool)
 
 ;; (file-system-info FILENAME) - return filesystem info as list
 ;; Returns (TOTAL FREE AVAIL) in bytes, or nil
 (defun file-system-info (string) -> ((list int) | nil))
 
 ;; (car-less-than-car A B) - compare car of two conses
-;; Used for sorting alists
-(defun car-less-than-car (any any) -> bool)
+;; Used for sorting alists; compares car elements numerically
+(defun car-less-than-car ((cons num any) (cons num any)) -> bool)
