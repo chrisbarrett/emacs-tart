@@ -212,5 +212,5 @@ delta-encodes, returns JSON.
 | # | Task | Status |
 |---|------|--------|
 | 1 | Protocol types for semantic tokens | Done |
-| 2 | Semantic tokens module | Not started |
+| 2 | Semantic tokens module | Done |
 | 3 | Wire into server | Not started |

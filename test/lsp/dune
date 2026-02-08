@@ -49,3 +49,8 @@
  (name folding_test)
  (modules folding_test)
  (libraries tart.lsp alcotest))
+
+(test
+ (name semantic_tokens_test)
+ (modules semantic_tokens_test)
+ (libraries tart.lsp alcotest))
