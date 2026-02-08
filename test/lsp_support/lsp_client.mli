@@ -9,9 +9,15 @@ val make_message :
   ?id:Yojson.Safe.t -> method_:string -> ?params:Yojson.Safe.t -> unit -> string
 (** Build a JSON-RPC 2.0 message string with Content-Length header. *)
 
-val initialize_msg : ?id:int -> ?root_uri:string -> unit -> string
-(** [initialize_msg ?id ?root_uri ()] builds an initialize request. Defaults:
-    [id = 1], [root_uri] omitted. *)
+val initialize_msg :
+  ?id:int ->
+  ?root_uri:string ->
+  ?initialization_options:Yojson.Safe.t ->
+  unit ->
+  string
+(** [initialize_msg ?id ?root_uri ?initialization_options ()] builds an
+    initialize request. Defaults: [id = 1], [root_uri] omitted,
+    [initialization_options] omitted. *)
 
 val initialized_msg : unit -> string
 (** Notification sent after initialize response is received. *)
@@ -116,6 +122,9 @@ val workspace_symbol_msg : id:int -> query:string -> unit -> string
 val did_change_watched_files_msg : changes:(string * int) list -> unit -> string
 (** workspace/didChangeWatchedFiles notification. Each change is a [(uri, type)]
     pair where type is 1=created, 2=changed, 3=deleted. *)
+
+val did_change_configuration_msg : settings:Yojson.Safe.t -> unit -> string
+(** workspace/didChangeConfiguration notification. *)
 
 (** {1 Session Runners} *)
 

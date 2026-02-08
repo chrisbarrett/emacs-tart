@@ -124,4 +124,4 @@ Both paths parse the same settings shape and call the same
 |---|------|--------|
 | 1 | Protocol types + settings parsing | Done |
 | 2 | Server apply_settings + mutable config | Done |
-| 3 | Tests | Not started |
+| 3 | Tests | Done |

@@ -14,13 +14,16 @@ let make_message ?(id : Yojson.Safe.t option) ~method_ ?params () : string =
   let content = Yojson.Safe.to_string json in
   Printf.sprintf "Content-Length: %d\r\n\r\n%s" (String.length content) content
 
-let initialize_msg ?(id = 1) ?root_uri () =
+let initialize_msg ?(id = 1) ?root_uri ?initialization_options () =
   let params =
     `Assoc
       ([ ("processId", `Null); ("capabilities", `Assoc []) ]
+      @ (match root_uri with
+        | Some uri -> [ ("rootUri", `String uri) ]
+        | None -> [])
       @
-      match root_uri with
-      | Some uri -> [ ("rootUri", `String uri) ]
+      match initialization_options with
+      | Some opts -> [ ("initializationOptions", opts) ]
       | None -> [])
   in
   make_message ~id:(`Int id) ~method_:"initialize" ~params ()
@@ -214,6 +217,11 @@ let did_change_watched_files_msg ~(changes : (string * int) list) () =
   in
   make_message ~method_:"workspace/didChangeWatchedFiles"
     ~params:(`Assoc [ ("changes", `List change_jsons) ])
+    ()
+
+let did_change_configuration_msg ~(settings : Yojson.Safe.t) () =
+  make_message ~method_:"workspace/didChangeConfiguration"
+    ~params:(`Assoc [ ("settings", settings) ])
     ()
 
 (* {1 Message Parsing} *)

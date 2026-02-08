@@ -2406,6 +2406,90 @@ let test_workspace_symbol_tart_file () =
         "kind is function" 12
         (first |> member "kind" |> to_int)
 
+(** {1 Workspace Configuration Tests} *)
+
+let test_initialization_options_emacs_version () =
+  (* Verify that initializationOptions with emacsVersion is accepted and
+     diagnostics are published after initialize. *)
+  let result =
+    run_session
+      [
+        initialize_msg ~id:1
+          ~initialization_options:
+            (`Assoc [ ("tart.emacsVersion", `String "30.1") ])
+          ();
+        initialized_msg ();
+        did_open_msg ~uri:"file:///test.el" ~text:"(+ 1 2)" ();
+        shutdown_msg ~id:99 ();
+        exit_msg ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  (* Diagnostics should be published for the opened document *)
+  match find_diagnostics ~uri:"file:///test.el" result.messages with
+  | None -> Alcotest.fail "No diagnostics after init with emacsVersion"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let _diagnostics = json |> member "params" |> member "diagnostics" in
+      (* Just verify it didn't crash — the specific diagnostics depend on
+         available typings *)
+      ()
+
+let test_did_change_configuration_searchpath () =
+  (* Open a doc, then send didChangeConfiguration with a searchPath. The
+     server should accept the notification, invalidate caches, and remain
+     functional — verified by a successful hover afterward. Diagnostic dedup
+     may suppress re-publication of identical diagnostics, so we check the
+     server still responds to requests instead of counting notifications. *)
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el" ~text:"(+ 1 2)" ();
+        did_change_configuration_msg
+          ~settings:(`Assoc [ ("tart.searchPath", `List [ `String "/tmp" ]) ])
+          ();
+        hover_msg ~id:2 ~uri:"file:///test.el" ~line:0 ~character:1 ();
+      ]
+  in
+  Alcotest.(check int) "exit code" 0 result.exit_code;
+  (* Verify server is still functional after config change *)
+  match find_response ~id:2 result.messages with
+  | None -> Alcotest.fail "No hover response after config change"
+  | Some json ->
+      let open Yojson.Safe.Util in
+      let result_field = json |> member "result" in
+      Alcotest.(check bool)
+        "hover works after config change" true (result_field <> `Null)
+
+let test_empty_settings_tolerated () =
+  (* Empty settings object should not crash the server *)
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el" ~text:"(+ 1 2)" ();
+        did_change_configuration_msg ~settings:(`Assoc []) ();
+      ]
+  in
+  Alcotest.(check int) "exit code with empty settings" 0 result.exit_code
+
+let test_unknown_settings_keys_ignored () =
+  (* Extra unknown keys in settings should be silently ignored *)
+  let result =
+    run_initialized_session
+      [
+        did_open_msg ~uri:"file:///test.el" ~text:"(+ 1 2)" ();
+        did_change_configuration_msg
+          ~settings:
+            (`Assoc
+               [
+                 ("tart.unknownKey", `String "value");
+                 ("completely.random", `Int 42);
+               ])
+          ();
+      ]
+  in
+  Alcotest.(check int) "exit code with unknown keys" 0 result.exit_code
+
 (** {1 File Watching Tests} *)
 
 let test_file_watcher_registration () =
@@ -2752,6 +2836,17 @@ let () =
             test_workspace_symbol_empty_workspace;
           Alcotest.test_case "tart file symbols" `Quick
             test_workspace_symbol_tart_file;
+        ] );
+      ( "workspace-config",
+        [
+          Alcotest.test_case "initializationOptions emacsVersion" `Quick
+            test_initialization_options_emacs_version;
+          Alcotest.test_case "didChangeConfiguration searchPath" `Quick
+            test_did_change_configuration_searchpath;
+          Alcotest.test_case "empty settings tolerated" `Quick
+            test_empty_settings_tolerated;
+          Alcotest.test_case "unknown keys ignored" `Quick
+            test_unknown_settings_keys_ignored;
         ] );
       ( "file-watching",
         [
