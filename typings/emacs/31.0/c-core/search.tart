@@ -85,7 +85,7 @@
 ;; (replace-match NEWTEXT &optional FIXEDCASE LITERAL STRING SUBEXP)
 ;; Replace text matched by last search with NEWTEXT.
 ;; Returns nil when replacing in buffer, string when STRING is provided.
-(defun replace-match (string &optional any any string int) -> (string | nil))
+(defun replace-match (string &optional bool bool string int) -> (string | nil))
 
 ;; ===========================================================================
 ;; Regexp utilities
@@ -101,4 +101,4 @@
 
 ;; (newline-cache-check &optional BUFFER)
 ;; Check newline cache against buffer contents.
-(defun newline-cache-check (&optional any) -> (any | nil))
+(defun newline-cache-check (&optional (buffer | nil)) -> ((list any) | nil))
