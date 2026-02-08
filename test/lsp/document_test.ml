@@ -442,6 +442,121 @@ let test_utf16_multiple_emoji () =
     "utf16 2 -> byte 4" 4
     (Document.byte_offset_of_utf16 ~line_text:line ~utf16_offset:2)
 
+(** {1 UTF-16 Incremental Edit Tests} *)
+
+let test_incremental_edit_with_cjk () =
+  (* Text: "a中b\n" where 中 is 3 bytes (U+4E2D, BMP → 1 UTF-16 unit)
+     UTF-16 offsets: a=0, 中=1, b=2
+     Insert "X" before "b" using UTF-16 character offset 2 *)
+  let store = Document.create () in
+  let text = "a\xE4\xB8\xADb" in
+  Document.open_doc store ~uri:"file:///test.el" ~version:1 ~text;
+  let change : Document.content_change =
+    {
+      range =
+        Some
+          {
+            start = { line = 0; character = 2 };
+            end_ = { line = 0; character = 2 };
+          };
+      text = "X";
+    }
+  in
+  (match
+     Document.apply_changes store ~uri:"file:///test.el" ~version:2 [ change ]
+   with
+  | Ok () -> ()
+  | Error e -> Alcotest.fail e);
+  match Document.get_doc store "file:///test.el" with
+  | Some doc ->
+      (* "a中Xb" — X inserted at byte offset 4 (after 中) *)
+      Alcotest.(check string) "text" "a\xE4\xB8\xADXb" doc.text
+  | None -> Alcotest.fail "Document not found"
+
+let test_incremental_edit_with_emoji () =
+  (* Text: "a😀b" where 😀 is 4 bytes (U+1F600, surrogate pair → 2 UTF-16 units)
+     UTF-16 offsets: a=0, 😀=1..2, b=3
+     Replace "b" using UTF-16 character offset 3 *)
+  let store = Document.create () in
+  let text = "a\xF0\x9F\x98\x80b" in
+  Document.open_doc store ~uri:"file:///test.el" ~version:1 ~text;
+  let change : Document.content_change =
+    {
+      range =
+        Some
+          {
+            start = { line = 0; character = 3 };
+            end_ = { line = 0; character = 4 };
+          };
+      text = "Z";
+    }
+  in
+  (match
+     Document.apply_changes store ~uri:"file:///test.el" ~version:2 [ change ]
+   with
+  | Ok () -> ()
+  | Error e -> Alcotest.fail e);
+  match Document.get_doc store "file:///test.el" with
+  | Some doc ->
+      (* "a😀Z" — b replaced by Z *)
+      Alcotest.(check string) "text" "a\xF0\x9F\x98\x80Z" doc.text
+  | None -> Alcotest.fail "Document not found"
+
+let test_incremental_edit_multiline_with_multibyte () =
+  (* Two lines with multi-byte content:
+     Line 0: "café"  (c a f é where é is 2 bytes, UTF-16 offsets: c=0 a=1 f=2 é=3)
+     Line 1: "a😀b"  (UTF-16 offsets: a=0 😀=1..2 b=3)
+     Delete from line 0 char 3 (é) through line 1 char 3 (b) *)
+  let store = Document.create () in
+  let text = "caf\xC3\xA9\na\xF0\x9F\x98\x80b" in
+  Document.open_doc store ~uri:"file:///test.el" ~version:1 ~text;
+  let change : Document.content_change =
+    {
+      range =
+        Some
+          {
+            start = { line = 0; character = 3 };
+            end_ = { line = 1; character = 3 };
+          };
+      text = "";
+    }
+  in
+  (match
+     Document.apply_changes store ~uri:"file:///test.el" ~version:2 [ change ]
+   with
+  | Ok () -> ()
+  | Error e -> Alcotest.fail e);
+  match Document.get_doc store "file:///test.el" with
+  | Some doc ->
+      (* "caf" + "b" = "cafb" — deleted é, newline, a😀 *)
+      Alcotest.(check string) "text" "cafb" doc.text
+  | None -> Alcotest.fail "Document not found"
+
+let test_incremental_edit_ascii_unchanged () =
+  (* Verify ASCII edits still work identically (byte = UTF-16 for ASCII) *)
+  let store = Document.create () in
+  let text = "hello world" in
+  Document.open_doc store ~uri:"file:///test.el" ~version:1 ~text;
+  let change : Document.content_change =
+    {
+      range =
+        Some
+          {
+            start = { line = 0; character = 5 };
+            end_ = { line = 0; character = 11 };
+          };
+      text = " Emacs";
+    }
+  in
+  (match
+     Document.apply_changes store ~uri:"file:///test.el" ~version:2 [ change ]
+   with
+  | Ok () -> ()
+  | Error e -> Alcotest.fail e);
+  match Document.get_doc store "file:///test.el" with
+  | Some doc -> Alcotest.(check string) "text" "hello Emacs" doc.text
+  | None -> Alcotest.fail "Document not found"
+
 let () =
   Alcotest.run "document"
     [
@@ -500,5 +615,16 @@ let () =
           Alcotest.test_case "clamp past end" `Quick test_utf16_clamp_past_end;
           Alcotest.test_case "empty line" `Quick test_utf16_empty_line;
           Alcotest.test_case "multiple emoji" `Quick test_utf16_multiple_emoji;
+        ] );
+      ( "utf16_incremental",
+        [
+          Alcotest.test_case "edit with CJK" `Quick
+            test_incremental_edit_with_cjk;
+          Alcotest.test_case "edit with emoji" `Quick
+            test_incremental_edit_with_emoji;
+          Alcotest.test_case "multiline with multibyte" `Quick
+            test_incremental_edit_multiline_with_multibyte;
+          Alcotest.test_case "ASCII unchanged" `Quick
+            test_incremental_edit_ascii_unchanged;
         ] );
     ]

@@ -96,8 +96,9 @@ let line_text_at (text : string) (line_number : int) : string option =
 
 type content_change = { range : range option; text : string }
 
-(** Convert a (line, character) position to a byte offset in text. Returns None
-    if position is out of range. *)
+(** Convert a (line, character) position to a byte offset in text. The
+    [character] field is interpreted as a UTF-16 code-unit offset and converted
+    to bytes. Returns None if position is out of range. *)
 let position_to_offset (text : string) (pos : position) : int option =
   let lines = String.split_on_char '\n' text in
   let rec find_offset line_num char_offset lines =
@@ -108,10 +109,13 @@ let position_to_offset (text : string) (pos : position) : int option =
         else None
     | line :: rest ->
         if line_num = pos.line then
+          let byte_char =
+            byte_offset_of_utf16 ~line_text:line ~utf16_offset:pos.character
+          in
           let line_len = String.length line in
           (* Allow character position up to line_len + 1 to handle cursor at EOL *)
-          if pos.character <= line_len then Some (char_offset + pos.character)
-          else if pos.character = line_len + 1 && rest = [] then
+          if byte_char <= line_len then Some (char_offset + byte_char)
+          else if byte_char = line_len + 1 && rest = [] then
             (* Special case: at very end of last line (after implicit \n) *)
             Some (char_offset + line_len)
           else None
