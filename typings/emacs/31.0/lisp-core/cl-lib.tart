@@ -85,32 +85,32 @@
 
 ;; (cl-pushnew X PLACE &key :test :test-not :key)
 ;; Add X to list in PLACE if not already present
-(defun cl-pushnew (any any &rest any) -> (list any))
+(defun cl-pushnew [a] (a any &rest any) -> (list a))
 
 ;; ===========================================================================
 ;; List accessors
 ;; ===========================================================================
 
 ;; (cl-first LIST) - same as car
-(defun cl-first ((list any)) -> any)
+(defun cl-first [a] ((list a)) -> (a | nil))
 
 ;; (cl-second LIST) - car of cdr
-(defun cl-second ((list any)) -> any)
+(defun cl-second [a] ((list a)) -> (a | nil))
 
 ;; (cl-third LIST) - third element
-(defun cl-third ((list any)) -> any)
+(defun cl-third [a] ((list a)) -> (a | nil))
 
 ;; (cl-fourth LIST) through (cl-tenth LIST) - nth element
-(defun cl-fourth ((list any)) -> any)
-(defun cl-fifth ((list any)) -> any)
-(defun cl-sixth ((list any)) -> any)
-(defun cl-seventh ((list any)) -> any)
-(defun cl-eighth ((list any)) -> any)
-(defun cl-ninth ((list any)) -> any)
-(defun cl-tenth ((list any)) -> any)
+(defun cl-fourth [a] ((list a)) -> (a | nil))
+(defun cl-fifth [a] ((list a)) -> (a | nil))
+(defun cl-sixth [a] ((list a)) -> (a | nil))
+(defun cl-seventh [a] ((list a)) -> (a | nil))
+(defun cl-eighth [a] ((list a)) -> (a | nil))
+(defun cl-ninth [a] ((list a)) -> (a | nil))
+(defun cl-tenth [a] ((list a)) -> (a | nil))
 
 ;; (cl-rest LIST) - same as cdr
-(defun cl-rest ((list any)) -> (list any))
+(defun cl-rest [a] ((list a)) -> (list a))
 
 ;; ===========================================================================
 ;; Higher-order functions
@@ -120,13 +120,13 @@
 (defun cl-mapcar (((&rest any) -> any) &rest ((list any) | (vector any) | string)) -> (list any))
 
 ;; (cl-remove-if PRED LIST &key :key) - remove elements where pred is true
-(defun cl-remove-if (((any) -> any) (list any) &rest any) -> (list any))
+(defun cl-remove-if [a] (((a) -> any) (list a) &rest any) -> (list a))
 
 ;; (cl-remove-if-not PRED LIST &key :key) - keep elements where pred is true
-(defun cl-remove-if-not (((any) -> any) (list any) &rest any) -> (list any))
+(defun cl-remove-if-not [a] (((a) -> any) (list a) &rest any) -> (list a))
 
 ;; (cl-find-if PRED SEQ &key :key) - find first element where pred is true
-(defun cl-find-if (((any) -> any) ((list any) | (vector any) | string) &rest any) -> any)
+(defun cl-find-if [a] (((a) -> any) ((list a) | (vector a) | string) &rest any) -> (a | nil))
 
 ;; (cl-position-if PRED SEQ &key :key) - find position where pred is true
 (defun cl-position-if (((any) -> any) ((list any) | (vector any) | string) &rest any) -> (int | nil))
