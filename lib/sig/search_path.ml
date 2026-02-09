@@ -52,6 +52,9 @@ let with_emacs_version version t = { t with emacs_version = Some version }
 (** Set the typings root directory (e.g., /path/to/typings/emacs). *)
 let with_typings_root root t = { t with typings_root = Some root }
 
+(** Get the typings root directory. *)
+let typings_root t = t.typings_root
+
 (** Add a directory to the front of the search path. *)
 let prepend_dir dir t = { t with search_dirs = dir :: t.search_dirs }
 

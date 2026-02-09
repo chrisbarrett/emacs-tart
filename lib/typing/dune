@@ -1,6 +1,6 @@
 (library
  (name typing)
  (public_name tart.typing)
- (libraries yojson tart.syntax tart.core tart.sig tart.log)
+ (libraries yojson tart.syntax tart.core tart.sig tart.log tart.interp)
  (preprocess
   (pps ppx_deriving.show ppx_deriving.eq)))

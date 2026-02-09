@@ -365,6 +365,11 @@ let functionp = function
   | [ _ ] -> Ok Nil
   | args -> arity_error "functionp" 1 (List.length args)
 
+let keywordp = function
+  | [ Keyword _ ] -> Ok T
+  | [ _ ] -> Ok Nil
+  | args -> arity_error "keywordp" 1 (List.length args)
+
 let eq_ = function
   | [ a; b ] -> (
       match (a, b) with
@@ -582,6 +587,7 @@ let builtins =
     make "floatp" (1, Some 1) floatp;
     make "vectorp" (1, Some 1) vectorp;
     make "functionp" (1, Some 1) functionp;
+    make "keywordp" (1, Some 1) keywordp;
     make "eq" (2, Some 2) eq_;
     make "equal" (2, Some 2) equal_;
     make "not" (1, Some 1) not_;

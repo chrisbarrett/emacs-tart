@@ -70,6 +70,7 @@ val integerp : Value.value list -> (Value.value, string) result
 val floatp : Value.value list -> (Value.value, string) result
 val vectorp : Value.value list -> (Value.value, string) result
 val functionp : Value.value list -> (Value.value, string) result
+val keywordp : Value.value list -> (Value.value, string) result
 val eq_ : Value.value list -> (Value.value, string) result
 val equal_ : Value.value list -> (Value.value, string) result
 val not_ : Value.value list -> (Value.value, string) result

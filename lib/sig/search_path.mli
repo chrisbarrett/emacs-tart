@@ -34,6 +34,9 @@ val with_typings_root : string -> t -> t
     When combined with [with_emacs_version], enables version-specific typings
     lookup with fallback chain: exact → minor → major → latest. *)
 
+val typings_root : t -> string option
+(** Get the typings root directory, if configured. *)
+
 val prepend_dir : string -> t -> t
 (** Add a directory to the front of the search path (higher precedence). *)
 

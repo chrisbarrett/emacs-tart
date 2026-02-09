@@ -673,6 +673,63 @@ let check_signature_kinds (sig_file : Sig.Sig_ast.signature) :
     kind_check_error list =
   List.concat_map check_decl_kinds sig_file.sig_decls
 
+(** {1 Macro Expansion Pre-Pass} *)
+
+(** Flatten nested [progn] forms into a flat list of top-level forms. *)
+let rec flatten_toplevel_progn (sexp : Syntax.Sexp.t) : Syntax.Sexp.t list =
+  match sexp with
+  | List (Symbol ("progn", _) :: exprs, _) ->
+      List.concat_map flatten_toplevel_progn exprs
+  | _ -> [ sexp ]
+
+(** Find the [tart-macros.el] file from the search path configuration.
+
+    Looks for the file in the parent of [typings_root] (e.g.,
+    [typings/tart-macros.el] when [typings_root] is [typings/emacs]), then falls
+    back to [stdlib_dir]. *)
+let find_macro_file (config : config) : string option =
+  let candidates =
+    (* From typings_root: typings/emacs -> typings/tart-macros.el *)
+    (match Search.typings_root config.search_path with
+      | Some root ->
+          let parent = Filename.dirname root in
+          [ Filename.concat parent "tart-macros.el" ]
+      | None -> [])
+    @
+    (* From stdlib_dir (set by LSP server) *)
+    match config.stdlib_dir with
+    | Some dir -> [ Filename.concat dir "tart-macros.el" ]
+    | None -> []
+  in
+  List.find_opt Sys.file_exists candidates
+
+(** Expand defining-form macros in top-level sexps.
+
+    Creates an interpreter, loads curated macros from [tart-macros.el], and
+    recursively expands all macro calls in each top-level form. Top-level
+    [progn] wrappers are flattened so the type checker sees individual
+    definitions.
+
+    Recursive expansion is needed because some macros (e.g., [gv-letplace],
+    [macroexp-let2]) appear nested inside function bodies, not only at top
+    level.
+
+    Returns sexps unchanged when the macro file is not found. *)
+let expand_defining_forms (config : config) (sexps : Syntax.Sexp.t list) :
+    Syntax.Sexp.t list =
+  match find_macro_file config with
+  | None -> sexps
+  | Some macro_file ->
+      let global = Interp.Eval.make_interpreter () in
+      let macro_parse = Syntax.Read.parse_file macro_file in
+      Interp.Expand.load_macros global macro_parse.sexps;
+      List.concat_map
+        (fun sexp ->
+          match Interp.Expand.expand_all global sexp with
+          | Expanded expanded -> flatten_toplevel_progn expanded
+          | Expansion_error _ -> [ sexp ])
+        sexps
+
 (** {1 Main Check Function} *)
 
 (** Type-check an elisp file with module awareness.
@@ -794,6 +851,9 @@ let check_module ~(config : config) ~(filename : string)
   let env_with_loader =
     Env.set_feature_loader feature_loader env_with_autoloads
   in
+
+  (* Step 4c: Expand defining-form macros *)
+  let sexps = expand_defining_forms config sexps in
 
   (* Step 5: Type-check the implementation *)
   let check_result = Check.check_program ~env:env_with_loader sexps in
