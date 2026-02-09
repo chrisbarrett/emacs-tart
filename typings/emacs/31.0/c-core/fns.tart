@@ -134,10 +134,7 @@
 (defun append [a] (&rest (list a)) -> (list a))
 
 ;; (concat &rest SEQS) - concatenate strings
-;; Kept as &rest any: tightening to (string | symbol | ...) would cause
-;; signature mismatches when callers declare string parameters, because the
-;; constraint solver infers the full union as the parameter type.
-(defun concat (&rest any) -> string)
+(defun concat (&rest (string | symbol | (list int) | (vector int))) -> string)
 
 ;; (vconcat &rest SEQS) - concatenate to vector
 (defun vconcat (&rest ((list any) | (vector any) | string | bool-vector)) -> (vector any))
