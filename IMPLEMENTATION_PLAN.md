@@ -1,138 +1,154 @@
-# Implementation Plan — Spec 88: `let-type`
+# Implementation Plan — Spec 89: Mutually Recursive Types
 
-Replace the unused `(let ...)` block form with a top-level `(let-type ...)`
-declaration. `let-type` has the same syntax and semantics as `(type ...)` except
-it is **not exported** — invisible to `build_alias_context`/`build_opaque_context`
-when other modules import the file.
+Extend `(type ...)` and `(let-type ...)` to accept multiple bindings in a single
+form, making all names in the group mutually visible. Single-binding forms remain
+unchanged; multi-binding forms are currently parse errors, so this is purely
+additive.
 
 ## Status
 
 | Task | Status |
 |:-----|:-------|
-| 1. AST: replace `DLet` with `DLetType of type_decl` | Done |
-| 2. Parser: replace `parse_let` with `parse_let_type` | Done |
-| 3. Loader: add `DLetType` handling (same as `DType` but no export) | Done |
-| 4. Validation, convert, graph, LSP: update all `DLet` match arms | Done |
-| 5. Tests: replace let tests with let-type tests | Done |
-| 6. Font-lock: add `let-type` keyword to `tart-mode.el` | Done |
+| 1. AST: introduce `type_binding` record, make `type_decl` a group | Not started |
+| 2. Parser: greedy multi-binding parsing for type and let-type | Not started |
+| 3. Loader: add all group names before resolving definitions | Not started |
+| 4. Validation, convert, workspace symbols: iterate bindings | Not started |
+| 5. Tests: multi-binding parser and loader tests | Not started |
 
 ## Design
 
-`let-type` reuses the existing `type_decl` record — it has the same fields
-(name, params, body option, loc). The only difference is the variant tag
-`DLetType` vs `DType`, which controls export visibility.
+### AST change
 
-### Key insight: no body scoping
+Replace the single-binding `type_decl` with a group representation:
 
-Unlike the old `DLet` (which had a `let_body` field for lexically-scoped
-declarations), `DLetType` is a simple top-level declaration. It adds a type
-alias/opaque to the file-local type context but is skipped by
-`build_alias_context`/`build_opaque_context` (which only match `DType`).
+```ocaml
+(** A single type binding within a type/let-type group. *)
+and type_binding = {
+  tb_name : string;
+  tb_params : tvar_binder list;
+  tb_body : sig_type option;  (* None only for opaque, single-binding *)
+  tb_loc : span;
+}
 
-### Removed types
+(** A group of one or more type bindings.
+    Multi-binding groups enable mutual recursion. *)
+and type_decl = {
+  type_bindings : type_binding list;  (* non-empty *)
+  type_loc : span;
+}
+```
 
-- `DLet of let_decl` — the block form variant
-- `let_decl` — the block record (bindings + body)
-- `let_type_binding` — individual binding within a let block
-- `parse_let` — block parser
-- `parse_let_binding` — binding parser
-- `load_let` — block loader
+`DType of type_decl` and `DLetType of type_decl` both use the same group type.
+Single-binding forms produce a one-element list, preserving backward compat.
+
+### Opaque restriction
+
+Opaque types (no body) are only valid in single-binding forms. A multi-binding
+form where any binding lacks a body is a parse error. The parser enforces this.
+
+### Scoping within a group
+
+All names in a multi-binding group are in scope for all definitions. The loader
+registers all names as aliases/opaques in a first pass before resolving any
+bodies. The validation pass adds all group names to the context before
+validating individual bodies.
+
+### Export behaviour
+
+`build_alias_context` and `build_opaque_context` in `sig_convert.ml` must
+iterate `type_bindings` for `DType`. `DLetType` remains excluded (wildcard arm).
 
 ## Tasks
 
-### Task 1 — AST: replace `DLet` with `DLetType of type_decl`
+### Task 1 — AST: introduce `type_binding`, make `type_decl` a group
 
 **Files:** `lib/sig/sig_ast.ml`, `lib/sig/sig_ast.mli`
 
-Remove:
-- `DLet of let_decl` variant from `decl`
-- `let_decl` record type
-- `let_type_binding` record type
-
 Add:
-- `DLetType of type_decl` variant to `decl`
-  - Docstring: `[(let-type name ...)] — file-local type alias (not exported)`
+- `type_binding` record: `tb_name`, `tb_params`, `tb_body` (option), `tb_loc`
 
-Update:
-- `decl_loc`: replace `DLet d -> d.let_loc` with `DLetType d -> d.type_loc`
+Change `type_decl`:
+- Replace `type_name/type_params/type_body/type_loc` fields with
+  `type_bindings : type_binding list` and `type_loc : span`
 
-### Task 2 — Parser: replace `parse_let` with `parse_let_type`
+Update `decl_loc`:
+- Both `DType d` and `DLetType d` already use `d.type_loc` — no change needed.
+
+### Task 2 — Parser: greedy multi-binding for type and let-type
 
 **File:** `lib/sig/sig_parser.ml`
 
-Remove:
-- `parse_let` function
-- `parse_let_binding` function
-- `"let"` arm in `parse_decl`
+Extract a shared helper `parse_type_bindings` that consumes binding tokens
+greedily after the keyword:
 
-Add:
-- `"let-type"` arm in `parse_decl` dispatching to `parse_let_type`
-- `parse_let_type`: identical grammar to `parse_type_decl` but produces
-  `DLetType` instead of `DType`. Reuse `parse_type_decl`'s logic by extracting a
-  shared helper or duplicating the small function with a different constructor.
+1. Read a bare symbol (type name)
+2. If next is `[`, read quantifiers
+3. Read a type expression (definition body)
+4. If more tokens remain, go to 1
 
-Update error message in catch-all arm to list `let-type` instead of `let`.
+Special cases:
+- `(type name)` — single opaque binding (body = None), no more tokens → OK
+- `(type name [params])` — single opaque with phantom params → OK
+- Multi-binding where a binding has no body → parse error
 
-### Task 3 — Loader: add `DLetType` handling
+Both `parse_type_decl` and `parse_let_type` call `parse_type_bindings`, then
+wrap the result in `DType` or `DLetType` respectively.
+
+### Task 3 — Loader: add all group names before resolving definitions
 
 **File:** `lib/sig/sig_loader.ml`
 
-Remove:
-- `load_let` function
-- `DLet` arm in `load_scoped_decl`
+For `DType` and `DLetType` arms in both `load_decls_into_state` and
+`load_scoped_decl`:
 
-Add `DLetType d ->` arm in `load_scoped_decl`, identical to `DType d ->` except:
-- **No `mark_type_imported`** — `let-type` is never exported, even from include
-- Shadowing check still runs
+1. **First pass:** iterate `type_bindings`, run shadowing check for each name,
+   register each name as an alias or opaque in the type context
+2. **Second pass:** (no change — the type context already has all names when
+   alias bodies are resolved during `sig_type_to_typ_with_ctx`)
 
-`build_alias_context` and `build_opaque_context` in `sig_convert.ml` already
-only match `DType`, so `DLetType` is automatically excluded from exports.
+Since aliases are stored as `sig_type` (surface AST) and resolved lazily during
+`sig_type_to_typ_with_ctx`, simply adding all names before any body is resolved
+provides mutual visibility automatically.
 
-### Task 4 — Validation, convert, graph, LSP: update all `DLet` match arms
+For export marking (`DType` only): mark each binding's name as imported when
+`from_include` is true.
+
+### Task 4 — Validation, convert, workspace symbols: iterate bindings
 
 **Files:**
 - `lib/sig/sig_validation.ml` — `validate_decl` and `build_context`
-- `lib/sig/sig_convert.ml` — `build_alias_context`, `build_opaque_context` (no
-  change needed, `_ ->` already covers it; just verify)
-- `lib/graph/graph_builder.ml` — `extract_edges_from_decl`
-- `lib/lsp/workspace_symbols.ml` — `decl_symbol_kind`, `decl_name`, and
-  `extract_tart_decl_symbols`
-- `lib/typing/module_check.ml` — `check_decl_kinds_with_scope`
+- `lib/sig/sig_convert.ml` — `build_alias_context` and `build_opaque_context`
+- `lib/lsp/workspace_symbols.ml` — `kind_of_decl` and `name_of_decl`
+- `lib/graph/graph_builder.ml` — no change (DType/DLetType → [])
+- `lib/typing/module_check.ml` — iterate bindings for kind checking
 
-For each:
-- Replace `DLet d -> ...` with `DLetType d -> ...`
-- `validate_decl`: delegate to `validate_type_decl ctx d` (same as `DType`)
-- `build_context`: add `DLetType d -> with_type ctx d.type_name` (let-type names
-  ARE visible within the file for validation)
-- `graph_builder`: `DLetType _ -> []` (no edges; it's file-local)
-- `workspace_symbols`: `DLetType` returns `Some Protocol.SKTypeParameter` for
-  kind and `Some d.type_name` for name (visible in file symbols)
-- `module_check`: `DLetType _ -> []` (no kind errors from a simple type decl
-  at top level)
+**validate_decl:**
+- For DType/DLetType, add all group names to ctx first, then validate each
+  binding body with the extended ctx (mutual visibility)
 
-### Task 5 — Tests: replace let tests with let-type tests
+**build_context:**
+- Add all `tb_name`s from each DType/DLetType group
 
-**File:** `test/sig/sig_parser_test.ml`
+**build_alias_context / build_opaque_context:**
+- Iterate `d.type_bindings` instead of accessing `d.type_name` directly
 
-Remove:
-- `test_let_simple`
-- `test_let_parameterized`
-- `test_let_multiple_bindings`
-- `test_let_error_no_bindings`
-- `test_let_error_no_body`
-- `"let-declarations"` test group
+**workspace_symbols:**
+- `kind_of_decl` and `name_of_decl` return the first binding's info
+  (for multi-binding, each binding becomes a separate symbol via
+  `extract_tart_decl_symbols`)
 
-Add `"let-type-declarations"` test group with:
-- `test_let_type_simple`: `(let-type pair (cons int int))` → `DLetType` with
-  name `"pair"`, no params, body = `STApp("cons", [int; int])`
-- `test_let_type_parameterized`: `(let-type wrapper [a] (list a))` → one param
-- `test_let_type_opaque`: `(let-type handle)` → body = `None`
-- `test_let_type_error_no_name`: `(let-type)` → parse error
+### Task 5 — Tests: multi-binding parser and loader tests
 
-### Task 6 — Font-lock: add `let-type` keyword to `tart-mode.el`
+**Files:** `test/sig/sig_parser_test.ml`, `test/sig/sig_loader_test.ml`
 
-**File:** `lisp/tart-mode.el`
+Parser tests:
+- Single binding (backward compat): `(type pair (cons int int))` → one binding
+- Multi-binding: `(type tree (leaf int | node forest) forest (list tree))`
+  → two bindings with correct names/bodies
+- Multi-binding with params: `(type tree [a] (list a) forest [a] (list (tree a)))`
+- Opaque single: `(type handle)` → one binding, body = None
+- Error: opaque in multi-binding `(type handle wrapper (list handle))`
 
-Add `"let-type"` to the `declaration-keywords` list (line 455) so it gets
-keyword highlighting. Add a font-lock rule for name highlighting after
-`let-type`, similar to the `type` rule.
+Loader tests:
+- Mutual recursion resolves: both names visible in each other's bodies
+- Multi-binding let-type not exported: names excluded from alias/opaque context
