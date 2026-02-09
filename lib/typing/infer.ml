@@ -15,7 +15,6 @@ module Loc = Syntax.Location
 module Sig_parser = Sig.Sig_parser
 module Sig_loader = Sig.Sig_loader
 module Sig_ast = Sig.Sig_ast
-
 include Infer_types
 
 (** Apply a single predicate narrowing to an env, returning (then_env,
@@ -63,33 +62,34 @@ let apply_predicate_else (pred : Narrow.predicate_info) (env : Env.t) : Env.t =
 let apply_guard (guard : Narrow.guard_info) (env : Env.t) : Env.t =
   match guard with
   | Narrow.FeatureGuard name -> Env.load_feature name env
-  | Narrow.FboundGuard name ->
+  | Narrow.FboundGuard name -> (
       (* Load the module for this function, then expose only this function *)
       let loaded_env = Env.load_feature name env in
-      (match Env.lookup_fn name loaded_env with
-       | Some scheme -> Env.extend_fn name scheme env
-       | None -> env)
-  | Narrow.BoundGuard name ->
+      match Env.lookup_fn name loaded_env with
+      | Some scheme -> Env.extend_fn name scheme env
+      | None -> env)
+  | Narrow.BoundGuard name -> (
       (* Load the module for this variable, then expose only this variable *)
       let loaded_env = Env.load_feature name env in
-      (match Env.lookup_var name loaded_env with
-       | Some scheme -> Env.extend name scheme env
-       | None ->
-           (* Also try function namespace for backward compat *)
-           (match Env.lookup_fn name loaded_env with
-            | Some scheme -> Env.extend name scheme env
-            | None -> env))
+      match Env.lookup_var name loaded_env with
+      | Some scheme -> Env.extend name scheme env
+      | None -> (
+          (* Also try function namespace for backward compat *)
+          match Env.lookup_fn name loaded_env with
+          | Some scheme -> Env.extend name scheme env
+          | None -> env))
   | Narrow.BoundTrueGuard name ->
       (* Variable is bound and non-nil: type is t (truthy) *)
       Env.extend_mono name Prim.t env
 
 (** Collect variable names whose binding is being tested by guards.
 
-    These are names that appear in guard conditions like (bound-and-true-p v)
-    or (boundp 'v). The checker should not flag these as undefined in the
-    condition expression, since the whole point of the guard is to test
-    whether they are bound. *)
-let guard_suppressed_names (analysis : Narrow.condition_analysis) : string list =
+    These are names that appear in guard conditions like (bound-and-true-p v) or
+    (boundp 'v). The checker should not flag these as undefined in the condition
+    expression, since the whole point of the guard is to test whether they are
+    bound. *)
+let guard_suppressed_names (analysis : Narrow.condition_analysis) : string list
+    =
   let from_guard = function
     | Narrow.BoundTrueGuard name -> [ name ]
     | Narrow.BoundGuard _name -> []
@@ -119,9 +119,7 @@ let narrow_env_from_analysis (analysis : Narrow.condition_analysis)
       let then_env = apply_guard guard env in
       (then_env, env)
   | Narrow.Guards guards ->
-      let then_env =
-        List.fold_left (fun e g -> apply_guard g e) env guards
-      in
+      let then_env = List.fold_left (fun e g -> apply_guard g e) env guards in
       (then_env, env)
   | Narrow.PredicatesAndGuards (preds, guards) ->
       let then_env =
@@ -180,12 +178,12 @@ type union_fn_result =
 (** Which kind of row-typed container was detected at the call site. *)
 type container_kind = Plist | Alist | HashTable | Map
 
-(** Configuration derived from clause analysis for row dispatch. *)
 type clause_config = {
   cc_kind : container_kind;
   cc_container_index : int;
   cc_key_index : int;
 }
+(** Configuration derived from clause analysis for row dispatch. *)
 
 let extract_plist_row ty =
   let plist_name = intrinsic "Plist" in
@@ -313,8 +311,8 @@ let analyze_params (params : param list) : clause_config option =
 let analyze_clause (clause : Env.loaded_clause) : clause_config option =
   analyze_params clause.lc_params
 
-(** Normalize a clause parameter to [PPositional] when the call-site provides
-    an argument at the given index.
+(** Normalize a clause parameter to [PPositional] when the call-site provides an
+    argument at the given index.
 
     Virtual clause params must use [PPositional] for positions with call-site
     arguments because clause dispatch wraps all call-site args as [PPositional]
@@ -324,9 +322,7 @@ let analyze_clause (clause : Env.loaded_clause) : clause_config option =
     correctly. *)
 let positional_if_supplied ~(num_args : int) (i : int) (p : param) : param =
   if i < num_args then
-    match p with
-    | POptional t | PKey (_, t) -> PPositional t
-    | _ -> p
+    match p with POptional t | PKey (_, t) -> PPositional t | _ -> p
   else p
 
 (** Generate virtual clauses from row fields for row-aware clause dispatch.
@@ -384,7 +380,9 @@ let generate_virtual_clauses (env : Env.t) (clauses : Env.loaded_clause list)
                             if i = container_index then
                               PPositional container_param
                             else if i = key_index then PLiteral field_name
-                            else positional_if_supplied ~num_args:(List.length arg_types) i p)
+                            else
+                              positional_if_supplied
+                                ~num_args:(List.length arg_types) i p)
                           clause.lc_params
                       in
                       Some
@@ -406,11 +404,9 @@ let generate_virtual_clauses (env : Env.t) (clauses : Env.loaded_clause list)
                   in
                   match key_literal with
                   | None -> [] (* No literal key — skip absent-key handling *)
-                  | Some key_name ->
+                  | Some key_name -> (
                       let key_in_row =
-                        List.exists
-                          (fun (n, _) -> n = key_name)
-                          row.row_fields
+                        List.exists (fun (n, _) -> n = key_name) row.row_fields
                       in
                       if key_in_row then []
                         (* Key found — Cases 1-2 clauses handle it *)
@@ -420,7 +416,7 @@ let generate_virtual_clauses (env : Env.t) (clauses : Env.loaded_clause list)
                         let rest_arg_types =
                           List.filteri (fun i _ -> i > max_idx) arg_types
                         in
-                        (match row.row_var with
+                        match row.row_var with
                         | None ->
                             (* Cases 3-4: closed row, key absent *)
                             let result_ty =
@@ -436,7 +432,9 @@ let generate_virtual_clauses (env : Env.t) (clauses : Env.loaded_clause list)
                                   if i = container_index then
                                     PPositional container_ty
                                   else if i = key_index then PLiteral key_name
-                                  else positional_if_supplied ~num_args:(List.length arg_types) i p)
+                                  else
+                                    positional_if_supplied
+                                      ~num_args:(List.length arg_types) i p)
                                 clause.lc_params
                             in
                             [
@@ -449,12 +447,8 @@ let generate_virtual_clauses (env : Env.t) (clauses : Env.loaded_clause list)
                         | Some _ ->
                             (* Case 5: open row, key absent — extend row with
                                {key: T & r'} and return (T | nil) *)
-                            let field_ty =
-                              fresh_tvar (Env.current_level env)
-                            in
-                            let row_var =
-                              fresh_tvar (Env.current_level env)
-                            in
+                            let field_ty = fresh_tvar (Env.current_level env) in
+                            let row_var = fresh_tvar (Env.current_level env) in
                             let virtual_row =
                               open_row [ (key_name, field_ty) ] row_var
                             in
@@ -467,7 +461,9 @@ let generate_virtual_clauses (env : Env.t) (clauses : Env.loaded_clause list)
                                   if i = container_index then
                                     PPositional container_param
                                   else if i = key_index then PLiteral key_name
-                                  else positional_if_supplied ~num_args:(List.length arg_types) i p)
+                                  else
+                                    positional_if_supplied
+                                      ~num_args:(List.length arg_types) i p)
                                 clause.lc_params
                             in
                             [
@@ -485,8 +481,8 @@ let generate_virtual_clauses (env : Env.t) (clauses : Env.loaded_clause list)
 (** Look up stored clauses and type variable names for a function.
 
     Returns [Some (clauses, tvar_names)] when the function has multi-clause
-    overloads stored in the environment. This is the common lookup pattern
-    used by clause dispatch and virtual clause generation. *)
+    overloads stored in the environment. This is the common lookup pattern used
+    by clause dispatch and virtual clause generation. *)
 let lookup_stored_clauses_and_vars (name : string) (env : Env.t) :
     (Env.loaded_clause list * string list) option =
   match Env.lookup_fn_clauses name env with
@@ -497,12 +493,12 @@ let lookup_stored_clauses_and_vars (name : string) (env : Env.t) :
       | None -> None)
   | None -> None
 
-(** Look up clauses and type variable names, synthesizing a single clause
-    from the function type when no stored clauses exist.
+(** Look up clauses and type variable names, synthesizing a single clause from
+    the function type when no stored clauses exist.
 
-    Extends {!lookup_stored_clauses_and_vars} by constructing a clause from
-    the function's arrow type for single-clause polymorphic functions that
-    don't store clause lists. Used by virtual clause generation. *)
+    Extends {!lookup_stored_clauses_and_vars} by constructing a clause from the
+    function's arrow type for single-clause polymorphic functions that don't
+    store clause lists. Used by virtual clause generation. *)
 let lookup_clauses_and_vars_with_synthesis (name : string) (env : Env.t) :
     (Env.loaded_clause list * string list) option =
   match lookup_stored_clauses_and_vars name env with
@@ -868,9 +864,7 @@ and infer_when env cond body span =
       (fun (u : undefined_var) -> not (List.mem u.name suppressed))
       cond_result.undefineds
   in
-  let all_undefineds =
-    cond_undefineds @ body_result.undefineds
-  in
+  let all_undefineds = cond_undefineds @ body_result.undefineds in
   {
     ty = result_ty;
     constraints = all_constraints;
@@ -1039,13 +1033,13 @@ and infer_let_star env bindings body span =
     Returns the type of the last expression, or nil if empty.
 
     Hard require forms [(require 'X)] extend the environment for subsequent
-    expressions in the progn (Spec 49 R5). Soft requires [(require 'X nil t)]
-    do not extend the environment.
+    expressions in the progn (Spec 49 R5). Soft requires [(require 'X nil t)] do
+    not extend the environment.
 
-    Or-expressions with never-exit branches narrow subsequent code (Spec 52
-    R5). When [(or (pred x) (error "..."))] is encountered, [x] is narrowed
-    by [pred] for subsequent forms because execution can only continue past
-    the [or] if [pred] was truthy. *)
+    Or-expressions with never-exit branches narrow subsequent code (Spec 52 R5).
+    When [(or (pred x) (error "..."))] is encountered, [x] is narrowed by [pred]
+    for subsequent forms because execution can only continue past the [or] if
+    [pred] was truthy. *)
 and infer_progn env exprs span =
   match exprs with
   | [] -> pure Prim.nil
@@ -1064,9 +1058,7 @@ and infer_progn env exprs span =
         match Narrow.analyze_or_exit e rest_env with
         | [] -> rest_env
         | preds ->
-            List.fold_left
-              (fun e p -> apply_predicate_then p e)
-              rest_env preds
+            List.fold_left (fun e p -> apply_predicate_then p e) rest_env preds
       in
       let rest_result = infer_progn rest_env rest span in
       {
@@ -1181,11 +1173,13 @@ and infer_and env args _span =
         (* Suppress undefineds for names proven by guards *)
         let suppressed = guard_suppressed_names analysis in
         let filtered_result =
-          { result with
+          {
+            result with
             undefineds =
               List.filter
                 (fun (u : undefined_var) -> not (List.mem u.name suppressed))
-                result.undefineds }
+                result.undefineds;
+          }
         in
         process next_env (filtered_result :: acc_results) rest
   in
@@ -1274,7 +1268,9 @@ and infer_tart_annotation env type_sexp form _span =
       let base_ty =
         Sig_loader.sig_type_to_typ_with_aliases prelude tvar_names inner_type
       in
-      let declared_ty = Clause_dispatch.substitute_tvar_names tvar_subst base_ty in
+      let declared_ty =
+        Clause_dispatch.substitute_tvar_names tvar_subst base_ty
+      in
 
       (* Create constraint: form's type = declared type *)
       let context = C.TartAnnotation { declared_type = declared_ty } in
@@ -1373,7 +1369,9 @@ and infer_explicit_instantiation (env : Env.t)
   in
 
   (* Apply substitution to get instantiated function type *)
-  let instantiated_fn_type = Clause_dispatch.substitute_tvar_names tvar_subst fn_body_type in
+  let instantiated_fn_type =
+    Clause_dispatch.substitute_tvar_names tvar_subst fn_body_type
+  in
 
   (* Now type-check the application with the instantiated type *)
   let arg_results = List.map (infer env) args in
@@ -1634,30 +1632,22 @@ and infer_apply env fn_expr args span =
     clause_diagnostics = quote_diag;
   }
 
-(** Infer the type of a funcall expression.
-
-    (funcall f arg1 arg2 ...) applies the function f to the arguments. We infer
-    f's type, constrain it to be a function type, and check the arguments
-    against the function's parameter types.
-
-    This provides better type checking than the generic builtin signature
-    because we can track the actual function type and argument positions. *)
 (** Try to dispatch a funcall through a union of function types (Spec 34 R11).
 
-    When the function expression has a union type where all members are
-    [TArrow] types, check arguments against every variant speculatively:
+    When the function expression has a union type where all members are [TArrow]
+    types, check arguments against every variant speculatively:
     - All variants must accept the arguments (intersection of param types)
     - Return type is the union of all variants' return types
 
     Returns [UnionMatched return_type] if all variants accept the args,
     [UnionFailed arrows] if the function IS a union of arrows but args don't
     satisfy all variants (carries the list of arrow variants for error
-    reporting), or [UnionNotApplicable] if the function type is not a union
-    of arrows. *)
-and try_union_fn_dispatch (arg_types : typ list) (fn_ty : typ)
-    (loc : Loc.span) : union_fn_result =
+    reporting), or [UnionNotApplicable] if the function type is not a union of
+    arrows. *)
+and try_union_fn_dispatch (arg_types : typ list) (fn_ty : typ) (loc : Loc.span)
+    : union_fn_result =
   match repr fn_ty with
-  | TUnion members ->
+  | TUnion members -> (
       let arrows =
         List.filter_map
           (fun m ->
@@ -1680,13 +1670,12 @@ and try_union_fn_dispatch (arg_types : typ list) (fn_ty : typ)
                     List.map (fun t -> PPositional t) arg_types
                   in
                   if
-                    Result.is_ok
-                      (Unify.try_unify_params param_types params loc)
+                    Result.is_ok (Unify.try_unify_params param_types params loc)
                   then Some (ret :: returns)
                   else None)
             (Some []) arrows
         in
-        (match try_all_variants () with
+        match try_all_variants () with
         | Some returns ->
             let returns = List.rev returns in
             (* Deduplicate return types: if all are the same, use that type
@@ -1698,9 +1687,7 @@ and try_union_fn_dispatch (arg_types : typ list) (fn_ty : typ)
                 [] returns
               |> List.rev
             in
-            let ret_ty =
-              match deduped with [ t ] -> t | ts -> TUnion ts
-            in
+            let ret_ty = match deduped with [ t ] -> t | ts -> TUnion ts in
             UnionMatched ret_ty
         | None -> UnionFailed arrows)
   | _ -> UnionNotApplicable
@@ -1737,9 +1724,7 @@ and infer_funcall env fn_expr args span =
         fn_result.undefineds @ combine_undefineds arg_results
       in
       let quote_diag =
-        match quote_style_diagnostic fn_expr with
-        | Some d -> [ d ]
-        | None -> []
+        match quote_style_diagnostic fn_expr with Some d -> [ d ] | None -> []
       in
       {
         ty = union_ret_ty;
@@ -1778,9 +1763,7 @@ and infer_funcall env fn_expr args span =
         fn_result.undefineds @ combine_undefineds arg_results
       in
       let quote_diag =
-        match quote_style_diagnostic fn_expr with
-        | Some d -> [ d ]
-        | None -> []
+        match quote_style_diagnostic fn_expr with Some d -> [ d ] | None -> []
       in
       {
         ty = result_ty;
@@ -1851,17 +1834,14 @@ and infer_funcall env fn_expr args span =
       let arg_constraints = combine_results arg_results in
       let all_constraints =
         C.combine fn_result.constraints
-          (C.combine arg_constraints
-             (C.add fn_constraint arg_type_constraints))
+          (C.combine arg_constraints (C.add fn_constraint arg_type_constraints))
       in
       let all_undefineds =
         fn_result.undefineds @ combine_undefineds arg_results
       in
 
       let quote_diag =
-        match quote_style_diagnostic fn_expr with
-        | Some d -> [ d ]
-        | None -> []
+        match quote_style_diagnostic fn_expr with Some d -> [ d ] | None -> []
       in
       {
         ty = result_ty;
@@ -1938,21 +1918,20 @@ and infer_application env fn args span =
         | Some name -> (
             let config =
               match lookup_clauses_and_vars_with_synthesis name env with
-              | Some (clauses, _) ->
-                  List.find_map analyze_clause clauses
+              | Some (clauses, _) -> List.find_map analyze_clause clauses
               | None -> None
             in
             match config with
             | None -> None
-            | Some cc ->
+            | Some cc -> (
                 let key_literal =
                   if cc.cc_key_index < List.length arg_literals then
                     List.nth arg_literals cc.cc_key_index
                   else None
                 in
-                (match key_literal with
+                match key_literal with
                 | None -> None
-                | Some key_name ->
+                | Some key_name -> (
                     let container_ty =
                       if cc.cc_container_index < List.length arg_types then
                         Some (List.nth arg_types cc.cc_container_index)
@@ -1963,7 +1942,7 @@ and infer_application env fn args span =
                         Some (List.nth args cc.cc_container_index)
                       else None
                     in
-                    (match (container_ty, container_expr) with
+                    match (container_ty, container_expr) with
                     | Some cty, Some cexpr ->
                         let field_ty = fresh_tvar (Env.current_level env) in
                         let row_var = fresh_tvar (Env.current_level env) in
@@ -1987,7 +1966,9 @@ and infer_application env fn args span =
   (* Merge clause and virtual clause results: prefer explicit clause dispatch,
      then virtual clause dispatch *)
   let effective_clause_result =
-    match clause_result with Some _ -> clause_result | None -> virtual_clause_result
+    match clause_result with
+    | Some _ -> clause_result
+    | None -> virtual_clause_result
   in
 
   let result =
@@ -2155,9 +2136,7 @@ and infer_vector env elems span =
       (* Widen the element type: if the first element is a literal,
          use its base type so that vector types are stable. *)
       let elem_ty =
-        match first_result.ty with
-        | TLiteral (_, base) -> base
-        | ty -> ty
+        match first_result.ty with TLiteral (_, base) -> base | ty -> ty
       in
 
       (* All remaining elements must unify with the element type *)
