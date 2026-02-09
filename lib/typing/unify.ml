@@ -120,6 +120,47 @@ type internal_error =
 
 type 'a internal_result = ('a, internal_error) Result.t
 
+(** Instantiate a TForall by replacing bound TCon names with fresh type
+    variables.
+
+    Used when unifying a TForall against a non-TForall type (implicit
+    instantiation). Creates fresh type variables at level 0 for each bound
+    variable, substitutes them into the body, and returns the instantiated type.
+*)
+let instantiate_forall vars body =
+  let subst = List.map (fun v -> (v, fresh_tvar 0)) vars in
+  let rec subst_ty subst ty =
+    match ty with
+    | TCon name -> (
+        match List.assoc_opt name subst with Some tv -> tv | None -> ty)
+    | TVar { contents = Link t } -> subst_ty subst t
+    | TVar _ -> ty
+    | TArrow (params, ret) ->
+        TArrow (List.map (subst_param subst) params, subst_ty subst ret)
+    | TApp (con, args) ->
+        TApp (subst_ty subst con, List.map (subst_ty subst) args)
+    | TForall (vs, b) ->
+        let subst' = List.filter (fun (n, _) -> not (List.mem n vs)) subst in
+        TForall (vs, subst_ty subst' b)
+    | TUnion types -> TUnion (List.map (subst_ty subst) types)
+    | TTuple types -> TTuple (List.map (subst_ty subst) types)
+    | TRow { row_fields; row_var } ->
+        TRow
+          {
+            row_fields =
+              List.map (fun (n, t) -> (n, subst_ty subst t)) row_fields;
+            row_var = Option.map (subst_ty subst) row_var;
+          }
+    | TLiteral _ -> ty
+  and subst_param subst = function
+    | PPositional t -> PPositional (subst_ty subst t)
+    | POptional t -> POptional (subst_ty subst t)
+    | PRest t -> PRest (subst_ty subst t)
+    | PKey (n, t) -> PKey (n, subst_ty subst t)
+    | PLiteral _ as p -> p
+  in
+  subst_ty subst body
+
 let map_con_name = intrinsic "Map"
 let plist_con_name = intrinsic "Plist"
 let list_con_name = intrinsic "List"
@@ -364,6 +405,18 @@ let rec unify ?(invariant = false) ?(context = Constraint_solving) t1 t2 loc :
           (* Unify bodies directly - this is simplified.
              A full implementation would alpha-rename. *)
           unify ~invariant ~context b1 b2 loc
+    (* Implicit instantiation: TForall vs non-TForall (Spec 83).
+       When one side is a universally quantified type (e.g. from a generalized
+       defun) and the other is a concrete type, instantiate the forall with
+       fresh type variables and unify the body. This enables generalized
+       function types like (forall (a) (-> (any &rest a) string)) to match
+       expected types like (-> (&rest any) any). *)
+    | TForall (vars, body), t ->
+        let instantiated = instantiate_forall vars body in
+        unify ~invariant ~context instantiated t loc
+    | t, TForall (vars, body) ->
+        let instantiated = instantiate_forall vars body in
+        unify ~invariant ~context t instantiated loc
     (* Union types: structural equality for unions on both sides *)
     | TUnion ts1, TUnion ts2 ->
         if List.length ts1 = List.length ts2 then
