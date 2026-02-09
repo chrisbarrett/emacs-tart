@@ -39,14 +39,21 @@ type predicate_info = {
     ]}
     Declares [stringp] as narrowing parameter [x] to [string] when true. *)
 
+type poly_scheme = {
+  ps_vars : string list;
+  ps_bounds : (string * typ) list;
+  ps_body : typ;
+}
+(** A polymorphic type scheme with optional upper bounds. *)
+
 (** A type scheme is a possibly-polymorphic type.
 
-    [Mono ty] is a monomorphic type (no quantified variables). [Poly (vars, ty)]
-    is a polymorphic type with bound type variables.
+    [Mono ty] is a monomorphic type (no quantified variables). [Poly ps] is a
+    polymorphic type with bound type variables and optional upper bounds.
 
     Type schemes are created during let-generalization when the RHS is a
     syntactic value (lambda, literal, variable, constructor application). *)
-type scheme = Mono of typ | Poly of string list * typ
+type scheme = Mono of typ | Poly of poly_scheme
 
 type emacs_version = { major : int; minor : int }
 (** Simple version representation for the core layer (Spec 50).
@@ -156,7 +163,8 @@ let extend_monos bindings env =
   List.fold_left (fun env (name, ty) -> extend_mono name ty env) env bindings
 
 (** Extend variable namespace with a polymorphic binding *)
-let extend_poly name vars ty env = extend name (Poly (vars, ty)) env
+let extend_poly name vars ty env =
+  extend name (Poly { ps_vars = vars; ps_bounds = []; ps_body = ty }) env
 
 (** Extend the function namespace with a new binding *)
 let extend_fn name scheme env =
@@ -166,7 +174,8 @@ let extend_fn name scheme env =
 let extend_fn_mono name ty env = extend_fn name (Mono ty) env
 
 (** Extend function namespace with a polymorphic binding *)
-let extend_fn_poly name vars ty env = extend_fn name (Poly (vars, ty)) env
+let extend_fn_poly name vars ty env =
+  extend_fn name (Poly { ps_vars = vars; ps_bounds = []; ps_body = ty }) env
 
 (** Register the preserved clause list for a multi-clause defun *)
 let extend_fn_clauses name clauses env =
@@ -212,11 +221,26 @@ let with_narrowed_var name ty env = extend_mono name ty env
 let rec instantiate scheme env =
   match scheme with
   | Mono ty -> ty
-  | Poly (vars, ty) ->
+  | Poly { ps_vars; ps_bounds; ps_body } ->
       (* Create fresh type variables for each bound variable *)
-      let subst = List.map (fun v -> (v, fresh_tvar env.level)) vars in
+      let subst = List.map (fun v -> (v, fresh_tvar env.level)) ps_vars in
+      (* Propagate upper bounds to fresh tvars (Spec 87) *)
+      List.iter
+        (fun (var_name, bound_ty) ->
+          match List.assoc_opt var_name subst with
+          | Some (TVar tv) -> (
+              match !tv with
+              | Unbound (id, _) ->
+                  (* Apply the same substitution to the bound type so that
+                     other bound vars in the bound are replaced with their
+                     fresh tvars *)
+                  let substituted_bound = substitute subst bound_ty in
+                  set_tvar_bound id substituted_bound
+              | Link _ -> ())
+          | _ -> ())
+        ps_bounds;
       (* Apply substitution to the body *)
-      substitute subst ty
+      substitute subst ps_body
 
 (** Substitute type variables in a type.
 
@@ -260,8 +284,19 @@ and substitute_param subst = function
 (** Convert a scheme to string for debugging *)
 let scheme_to_string = function
   | Mono ty -> to_string ty
-  | Poly (vars, ty) ->
-      Printf.sprintf "(forall (%s) %s)" (String.concat " " vars) (to_string ty)
+  | Poly { ps_vars; ps_bounds; ps_body } ->
+      let var_str =
+        if ps_bounds = [] then String.concat " " ps_vars
+        else
+          String.concat " "
+            (List.map
+               (fun v ->
+                 match List.assoc_opt v ps_bounds with
+                 | Some bound -> Printf.sprintf "(%s <: %s)" v (to_string bound)
+                 | None -> v)
+               ps_vars)
+      in
+      Printf.sprintf "(forall (%s) %s)" var_str (to_string ps_body)
 
 (** Set the feature loader callback (Spec 49).
 

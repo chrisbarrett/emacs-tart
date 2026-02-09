@@ -61,14 +61,27 @@ type loaded_clause = {
 
 (** {1 Type Schemes} *)
 
+type poly_scheme = {
+  ps_vars : string list;
+  ps_bounds : (string * Types.typ) list;
+  ps_body : Types.typ;
+}
+(** A polymorphic type scheme with optional upper bounds on type variables.
+
+    - [ps_vars]: the bound type variable names.
+    - [ps_bounds]: upper-bound constraints [(var_name, bound_type)] for bounded
+      quantification (Spec 87). Empty for unbounded polymorphism.
+    - [ps_body]: the body type with bound variables as [TCon] names. *)
+
 (** A type scheme is a possibly-polymorphic type.
 
     - [Mono ty] is a monomorphic type (no quantified variables).
-    - [Poly (vars, ty)] is a polymorphic type with bound type variables.
+    - [Poly ps] is a polymorphic type with bound type variables and optional
+      upper bounds.
 
     Type schemes are created during let-generalization when the RHS is a
     syntactic value (lambda, literal, variable, constructor application). *)
-type scheme = Mono of Types.typ | Poly of string list * Types.typ
+type scheme = Mono of Types.typ | Poly of poly_scheme
 
 (** {1 Version Ranges (Spec 50)} *)
 

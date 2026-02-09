@@ -880,7 +880,8 @@ let check_module ~(config : config) ~(filename : string)
                     let inferred =
                       match scheme with
                       | Env.Mono ty -> ty
-                      | Env.Poly (vars, ty) -> Types.TForall (vars, ty)
+                      | Env.Poly { ps_vars; ps_body; _ } ->
+                          Types.TForall (ps_vars, ps_body)
                     in
                     (* Get the declared type from the signature, using prelude
                        context to resolve primitive type names to intrinsics *)
@@ -889,7 +890,8 @@ let check_module ~(config : config) ~(filename : string)
                     let declared_ty =
                       match declared with
                       | Env.Mono ty -> ty
-                      | Env.Poly (vars, ty) -> Types.TForall (vars, ty)
+                      | Env.Poly { ps_vars; ps_body; _ } ->
+                          Types.TForall (ps_vars, ps_body)
                     in
                     (* Find implementation span - look up by name, fallback to first sexp *)
                     let impl_span =

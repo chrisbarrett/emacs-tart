@@ -242,7 +242,7 @@ let analyze_condition (condition : Syntax.Sexp.t) (env : Env.t) :
 let fn_return_type_from_scheme (scheme : Env.scheme) : typ option =
   match scheme with
   | Mono (TArrow (_, ret)) -> Some (repr ret)
-  | Poly (_, TArrow (_, ret)) -> Some (repr ret)
+  | Poly { ps_body = TArrow (_, ret); _ } -> Some (repr ret)
   | _ -> None
 
 (** Check whether a function call expression returns [never].

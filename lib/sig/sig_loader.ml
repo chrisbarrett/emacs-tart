@@ -407,7 +407,7 @@ let load_defun_with_ctx (ctx : type_context) (d : defun_decl) : Type_env.scheme
   let tvar_names = List.map (fun b -> b.name) d.defun_tvar_binders in
   let arrow = compute_defun_type ctx tvar_names d.defun_clauses in
   if tvar_names = [] then Type_env.Mono arrow
-  else Type_env.Poly (tvar_names, arrow)
+  else Type_env.Poly { ps_vars = tvar_names; ps_bounds = []; ps_body = arrow }
 
 (** Convert a defun declaration inside a forall block to a type scheme. The
     scope type variables are added to the function's quantifier list. Uses the
@@ -425,7 +425,8 @@ let load_defun_with_scope (ctx : type_context)
     compute_defun_type ~scope_tvars ctx fn_tvar_names d.defun_clauses
   in
   if all_tvar_names = [] then Type_env.Mono arrow
-  else Type_env.Poly (all_tvar_names, arrow)
+  else
+    Type_env.Poly { ps_vars = all_tvar_names; ps_bounds = []; ps_body = arrow }
 
 (** Convert a defvar declaration to a type scheme with full type context. The
     type may be polymorphic if it contains a forall. *)
@@ -436,7 +437,8 @@ let load_defvar_with_ctx (ctx : type_context) (d : defvar_decl) :
       (* Polymorphic variable - extract quantifiers *)
       let tvar_names = List.map (fun b -> b.name) binders in
       let body_type = sig_type_to_typ_with_ctx ctx tvar_names body in
-      Type_env.Poly (tvar_names, body_type)
+      Type_env.Poly
+        { ps_vars = tvar_names; ps_bounds = []; ps_body = body_type }
   | _ ->
       (* Monomorphic variable *)
       let ty = sig_type_to_typ_with_ctx ctx [] d.defvar_type in
@@ -712,7 +714,9 @@ let load_data (module_name : string) (d : data_decl) (state : load_state) :
       (* If polymorphic, wrap in forall (constructors have no constraints) *)
       let ctor_scheme =
         if type_params = [] then Type_env.Mono ctor_typ
-        else Type_env.Poly (type_params, ctor_typ)
+        else
+          Type_env.Poly
+            { ps_vars = type_params; ps_bounds = []; ps_body = ctor_typ }
       in
       let state = add_value_to_state ctor_name ctor_scheme state in
 
@@ -760,7 +764,13 @@ let load_data (module_name : string) (d : data_decl) (state : load_state) :
           in
           let accessor_scheme =
             if type_params = [] then Type_env.Mono accessor_typ
-            else Type_env.Poly (type_params, accessor_typ)
+            else
+              Type_env.Poly
+                {
+                  ps_vars = type_params;
+                  ps_bounds = [];
+                  ps_body = accessor_typ;
+                }
           in
           add_value_to_state accessor_name accessor_scheme state
         else
@@ -785,7 +795,13 @@ let load_data (module_name : string) (d : data_decl) (state : load_state) :
               in
               let accessor_scheme =
                 if type_params = [] then Type_env.Mono accessor_typ
-                else Type_env.Poly (type_params, accessor_typ)
+                else
+                  Type_env.Poly
+                    {
+                      ps_vars = type_params;
+                      ps_bounds = [];
+                      ps_body = accessor_typ;
+                    }
               in
               (add_value_to_state accessor_name accessor_scheme state, idx + 1))
             (state, 1) ctor.ctor_fields

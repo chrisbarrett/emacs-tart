@@ -161,7 +161,8 @@ let handle ~(config : Typing.Module_check.config) ~(uri : string)
             let ty =
               match scheme with
               | Core.Type_env.Mono t -> t
-              | Core.Type_env.Poly (vars, t) -> Core.Types.TForall (vars, t)
+              | Core.Type_env.Poly { ps_vars; ps_body; _ } ->
+                  Core.Types.TForall (ps_vars, ps_body)
             in
             Log.debug "Function type: %s" (Core.Types.to_string ty);
             let result = signature_of_function_type fn_name ty arg_index in

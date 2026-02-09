@@ -488,7 +488,7 @@ let lookup_stored_clauses_and_vars (name : string) (env : Env.t) :
   match Env.lookup_fn_clauses name env with
   | Some clauses -> (
       match Env.lookup_fn name env with
-      | Some (Env.Poly (vars, _)) -> Some (clauses, vars)
+      | Some (Env.Poly { ps_vars; _ }) -> Some (clauses, ps_vars)
       | Some (Env.Mono _) -> Some (clauses, [])
       | None -> None)
   | None -> None
@@ -505,8 +505,8 @@ let lookup_clauses_and_vars_with_synthesis (name : string) (env : Env.t) :
   | Some _ as result -> result
   | None -> (
       match Env.lookup_fn name env with
-      | Some (Env.Poly (vars, ty)) -> (
-          match ty with
+      | Some (Env.Poly { ps_vars; ps_body; _ }) -> (
+          match ps_body with
           | TArrow (params, ret) | TForall (_, TArrow (params, ret)) ->
               let clause =
                 {
@@ -515,7 +515,7 @@ let lookup_clauses_and_vars_with_synthesis (name : string) (env : Env.t) :
                   lc_diagnostic = None;
                 }
               in
-              Some ([ clause ], vars)
+              Some ([ clause ], ps_vars)
           | _ -> None)
       | _ -> None)
 
@@ -1447,7 +1447,7 @@ and infer_explicit_instantiation (env : Env.t)
   (* Get the function's quantified type variables and body type *)
   let tvar_names, fn_body_type =
     match fn_scheme with
-    | Some (Env.Poly (vars, ty)) -> (vars, ty)
+    | Some (Env.Poly { ps_vars; ps_body; _ }) -> (ps_vars, ps_body)
     | Some (Env.Mono ty) -> ([], ty)
     | None -> ([], fresh_tvar (Env.current_level env))
   in

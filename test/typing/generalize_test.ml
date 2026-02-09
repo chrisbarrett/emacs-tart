@@ -69,7 +69,7 @@ let test_generalize_tvar_at_higher_level () =
   let scheme = G.generalize 0 tv in
   (* outer level 0 *)
   match scheme with
-  | Env.Poly ([ _ ], _) -> ()
+  | Env.Poly { ps_vars = [ _ ]; _ } -> ()
   | _ -> Alcotest.fail "expected Poly scheme"
 
 let test_no_generalize_tvar_at_same_level () =
@@ -91,7 +91,12 @@ let test_generalize_arrow_with_tvars () =
   let fn_type = TArrow ([ PPositional tv ], tv) in
   let scheme = G.generalize 0 fn_type in
   match scheme with
-  | Env.Poly ([ name ], TArrow ([ PPositional (TCon a) ], TCon b))
+  | Env.Poly
+      {
+        ps_vars = [ name ];
+        ps_body = TArrow ([ PPositional (TCon a) ], TCon b);
+        _;
+      }
     when a = name && b = name ->
       ()
   | _ -> Alcotest.fail "expected polymorphic identity type"
@@ -104,7 +109,7 @@ let test_generalize_nested_tvars () =
   let fn_type = TArrow ([ PPositional tv1; PPositional tv2 ], tv1) in
   let scheme = G.generalize 0 fn_type in
   match scheme with
-  | Env.Poly (vars, _) when List.length vars = 2 -> ()
+  | Env.Poly { ps_vars; _ } when List.length ps_vars = 2 -> ()
   | _ -> Alcotest.fail "expected two type variables"
 
 (* =============================================================================
@@ -156,7 +161,13 @@ let test_value_restriction_application () =
   let env =
     Env.of_list
       [
-        ("f", Env.Poly ([ "a" ], TArrow ([ PPositional (TCon "a") ], TCon "a")));
+        ( "f",
+          Env.Poly
+            {
+              ps_vars = [ "a" ];
+              ps_bounds = [];
+              ps_body = TArrow ([ PPositional (TCon "a") ], TCon "a");
+            } );
         ("y", Env.Mono Prim.int);
       ]
   in
@@ -179,9 +190,12 @@ let test_value_restriction_reverse () =
       [
         ( "reverse",
           Env.Poly
-            ( [ "a" ],
-              TArrow ([ PPositional (list_of (TCon "a")) ], list_of (TCon "a"))
-            ) );
+            {
+              ps_vars = [ "a" ];
+              ps_bounds = [];
+              ps_body =
+                TArrow ([ PPositional (list_of (TCon "a")) ], list_of (TCon "a"));
+            } );
       ]
   in
   let sexp = parse "(let ((xs (reverse '(1)))) xs)" in
@@ -190,6 +204,113 @@ let test_value_restriction_reverse () =
   (* xs should be monomorphic (list int), not polymorphic *)
   let ty_str = to_string result.ty in
   Alcotest.(check string) "reverse result monomorphic" "(list int)" ty_str
+
+(* =============================================================================
+   Bounded Quantification Tests (Spec 87)
+   ============================================================================= *)
+
+let test_generalize_bounded_tvar () =
+  (* A tvar with an upper bound should produce a Poly scheme with ps_bounds *)
+  setup ();
+  let tv = fresh_tvar 1 in
+  (* Set an upper bound on this tvar *)
+  let bound = TUnion [ Prim.int; Prim.string ] in
+  (match tv with
+  | TVar r -> (
+      match !r with
+      | Unbound (id, _) -> set_tvar_bound id bound
+      | _ -> failwith "expected unbound")
+  | _ -> failwith "expected TVar");
+  let fn_type = TArrow ([ PPositional tv ], Prim.string) in
+  let scheme = G.generalize 0 fn_type in
+  match scheme with
+  | Env.Poly { ps_vars = [ _ ]; ps_bounds = [ (_, _) ]; _ } -> ()
+  | Env.Poly { ps_bounds = []; _ } ->
+      Alcotest.fail "expected non-empty ps_bounds"
+  | _ -> Alcotest.fail "expected Poly with bounds"
+
+let test_generalize_no_bound_no_bounds () =
+  (* A tvar without an upper bound should produce empty ps_bounds *)
+  setup ();
+  let tv = fresh_tvar 1 in
+  let scheme = G.generalize 0 tv in
+  match scheme with
+  | Env.Poly { ps_bounds = []; _ } -> ()
+  | Env.Poly { ps_bounds = _ :: _; _ } ->
+      Alcotest.fail "expected empty ps_bounds"
+  | _ -> Alcotest.fail "expected Poly scheme"
+
+let test_instantiate_bounded_sets_bound () =
+  (* Instantiating a bounded scheme should set the bound on the fresh tvar *)
+  setup ();
+  let bound = TUnion [ Prim.int; Prim.string ] in
+  let scheme =
+    Env.Poly
+      {
+        ps_vars = [ "a" ];
+        ps_bounds = [ ("a", bound) ];
+        ps_body = TArrow ([ PPositional (TCon "a") ], Prim.string);
+      }
+  in
+  let env = Env.enter_level Env.empty in
+  let ty = Env.instantiate scheme env in
+  (* The body should have a fresh TVar in param position *)
+  match ty with
+  | TArrow ([ PPositional (TVar r) ], _) -> (
+      match !r with
+      | Unbound (id, _) -> (
+          match get_tvar_bound id with
+          | Some (TUnion _) -> ()
+          | Some _ -> Alcotest.fail "bound should be TUnion"
+          | None -> Alcotest.fail "expected bound on fresh tvar")
+      | Link _ -> Alcotest.fail "expected unbound tvar")
+  | _ -> Alcotest.fail "expected arrow type with tvar param"
+
+let test_instantiate_bounded_accepts_subtype () =
+  (* Instantiating a bounded scheme and unifying with a valid subtype succeeds *)
+  setup ();
+  let bound = TUnion [ Prim.int; Prim.string ] in
+  let scheme =
+    Env.Poly
+      {
+        ps_vars = [ "a" ];
+        ps_bounds = [ ("a", bound) ];
+        ps_body = TArrow ([ PPositional (TCon "a") ], Prim.string);
+      }
+  in
+  let env = Env.enter_level Env.empty in
+  let ty = Env.instantiate scheme env in
+  match ty with
+  | TArrow ([ PPositional tvar ], _) ->
+      (* Unifying with int should succeed since int <: (int | string) *)
+      let result = Unify.unify tvar Prim.int Syntax.Location.dummy_span in
+      Alcotest.(check bool)
+        "unify with valid subtype" true
+        (match result with Ok () -> true | Error _ -> false)
+  | _ -> Alcotest.fail "expected arrow type"
+
+let test_instantiate_bounded_rejects_invalid () =
+  (* Instantiating a bounded scheme and unifying with invalid type fails *)
+  setup ();
+  let bound = TUnion [ Prim.int; Prim.string ] in
+  let scheme =
+    Env.Poly
+      {
+        ps_vars = [ "a" ];
+        ps_bounds = [ ("a", bound) ];
+        ps_body = TArrow ([ PPositional (TCon "a") ], Prim.string);
+      }
+  in
+  let env = Env.enter_level Env.empty in
+  let ty = Env.instantiate scheme env in
+  match ty with
+  | TArrow ([ PPositional tvar ], _) ->
+      (* Unifying with float should fail since float not <: (int | string) *)
+      let result = Unify.unify tvar Prim.float Syntax.Location.dummy_span in
+      Alcotest.(check bool)
+        "unify with invalid type" true
+        (match result with Ok () -> false | Error _ -> true)
+  | _ -> Alcotest.fail "expected arrow type"
 
 (* =============================================================================
    Test Suite
@@ -238,5 +359,18 @@ let () =
             test_value_restriction_application;
           Alcotest.test_case "reverse monomorphic" `Quick
             test_value_restriction_reverse;
+        ] );
+      ( "bounded quantification",
+        [
+          Alcotest.test_case "bounded tvar in scheme" `Quick
+            test_generalize_bounded_tvar;
+          Alcotest.test_case "no bound means empty ps_bounds" `Quick
+            test_generalize_no_bound_no_bounds;
+          Alcotest.test_case "instantiate sets bound" `Quick
+            test_instantiate_bounded_sets_bound;
+          Alcotest.test_case "bounded accepts subtype" `Quick
+            test_instantiate_bounded_accepts_subtype;
+          Alcotest.test_case "bounded rejects invalid" `Quick
+            test_instantiate_bounded_rejects_invalid;
         ] );
     ]

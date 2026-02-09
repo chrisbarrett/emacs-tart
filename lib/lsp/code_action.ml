@@ -887,7 +887,8 @@ let handle ~(range_of_span : Syntax.Location.span -> Protocol.range)
                 let ty =
                   match scheme with
                   | Core.Type_env.Mono t -> t
-                  | Core.Type_env.Poly (vars, t) -> Core.Types.TForall (vars, t)
+                  | Core.Type_env.Poly { ps_vars; ps_body; _ } ->
+                      Core.Types.TForall (ps_vars, ps_body)
                 in
                 generate_add_signature_action ~name:warn.name ~ty ~tart_path
                   ~tart_content

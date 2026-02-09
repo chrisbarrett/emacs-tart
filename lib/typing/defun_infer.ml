@@ -249,7 +249,7 @@ let infer_defun_inferred
   let generalized_ty =
     match scheme with
     | Env.Mono ty -> ty
-    | Env.Poly (vars, ty) -> TForall (vars, ty)
+    | Env.Poly { ps_vars; ps_body; _ } -> TForall (ps_vars, ps_body)
   in
 
   Some

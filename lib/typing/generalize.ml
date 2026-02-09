@@ -158,9 +158,22 @@ let generalize level ty : Env.scheme =
       (* Create names for each generalizable variable *)
       let var_map = List.mapi (fun i id -> (id, name_of_id i)) ids in
       let names = List.map snd var_map in
+      (* Collect upper bounds from the tvar bounds side-table (Spec 87) *)
+      let bounds =
+        List.filter_map
+          (fun (id, name) ->
+            match get_tvar_bound id with
+            | Some bound_ty ->
+                (* Apply the same name substitution to the bound type, since
+                   it may reference other tvars being generalized *)
+                let named_bound = replace_tvars_with_names var_map bound_ty in
+                Some (name, named_bound)
+            | None -> None)
+          var_map
+      in
       (* Replace tvars with named type constants *)
       let body = replace_tvars_with_names var_map ty in
-      Env.Poly (names, body)
+      Env.Poly { ps_vars = names; ps_bounds = bounds; ps_body = body }
 
 (** Generalize a type only if the expression is a syntactic value.
 

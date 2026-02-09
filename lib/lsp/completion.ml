@@ -250,7 +250,7 @@ let collect_env_completions (env : Core.Type_env.t) :
       let ty =
         match scheme with
         | Core.Type_env.Mono t -> t
-        | Core.Type_env.Poly (_, t) -> t
+        | Core.Type_env.Poly { ps_body; _ } -> ps_body
       in
       let kind =
         match ty with
