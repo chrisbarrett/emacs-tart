@@ -8,7 +8,7 @@ _Symbols requiring features tart doesn't have._
 
 ## untypeable
 
-_Symbols whose behavior can't be captured soundly._
+_Symbols whose return types are determined at runtime; correctly typed as `any`._
 
 ## ergonomic
 
