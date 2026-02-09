@@ -664,96 +664,89 @@ let parse_defvar (contents : Sexp.t list) (span : Loc.span) : decl result =
       | Error e -> Error e)
   | _ -> error "Expected (defvar name type)" span
 
+(** Parse one or more type bindings greedily from a token stream.
+
+    Each binding is: name [[params]] body
+
+    Special cases:
+    - Single opaque: name only (no body) or name \[params\] only → OK
+    - Multi-binding where any binding lacks a body → parse error *)
+let parse_type_bindings (tokens : Sexp.t list) (span : Loc.span) :
+    type_binding list result =
+  let rec loop acc = function
+    | [] -> (
+        (* End of tokens — check for opaque-in-multi-binding *)
+        match acc with
+        | [ single ] -> Ok [ single ] (* single binding, opaque OK *)
+        | _ -> (
+            (* Multi-binding: check none are opaque *)
+            let opaque =
+              List.find_opt (fun (b : type_binding) -> b.tb_body = None) acc
+            in
+            match opaque with
+            | Some b ->
+                error
+                  (Printf.sprintf
+                     "Opaque type '%s' is not allowed in a multi-binding group"
+                     b.tb_name)
+                  b.tb_loc
+            | None -> Ok (List.rev acc)))
+    | Sexp.Symbol (name, name_span) :: rest -> (
+        (* Read optional [params] *)
+        let params, after_params =
+          match rest with
+          | (Sexp.Vector (_, _) as quant) :: rest' -> (
+              match parse_tvar_binders quant with
+              | Ok p -> (p, rest')
+              | Error _ -> ([], rest))
+          | _ -> ([], rest)
+        in
+        match after_params with
+        | [] ->
+            (* No body: opaque binding *)
+            let binding =
+              {
+                tb_name = name;
+                tb_params = params;
+                tb_body = None;
+                tb_loc = name_span;
+              }
+            in
+            loop (binding :: acc) []
+        | body_sexp :: rest' -> (
+            (* Parse body as type expression *)
+            match parse_sig_type body_sexp with
+            | Ok body ->
+                let binding =
+                  {
+                    tb_name = name;
+                    tb_params = params;
+                    tb_body = Some body;
+                    tb_loc = name_span;
+                  }
+                in
+                loop (binding :: acc) rest'
+            | Error e -> Error e))
+    | other :: _ -> error "Expected type name (symbol)" (Sexp.span_of other)
+  in
+  match tokens with
+  | [] -> error "Expected type name" span
+  | _ -> loop [] tokens
+
 (** Parse a type declaration.
 
     Syntax:
     - (type name) - opaque
     - (type name body) - alias
     - (type name [params] body) - parameterized alias
-    - (type name [params]) - opaque with phantom params *)
+    - (type name [params]) - opaque with phantom params
+    - (type name1 body1 name2 body2) - multi-binding (mutual recursion) *)
 let parse_type_decl (contents : Sexp.t list) (span : Loc.span) : decl result =
   match contents with
-  | [ Sexp.Symbol ("type", _); Sexp.Symbol (name, _) ] ->
-      (* Opaque type with no params *)
-      Ok
-        (DType
-           {
-             type_bindings =
-               [
-                 {
-                   tb_name = name;
-                   tb_params = [];
-                   tb_body = None;
-                   tb_loc = span;
-                 };
-               ];
-             type_loc = span;
-           })
-  | [ Sexp.Symbol ("type", _); Sexp.Symbol (name, _); body_sexp ] -> (
-      (* Could be params or body *)
-      match body_sexp with
-      | Sexp.Vector (_, _) -> (
-          (* Opaque type with phantom params *)
-          match parse_tvar_binders body_sexp with
-          | Ok params ->
-              Ok
-                (DType
-                   {
-                     type_bindings =
-                       [
-                         {
-                           tb_name = name;
-                           tb_params = params;
-                           tb_body = None;
-                           tb_loc = span;
-                         };
-                       ];
-                     type_loc = span;
-                   })
-          | Error e -> Error e)
-      | _ -> (
-          (* Alias with no params *)
-          match parse_sig_type body_sexp with
-          | Ok body ->
-              Ok
-                (DType
-                   {
-                     type_bindings =
-                       [
-                         {
-                           tb_name = name;
-                           tb_params = [];
-                           tb_body = Some body;
-                           tb_loc = span;
-                         };
-                       ];
-                     type_loc = span;
-                   })
-          | Error e -> Error e))
-  | [ Sexp.Symbol ("type", _); Sexp.Symbol (name, _); params_sexp; body_sexp ]
-    -> (
-      (* Parameterized type alias *)
-      match parse_tvar_binders params_sexp with
-      | Error e -> Error e
-      | Ok params -> (
-          match parse_sig_type body_sexp with
-          | Ok body ->
-              Ok
-                (DType
-                   {
-                     type_bindings =
-                       [
-                         {
-                           tb_name = name;
-                           tb_params = params;
-                           tb_body = Some body;
-                           tb_loc = span;
-                         };
-                       ];
-                     type_loc = span;
-                   })
-          | Error e -> Error e))
-  | Sexp.Symbol ("type", _) :: _ -> error "Invalid type declaration syntax" span
+  | Sexp.Symbol ("type", _) :: rest -> (
+      match parse_type_bindings rest span with
+      | Ok bindings -> Ok (DType { type_bindings = bindings; type_loc = span })
+      | Error e -> Error e)
   | _ -> error "Expected type declaration" span
 
 (** Parse an open directive.
@@ -954,92 +947,15 @@ and parse_forall (contents : Sexp.t list) (span : Loc.span) : decl result =
     Examples:
     - (let-type pair (cons int int))
     - (let-type wrapper [a] (list a))
-    - (let-type internal-handle) *)
+    - (let-type internal-handle)
+    - (let-type a (list int) b (list a)) — multi-binding *)
 and parse_let_type (contents : Sexp.t list) (span : Loc.span) : decl result =
   match contents with
-  | [ Sexp.Symbol ("let-type", _); Sexp.Symbol (name, _) ] ->
-      (* Opaque type with no params *)
-      Ok
-        (DLetType
-           {
-             type_bindings =
-               [
-                 {
-                   tb_name = name;
-                   tb_params = [];
-                   tb_body = None;
-                   tb_loc = span;
-                 };
-               ];
-             type_loc = span;
-           })
-  | [ Sexp.Symbol ("let-type", _); Sexp.Symbol (name, _); body_sexp ] -> (
-      (* Could be params or body *)
-      match body_sexp with
-      | Sexp.Vector (_, _) -> (
-          (* Opaque type with phantom params *)
-          match parse_tvar_binders body_sexp with
-          | Ok params ->
-              Ok
-                (DLetType
-                   {
-                     type_bindings =
-                       [
-                         {
-                           tb_name = name;
-                           tb_params = params;
-                           tb_body = None;
-                           tb_loc = span;
-                         };
-                       ];
-                     type_loc = span;
-                   })
-          | Error e -> Error e)
-      | _ -> (
-          (* Alias with no params *)
-          match parse_sig_type body_sexp with
-          | Ok body ->
-              Ok
-                (DLetType
-                   {
-                     type_bindings =
-                       [
-                         {
-                           tb_name = name;
-                           tb_params = [];
-                           tb_body = Some body;
-                           tb_loc = span;
-                         };
-                       ];
-                     type_loc = span;
-                   })
-          | Error e -> Error e))
-  | [
-   Sexp.Symbol ("let-type", _); Sexp.Symbol (name, _); params_sexp; body_sexp;
-  ] -> (
-      (* Parameterized type alias *)
-      match parse_tvar_binders params_sexp with
-      | Error e -> Error e
-      | Ok params -> (
-          match parse_sig_type body_sexp with
-          | Ok body ->
-              Ok
-                (DLetType
-                   {
-                     type_bindings =
-                       [
-                         {
-                           tb_name = name;
-                           tb_params = params;
-                           tb_body = Some body;
-                           tb_loc = span;
-                         };
-                       ];
-                     type_loc = span;
-                   })
-          | Error e -> Error e))
-  | Sexp.Symbol ("let-type", _) :: _ ->
-      error "Invalid let-type declaration syntax" span
+  | Sexp.Symbol ("let-type", _) :: rest -> (
+      match parse_type_bindings rest span with
+      | Ok bindings ->
+          Ok (DLetType { type_bindings = bindings; type_loc = span })
+      | Error e -> Error e)
   | _ -> error "Expected let-type declaration" span
 
 (** Parse a signature file from S-expressions.
