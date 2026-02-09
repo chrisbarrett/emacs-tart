@@ -22,7 +22,7 @@ specs 81–89 are not started.
 | [78](./specs/78-parser-fidelity.md) | Parser Fidelity | Done |
 | [79](./specs/79-coverage-reporting.md) | Coverage Reporting | Done |
 | [80](./specs/80-release-workflow.md) | Release Workflow | Done |
-| [81](./specs/81-nil-list-subtyping.md) | Nil-List Subtyping | Not started |
+| [81](./specs/81-nil-list-subtyping.md) | Nil-List Subtyping | Done |
 | [82](./specs/82-special-form-parser-extensions.md) | Special Form Parser Extensions | Done |
 | [83](./specs/83-function-subtype-widening.md) | Function Subtype Widening | Not started |
 | [84](./specs/84-heterogeneous-list-inference.md) | Heterogeneous List Inference | Not started |

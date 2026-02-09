@@ -283,6 +283,12 @@ let rec unify ?(invariant = false) ?(context = Constraint_solving) t1 t2 loc :
           if is_num n1 && (is_int n2 || is_float n2) then Ok ()
           else if is_num n2 && (is_int n1 || is_float n1) then Ok ()
           else Error (ITypeMismatch (t1, t2, loc))
+    (* Nil-List subtyping (Spec 81): nil <: (list a) for all a.
+       Emacs Lisp treats nil as the empty list — (listp nil) returns t.
+       The rule is unconditional: nil is a valid (list a) regardless of
+       the element type, because the empty list contains no elements. *)
+    | TCon n, TApp (c, [ _ ]) when n = nil_con_name && is_list_con c -> Ok ()
+    | TApp (c, [ _ ]), TCon n when is_list_con c && n = nil_con_name -> Ok ()
     (* Type applications: constructor and args must match.
        For HK types, the constructor may be a type variable that unifies
        with a concrete constructor. Arguments are unified with invariant=true

@@ -138,10 +138,19 @@
 ;; ===========================================================================
 
 ;; (car LIST) - first element, nil if not a cons
-(defun car [a] ((list a)) -> (a | nil))
+;; Two clauses: list for normal usage, any fallback for union-typed values
+;; from dynamic control flow (emits info note when precision is lost).
+(defun car [a]
+  (((list a)) -> (a | nil))
+  ((any) -> any
+    (note "car applied to non-list type; result is any")))
 
 ;; (cdr LIST) - rest of list, nil if not a cons
-(defun cdr [a] ((list a)) -> (list a))
+;; Same two-clause pattern as car.
+(defun cdr [a]
+  (((list a)) -> (list a))
+  ((any) -> any
+    (note "cdr applied to non-list type; result is any")))
 
 ;; (car-safe OBJ) - car or nil if not a cons
 (defun car-safe [a b]
