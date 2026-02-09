@@ -1,154 +1,227 @@
-# Implementation Plan — Spec 89: Mutually Recursive Types
+# Implementation Plan — Spec 87: Bounded Quantification
 
-Extend `(type ...)` and `(let-type ...)` to accept multiple bindings in a single
-form, making all names in the group mutually visible. Single-binding forms remain
-unchanged; multi-binding forms are currently parse errors, so this is purely
-additive.
+Replace equality constraints with upper-bound constraints when a type variable
+is unified with a union from a rest parameter, so callers don't inherit the full
+union. Purely inferred — no user-facing syntax changes.
 
-## Status
+Linked spec: [specs/87-bounded-quantification.md](specs/87-bounded-quantification.md)
 
-| Task | Status |
-|:-----|:-------|
-| 1. AST: introduce `type_binding` record, make `type_decl` a group | Done |
-| 2. Parser: greedy multi-binding parsing for type and let-type | Done |
-| 3. Loader: add all group names before resolving definitions | Not started |
-| 4. Validation, convert, workspace symbols: iterate bindings | Not started |
-| 5. Tests: multi-binding parser and loader tests | Not started |
+---
 
-## Design
+## Architecture Overview
 
-### AST change
+The change threads through four layers:
 
-Replace the single-binding `type_decl` with a group representation:
+1. **Type representation** (`types.mli`, `type_env.ml`) — extend `scheme` with
+   optional per-variable upper bounds
+2. **Unification** (`unify.ml`) — store upper bounds on tvars and check them
+   when a bounded tvar is linked to a concrete type
+3. **Generalization** (`generalize.ml`) — collect bounds from tvars and emit
+   bounded `Poly` schemes
+4. **Instantiation** (`type_env.ml`) — propagate bounds to fresh tvars when
+   instantiating bounded schemes
 
-```ocaml
-(** A single type binding within a type/let-type group. *)
-and type_binding = {
-  tb_name : string;
-  tb_params : tvar_binder list;
-  tb_body : sig_type option;  (* None only for opaque, single-binding *)
-  tb_loc : span;
-}
+Rest-parameter origin is already implicit: in `unify_param_lists`, `PRest` arms
+unify the rest element type with each arg type. The union appears because the
+signature declares `(&rest (A | B | C))`. When a tvar meets a union *through*
+rest-param unification, we record it as a bound rather than a link.
 
-(** A group of one or more type bindings.
-    Multi-binding groups enable mutual recursion. *)
-and type_decl = {
-  type_bindings : type_binding list;  (* non-empty *)
-  type_loc : span;
-}
+---
+
+## Task 1 — Extend tvar state with an upper-bound side-table
+
+**Files:** `lib/core/types.mli`, `lib/core/types.ml`
+
+Add a global side-table so that any tvar can carry `a <: U` without being linked
+to `U`. A side-table avoids changing the `TVar` constructor payload (which would
+touch every constructor site across the codebase).
+
+1. Add a module-level `Hashtbl.t` in `types.ml`:
+   ```ocaml
+   let tvar_bounds : (tvar_id, typ) Hashtbl.t = Hashtbl.create 16
+   ```
+
+2. Expose helpers in `types.mli`:
+   - `val set_tvar_bound : tvar_id -> typ -> unit`
+   - `val get_tvar_bound : tvar_id -> typ option`
+   - `val clear_tvar_bounds : unit -> unit`
+
+3. Update `reset_tvar_counter` to also call `clear_tvar_bounds`.
+
+**Tests:** Unit test that `set_tvar_bound`/`get_tvar_bound` round-trip and that
+`clear_tvar_bounds` empties the table.
+
+---
+
+## Task 2 — Record upper bound during rest-param unification
+
+**Files:** `lib/typing/unify.ml`
+
+When a tvar is unified with a union type through a `PRest` path, record the
+union as an upper bound instead of linking:
+
+1. Add a `~from_rest:bool` optional parameter (default `false`) to the internal
+   `unify` function. Thread it from the `PRest` arms in `unify_param_lists`:
+   - In `[PRest elem_ty1], params2`: pass `~from_rest:true` when unifying
+     `elem_ty1` with each param's type
+   - In `params1, [PRest elem_ty2]`: same
+   - In the mid-list `PRest` arms: same
+   - All other `unify` call sites: leave default `false`
+
+2. In the `TVar tv, ty | ty, TVar tv` case, when `from_rest = true` AND `ty`
+   is `TUnion _`:
+   - Perform the occurs check as usual
+   - Call `Types.set_tvar_bound id ty` instead of `tv := Link ty`
+   - Leave the tvar `Unbound` so generalization can see it
+
+3. When a bounded tvar is later unified (the normal `TVar` case,
+   `from_rest = false`):
+   - After the occurs check, check `Types.get_tvar_bound id`
+   - If a bound `U` exists, verify the concrete type `S` is a subtype of `U`:
+     use the existing union-subtype logic (if `U` is `TUnion members`, check
+     that `S` matches at least one member via speculative unification)
+   - If the check passes, link `tv := Link S` and clear the bound
+   - If it fails, produce `TypeMismatch`
+
+4. Update speculative unification (`collect_tvar_refs`/`restore_tvars`) to
+   snapshot and restore bounds for affected tvars. Add a helper
+   `snapshot_tvar_bounds`/`restore_tvar_bounds` that saves and restores the
+   bound entries for a given set of tvar ids.
+
+**Tests:** Unit tests in `unify_test.ml`:
+- tvar unified via rest with `(int | string)` → tvar stays unbound, has bound
+- bounded tvar then unified with `int` → succeeds, tvar linked to `int`
+- bounded tvar then unified with `float` → TypeMismatch
+- speculative unify rollback restores bound state
+
+---
+
+## Task 3 — Generalize bounded tvars into bounded schemes
+
+**Files:** `lib/core/type_env.mli`, `lib/core/type_env.ml`,
+`lib/typing/generalize.ml`
+
+Extend `scheme` to carry per-variable bounds, and teach generalization to
+collect them:
+
+1. Change `scheme` from:
+   ```ocaml
+   type scheme = Mono of typ | Poly of string list * typ
+   ```
+   to:
+   ```ocaml
+   type scheme =
+     | Mono of typ
+     | Poly of poly_scheme
+
+   and poly_scheme = {
+     ps_vars : string list;
+     ps_bounds : (string * typ) list;
+     ps_body : typ;
+   }
+   ```
+   This is a breaking change to a widely-used type. Update all pattern
+   matches on `Poly` across the codebase — most need only `ps_vars`/`ps_body`
+   and can use `ps_bounds = []`.
+
+2. In `generalize.ml`, after collecting generalizable tvar ids and creating the
+   var_map, look up each id's bound via `Types.get_tvar_bound`. For each found
+   bound, apply `replace_tvars_with_names` to the bound type (since it may
+   reference other tvars being generalized), and include it in `ps_bounds`.
+
+3. Update `scheme_to_string` to display bounds:
+   `(forall ((a <: (int | string))) ...)`.
+
+4. Update `instantiate` (in `type_env.ml`): when instantiating a `Poly` scheme,
+   for each `(var_name, bound_ty)` in `ps_bounds`:
+   - Look up the fresh tvar created for `var_name` in the substitution
+   - Get its tvar_id
+   - Apply the same substitution to `bound_ty` (replacing other bound vars with
+     their fresh tvars)
+   - Call `Types.set_tvar_bound fresh_id substituted_bound`
+   - This propagates bounds through chained calls
+
+**Tests:** Unit tests:
+- Generalize a type with a bounded tvar → scheme has non-empty `ps_bounds`
+- Instantiate the scheme → fresh tvar has the bound set
+- Instantiate and unify with valid subtype → succeeds
+- Instantiate and unify with invalid type → fails
+
+---
+
+## Task 4 — End-to-end integration tests
+
+**Files:** `test/fixtures/typing/`, `test/typing/check_test.ml` or
+`test/typing/infer_test.ml`
+
+Write fixture tests that exercise the full pipeline:
+
+1. **Basic rest-param bounded inference:**
+   Create a fixture with a signature declaring `(&rest (string | symbol))` and
+   a function that passes an inferred param to it. Verify the param accepts
+   `string` and `symbol` but rejects `int`.
+
+2. **Chained bounded inference:**
+   Function `f` calls the rest-param function, then function `g` calls `f`.
+   Verify the bound propagates through.
+
+3. **Non-rest unions unchanged:**
+   A function with a fixed param typed as `(int | string)` — verify equality
+   constraint still applies (caller gets `(int | string)`, not a bound).
+
+4. **Multiple rest args:**
+   Calling a rest-param function with two parameters — both should acquire
+   independent bounds.
+
+---
+
+## Task 5 — Tighten `concat` signature and fix fallout
+
+**Files:** `typings/emacs/31.0/c-core/fns.tart`, test fixtures
+
+1. Replace:
+   ```lisp
+   (defun concat (&rest any) -> string)
+   ```
+   with:
+   ```lisp
+   (defun concat (&rest (string | symbol | (list int) | (vector int))) -> string)
+   ```
+
+2. Remove the explanatory comment about why the signature was kept loose.
+
+3. Run the full test suite and the corpus check. Fix any fixture or corpus
+   regressions caused by the tighter signature.
+
+**Depends on:** Tasks 1–4 complete and passing.
+
+---
+
+## Task Ordering
+
+```
+Task 1 (tvar bounds table)
+  └─► Task 2 (rest-param bound recording + unification checking)
+        └─► Task 3 (scheme extension + generalization + instantiation)
+              └─► Task 4 (integration tests)
+                    └─► Task 5 (tighten concat)
 ```
 
-`DType of type_decl` and `DLetType of type_decl` both use the same group type.
-Single-binding forms produce a one-element list, preserving backward compat.
+Each task is independently testable. Tasks 1–3 are the core mechanism; Task 4
+validates end-to-end; Task 5 is the payoff.
 
-### Opaque restriction
+---
 
-Opaque types (no body) are only valid in single-binding forms. A multi-binding
-form where any binding lacks a body is a parse error. The parser enforces this.
+## Risks
 
-### Scoping within a group
+- **`Poly` refactor breadth.** Changing `scheme` touches every file that pattern
+  matches on `Poly`. Mitigate by using a record — most sites only need
+  `ps_vars`/`ps_body` and can use `ps_bounds = []`.
 
-All names in a multi-binding group are in scope for all definitions. The loader
-registers all names as aliases/opaques in a first pass before resolving any
-bodies. The validation pass adds all group names to the context before
-validating individual bodies.
+- **Speculative unification rollback.** The bounds side-table must be
+  snapshot/restored during `try_unify`. Missing this leaks bounds across
+  speculative branches.
 
-### Export behaviour
-
-`build_alias_context` and `build_opaque_context` in `sig_convert.ml` must
-iterate `type_bindings` for `DType`. `DLetType` remains excluded (wildcard arm).
-
-## Tasks
-
-### Task 1 — AST: introduce `type_binding`, make `type_decl` a group
-
-**Files:** `lib/sig/sig_ast.ml`, `lib/sig/sig_ast.mli`
-
-Add:
-- `type_binding` record: `tb_name`, `tb_params`, `tb_body` (option), `tb_loc`
-
-Change `type_decl`:
-- Replace `type_name/type_params/type_body/type_loc` fields with
-  `type_bindings : type_binding list` and `type_loc : span`
-
-Update `decl_loc`:
-- Both `DType d` and `DLetType d` already use `d.type_loc` — no change needed.
-
-### Task 2 — Parser: greedy multi-binding for type and let-type
-
-**File:** `lib/sig/sig_parser.ml`
-
-Extract a shared helper `parse_type_bindings` that consumes binding tokens
-greedily after the keyword:
-
-1. Read a bare symbol (type name)
-2. If next is `[`, read quantifiers
-3. Read a type expression (definition body)
-4. If more tokens remain, go to 1
-
-Special cases:
-- `(type name)` — single opaque binding (body = None), no more tokens → OK
-- `(type name [params])` — single opaque with phantom params → OK
-- Multi-binding where a binding has no body → parse error
-
-Both `parse_type_decl` and `parse_let_type` call `parse_type_bindings`, then
-wrap the result in `DType` or `DLetType` respectively.
-
-### Task 3 — Loader: add all group names before resolving definitions
-
-**File:** `lib/sig/sig_loader.ml`
-
-For `DType` and `DLetType` arms in both `load_decls_into_state` and
-`load_scoped_decl`:
-
-1. **First pass:** iterate `type_bindings`, run shadowing check for each name,
-   register each name as an alias or opaque in the type context
-2. **Second pass:** (no change — the type context already has all names when
-   alias bodies are resolved during `sig_type_to_typ_with_ctx`)
-
-Since aliases are stored as `sig_type` (surface AST) and resolved lazily during
-`sig_type_to_typ_with_ctx`, simply adding all names before any body is resolved
-provides mutual visibility automatically.
-
-For export marking (`DType` only): mark each binding's name as imported when
-`from_include` is true.
-
-### Task 4 — Validation, convert, workspace symbols: iterate bindings
-
-**Files:**
-- `lib/sig/sig_validation.ml` — `validate_decl` and `build_context`
-- `lib/sig/sig_convert.ml` — `build_alias_context` and `build_opaque_context`
-- `lib/lsp/workspace_symbols.ml` — `kind_of_decl` and `name_of_decl`
-- `lib/graph/graph_builder.ml` — no change (DType/DLetType → [])
-- `lib/typing/module_check.ml` — iterate bindings for kind checking
-
-**validate_decl:**
-- For DType/DLetType, add all group names to ctx first, then validate each
-  binding body with the extended ctx (mutual visibility)
-
-**build_context:**
-- Add all `tb_name`s from each DType/DLetType group
-
-**build_alias_context / build_opaque_context:**
-- Iterate `d.type_bindings` instead of accessing `d.type_name` directly
-
-**workspace_symbols:**
-- `kind_of_decl` and `name_of_decl` return the first binding's info
-  (for multi-binding, each binding becomes a separate symbol via
-  `extract_tart_decl_symbols`)
-
-### Task 5 — Tests: multi-binding parser and loader tests
-
-**Files:** `test/sig/sig_parser_test.ml`, `test/sig/sig_loader_test.ml`
-
-Parser tests:
-- Single binding (backward compat): `(type pair (cons int int))` → one binding
-- Multi-binding: `(type tree (leaf int | node forest) forest (list tree))`
-  → two bindings with correct names/bodies
-- Multi-binding with params: `(type tree [a] (list a) forest [a] (list (tree a)))`
-- Opaque single: `(type handle)` → one binding, body = None
-- Error: opaque in multi-binding `(type handle wrapper (list handle))`
-
-Loader tests:
-- Mutual recursion resolves: both names visible in each other's bodies
-- Multi-binding let-type not exported: names excluded from alias/opaque context
+- **Corpus regressions from tighter `concat`.** Some callers may rely on `any`
+  accepting arbitrary types. These need individual assessment — genuine typing
+  bugs vs. legitimate patterns needing a wider union.
