@@ -2151,6 +2151,113 @@ let test_let_type_validation_unbound () =
   |} in
   expect_error_containing "Unbound type variable" src
 
+(** {1 Multi-Binding Type Tests}
+
+    Tests for mutually recursive type groups. *)
+
+(** Test that multi-binding type group loads both aliases (non-recursive) *)
+let test_multi_binding_loads_both () =
+  (* Two aliases in one group, no mutual reference *)
+  let sig_src =
+    {|
+    (type int-pair (cons int int) str-pair (cons string string))
+    (defun make-ints () -> int-pair)
+    (defun make-strs () -> str-pair)
+  |}
+  in
+  let env = load_sig_str sig_src in
+  (* Both should be loaded *)
+  (match Type_env.lookup "make-ints" env with
+  | None -> Alcotest.fail "make-ints not found"
+  | Some _ -> ());
+  match Type_env.lookup "make-strs" env with
+  | None -> Alcotest.fail "make-strs not found"
+  | Some _ -> ()
+
+(** Test that later binding in group can reference earlier binding *)
+let test_multi_binding_forward_ref () =
+  (* forest references tree (second references first) *)
+  let sig_src =
+    {|
+    (type tree (cons string (list string)) forest (list tree))
+    (defun make-forest () -> forest)
+  |}
+  in
+  let env = load_sig_str sig_src in
+  match Type_env.lookup "make-forest" env with
+  | None -> Alcotest.fail "make-forest not found"
+  | Some scheme ->
+      let scheme_str = Type_env.scheme_to_string scheme in
+      (* forest should expand to (list (cons string (list string))) *)
+      Alcotest.(check bool)
+        "expanded contains list" true
+        (try
+           let _ = Str.search_forward (Str.regexp_string "list") scheme_str 0 in
+           true
+         with Not_found -> false)
+
+(** Test that multi-binding parameterized aliases work *)
+let test_multi_binding_parameterized () =
+  let sig_src =
+    {|
+    (type wrapper [a] (list a) pair [a b] (cons a b))
+    (defun wrap [a] (a) -> (wrapper a))
+    (defun make-pair [a b] (a b) -> (pair a b))
+  |}
+  in
+  let env = load_sig_str sig_src in
+  (match Type_env.lookup "wrap" env with
+  | None -> Alcotest.fail "wrap not found"
+  | Some _ -> ());
+  match Type_env.lookup "make-pair" env with
+  | None -> Alcotest.fail "make-pair not found"
+  | Some _ -> ()
+
+(** Test that multi-binding let-type names are NOT exported via include *)
+let test_multi_binding_let_type_not_exported () =
+  let inner_sig =
+    {|
+    (let-type int-pair (cons int int) str-pair (cons string string))
+    (defun make-ints () -> int-pair)
+  |}
+  in
+  let inner_parsed =
+    let parse_result = Syntax.Read.parse_string inner_sig in
+    match
+      Sig_parser.parse_signature ~module_name:"inner" parse_result.sexps
+    with
+    | Error _ -> failwith "Parse error"
+    | Ok sig_file -> sig_file
+  in
+  let resolver name = if name = "inner" then Some inner_parsed else None in
+  let outer_sig = {|(include 'inner)|} in
+  let env = load_sig_str_with_resolver ~resolver outer_sig in
+  (* make-ints should be exported via include *)
+  (match Type_env.lookup "make-ints" env with
+  | None -> Alcotest.fail "make-ints not found after include"
+  | Some _ -> ());
+  (* Verify let-type aliases are NOT exported:
+     build_alias_context only processes DType, not DLetType.
+     The included signature's let-type names don't become part of
+     the outer module's alias context. *)
+  let outer_aliases = Sig_convert.build_alias_context inner_parsed in
+  Alcotest.(check int)
+    "no aliases from let-type" 0
+    (List.length (Sig_convert.alias_names outer_aliases))
+
+(** Test validation works for multi-binding groups (mutual references ok) *)
+let test_multi_binding_validation () =
+  let src =
+    {|
+    (type tree (list forest) forest (list tree))
+    (defun foo () -> tree)
+  |}
+  in
+  match validate_str src with
+  | Ok () -> ()
+  | Error e ->
+      Alcotest.fail (Printf.sprintf "Expected validation to pass: %s" e.message)
+
 (** {1 Auxiliary File Tests (R19)}
 
     Tests for the rule that auxiliary .tart files (no corresponding .el) can be
@@ -2574,6 +2681,16 @@ let () =
           Alcotest.test_case "end-to-end" `Quick test_let_type_end_to_end;
           Alcotest.test_case "validation unbound" `Quick
             test_let_type_validation_unbound;
+        ] );
+      ( "multi-binding-types",
+        [
+          Alcotest.test_case "loads both" `Quick test_multi_binding_loads_both;
+          Alcotest.test_case "forward ref" `Quick test_multi_binding_forward_ref;
+          Alcotest.test_case "parameterized" `Quick
+            test_multi_binding_parameterized;
+          Alcotest.test_case "let-type not exported" `Quick
+            test_multi_binding_let_type_not_exported;
+          Alcotest.test_case "validation" `Quick test_multi_binding_validation;
         ] );
       ( "auxiliary-files",
         [

@@ -643,6 +643,55 @@ let test_let_type_error_no_name () =
   | Ok _ -> Alcotest.fail "Expected parse error"
   | Error _ -> ()
 
+(** {1 Multi-Binding Type Tests} *)
+
+let test_multi_binding_type () =
+  (* (type tree (list forest) forest (list tree)) — two bindings *)
+  let src = {|(type tree (list forest) forest (list tree))|} in
+  match parse_decl_str src with
+  | Ok (Sig_ast.DType { type_bindings = [ b1; b2 ]; _ }) -> (
+      Alcotest.(check string) "first name" "tree" b1.tb_name;
+      Alcotest.(check int) "first no params" 0 (List.length b1.tb_params);
+      (match b1.tb_body with
+      | Some (Sig_ast.STApp ("list", [ Sig_ast.STVar ("forest", _) ], _)) -> ()
+      | _ -> Alcotest.fail "Expected tree body = (list forest)");
+      Alcotest.(check string) "second name" "forest" b2.tb_name;
+      Alcotest.(check int) "second no params" 0 (List.length b2.tb_params);
+      match b2.tb_body with
+      | Some (Sig_ast.STApp ("list", [ Sig_ast.STVar ("tree", _) ], _)) -> ()
+      | _ -> Alcotest.fail "Expected forest body = (list tree)")
+  | Ok _ -> Alcotest.fail "Expected DType with two bindings"
+  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
+
+let test_multi_binding_type_with_params () =
+  (* (type tree [a] (list (forest a)) forest [a] (list (tree a))) *)
+  let src = {|(type tree [a] (list (forest a)) forest [a] (list (tree a)))|} in
+  match parse_decl_str src with
+  | Ok (Sig_ast.DType { type_bindings = [ b1; b2 ]; _ }) ->
+      Alcotest.(check string) "first name" "tree" b1.tb_name;
+      Alcotest.(check int) "first one param" 1 (List.length b1.tb_params);
+      Alcotest.(check string) "second name" "forest" b2.tb_name;
+      Alcotest.(check int) "second one param" 1 (List.length b2.tb_params)
+  | Ok _ -> Alcotest.fail "Expected DType with two parameterized bindings"
+  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
+
+let test_multi_binding_opaque_error () =
+  (* Opaque in multi-binding is an error *)
+  let src = {|(type handle wrapper (list handle))|} in
+  match parse_decl_str src with
+  | Ok _ -> Alcotest.fail "Expected parse error for opaque in multi-binding"
+  | Error _ -> ()
+
+let test_multi_binding_let_type () =
+  (* (let-type tree (list forest) forest (list tree)) *)
+  let src = {|(let-type tree (list forest) forest (list tree))|} in
+  match parse_decl_str src with
+  | Ok (Sig_ast.DLetType { type_bindings = [ b1; b2 ]; _ }) ->
+      Alcotest.(check string) "first name" "tree" b1.tb_name;
+      Alcotest.(check string) "second name" "forest" b2.tb_name
+  | Ok _ -> Alcotest.fail "Expected DLetType with two bindings"
+  | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
+
 (** {1 Clause Diagnostic Tests} *)
 
 let test_single_clause_warn () =
@@ -897,6 +946,16 @@ let () =
             test_let_type_parameterized;
           Alcotest.test_case "opaque let-type" `Quick test_let_type_opaque;
           Alcotest.test_case "error no name" `Quick test_let_type_error_no_name;
+        ] );
+      ( "multi-binding-types",
+        [
+          Alcotest.test_case "multi-binding type" `Quick test_multi_binding_type;
+          Alcotest.test_case "multi-binding with params" `Quick
+            test_multi_binding_type_with_params;
+          Alcotest.test_case "opaque in multi-binding error" `Quick
+            test_multi_binding_opaque_error;
+          Alcotest.test_case "multi-binding let-type" `Quick
+            test_multi_binding_let_type;
         ] );
       ( "clause-diagnostics",
         [
