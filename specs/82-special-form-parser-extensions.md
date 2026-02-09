@@ -2,126 +2,147 @@
 
 ## Overview
 
-Tart's parser does not recognise many common Emacs Lisp defining forms, causing
-all bindings inside their bodies to appear as undefined variables. These
+Tart's type checker does not recognise many common Emacs Lisp defining forms,
+causing all bindings inside their bodies to appear as undefined variables. These
 unsupported forms account for approximately 49% of all validation errors
 (7,171/14,508 UNDEFINED VARIABLE errors) across the Emacs core files tested.
-This spec classifies the unsupported forms, defines the parsing behaviour for
-each category, fixes `defcustom`/`defgroup`/`defface` first-argument
-interpretation, and organises the work into five phases.
+
+Rather than hardcoding each form in OCaml, this spec adds a **macro expansion
+pre-pass** that rewrites unknown defining forms into forms the checker already
+understands (`defun`, `defvar`, `progn`). A curated `.el` file provides
+simplified macro definitions. The existing pure Elisp interpreter
+([`lib/interp/`](../lib/interp/)) expands these before the type checker runs,
+keeping form knowledge in user-land and making new forms a one-line Elisp
+change.
 
 This spec operates at the type-checker's form-recognition level — it
 determines which Elisp forms the checker understands and how it binds variables
 within them. The S-expression parser itself is covered by
 [Spec 78](./78-parser-fidelity.md).
 
+## Design
+
+### Where
+
+In [`module_check.ml`](../lib/typing/module_check.ml), between environment
+setup and `Check.check_program` (around line 799). The expansion is a
+pre-processing step — the type checker receives already-expanded S-expressions
+and needs no changes to its dispatch.
+
+### How
+
+Create an interpreter, load curated macros from `typings/tart-macros.el`,
+single-step expand each top-level form, flatten any resulting `progn` into
+multiple top-level forms.
+
+### Why not inside `check_form_with_state`?
+
+Threading the interpreter through `check_state` would be needed to support
+user-defined macros in the same file. For this spec, all target macros are
+pre-defined. Pre-processing is simpler and keeps the interpreter out of the
+type checker.
+
 ## Form Classification
 
 ### Defun-like forms
 
-Forms that define a named function with a parameter list and body.
-The checker should treat these identically to `defun`: bind the function name,
-bind parameters in the body scope, and infer the body type.
+Forms that define a named function. The pre-pass rewrites them to `defun`.
 
-| Form | Notes |
-|:-----|:------|
-| `defsubst` | Inline function; semantically identical to `defun` |
-| `cl-defgeneric` | CLOS-style generic; treat name + arglist as function binding |
-| `cl-defmethod` | CLOS-style method; bind name + arglist, ignore qualifiers/specializers |
+| Form | Expansion | Notes |
+|:-----|:----------|:------|
+| `defsubst` | `(defun ...)` | Identical structure |
+| `cl-defgeneric` | `(defun ...)` | Drop options after arglist |
+| `cl-defmethod` | `(defun ...)` | Skip qualifiers, strip specializers |
+| `defmacro` | `(defun ...)` | Treat as function for type checking |
+| `pcase-defmacro` | `(defun ...)` | Same as defmacro |
+| `gv-define-setter` | `(defun ...)` | Bind name as function |
+| `gv-define-expander` | `(defun ...)` | Bind name as function |
 
-### Defmacro-like forms
+### Variable-binding forms
 
-Forms that define a named macro with a parameter list and body.
-The checker should bind the macro name and parameters in the body scope.
-Macro parameters use destructuring `&rest`/`&body` and may include
-`&environment` — these are bound as variables but not typed.
+Forms that introduce a named variable. The pre-pass rewrites them to `defvar`.
 
-| Form | Notes |
-|:-----|:------|
-| `defmacro` | Currently parsed but body bindings are not fully scoped |
-| `pcase-defmacro` | Defines a pcase pattern macro; same structure as `defmacro` |
+| Form | Expansion | Notes |
+|:-----|:----------|:------|
+| `defcustom` | `(defvar ...)` | Variable binding |
+| `defgroup` | `(defvar ...)` | Variable binding |
+| `defface` | `(defvar ...)` | Variable binding |
+| `declare-function` | `(defvar ...)` | Just makes name known |
+| `cl--defalias` | `(defvar ...)` | Bind name |
 
-### Define-mode-like forms
+### Dual-binding forms
 
-Forms that define a minor or major mode. These generate a function (the mode
-toggle) and a variable (the mode state). The checker should bind both.
+Forms that define both a function and a variable.
 
-| Form | Notes |
-|:-----|:------|
-| `define-minor-mode` | Generates `MODE` function and `MODE` variable (bool) |
+| Form | Expansion | Notes |
+|:-----|:----------|:------|
+| `define-minor-mode` | `(progn (defvar ...) (defun ...))` | Mode variable + toggle function |
 
-### Binding forms
+### Local binding forms
 
 Forms that introduce local variable bindings in a body, similar to `let`.
-The checker should scope the bound variables to the body expressions.
 
-| Form | Notes |
-|:-----|:------|
-| `gv-letplace` | Binds a getter/setter pair in body |
-| `macroexp-let2` | Binds a variable to an expression in body |
+| Form | Expansion | Notes |
+|:-----|:----------|:------|
+| `gv-letplace` | `(let ...)` | Binds getter/setter pair in body |
+| `macroexp-let2` | `(let ...)` | Binds variable to expression in body |
 
-### Declaration-only forms
+### No-op forms
 
-Forms that declare a name without defining a body. The checker should record
-the binding but has no body to type-check.
+Forms that need no bindings and can be discarded.
 
-| Form | Notes |
-|:-----|:------|
-| `declare-function` | Declares external function exists; bind name |
-| `set-advertised-calling-convention` | Metadata; no bindings needed |
-| `gv-define-setter` | Declares a setter; bind name |
-| `gv-define-expander` | Declares a gv expander; bind name |
-| `cl--defalias` | Internal alias; bind target name |
+| Form | Expansion | Notes |
+|:-----|:----------|:------|
+| `set-advertised-calling-convention` | `nil` | Metadata only |
 
-## Defcustom First-Argument Fix
+## Edge Cases
 
-### Problem
+### `cl-defmethod` qualifier skipping
 
-`defcustom` is typed as `(symbol any string &rest any) -> symbol`, but the
-checker currently interprets `(defcustom foo 42 "doc" ...)` with `foo` as a
-variable reference rather than a symbol literal. This causes 12 spurious
-"expects argument 1 to be symbol" errors in `simple.el` alone.
+`cl-defmethod` accepts optional qualifiers between the name and arglist:
+`:before`, `:after`, `:around`, and `:extra "string"`. The macro must skip
+these to find the actual parameter list. The interpreter lacks `keywordp` —
+add it as a one-line builtin in
+[`builtin.ml`](../lib/interp/builtin.ml).
 
-The same issue affects `defgroup` and `defface`, which also take a symbol
-name as their first argument.
+### `defmacro` macro ordering
 
-### Solution
+The `defmacro` macro must be defined *last* in `tart-macros.el`.
+`load_macros` uses the `defmacro` special form to register all other macros.
+Once a macro named `defmacro` is registered, the expander would try to expand
+subsequent `(defmacro ...)` forms. In practice `load_macros` uses
+`eval_toplevel` which hits the special form first, and we only use `expand_1`
+not `macroexpand_all`, but defining it last is defensive.
 
-In `check.ml`, add special-case handling for `defcustom`, `defgroup`, and
-`defface` to treat the first argument as a quoted symbol literal rather than
-a variable reference. This matches the existing handling of `defvar` and
-`defconst`.
+## Key Files
 
-## Phased Implementation
+| File | Role |
+|:-----|:-----|
+| [`lib/typing/dune`](../lib/typing/dune) | Add `tart.interp` dependency |
+| [`lib/interp/builtin.ml`](../lib/interp/builtin.ml) | Add `keywordp` predicate |
+| `typings/tart-macros.el` | Curated macro definitions (new file) |
+| [`lib/typing/module_check.ml`](../lib/typing/module_check.ml) | Expansion pre-pass |
+| `test/fixtures/typing/special-forms/` | Test fixtures (new directory) |
 
-### Phase 1 — Defmacro/Defsubst
+## Test Plan
 
-Extend the form recogniser for `defmacro` (full body scoping) and `defsubst`.
-These are the most common forms and have straightforward defun-like structure.
+Fixture pairs in `test/fixtures/typing/special-forms/`:
 
-### Phase 2 — CL Forms
+| Fixture | Tests |
+|:--------|:------|
+| `defsubst.el` / `.expected` | Define via defsubst, call it → PASS |
+| `cl-defmethod.el` / `.expected` | With qualifier and specializer → PASS |
+| `define-minor-mode.el` / `.expected` | Use mode variable and function → PASS |
+| `defcustom.el` / `.expected` | Reference the variable → PASS |
+| `binding-forms.el` / `.expected` | gv-letplace, macroexp-let2 → PASS |
+| `declaration-only.el` / `.expected` | declare-function etc. → PASS |
 
-Add support for `cl-defgeneric`, `cl-defmethod`, and `cl--defalias`.
-`cl-defmethod` requires skipping optional qualifiers (`:before`, `:after`,
-`:around`) and type specializers in the parameter list.
+Verification:
 
-### Phase 3 — Mode/GV/Pcase
-
-Add `define-minor-mode`, `gv-letplace`, `gv-define-setter`,
-`gv-define-expander`, and `pcase-defmacro`. These are less frequent but still
-contribute to UNDEFINED VARIABLE counts.
-
-### Phase 4 — Declaration-Only
-
-Add `declare-function`, `set-advertised-calling-convention`, and
-`macroexp-let2`. These are low-frequency but easy to implement since they
-mostly just record a binding.
-
-### Phase 5 — Defcustom/Defgroup/Defface
-
-Fix the first-argument interpretation for `defcustom`, `defgroup`, and
-`defface`. This is separated because it changes argument evaluation semantics
-rather than adding new form recognition.
+1. `nix develop --command dune build 2>&1` — compiles cleanly
+2. `nix develop --command dune test --force 2>&1` — all tests pass
+3. `./tart check --emacs-version 31.0 <file-with-defsubst>` — no UNDEFINED
+   VARIABLE for the defined name
 
 ## Impact Estimate
 
@@ -140,20 +161,19 @@ errors across the tested files. The per-file impact:
 | `minibuffer.el` | ~614 | 614 |
 | `window.el` | ~1,519 | 1,519 |
 
-## Key Files
+## Future: Upgrade Path
 
-| File | Role |
-|:-----|:-----|
-| `lib/typing/check.ml` | Form recognition, defcustom first-arg fix |
-| `lib/typing/infer.ml` | Body inference for new form types |
-| `lib/typing/defun_infer.ml` | Defun-like inference (template for new forms) |
-| `lib/syntax/sexp.ml` | S-expression parser (unchanged; see [Spec 78](./78-parser-fidelity.md)) |
+The curated macro file is the natural place to replace with type-level effect
+bodies later. Each macro definition documents "this form has these binding
+effects," which is exactly the information a type-level effect system would
+formalize. The pre-processing architecture can be swapped for an in-line
+expansion step (threading the interpreter through `check_state`) when needed
+for user-defined macros.
 
 ## Deferred
 
-- **Macro expansion.** Tart does not expand macros before type checking.
-  Forms like `cl-defmethod` may expand into more complex code that the
-  checker cannot follow. Full macro expansion is out of scope.
+- **User-defined macros.** Only pre-defined macros from `tart-macros.el` are
+  expanded. Macros defined in the file being checked are not expanded.
 - **Type specializers.** `cl-defmethod` parameters can include type
   specializers `((arg type) ...)`. Using these for type narrowing in the
   method body is deferred.
