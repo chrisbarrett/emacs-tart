@@ -1,29 +1,52 @@
 name: Release
 
 on:
-  push:
-    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: Semver component to bump
+        required: true
+        type: choice
+        options:
+          - minor
+          - major
+          - patch
+        default: minor
 
 permissions:
   contents: read
 
 jobs:
-  verify-main:
+  preflight:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          fetch-depth: 0
 
-      - name: Verify tag is on main branch
+      - name: Compute new version
+        id: version
         run: |
-          if ! git merge-base --is-ancestor ${{ github.sha }} origin/main; then
-            echo "Error: Release tags must be on main branch"
+          current=$(sed -n '3s/let version = "\(.*\)"/\1/p' lib/tart.ml)
+          if ! [[ "$current" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            echo "Error: Invalid semver in lib/tart.ml: $current"
             exit 1
           fi
+          major="${BASH_REMATCH[1]}"
+          minor="${BASH_REMATCH[2]}"
+          patch="${BASH_REMATCH[3]}"
+          case "${{ inputs.release_type }}" in
+            major) major=$((major + 1)); minor=0; patch=0 ;;
+            minor) minor=$((minor + 1)); patch=0 ;;
+            patch) patch=$((patch + 1)) ;;
+          esac
+          version="${major}.${minor}.${patch}"
+          echo "version=${version}" >> $GITHUB_OUTPUT
+          echo "tag=v${version}" >> $GITHUB_OUTPUT
+          echo "New version: ${version} (tag: v${version})"
 
   test:
-    needs: verify-main
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
