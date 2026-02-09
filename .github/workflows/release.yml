@@ -154,12 +154,55 @@ jobs:
           path: tart-${{ matrix.os }}-${{ matrix.arch }}
 
   release:
-    needs: build
+    needs: [preflight, build]
     runs-on: ubuntu-latest
+    environment: release
     permissions:
       contents: write
 
     steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.preflight.outputs.tag }}
+
+      - name: Generate changelog
+        id: changelog
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -n "$PREV_TAG" ]; then
+            COMMITS=$(git log --oneline "${PREV_TAG}..HEAD")
+          else
+            COMMITS=$(git log --oneline)
+          fi
+
+          CHANGELOG=""
+          if [ -n "$ANTHROPIC_API_KEY" ]; then
+            PROMPT="Generate a changelog for the following git commits.\nGroup changes into: Features, Fixes, Improvements.\nUse markdown formatting with bullet points.\nBe concise but informative.\n\nCommits:\n${COMMITS}"
+            RESPONSE=$(curl -s --fail -X POST https://api.anthropic.com/v1/messages \
+              -H "Content-Type: application/json" \
+              -H "x-api-key: ${ANTHROPIC_API_KEY}" \
+              -H "anthropic-version: 2023-06-01" \
+              -d "$(jq -n --arg prompt "$PROMPT" '{
+                model: "claude-sonnet-4-20250514",
+                max_tokens: 1024,
+                messages: [{role: "user", content: $prompt}]
+              }')" 2>/dev/null) && \
+            CHANGELOG=$(echo "$RESPONSE" | jq -r '.content[0].text // empty' 2>/dev/null) || true
+          fi
+
+          if [ -z "$CHANGELOG" ]; then
+            CHANGELOG="$COMMITS"
+          fi
+
+          {
+            echo "body<<CHANGELOG_EOF"
+            echo "$CHANGELOG"
+            echo "CHANGELOG_EOF"
+          } >> $GITHUB_OUTPUT
+
       - name: Download all artifacts
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
@@ -172,7 +215,8 @@ jobs:
       - name: Determine prerelease status
         id: prerelease
         run: |
-          if [[ "${{ github.ref_name }}" =~ ^v.*-(rc|alpha|beta) ]]; then
+          TAG="${{ needs.preflight.outputs.tag }}"
+          if [[ "$TAG" =~ ^v.*-(rc|alpha|beta) ]]; then
             echo "prerelease=true" >> $GITHUB_OUTPUT
           else
             echo "prerelease=false" >> $GITHUB_OUTPUT
@@ -181,6 +225,8 @@ jobs:
       - name: Create release
         uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
         with:
+          tag_name: ${{ needs.preflight.outputs.tag }}
+          name: Release ${{ needs.preflight.outputs.version }}
+          body: ${{ steps.changelog.outputs.body }}
           files: artifacts/*
           prerelease: ${{ steps.prerelease.outputs.prerelease }}
-          generate_release_notes: true
