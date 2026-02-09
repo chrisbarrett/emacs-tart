@@ -9,7 +9,7 @@ additive.
 
 | Task | Status |
 |:-----|:-------|
-| 1. AST: introduce `type_binding` record, make `type_decl` a group | Not started |
+| 1. AST: introduce `type_binding` record, make `type_decl` a group | Done |
 | 2. Parser: greedy multi-binding parsing for type and let-type | Not started |
 | 3. Loader: add all group names before resolving definitions | Not started |
 | 4. Validation, convert, workspace symbols: iterate bindings | Not started |

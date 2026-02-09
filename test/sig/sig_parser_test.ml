@@ -453,10 +453,17 @@ let test_type_alias () =
   | Ok
       (Sig_ast.DType
          {
-           type_name = "int-list";
-           type_params = [];
-           type_body =
-             Some (Sig_ast.STApp ("list", [ Sig_ast.STCon ("int", _) ], _));
+           type_bindings =
+             [
+               {
+                 tb_name = "int-list";
+                 tb_params = [];
+                 tb_body =
+                   Some
+                     (Sig_ast.STApp ("list", [ Sig_ast.STCon ("int", _) ], _));
+                 _;
+               };
+             ];
            _;
          }) ->
       ()
@@ -467,7 +474,11 @@ let test_type_opaque () =
   match parse_decl_str "(type buffer)" with
   | Ok
       (Sig_ast.DType
-         { type_name = "buffer"; type_params = []; type_body = None; _ }) ->
+         {
+           type_bindings =
+             [ { tb_name = "buffer"; tb_params = []; tb_body = None; _ } ];
+           _;
+         }) ->
       ()
   | _ -> Alcotest.fail "Expected opaque type"
 
@@ -477,9 +488,15 @@ let test_type_parameterized () =
   | Ok
       (Sig_ast.DType
          {
-           type_name = "result";
-           type_params = [ { name = "a"; _ }; { name = "e"; _ } ];
-           type_body = Some (Sig_ast.STUnion _);
+           type_bindings =
+             [
+               {
+                 tb_name = "result";
+                 tb_params = [ { name = "a"; _ }; { name = "e"; _ } ];
+                 tb_body = Some (Sig_ast.STUnion _);
+                 _;
+               };
+             ];
            _;
          }) ->
       ()
@@ -590,34 +607,34 @@ let test_data_recursive () =
 let test_let_type_simple () =
   let src = {|(let-type pair (cons int int))|} in
   match parse_decl_str src with
-  | Ok (Sig_ast.DLetType d) -> (
-      Alcotest.(check string) "name" "pair" d.type_name;
-      Alcotest.(check int) "no params" 0 (List.length d.type_params);
-      match d.type_body with
+  | Ok (Sig_ast.DLetType { type_bindings = [ b ]; _ }) -> (
+      Alcotest.(check string) "name" "pair" b.tb_name;
+      Alcotest.(check int) "no params" 0 (List.length b.tb_params);
+      match b.tb_body with
       | Some (Sig_ast.STApp ("cons", [ _; _ ], _)) -> ()
       | _ -> Alcotest.fail "Expected STApp(cons, [int; int])")
-  | Ok _ -> Alcotest.fail "Expected DLetType"
+  | Ok _ -> Alcotest.fail "Expected DLetType with one binding"
   | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
 
 let test_let_type_parameterized () =
   let src = {|(let-type wrapper [a] (list a))|} in
   match parse_decl_str src with
-  | Ok (Sig_ast.DLetType d) ->
-      Alcotest.(check string) "name" "wrapper" d.type_name;
-      Alcotest.(check int) "one param" 1 (List.length d.type_params)
-  | Ok _ -> Alcotest.fail "Expected DLetType"
+  | Ok (Sig_ast.DLetType { type_bindings = [ b ]; _ }) ->
+      Alcotest.(check string) "name" "wrapper" b.tb_name;
+      Alcotest.(check int) "one param" 1 (List.length b.tb_params)
+  | Ok _ -> Alcotest.fail "Expected DLetType with one binding"
   | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
 
 let test_let_type_opaque () =
   let src = {|(let-type handle)|} in
   match parse_decl_str src with
-  | Ok (Sig_ast.DLetType d) -> (
-      Alcotest.(check string) "name" "handle" d.type_name;
-      Alcotest.(check int) "no params" 0 (List.length d.type_params);
-      match d.type_body with
+  | Ok (Sig_ast.DLetType { type_bindings = [ b ]; _ }) -> (
+      Alcotest.(check string) "name" "handle" b.tb_name;
+      Alcotest.(check int) "no params" 0 (List.length b.tb_params);
+      match b.tb_body with
       | None -> ()
       | Some _ -> Alcotest.fail "Expected opaque (body = None)")
-  | Ok _ -> Alcotest.fail "Expected DLetType"
+  | Ok _ -> Alcotest.fail "Expected DLetType with one binding"
   | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
 
 let test_let_type_error_no_name () =

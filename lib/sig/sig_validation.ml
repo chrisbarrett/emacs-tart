@@ -154,17 +154,25 @@ let validate_defun ctx (d : defun_decl) : unit result =
 let validate_defvar ctx (d : defvar_decl) : unit result =
   validate_type ctx d.defvar_type
 
-(** Validate a type declaration *)
-let validate_type_decl ctx (d : type_decl) : unit result =
+(** Validate a single type binding *)
+let validate_type_binding ctx (b : type_binding) : unit result =
   (* Add type parameters to context *)
-  let var_names = List.map (fun b -> b.name) d.type_params in
+  let var_names = List.map (fun p -> p.name) b.tb_params in
   let inner_ctx = with_tvars ctx var_names in
   (* Validate binder bounds in outer context *)
-  let* () = validate_binder_bounds ctx d.type_params in
+  let* () = validate_binder_bounds ctx b.tb_params in
   (* Validate body if present *)
-  match d.type_body with
+  match b.tb_body with
   | None -> Ok () (* Opaque type, no body to validate *)
   | Some body -> validate_type inner_ctx body
+
+(** Validate a type declaration (group of bindings) *)
+let validate_type_decl ctx (d : type_decl) : unit result =
+  List.fold_left
+    (fun acc b ->
+      let* () = acc in
+      validate_type_binding ctx b)
+    (Ok ()) d.type_bindings
 
 (** Validate an import-struct declaration *)
 let validate_import_struct ctx (d : import_struct_decl) : unit result =
@@ -222,13 +230,15 @@ let rec validate_decl ctx (decl : decl) : unit result =
 let build_context (sig_file : signature) : tvar_context =
   let rec add_decl_types ctx decl =
     match decl with
-    | DType d -> with_type ctx d.type_name
+    | DType d ->
+        List.fold_left (fun c b -> with_type c b.tb_name) ctx d.type_bindings
     | DImportStruct d -> with_type ctx d.struct_name
     | DData d -> with_type ctx d.data_name
     | DForall d ->
         (* Recursively collect types from scope declarations *)
         List.fold_left add_decl_types ctx d.forall_decls
-    | DLetType d -> with_type ctx d.type_name
+    | DLetType d ->
+        List.fold_left (fun c b -> with_type c b.tb_name) ctx d.type_bindings
     | _ -> ctx
   in
   List.fold_left add_decl_types empty_context sig_file.sig_decls

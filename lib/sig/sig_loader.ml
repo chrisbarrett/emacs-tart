@@ -916,40 +916,47 @@ and load_decls_into_state ?(from_include = false) (sig_file : signature)
           | DOpen (name, span) -> process_open name span state
           | DInclude (name, _) -> process_include name state
           | DType d ->
-              (* Check shadowing if from current file *)
-              let* () =
-                if not from_include then
-                  check_type_not_shadowing d.type_name d.type_loc state
-                else Ok ()
-              in
-              (* Add to type context *)
-              let state =
-                match d.type_body with
-                | Some body ->
-                    (* Type alias *)
-                    let alias =
-                      {
-                        alias_params =
-                          List.map binder_to_alias_param d.type_params;
-                        alias_body = body;
-                      }
+              (* Process each binding in the group *)
+              let* state =
+                List.fold_left
+                  (fun state_r (b : type_binding) ->
+                    let* state = state_r in
+                    (* Check shadowing if from current file *)
+                    let* () =
+                      if not from_include then
+                        check_type_not_shadowing b.tb_name b.tb_loc state
+                      else Ok ()
                     in
-                    add_alias_to_state d.type_name alias state
-                | None ->
-                    (* Opaque type - use the original module name for the constructor *)
-                    let opaque =
-                      {
-                        opaque_params = List.map (fun b -> b.name) d.type_params;
-                        opaque_con =
-                          opaque_con_name sig_file.sig_module d.type_name;
-                      }
+                    (* Add to type context *)
+                    let state =
+                      match b.tb_body with
+                      | Some body ->
+                          let alias =
+                            {
+                              alias_params =
+                                List.map binder_to_alias_param b.tb_params;
+                              alias_body = body;
+                            }
+                          in
+                          add_alias_to_state b.tb_name alias state
+                      | None ->
+                          let opaque =
+                            {
+                              opaque_params =
+                                List.map (fun p -> p.name) b.tb_params;
+                              opaque_con =
+                                opaque_con_name sig_file.sig_module b.tb_name;
+                            }
+                          in
+                          add_opaque_to_state b.tb_name opaque state
                     in
-                    add_opaque_to_state d.type_name opaque state
+                    (* Mark as imported if from include *)
+                    Ok
+                      (if from_include then mark_type_imported b.tb_name state
+                       else state))
+                  (Ok state) d.type_bindings
               in
-              (* Mark as imported if from include *)
-              Ok
-                (if from_include then mark_type_imported d.type_name state
-                 else state)
+              Ok state
           | DDefun d ->
               (* Check shadowing if from current file *)
               let* () =
@@ -1051,35 +1058,44 @@ and load_decls_into_state ?(from_include = false) (sig_file : signature)
                  else state)
           | DForall d -> load_forall ~from_include sig_file d state
           | DLetType d ->
-              (* Shadowing check still runs *)
-              let* () =
-                if not from_include then
-                  check_type_not_shadowing d.type_name d.type_loc state
-                else Ok ()
-              in
-              (* Same loading as DType: add alias or opaque to type context *)
-              let state =
-                match d.type_body with
-                | Some body ->
-                    let alias =
-                      {
-                        alias_params =
-                          List.map binder_to_alias_param d.type_params;
-                        alias_body = body;
-                      }
+              (* Process each binding in the group *)
+              let* state =
+                List.fold_left
+                  (fun state_r (b : type_binding) ->
+                    let* state = state_r in
+                    (* Shadowing check still runs *)
+                    let* () =
+                      if not from_include then
+                        check_type_not_shadowing b.tb_name b.tb_loc state
+                      else Ok ()
                     in
-                    add_alias_to_state d.type_name alias state
-                | None ->
-                    let opaque =
-                      {
-                        opaque_params = List.map (fun b -> b.name) d.type_params;
-                        opaque_con =
-                          opaque_con_name sig_file.sig_module d.type_name;
-                      }
+                    (* Same loading as DType: add alias or opaque to type context *)
+                    let state =
+                      match b.tb_body with
+                      | Some body ->
+                          let alias =
+                            {
+                              alias_params =
+                                List.map binder_to_alias_param b.tb_params;
+                              alias_body = body;
+                            }
+                          in
+                          add_alias_to_state b.tb_name alias state
+                      | None ->
+                          let opaque =
+                            {
+                              opaque_params =
+                                List.map (fun p -> p.name) b.tb_params;
+                              opaque_con =
+                                opaque_con_name sig_file.sig_module b.tb_name;
+                            }
+                          in
+                          add_opaque_to_state b.tb_name opaque state
                     in
-                    add_opaque_to_state d.type_name opaque state
+                    (* Not exported: no mark_type_imported, even from include *)
+                    Ok state)
+                  (Ok state) d.type_bindings
               in
-              (* Not exported: no mark_type_imported, even from include *)
               Ok state))
     (Ok state) sig_file.sig_decls
 
@@ -1116,33 +1132,43 @@ and load_scoped_decl ?(from_include = false) (sig_file : signature)
   | DOpen (name, span) -> process_open name span state
   | DInclude (name, _) -> process_include name state
   | DType d ->
-      (* Check shadowing if from current file *)
-      let* () =
-        if not from_include then
-          check_type_not_shadowing d.type_name d.type_loc state
-        else Ok ()
-      in
-      (* Type declarations in scopes work the same way *)
-      let state =
-        match d.type_body with
-        | Some body ->
-            let alias =
-              {
-                alias_params = List.map binder_to_alias_param d.type_params;
-                alias_body = body;
-              }
+      (* Process each binding in the group *)
+      let* state =
+        List.fold_left
+          (fun state_r (b : type_binding) ->
+            let* state = state_r in
+            (* Check shadowing if from current file *)
+            let* () =
+              if not from_include then
+                check_type_not_shadowing b.tb_name b.tb_loc state
+              else Ok ()
             in
-            add_alias_to_state d.type_name alias state
-        | None ->
-            let opaque =
-              {
-                opaque_params = List.map (fun b -> b.name) d.type_params;
-                opaque_con = opaque_con_name sig_file.sig_module d.type_name;
-              }
+            (* Type declarations in scopes work the same way *)
+            let state =
+              match b.tb_body with
+              | Some body ->
+                  let alias =
+                    {
+                      alias_params = List.map binder_to_alias_param b.tb_params;
+                      alias_body = body;
+                    }
+                  in
+                  add_alias_to_state b.tb_name alias state
+              | None ->
+                  let opaque =
+                    {
+                      opaque_params = List.map (fun p -> p.name) b.tb_params;
+                      opaque_con = opaque_con_name sig_file.sig_module b.tb_name;
+                    }
+                  in
+                  add_opaque_to_state b.tb_name opaque state
             in
-            add_opaque_to_state d.type_name opaque state
+            Ok
+              (if from_include then mark_type_imported b.tb_name state
+               else state))
+          (Ok state) d.type_bindings
       in
-      Ok (if from_include then mark_type_imported d.type_name state else state)
+      Ok state
   | DDefun d ->
       (* Check shadowing if from current file *)
       let* () =
@@ -1231,33 +1257,41 @@ and load_scoped_decl ?(from_include = false) (sig_file : signature)
       (* Handle nested scopes recursively *)
       load_forall ~from_include sig_file nested state
   | DLetType d ->
-      (* Shadowing check still runs *)
-      let* () =
-        if not from_include then
-          check_type_not_shadowing d.type_name d.type_loc state
-        else Ok ()
-      in
-      (* Same loading as DType: add alias or opaque to type context *)
-      let state =
-        match d.type_body with
-        | Some body ->
-            let alias =
-              {
-                alias_params = List.map binder_to_alias_param d.type_params;
-                alias_body = body;
-              }
+      (* Process each binding in the group *)
+      let* state =
+        List.fold_left
+          (fun state_r (b : type_binding) ->
+            let* state = state_r in
+            (* Shadowing check still runs *)
+            let* () =
+              if not from_include then
+                check_type_not_shadowing b.tb_name b.tb_loc state
+              else Ok ()
             in
-            add_alias_to_state d.type_name alias state
-        | None ->
-            let opaque =
-              {
-                opaque_params = List.map (fun b -> b.name) d.type_params;
-                opaque_con = opaque_con_name sig_file.sig_module d.type_name;
-              }
+            (* Same loading as DType: add alias or opaque to type context *)
+            let state =
+              match b.tb_body with
+              | Some body ->
+                  let alias =
+                    {
+                      alias_params = List.map binder_to_alias_param b.tb_params;
+                      alias_body = body;
+                    }
+                  in
+                  add_alias_to_state b.tb_name alias state
+              | None ->
+                  let opaque =
+                    {
+                      opaque_params = List.map (fun p -> p.name) b.tb_params;
+                      opaque_con = opaque_con_name sig_file.sig_module b.tb_name;
+                    }
+                  in
+                  add_opaque_to_state b.tb_name opaque state
             in
-            add_opaque_to_state d.type_name opaque state
+            (* Not exported: no mark_type_imported, even from include *)
+            Ok state)
+          (Ok state) d.type_bindings
       in
-      (* Not exported: no mark_type_imported, even from include *)
       Ok state
 
 (** {1 Signature Loading}

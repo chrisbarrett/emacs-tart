@@ -1047,7 +1047,14 @@ let find_type_definition_in_signature (name : string)
   List.find_map
     (fun decl ->
       match decl with
-      | Sig.Sig_ast.DType d when d.type_name = name -> Some d.type_loc
+      | Sig.Sig_ast.DType d -> (
+          match
+            List.find_opt
+              (fun (b : Sig.Sig_ast.type_binding) -> b.tb_name = name)
+              d.type_bindings
+          with
+          | Some b -> Some b.tb_loc
+          | None -> None)
       | Sig.Sig_ast.DData d when d.data_name = name -> Some d.data_loc
       | Sig.Sig_ast.DImportStruct d when d.struct_name = name ->
           Some d.struct_loc

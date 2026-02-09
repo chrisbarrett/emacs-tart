@@ -293,20 +293,27 @@ let infer_defun_kinds (d : defun_decl) : infer_result =
     @return The inferred kind environment and any errors *)
 let infer_type_decl_kinds (d : type_decl) : infer_result =
   Kind.reset_kvar_counter ();
-  (* Create kind environment from binders, respecting explicit annotations *)
-  let env = env_from_binders d.type_params in
-
-  (* Infer kinds from body if present *)
-  let errors =
-    match d.type_body with
-    | None -> []
-    | Some body -> (
-        match infer_sig_type_kind env body with
-        | Ok kind_scheme -> (
-            match unify_scheme_with_kind kind_scheme Kind.KStar "type body" with
-            | Ok () -> []
-            | Error e -> [ e ])
-        | Error e -> [ e ])
+  (* Process each binding in the group *)
+  let env, errors =
+    List.fold_left
+      (fun (env, errs) (b : type_binding) ->
+        let binding_env = env_from_binders b.tb_params in
+        let merged_env = Kind.merge env binding_env in
+        let new_errs =
+          match b.tb_body with
+          | None -> []
+          | Some body -> (
+              match infer_sig_type_kind merged_env body with
+              | Ok kind_scheme -> (
+                  match
+                    unify_scheme_with_kind kind_scheme Kind.KStar "type body"
+                  with
+                  | Ok () -> []
+                  | Error e -> [ e ])
+              | Error e -> [ e ])
+        in
+        (merged_env, errs @ new_errs))
+      (Kind.empty_env, []) d.type_bindings
   in
 
   (* Default all unconstrained kind variables to * *)
@@ -409,28 +416,36 @@ let infer_defun_kinds_with_scope (scope_env : Kind.env) (d : defun_decl) :
 let infer_type_decl_kinds_with_scope (scope_env : Kind.env) (d : type_decl) :
     infer_result =
   Kind.reset_kvar_counter ();
-  (* Start with scope environment, then add type's own binders *)
-  let env =
+  (* Process each binding in the group, extending scope env *)
+  let env, errors =
     List.fold_left
-      (fun env (b : tvar_binder) ->
-        match b.kind with
-        | Some sk ->
-            Kind.extend_env b.name (Kind.KConcrete (Kind.of_sig_kind sk)) env
-        | None -> Kind.extend_env b.name (Kind.fresh_kvar ()) env)
-      scope_env d.type_params
-  in
-
-  (* Infer kinds from body if present *)
-  let errors =
-    match d.type_body with
-    | None -> []
-    | Some body -> (
-        match infer_sig_type_kind env body with
-        | Ok kind_scheme -> (
-            match unify_scheme_with_kind kind_scheme Kind.KStar "type body" with
-            | Ok () -> []
-            | Error e -> [ e ])
-        | Error e -> [ e ])
+      (fun (env, errs) (b : type_binding) ->
+        let binding_env =
+          List.fold_left
+            (fun env (p : tvar_binder) ->
+              match p.kind with
+              | Some sk ->
+                  Kind.extend_env p.name
+                    (Kind.KConcrete (Kind.of_sig_kind sk))
+                    env
+              | None -> Kind.extend_env p.name (Kind.fresh_kvar ()) env)
+            env b.tb_params
+        in
+        let new_errs =
+          match b.tb_body with
+          | None -> []
+          | Some body -> (
+              match infer_sig_type_kind binding_env body with
+              | Ok kind_scheme -> (
+                  match
+                    unify_scheme_with_kind kind_scheme Kind.KStar "type body"
+                  with
+                  | Ok () -> []
+                  | Error e -> [ e ])
+              | Error e -> [ e ])
+        in
+        (binding_env, errs @ new_errs))
+      (scope_env, []) d.type_bindings
   in
 
   Kind.default_all env;

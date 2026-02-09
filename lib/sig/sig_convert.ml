@@ -55,19 +55,20 @@ let build_alias_context (sig_file : signature) : alias_context =
   List.fold_left
     (fun ctx decl ->
       match decl with
-      | DType d -> (
-          match d.type_body with
-          | Some body ->
-              let alias =
-                {
-                  alias_params = List.map binder_to_alias_param d.type_params;
-                  alias_body = body;
-                }
-              in
-              add_alias d.type_name alias ctx
-          | None ->
-              (* Opaque type - not an alias *)
-              ctx)
+      | DType d ->
+          List.fold_left
+            (fun ctx (b : type_binding) ->
+              match b.tb_body with
+              | Some body ->
+                  let alias =
+                    {
+                      alias_params = List.map binder_to_alias_param b.tb_params;
+                      alias_body = body;
+                    }
+                  in
+                  add_alias b.tb_name alias ctx
+              | None -> ctx)
+            ctx d.type_bindings
       | _ -> ctx)
     empty_aliases sig_file.sig_decls
 
@@ -118,20 +119,20 @@ let build_opaque_context (module_name : string) (sig_file : signature) :
   List.fold_left
     (fun ctx decl ->
       match decl with
-      | DType d -> (
-          match d.type_body with
-          | None ->
-              (* Opaque type - generate unique constructor *)
-              let opaque =
-                {
-                  opaque_params = List.map (fun b -> b.name) d.type_params;
-                  opaque_con = opaque_con_name module_name d.type_name;
-                }
-              in
-              add_opaque d.type_name opaque ctx
-          | Some _ ->
-              (* Type alias - not opaque *)
-              ctx)
+      | DType d ->
+          List.fold_left
+            (fun ctx (b : type_binding) ->
+              match b.tb_body with
+              | None ->
+                  let opaque =
+                    {
+                      opaque_params = List.map (fun p -> p.name) b.tb_params;
+                      opaque_con = opaque_con_name module_name b.tb_name;
+                    }
+                  in
+                  add_opaque b.tb_name opaque ctx
+              | Some _ -> ctx)
+            ctx d.type_bindings
       | _ -> ctx)
     empty_opaques sig_file.sig_decls
 

@@ -164,19 +164,27 @@ and defvar_decl = {
     - [(defvar my-default string)] - simple type
     - [(defvar my-handler ((string) -> nil))] - function value type *)
 
+and type_binding = {
+  tb_name : string;
+  tb_params : tvar_binder list;
+  tb_body : sig_type option;  (** None only for opaque, single-binding *)
+  tb_loc : span;
+}
+(** A single type binding within a type/let-type group. *)
+
 and type_decl = {
-  type_name : string;
-  type_params : tvar_binder list;  (** Type parameters with optional bounds *)
-  type_body : sig_type option;  (** None for opaque types *)
+  type_bindings : type_binding list;  (** Non-empty list of bindings *)
   type_loc : span;
 }
-(** Type declaration (alias or opaque).
+(** A group of one or more type bindings.
+
+    Multi-binding groups enable mutual recursion.
 
     Examples:
-    - [(type int-list (list int))] - alias
-    - [(type result [a e] ((ok a) | (err e)))] - parameterized alias
-    - [(type buffer)] - opaque (no definition)
-    - [(type tagged [a])] - opaque with phantom parameter *)
+    - [(type int-list (list int))] - single alias binding
+    - [(type buffer)] - single opaque binding
+    - [(type tree (leaf int | node forest) forest (list tree))] - mutual
+      recursion *)
 
 and import_struct_decl = {
   struct_name : string;

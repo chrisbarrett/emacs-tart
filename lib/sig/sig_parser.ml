@@ -678,9 +678,15 @@ let parse_type_decl (contents : Sexp.t list) (span : Loc.span) : decl result =
       Ok
         (DType
            {
-             type_name = name;
-             type_params = [];
-             type_body = None;
+             type_bindings =
+               [
+                 {
+                   tb_name = name;
+                   tb_params = [];
+                   tb_body = None;
+                   tb_loc = span;
+                 };
+               ];
              type_loc = span;
            })
   | [ Sexp.Symbol ("type", _); Sexp.Symbol (name, _); body_sexp ] -> (
@@ -693,9 +699,15 @@ let parse_type_decl (contents : Sexp.t list) (span : Loc.span) : decl result =
               Ok
                 (DType
                    {
-                     type_name = name;
-                     type_params = params;
-                     type_body = None;
+                     type_bindings =
+                       [
+                         {
+                           tb_name = name;
+                           tb_params = params;
+                           tb_body = None;
+                           tb_loc = span;
+                         };
+                       ];
                      type_loc = span;
                    })
           | Error e -> Error e)
@@ -706,9 +718,15 @@ let parse_type_decl (contents : Sexp.t list) (span : Loc.span) : decl result =
               Ok
                 (DType
                    {
-                     type_name = name;
-                     type_params = [];
-                     type_body = Some body;
+                     type_bindings =
+                       [
+                         {
+                           tb_name = name;
+                           tb_params = [];
+                           tb_body = Some body;
+                           tb_loc = span;
+                         };
+                       ];
                      type_loc = span;
                    })
           | Error e -> Error e))
@@ -723,9 +741,15 @@ let parse_type_decl (contents : Sexp.t list) (span : Loc.span) : decl result =
               Ok
                 (DType
                    {
-                     type_name = name;
-                     type_params = params;
-                     type_body = Some body;
+                     type_bindings =
+                       [
+                         {
+                           tb_name = name;
+                           tb_params = params;
+                           tb_body = Some body;
+                           tb_loc = span;
+                         };
+                       ];
                      type_loc = span;
                    })
           | Error e -> Error e))
@@ -938,9 +962,15 @@ and parse_let_type (contents : Sexp.t list) (span : Loc.span) : decl result =
       Ok
         (DLetType
            {
-             type_name = name;
-             type_params = [];
-             type_body = None;
+             type_bindings =
+               [
+                 {
+                   tb_name = name;
+                   tb_params = [];
+                   tb_body = None;
+                   tb_loc = span;
+                 };
+               ];
              type_loc = span;
            })
   | [ Sexp.Symbol ("let-type", _); Sexp.Symbol (name, _); body_sexp ] -> (
@@ -953,9 +983,15 @@ and parse_let_type (contents : Sexp.t list) (span : Loc.span) : decl result =
               Ok
                 (DLetType
                    {
-                     type_name = name;
-                     type_params = params;
-                     type_body = None;
+                     type_bindings =
+                       [
+                         {
+                           tb_name = name;
+                           tb_params = params;
+                           tb_body = None;
+                           tb_loc = span;
+                         };
+                       ];
                      type_loc = span;
                    })
           | Error e -> Error e)
@@ -966,9 +1002,15 @@ and parse_let_type (contents : Sexp.t list) (span : Loc.span) : decl result =
               Ok
                 (DLetType
                    {
-                     type_name = name;
-                     type_params = [];
-                     type_body = Some body;
+                     type_bindings =
+                       [
+                         {
+                           tb_name = name;
+                           tb_params = [];
+                           tb_body = Some body;
+                           tb_loc = span;
+                         };
+                       ];
                      type_loc = span;
                    })
           | Error e -> Error e))
@@ -984,9 +1026,15 @@ and parse_let_type (contents : Sexp.t list) (span : Loc.span) : decl result =
               Ok
                 (DLetType
                    {
-                     type_name = name;
-                     type_params = params;
-                     type_body = Some body;
+                     type_bindings =
+                       [
+                         {
+                           tb_name = name;
+                           tb_params = params;
+                           tb_body = Some body;
+                           tb_loc = span;
+                         };
+                       ];
                      type_loc = span;
                    })
           | Error e -> Error e))

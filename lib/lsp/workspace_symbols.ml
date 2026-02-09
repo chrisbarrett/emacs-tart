@@ -86,8 +86,11 @@ let kind_of_decl (decl : Sig.Sig_ast.decl) : Protocol.symbol_kind option =
   match decl with
   | Sig.Sig_ast.DDefun _ -> Some Protocol.SKFunction
   | Sig.Sig_ast.DDefvar _ -> Some Protocol.SKVariable
-  | Sig.Sig_ast.DType { type_body = None; _ } -> Some Protocol.SKInterface
-  | Sig.Sig_ast.DType { type_body = Some _; _ } -> Some Protocol.SKTypeParameter
+  | Sig.Sig_ast.DType { type_bindings = { tb_body = None; _ } :: _; _ } ->
+      Some Protocol.SKInterface
+  | Sig.Sig_ast.DType { type_bindings = { tb_body = Some _; _ } :: _; _ } ->
+      Some Protocol.SKTypeParameter
+  | Sig.Sig_ast.DType { type_bindings = []; _ } -> None
   | Sig.Sig_ast.DData _ -> Some Protocol.SKEnum
   | Sig.Sig_ast.DImportStruct _ -> Some Protocol.SKStruct
   | Sig.Sig_ast.DLetType _ -> Some Protocol.SKTypeParameter
@@ -98,10 +101,12 @@ let name_of_decl (decl : Sig.Sig_ast.decl) : string option =
   match decl with
   | Sig.Sig_ast.DDefun d -> Some d.defun_name
   | Sig.Sig_ast.DDefvar d -> Some d.defvar_name
-  | Sig.Sig_ast.DType d -> Some d.type_name
+  | Sig.Sig_ast.DType d -> (
+      match d.type_bindings with b :: _ -> Some b.tb_name | [] -> None)
   | Sig.Sig_ast.DData d -> Some d.data_name
   | Sig.Sig_ast.DImportStruct d -> Some d.struct_name
-  | Sig.Sig_ast.DLetType d -> Some d.type_name
+  | Sig.Sig_ast.DLetType d -> (
+      match d.type_bindings with b :: _ -> Some b.tb_name | [] -> None)
   | Sig.Sig_ast.DOpen _ | Sig.Sig_ast.DInclude _ | Sig.Sig_ast.DForall _ -> None
 
 (** Extract symbols from a list of signature declarations, recursing into
