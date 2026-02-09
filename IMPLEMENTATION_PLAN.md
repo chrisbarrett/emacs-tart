@@ -25,7 +25,7 @@ specs 81–89 are not started.
 | [81](./specs/81-nil-list-subtyping.md) | Nil-List Subtyping | Done |
 | [82](./specs/82-special-form-parser-extensions.md) | Special Form Parser Extensions | Done |
 | [83](./specs/83-function-subtype-widening.md) | Function Subtype Widening | Done |
-| [84](./specs/84-heterogeneous-list-inference.md) | Heterogeneous List Inference | Not started |
+| [84](./specs/84-heterogeneous-list-inference.md) | Heterogeneous List Inference | Done |
 | [85](./specs/85-condition-case-return-typing.md) | Condition-Case Return Typing | Done |
 | [86](./specs/86-record-type-constructor.md) | Record Type Constructor | Not started |
 | [87](./specs/87-bounded-quantification.md) | Bounded Quantification | Not started |

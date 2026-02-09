@@ -871,6 +871,29 @@ let try_unify_params ?(context = Constraint_solving) ps1 ps2 loc : unit result =
       restore_tvars snapshot;
       Error (to_external_error C.NoContext e)
 
+(** Attempt to unify all types in a list with a single element variable
+    speculatively. Takes a snapshot of all tvars across all types plus the
+    element variable, attempts to unify each type with the element variable, and
+    either commits all mutations (returns [true]) or rolls back everything
+    (returns [false]).
+
+    Used by the [list] intrinsic (Spec 84) to check whether argument types are
+    homogeneous. *)
+let try_unify_all_to_element types elem_var loc : bool =
+  let snapshot =
+    List.fold_left collect_tvar_refs (collect_tvar_refs [] elem_var) types
+  in
+  let ok =
+    List.for_all
+      (fun t ->
+        match unify elem_var t loc with Ok () -> true | Error _ -> false)
+      types
+  in
+  if ok then true
+  else (
+    restore_tvars snapshot;
+    false)
+
 (** Check if two types are provably disjoint (empty intersection).
 
     Returns [true] when the types cannot share any value at runtime:

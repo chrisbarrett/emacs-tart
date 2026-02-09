@@ -94,6 +94,16 @@ val try_unify_params :
     structurally distinct types as non-matching. Defaults to
     [Constraint_solving]. *)
 
+val try_unify_all_to_element :
+  Core.Types.typ list -> Core.Types.typ -> Syntax.Location.span -> bool
+(** [try_unify_all_to_element types elem_var loc] attempts to unify all [types]
+    with [elem_var] speculatively. Snapshots all tvars before starting, then
+    tries each unification sequentially. Returns [true] if all succeed
+    (mutations committed) or [false] if any fails (all mutations rolled back).
+
+    Used by the [list] intrinsic (Spec 84) to test whether argument types are
+    homogeneous without leaking partial unification on failure. *)
+
 (** {1 Disjointness} *)
 
 val types_disjoint : Core.Types.typ -> Core.Types.typ -> bool

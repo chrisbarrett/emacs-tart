@@ -632,6 +632,9 @@ let rec infer (env : Env.t) (sexp : Syntax.Sexp.t) : result =
       infer_when env cond body span
   | List (Symbol ("unless", _) :: cond :: body, span) ->
       infer_unless env cond body span
+  (* === List intrinsic: heterogeneous list inference (Spec 84) === *)
+  | List (Symbol ("list", _) :: args, span) ->
+      infer_list_intrinsic env args span
   (* === Function application (catch-all for lists) === *)
   | List (fn :: args, span) -> infer_application env fn args span
   | List ([], _span) ->
@@ -1109,6 +1112,50 @@ and infer_setq env pairs span =
         process_pairs rest constraints undefineds last_ty
   in
   process_pairs pairs C.empty [] Prim.nil
+
+(** Infer the type of a [(list ...)] call (Spec 84).
+
+    The [list] function is a type-checker intrinsic that infers heterogeneous
+    tuples when arguments have different types:
+
+    - [(list)] returns [nil]
+    - [(list x)] returns [(list t)] where [t] is the type of [x]
+    - [(list a b ...)] with homogeneous types returns [(list a)]
+    - [(list a b ...)] with heterogeneous types returns [TTuple [t₁; t₂; ...]]
+
+    Homogeneity is checked via trial unification (snapshot/rollback) so that
+    types that unify (e.g. [int] and [int]) produce a list, while types that
+    don't (e.g. [symbol] and [int]) produce a tuple. The existing
+    [TTuple <: TList] subtyping rule ensures tuples can be passed where lists
+    are expected. *)
+and infer_list_intrinsic env args span =
+  let arg_results = List.map (infer env) args in
+  let arg_types = List.map (fun r -> r.ty) arg_results in
+  let arg_constraints = combine_results arg_results in
+  let all_undefineds = combine_undefineds arg_results in
+  let all_clause_diags = combine_clause_diagnostics arg_results in
+  let result_ty =
+    match arg_types with
+    | [] -> Prim.nil
+    | [ t ] -> list_of t
+    | _ :: _ ->
+        (* Try to unify all argument types with a fresh type variable. Use a
+           single trial unification attempt: snapshot all tvars in the argument
+           types plus the element variable, attempt all unifications, and either
+           commit everything (homogeneous → list) or roll back everything
+           (heterogeneous → tuple). *)
+        let elem_var = fresh_tvar (Env.current_level env) in
+        let homogeneous =
+          Unify.try_unify_all_to_element arg_types elem_var span
+        in
+        if homogeneous then list_of elem_var else TTuple arg_types
+  in
+  {
+    ty = result_ty;
+    constraints = arg_constraints;
+    undefineds = all_undefineds;
+    clause_diagnostics = all_clause_diags;
+  }
 
 (** Infer the type of a condition-case expression (Spec 85).
 
