@@ -224,6 +224,9 @@ let prelude_opaque_defs : (string * string list) list =
     (* Terminal device (display or tty) *)
     ("finalizer", []);
     (* GC weak reference with cleanup function *)
+    (* Records *)
+    ("record", [ "tag" ]);
+    (* Typed vector with type tag in slot 0 *)
     (* Special sequences *)
     ("bool-vector", []);
     (* Bit vector *)

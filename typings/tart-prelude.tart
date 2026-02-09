@@ -125,6 +125,9 @@
 (type terminal)    ; Terminal device (display or tty)
 (type finalizer)   ; GC weak reference with cleanup function
 
+;; Records
+(type record [tag]) ; Typed vector with type tag in slot 0
+
 ;; Special sequences
 (type bool-vector) ; Bit vector
 (type char-table)  ; Character property table

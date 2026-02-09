@@ -90,7 +90,9 @@
   (((vector any)) -> t)
   ((string) -> t)
   ((_) -> nil))
-(defun recordp (any) -> bool)
+(defun recordp
+  (((record _)) -> t)
+  ((_) -> nil))
 
 ;; Other type predicates
 (defun bufferp

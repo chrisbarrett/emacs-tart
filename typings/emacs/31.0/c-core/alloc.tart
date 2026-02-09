@@ -32,13 +32,11 @@
 ;; Records
 ;; ===========================================================================
 
-;; (record TYPE &rest SLOTS) - create record with type and initial slots
-;; Returns a record (typed vector with a type tag); no record type exists (see BUGS.md)
-(defun record (symbol &rest any) -> truthy)
+;; (record TYPE &rest SLOTS) - create record with type tag and initial slots
+(defun record [tag] (tag &rest any) -> (record tag))
 
 ;; (make-record TYPE LENGTH INIT) - create record with length, all slots set to INIT
-;; Returns a record object; no record type exists (see BUGS.md)
-(defun make-record (symbol int any) -> truthy)
+(defun make-record [tag] (tag int any) -> (record tag))
 
 ;; ===========================================================================
 ;; Strings
