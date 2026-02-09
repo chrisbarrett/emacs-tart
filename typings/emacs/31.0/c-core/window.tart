@@ -63,7 +63,8 @@
 (defun get-buffer-window (&optional (buffer | string) any) -> (window | nil))
 
 ;; (set-window-buffer WINDOW BUFFER-OR-NAME &optional KEEP-MARGINS) - set buffer for window
-(defun set-window-buffer (window (buffer | string) &optional any) -> nil)
+;; WINDOW nil means selected window
+(defun set-window-buffer ((window | nil) (buffer | string) &optional any) -> nil)
 
 ;; ===========================================================================
 ;; Window frame relationship
@@ -199,10 +200,12 @@
 (defun window-end (&optional window any) -> (int | nil))
 
 ;; (set-window-point WINDOW POS) - set point in window
-(defun set-window-point (window int) -> int)
+;; WINDOW nil means selected window
+(defun set-window-point ((window | nil) int) -> int)
 
 ;; (set-window-start WINDOW POS &optional NOFORCE) - set display start
-(defun set-window-start (window int &optional any) -> int)
+;; WINDOW nil means selected window
+(defun set-window-start ((window | nil) int &optional any) -> int)
 
 ;; ===========================================================================
 ;; Horizontal scrolling
@@ -212,13 +215,15 @@
 (defun window-hscroll (&optional window) -> int)
 
 ;; (set-window-hscroll WINDOW NCOL) - set horizontal scroll
-(defun set-window-hscroll (window int) -> int)
+;; WINDOW nil means selected window
+(defun set-window-hscroll ((window | nil) int) -> int)
 
 ;; (window-vscroll &optional WINDOW PIXELS-P) - vertical scroll amount
 (defun window-vscroll (&optional window any) -> (int | float))
 
 ;; (set-window-vscroll WINDOW VSCROLL &optional PIXELS-P PRESERVE-VSCROLL-P) - set vertical scroll
-(defun set-window-vscroll (window num &optional bool bool) -> num)
+;; WINDOW nil means selected window
+(defun set-window-vscroll ((window | nil) num &optional bool bool) -> num)
 
 ;; (scroll-left &optional ARG SET-MINIMUM) - scroll left
 (defun scroll-left (&optional any any) -> int)
@@ -292,7 +297,8 @@
 ;; ===========================================================================
 
 ;; (window-parameter WINDOW PARAMETER) - get window parameter
-(defun window-parameter (window symbol) -> any)
+;; WINDOW nil means selected window
+(defun window-parameter ((window | nil) symbol) -> any)
 
 ;; (window-parameters &optional WINDOW) - get all window parameters
 (defun window-parameters (&optional window) -> (list any))

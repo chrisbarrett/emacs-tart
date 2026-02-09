@@ -238,7 +238,7 @@
 ;; ===========================================================================
 
 ;; (add-hook HOOK FN &optional DEPTH LOCAL) - add function to hook
-(defun add-hook (symbol (symbol | (any -> any)) &optional int bool) -> nil)
+(defun add-hook (symbol (symbol | (any -> any)) &optional (int | nil) bool) -> nil)
 
 ;; (remove-hook HOOK FN &optional LOCAL) - remove function from hook
 (defun remove-hook (symbol (symbol | (any -> any)) &optional bool) -> nil)

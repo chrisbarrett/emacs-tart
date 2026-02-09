@@ -139,10 +139,24 @@ _Symbols whose behavior can't be captured soundly (dynamic dispatch, eval-based)
   causing all bindings inside their bodies to appear as undefined
   variables: `cl-defgeneric`, `cl-defmethod`, `gv-define-setter`,
   `gv-define-expander`, `pcase-defmacro`, `declare-function`,
-  `define-minor-mode`, `cl--defalias`. These account for the majority
-  of errors when validating `seq.el` (422/482) and `cl-lib.el`
-  (155/235)
+  `define-minor-mode`, `cl--defalias`, `gv-letplace`,
+  `macroexp-let2`, `set-advertised-calling-convention`. Additionally,
+  `defmacro` body bindings and `defsubst` body bindings are not fully
+  scoped. These account for the majority of errors when validating
+  `seq.el` (422/482), `cl-lib.el` (155/235), `subr.el` (1466/2562),
+  and `simple.el` (1217/2675)
 - **Suggested feature:** Parser support for these forms
+
+### `defcustom` parser interpretation
+- **Location:** parser
+- **Issue:** `defcustom` is typed as
+  `(symbol any string &rest any) -> symbol`, but the parser interprets
+  `(defcustom foo 42 "doc" ...)` with `foo` as a variable reference
+  (yielding the integer 42 as argument 1) rather than the symbol being
+  defined. This causes spurious "expects argument 1 to be symbol"
+  errors in `simple.el` (12 instances)
+- **Suggested feature:** Special-case `defcustom` in the parser to
+  treat the first argument as a symbol literal
 
 ## ergonomic
 

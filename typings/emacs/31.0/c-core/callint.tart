@@ -15,7 +15,7 @@
 ;; Its numeric meaning is what you get from (interactive "p").
 ;; Returns 1 for nil, the numeric value for integers,
 ;; the car for a cons (list), etc.
-(defun prefix-numeric-value ((int | (cons int any) | nil)) -> int)
+(defun prefix-numeric-value ((int | (cons any any) | nil)) -> int)
 
 ;; ===========================================================================
 ;; Interactive command calling

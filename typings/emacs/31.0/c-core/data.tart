@@ -172,10 +172,14 @@
 
 ;; (aref ARRAY INDEX) - element access
 ;; Works on vectors, strings, char-tables, bool-vectors
-(defun aref [a] ((vector a) int) -> a)
+(defun aref [a]
+  (((vector a) int) -> a)
+  ((string int) -> int))
 
 ;; (aset ARRAY INDEX VALUE) - element mutation
-(defun aset [a] ((vector a) int a) -> a)
+(defun aset [a]
+  (((vector a) int a) -> a)
+  ((string int int) -> int))
 
 ;; ===========================================================================
 ;; Symbol operations
