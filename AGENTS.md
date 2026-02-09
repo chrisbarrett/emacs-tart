@@ -28,6 +28,8 @@ References to other files or specs are always hyperlinked.
 
 Tests under `test/fixtures/typing/` are pairs of `$name.{el,expected}` files.
 
+Pre-commit hooks can be run manually using `prek` (not `pre-commit`).
+
 ## Type Definitions
 
 OCaml layer defines minimal intrinsics; everything else bootstraps in user-land.
