@@ -452,7 +452,7 @@ symbol constituents for `|' (union operator), `&' (`&optional',
 `&rest', `&key'), and `:' (type bounds).")
 
 (defvar tart-signature-mode-font-lock-keywords
-  (let ((declaration-keywords '("defun" "defvar" "type" "open" "include")))
+  (let ((declaration-keywords '("defun" "defvar" "type" "let-type" "open" "include")))
     `(;; R1: Declaration keywords
       (,(concat "(" (regexp-opt declaration-keywords t) "\\_>")
        (1 font-lock-keyword-face))
@@ -465,8 +465,8 @@ symbol constituents for `|' (union operator), `&' (`&optional',
       ("(defvar\\_>[ \t]+\\(\\(?:\\sw\\|\\s_\\)+\\)"
        (1 font-lock-variable-name-face))
 
-      ;; R2: Type name after type
-      ("(type\\_>[ \t]+\\(\\(?:\\sw\\|\\s_\\)+\\)"
+      ;; R2: Type name after type or let-type
+      ("(\\(?:let-\\)?type\\_>[ \t]+\\(\\(?:\\sw\\|\\s_\\)+\\)"
        (1 font-lock-type-face))
 
       ;; R5: Module name after open/include

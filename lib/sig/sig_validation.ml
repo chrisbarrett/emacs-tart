@@ -213,29 +213,7 @@ let rec validate_decl ctx (decl : decl) : unit result =
           let* () = acc in
           validate_decl scope_ctx inner_decl)
         (Ok ()) d.forall_decls
-  | DLet d ->
-      (* Validate let bindings *)
-      let* () =
-        List.fold_left
-          (fun acc (b : let_type_binding) ->
-            let* () = acc in
-            let var_names = List.map (fun bv -> bv.name) b.ltb_params in
-            let bind_ctx = with_tvars ctx var_names in
-            let* () = validate_binder_bounds ctx b.ltb_params in
-            validate_type bind_ctx b.ltb_body)
-          (Ok ()) d.let_bindings
-      in
-      (* Validate body with let-bound type names in context *)
-      let inner_ctx =
-        List.fold_left
-          (fun c (b : let_type_binding) -> with_type c b.ltb_name)
-          ctx d.let_bindings
-      in
-      List.fold_left
-        (fun acc inner_decl ->
-          let* () = acc in
-          validate_decl inner_ctx inner_decl)
-        (Ok ()) d.let_body
+  | DLetType d -> validate_type_decl ctx d
 
 (** {1 Signature Validation} *)
 
@@ -250,10 +228,7 @@ let build_context (sig_file : signature) : tvar_context =
     | DForall d ->
         (* Recursively collect types from scope declarations *)
         List.fold_left add_decl_types ctx d.forall_decls
-    | DLet d ->
-        (* Recursively collect types from body declarations;
-           let-bound names are NOT added (they're local) *)
-        List.fold_left add_decl_types ctx d.let_body
+    | DLetType d -> with_type ctx d.type_name
     | _ -> ctx
   in
   List.fold_left add_decl_types empty_context sig_file.sig_decls

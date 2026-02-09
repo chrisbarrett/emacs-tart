@@ -2043,12 +2043,12 @@ let test_shadow_error_has_span () =
     block of declarations. *)
 
 (** Test simple let alias is usable in body *)
-let test_let_simple_alias () =
+let test_let_type_simple_alias () =
   let sig_src =
     {|
-    (let ((type int-list (list int)))
-      (defun sum (int-list) -> int)
-      (defun make-list (int) -> int-list))
+    (let-type int-list (list int))
+    (defun sum (int-list) -> int)
+    (defun make-list (int) -> int-list)
   |}
   in
   let env = load_sig_str sig_src in
@@ -2069,13 +2069,13 @@ let test_let_simple_alias () =
   | None -> Alcotest.fail "make-list not found"
   | Some _ -> ()
 
-(** Test let alias with parameterized type *)
-let test_let_parameterized_alias () =
+(** Test let-type alias with parameterized type *)
+let test_let_type_parameterized_alias () =
   let sig_src =
     {|
-    (let ((type wrapper [a] (list a)))
-      (defun wrap [a] (a) -> (wrapper a))
-      (defun unwrap [a] ((wrapper a)) -> a))
+    (let-type wrapper [a] (list a))
+    (defun wrap [a] (a) -> (wrapper a))
+    (defun unwrap [a] ((wrapper a)) -> a)
   |}
   in
   let env = load_sig_str sig_src in
@@ -2092,12 +2092,12 @@ let test_let_parameterized_alias () =
            true
          with Not_found -> false)
 
-(** Test that let-bound types are not exported *)
-let test_let_not_exported () =
+(** Test that let-type-bound types are not exported *)
+let test_let_type_not_exported () =
   let sig_src =
     {|
-    (let ((type int-list (list int)))
-      (defun make-list (int) -> int-list))
+    (let-type int-list (list int))
+    (defun make-list (int) -> int-list)
     (defun use-list ((list int)) -> nil)
   |}
   in
@@ -2111,14 +2111,14 @@ let test_let_not_exported () =
   | None -> Alcotest.fail "use-list not found"
   | Some _ -> ()
 
-(** Test let with multiple bindings *)
-let test_let_multiple_bindings () =
+(** Test let-type with multiple declarations *)
+let test_let_type_multiple () =
   let sig_src =
     {|
-    (let ((type int-list (list int))
-          (type str-list (list string)))
-      (defun first-of-ints (int-list) -> int)
-      (defun first-of-strs (str-list) -> string))
+    (let-type int-list (list int))
+    (let-type str-list (list string))
+    (defun first-of-ints (int-list) -> int)
+    (defun first-of-strs (str-list) -> string)
   |}
   in
   let env = load_sig_str sig_src in
@@ -2129,12 +2129,12 @@ let test_let_multiple_bindings () =
   | None -> Alcotest.fail "first-of-strs not found"
   | Some _ -> ()
 
-(** Test that let-bound alias works end-to-end with type checker *)
-let test_let_end_to_end () =
+(** Test that let-type alias works end-to-end with type checker *)
+let test_let_type_end_to_end () =
   let sig_src =
     {|
-    (let ((type int-list (list int)))
-      (defun make-ints () -> int-list))
+    (let-type int-list (list int))
+    (defun make-ints () -> int-list)
   |}
   in
   let env = load_sig_str sig_src in
@@ -2143,14 +2143,12 @@ let test_let_end_to_end () =
   (* Result should be (list int) since int-list expands *)
   Alcotest.(check string) "result is list int" "(list int)" (Types.to_string ty)
 
-(** Test validation catches unbound var in let binding body *)
-let test_let_validation_unbound () =
-  let src =
-    {|
-    (let ((type bad (list b)))
-      (defun foo () -> bad))
-  |}
-  in
+(** Test validation catches unbound var in let-type body *)
+let test_let_type_validation_unbound () =
+  let src = {|
+    (let-type bad (list b))
+    (defun foo () -> bad)
+  |} in
   expect_error_containing "Unbound type variable" src
 
 (** {1 Auxiliary File Tests (R19)}
@@ -2566,17 +2564,16 @@ let () =
             test_shadow_new_type_allowed;
           Alcotest.test_case "error has span" `Quick test_shadow_error_has_span;
         ] );
-      ( "let-local-aliases",
+      ( "let-type-aliases",
         [
-          Alcotest.test_case "simple alias" `Quick test_let_simple_alias;
+          Alcotest.test_case "simple alias" `Quick test_let_type_simple_alias;
           Alcotest.test_case "parameterized alias" `Quick
-            test_let_parameterized_alias;
-          Alcotest.test_case "not exported" `Quick test_let_not_exported;
-          Alcotest.test_case "multiple bindings" `Quick
-            test_let_multiple_bindings;
-          Alcotest.test_case "end-to-end" `Quick test_let_end_to_end;
+            test_let_type_parameterized_alias;
+          Alcotest.test_case "not exported" `Quick test_let_type_not_exported;
+          Alcotest.test_case "multiple" `Quick test_let_type_multiple;
+          Alcotest.test_case "end-to-end" `Quick test_let_type_end_to_end;
           Alcotest.test_case "validation unbound" `Quick
-            test_let_validation_unbound;
+            test_let_type_validation_unbound;
         ] );
       ( "auxiliary-files",
         [

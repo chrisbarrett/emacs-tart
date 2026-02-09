@@ -90,9 +90,8 @@ let kind_of_decl (decl : Sig.Sig_ast.decl) : Protocol.symbol_kind option =
   | Sig.Sig_ast.DType { type_body = Some _; _ } -> Some Protocol.SKTypeParameter
   | Sig.Sig_ast.DData _ -> Some Protocol.SKEnum
   | Sig.Sig_ast.DImportStruct _ -> Some Protocol.SKStruct
-  | Sig.Sig_ast.DOpen _ | Sig.Sig_ast.DInclude _ | Sig.Sig_ast.DForall _
-  | Sig.Sig_ast.DLet _ ->
-      None
+  | Sig.Sig_ast.DLetType _ -> Some Protocol.SKTypeParameter
+  | Sig.Sig_ast.DOpen _ | Sig.Sig_ast.DInclude _ | Sig.Sig_ast.DForall _ -> None
 
 (** Get the name of a declaration, if it has one. *)
 let name_of_decl (decl : Sig.Sig_ast.decl) : string option =
@@ -102,12 +101,11 @@ let name_of_decl (decl : Sig.Sig_ast.decl) : string option =
   | Sig.Sig_ast.DType d -> Some d.type_name
   | Sig.Sig_ast.DData d -> Some d.data_name
   | Sig.Sig_ast.DImportStruct d -> Some d.struct_name
-  | Sig.Sig_ast.DOpen _ | Sig.Sig_ast.DInclude _ | Sig.Sig_ast.DForall _
-  | Sig.Sig_ast.DLet _ ->
-      None
+  | Sig.Sig_ast.DLetType d -> Some d.type_name
+  | Sig.Sig_ast.DOpen _ | Sig.Sig_ast.DInclude _ | Sig.Sig_ast.DForall _ -> None
 
 (** Extract symbols from a list of signature declarations, recursing into
-    [DForall] and [DLet] scopes. *)
+    [DForall] scopes. *)
 let rec extract_tart_decl_symbols ~(uri : string) ~(text : string)
     ~(container : string) (decls : Sig.Sig_ast.decl list) :
     Protocol.symbol_information list =
@@ -126,12 +124,9 @@ let rec extract_tart_decl_symbols ~(uri : string) ~(text : string)
             };
           ]
       | _ ->
-          (* Recurse into DForall and DLet bodies *)
+          (* Recurse into DForall bodies *)
           let nested_decls =
-            match decl with
-            | Sig.Sig_ast.DForall d -> d.forall_decls
-            | Sig.Sig_ast.DLet d -> d.let_body
-            | _ -> []
+            match decl with Sig.Sig_ast.DForall d -> d.forall_decls | _ -> []
           in
           extract_tart_decl_symbols ~uri ~text ~container nested_decls)
     decls

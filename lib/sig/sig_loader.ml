@@ -1050,7 +1050,37 @@ and load_decls_into_state ?(from_include = false) (sig_file : signature)
                      state d.data_ctors
                  else state)
           | DForall d -> load_forall ~from_include sig_file d state
-          | DLet d -> load_let ~from_include sig_file d state))
+          | DLetType d ->
+              (* Shadowing check still runs *)
+              let* () =
+                if not from_include then
+                  check_type_not_shadowing d.type_name d.type_loc state
+                else Ok ()
+              in
+              (* Same loading as DType: add alias or opaque to type context *)
+              let state =
+                match d.type_body with
+                | Some body ->
+                    let alias =
+                      {
+                        alias_params =
+                          List.map binder_to_alias_param d.type_params;
+                        alias_body = body;
+                      }
+                    in
+                    add_alias_to_state d.type_name alias state
+                | None ->
+                    let opaque =
+                      {
+                        opaque_params = List.map (fun b -> b.name) d.type_params;
+                        opaque_con =
+                          opaque_con_name sig_file.sig_module d.type_name;
+                      }
+                    in
+                    add_opaque_to_state d.type_name opaque state
+              in
+              (* Not exported: no mark_type_imported, even from include *)
+              Ok state))
     (Ok state) sig_file.sig_decls
 
 (** Load a forall block. Creates fresh type variables for the scope's binders
@@ -1200,55 +1230,35 @@ and load_scoped_decl ?(from_include = false) (sig_file : signature)
   | DForall nested ->
       (* Handle nested scopes recursively *)
       load_forall ~from_include sig_file nested state
-  | DLet d -> load_let ~from_include sig_file d state
-
-(** Load a let block. Extends the type context with local aliases for the
-    duration of the body declarations. The aliases are not exported—only the
-    body's declarations are added to the load state. *)
-and load_let ?(from_include = false) (sig_file : signature) (d : let_decl)
-    (state : load_state) : load_state result =
-  (* Collect the names being bound *)
-  let let_bound_names =
-    List.map (fun (b : let_type_binding) -> b.ltb_name) d.let_bindings
-  in
-  (* Add each let binding as a type alias in the type context *)
-  let state_with_aliases =
-    List.fold_left
-      (fun s (b : let_type_binding) ->
-        let alias =
-          {
-            alias_params = List.map binder_to_alias_param b.ltb_params;
-            alias_body = b.ltb_body;
-          }
-        in
-        add_alias_to_state b.ltb_name alias s)
-      state d.let_bindings
-  in
-  (* Process body declarations with the extended alias context.
-     We use a virtual signature to reuse load_decls_into_state. *)
-  let virtual_sig =
-    {
-      sig_module = sig_file.sig_module;
-      sig_decls = d.let_body;
-      sig_loc = d.let_loc;
-    }
-  in
-  let* final_state =
-    load_decls_into_state ~from_include virtual_sig state_with_aliases
-  in
-  (* Remove only the let-bound aliases from the context, keeping any aliases
-     added by body declarations (e.g., type decls inside the let body). *)
-  let cleaned_aliases =
-    List.filter
-      (fun (name, _) -> not (List.mem name let_bound_names))
-      final_state.ls_type_ctx.tc_aliases
-  in
-  Ok
-    {
-      final_state with
-      ls_type_ctx =
-        { final_state.ls_type_ctx with tc_aliases = cleaned_aliases };
-    }
+  | DLetType d ->
+      (* Shadowing check still runs *)
+      let* () =
+        if not from_include then
+          check_type_not_shadowing d.type_name d.type_loc state
+        else Ok ()
+      in
+      (* Same loading as DType: add alias or opaque to type context *)
+      let state =
+        match d.type_body with
+        | Some body ->
+            let alias =
+              {
+                alias_params = List.map binder_to_alias_param d.type_params;
+                alias_body = body;
+              }
+            in
+            add_alias_to_state d.type_name alias state
+        | None ->
+            let opaque =
+              {
+                opaque_params = List.map (fun b -> b.name) d.type_params;
+                opaque_con = opaque_con_name sig_file.sig_module d.type_name;
+              }
+            in
+            add_opaque_to_state d.type_name opaque state
+      in
+      (* Not exported: no mark_type_imported, even from include *)
+      Ok state
 
 (** {1 Signature Loading}
 

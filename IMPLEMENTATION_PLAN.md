@@ -9,12 +9,12 @@ when other modules import the file.
 
 | Task | Status |
 |:-----|:-------|
-| 1. AST: replace `DLet` with `DLetType of type_decl` | Not started |
-| 2. Parser: replace `parse_let` with `parse_let_type` | Not started |
-| 3. Loader: add `DLetType` handling (same as `DType` but no export) | Not started |
-| 4. Validation, convert, graph, LSP: update all `DLet` match arms | Not started |
-| 5. Tests: replace let tests with let-type tests | Not started |
-| 6. Font-lock: add `let-type` keyword to `tart-mode.el` | Not started |
+| 1. AST: replace `DLet` with `DLetType of type_decl` | Done |
+| 2. Parser: replace `parse_let` with `parse_let_type` | Done |
+| 3. Loader: add `DLetType` handling (same as `DType` but no export) | Done |
+| 4. Validation, convert, graph, LSP: update all `DLet` match arms | Done |
+| 5. Tests: replace let tests with let-type tests | Done |
+| 6. Font-lock: add `let-type` keyword to `tart-mode.el` | Done |
 
 ## Design
 

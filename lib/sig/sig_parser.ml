@@ -876,12 +876,12 @@ let rec parse_decl (sexp : Sexp.t) : decl result =
       parse_data contents span
   | Sexp.List ((Sexp.Symbol ("forall", _) :: _ as contents), span) ->
       parse_forall contents span
-  | Sexp.List ((Sexp.Symbol ("let", _) :: _ as contents), span) ->
-      parse_let contents span
+  | Sexp.List ((Sexp.Symbol ("let-type", _) :: _ as contents), span) ->
+      parse_let_type contents span
   | _ ->
       error
-        "Expected declaration (defun, defvar, type, data, let, open, include, \
-         import-struct, or forall)"
+        "Expected declaration (defun, defvar, type, data, let-type, open, \
+         include, import-struct, or forall)"
         (Sexp.span_of sexp)
 
 (** Parse a forall declaration.
@@ -923,96 +923,76 @@ and parse_forall (contents : Sexp.t list) (span : Loc.span) : decl result =
       error "Expected type variables [a b ...] after forall" span
   | _ -> error "Invalid forall declaration syntax" span
 
-(** Parse a let declaration for local type aliases.
+(** Parse a let-type declaration for file-local type aliases.
 
-    Grammar: (let [(type name body) (type name [vars] body) ...] decl...)
+    Grammar: identical to (type ...) but produces [DLetType].
 
     Examples:
-    - (let [(type pair (cons int int))] (defun swap-pair (pair) -> pair) (defun
-      make-pair (int int) -> pair)) *)
-and parse_let (contents : Sexp.t list) (span : Loc.span) : decl result =
+    - (let-type pair (cons int int))
+    - (let-type wrapper [a] (list a))
+    - (let-type internal-handle) *)
+and parse_let_type (contents : Sexp.t list) (span : Loc.span) : decl result =
   match contents with
-  | [ Sexp.Symbol ("let", _) ] -> error "Expected bindings list after let" span
-  | [ Sexp.Symbol ("let", _); _ ] ->
-      error "Expected declarations after let bindings" span
-  | Sexp.Symbol ("let", _) :: Sexp.List (bindings_sexp, _) :: body_sexp -> (
-      (* Parse each binding: (type name body) or (type name [vars] body) *)
-      let rec parse_bindings acc = function
-        | [] -> Ok (List.rev acc)
-        | sexp :: rest -> (
-            match parse_let_binding sexp with
-            | Ok binding -> parse_bindings (binding :: acc) rest
-            | Error e -> Error e)
-      in
-      match parse_bindings [] bindings_sexp with
-      | Error e -> Error e
-      | Ok bindings -> (
-          (* Parse body declarations *)
-          let rec parse_body acc = function
-            | [] -> Ok (List.rev acc)
-            | sexp :: rest -> (
-                match parse_decl sexp with
-                | Ok d -> parse_body (d :: acc) rest
-                | Error e -> Error e)
-          in
-          match parse_body [] body_sexp with
-          | Error e -> Error e
+  | [ Sexp.Symbol ("let-type", _); Sexp.Symbol (name, _) ] ->
+      (* Opaque type with no params *)
+      Ok
+        (DLetType
+           {
+             type_name = name;
+             type_params = [];
+             type_body = None;
+             type_loc = span;
+           })
+  | [ Sexp.Symbol ("let-type", _); Sexp.Symbol (name, _); body_sexp ] -> (
+      (* Could be params or body *)
+      match body_sexp with
+      | Sexp.Vector (_, _) -> (
+          (* Opaque type with phantom params *)
+          match parse_tvar_binders body_sexp with
+          | Ok params ->
+              Ok
+                (DLetType
+                   {
+                     type_name = name;
+                     type_params = params;
+                     type_body = None;
+                     type_loc = span;
+                   })
+          | Error e -> Error e)
+      | _ -> (
+          (* Alias with no params *)
+          match parse_sig_type body_sexp with
           | Ok body ->
               Ok
-                (DLet
-                   { let_bindings = bindings; let_body = body; let_loc = span })
-          ))
-  | Sexp.Symbol ("let", _) :: _ ->
-      error "Expected bindings list [(type name def)...] after let" span
-  | _ -> error "Invalid let syntax" span
-
-(** Parse a single let type binding.
-
-    Grammar:
-    - (type name body) - simple alias
-    - (type name [vars] body) - parameterized alias *)
-and parse_let_binding (sexp : Sexp.t) : let_type_binding result =
-  match sexp with
-  | Sexp.List (contents, span) -> (
-      match contents with
-      | [ Sexp.Symbol ("type", _); Sexp.Symbol (name, _); body_sexp ] -> (
-          (* Simple alias: (type name body) *)
-          match body_sexp with
-          | Sexp.Vector (_, _) ->
-              error "Expected type body, not parameter list"
-                (Sexp.span_of body_sexp)
-          | _ -> (
-              match parse_sig_type body_sexp with
-              | Ok body ->
-                  Ok
-                    {
-                      ltb_name = name;
-                      ltb_params = [];
-                      ltb_body = body;
-                      ltb_loc = span;
-                    }
-              | Error e -> Error e))
-      | [
-       Sexp.Symbol ("type", _); Sexp.Symbol (name, _); params_sexp; body_sexp;
-      ] -> (
-          (* Parameterized alias: (type name [vars] body) *)
-          match parse_tvar_binders params_sexp with
-          | Error e -> Error e
-          | Ok params -> (
-              match parse_sig_type body_sexp with
-              | Ok body ->
-                  Ok
-                    {
-                      ltb_name = name;
-                      ltb_params = params;
-                      ltb_body = body;
-                      ltb_loc = span;
-                    }
-              | Error e -> Error e))
-      | Sexp.Symbol ("type", _) :: _ ->
-          error "Expected (type name [vars] body)" span
-      | _ -> error "Let binding must be a (type name body) form" span)
-  | _ -> error "Expected (type name body) in let bindings" (Sexp.span_of sexp)
+                (DLetType
+                   {
+                     type_name = name;
+                     type_params = [];
+                     type_body = Some body;
+                     type_loc = span;
+                   })
+          | Error e -> Error e))
+  | [
+   Sexp.Symbol ("let-type", _); Sexp.Symbol (name, _); params_sexp; body_sexp;
+  ] -> (
+      (* Parameterized type alias *)
+      match parse_tvar_binders params_sexp with
+      | Error e -> Error e
+      | Ok params -> (
+          match parse_sig_type body_sexp with
+          | Ok body ->
+              Ok
+                (DLetType
+                   {
+                     type_name = name;
+                     type_params = params;
+                     type_body = Some body;
+                     type_loc = span;
+                   })
+          | Error e -> Error e))
+  | Sexp.Symbol ("let-type", _) :: _ ->
+      error "Invalid let-type declaration syntax" span
+  | _ -> error "Expected let-type declaration" span
 
 (** Parse a signature file from S-expressions.
 

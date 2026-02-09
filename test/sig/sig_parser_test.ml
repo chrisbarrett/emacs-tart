@@ -587,56 +587,41 @@ let test_data_recursive () =
 
 (** {1 Let Declaration Tests} *)
 
-let test_let_simple () =
-  let src =
-    {|(let ((type int-list (list int)))
-      (defun sum (int-list) -> int))|}
-  in
+let test_let_type_simple () =
+  let src = {|(let-type pair (cons int int))|} in
   match parse_decl_str src with
-  | Ok (Sig_ast.DLet d) ->
-      Alcotest.(check int) "one binding" 1 (List.length d.let_bindings);
-      Alcotest.(check int) "one body decl" 1 (List.length d.let_body);
-      let binding = List.hd d.let_bindings in
-      Alcotest.(check string) "binding name" "int-list" binding.ltb_name;
-      Alcotest.(check int) "no params" 0 (List.length binding.ltb_params)
-  | Ok _ -> Alcotest.fail "Expected DLet"
+  | Ok (Sig_ast.DLetType d) -> (
+      Alcotest.(check string) "name" "pair" d.type_name;
+      Alcotest.(check int) "no params" 0 (List.length d.type_params);
+      match d.type_body with
+      | Some (Sig_ast.STApp ("cons", [ _; _ ], _)) -> ()
+      | _ -> Alcotest.fail "Expected STApp(cons, [int; int])")
+  | Ok _ -> Alcotest.fail "Expected DLetType"
   | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
 
-let test_let_parameterized () =
-  let src =
-    {|(let ((type wrapper [a] (list a)))
-      (defun wrap [a] (a) -> (wrapper a)))|}
-  in
+let test_let_type_parameterized () =
+  let src = {|(let-type wrapper [a] (list a))|} in
   match parse_decl_str src with
-  | Ok (Sig_ast.DLet d) ->
-      let binding = List.hd d.let_bindings in
-      Alcotest.(check string) "binding name" "wrapper" binding.ltb_name;
-      Alcotest.(check int) "one param" 1 (List.length binding.ltb_params)
-  | Ok _ -> Alcotest.fail "Expected DLet"
+  | Ok (Sig_ast.DLetType d) ->
+      Alcotest.(check string) "name" "wrapper" d.type_name;
+      Alcotest.(check int) "one param" 1 (List.length d.type_params)
+  | Ok _ -> Alcotest.fail "Expected DLetType"
   | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
 
-let test_let_multiple_bindings () =
-  let src =
-    {|(let ((type int-list (list int))
-           (type str-list (list string)))
-      (defun sum (int-list) -> int)
-      (defun join (str-list) -> string))|}
-  in
+let test_let_type_opaque () =
+  let src = {|(let-type handle)|} in
   match parse_decl_str src with
-  | Ok (Sig_ast.DLet d) ->
-      Alcotest.(check int) "two bindings" 2 (List.length d.let_bindings);
-      Alcotest.(check int) "two body decls" 2 (List.length d.let_body)
-  | Ok _ -> Alcotest.fail "Expected DLet"
+  | Ok (Sig_ast.DLetType d) -> (
+      Alcotest.(check string) "name" "handle" d.type_name;
+      Alcotest.(check int) "no params" 0 (List.length d.type_params);
+      match d.type_body with
+      | None -> ()
+      | Some _ -> Alcotest.fail "Expected opaque (body = None)")
+  | Ok _ -> Alcotest.fail "Expected DLetType"
   | Error e -> Alcotest.fail (Printf.sprintf "Parse error: %s" e.message)
 
-let test_let_error_no_bindings () =
-  let src = {|(let)|} in
-  match parse_decl_str src with
-  | Ok _ -> Alcotest.fail "Expected parse error"
-  | Error _ -> ()
-
-let test_let_error_no_body () =
-  let src = {|(let ((type int-list (list int))))|} in
+let test_let_type_error_no_name () =
+  let src = {|(let-type)|} in
   match parse_decl_str src with
   | Ok _ -> Alcotest.fail "Expected parse error"
   | Error _ -> ()
@@ -888,15 +873,13 @@ let () =
           Alcotest.test_case "data multi-field" `Quick test_data_multi_field;
           Alcotest.test_case "data recursive" `Quick test_data_recursive;
         ] );
-      ( "let-declarations",
+      ( "let-type-declarations",
         [
-          Alcotest.test_case "simple let" `Quick test_let_simple;
-          Alcotest.test_case "parameterized let" `Quick test_let_parameterized;
-          Alcotest.test_case "multiple bindings" `Quick
-            test_let_multiple_bindings;
-          Alcotest.test_case "error no bindings" `Quick
-            test_let_error_no_bindings;
-          Alcotest.test_case "error no body" `Quick test_let_error_no_body;
+          Alcotest.test_case "simple let-type" `Quick test_let_type_simple;
+          Alcotest.test_case "parameterized let-type" `Quick
+            test_let_type_parameterized;
+          Alcotest.test_case "opaque let-type" `Quick test_let_type_opaque;
+          Alcotest.test_case "error no name" `Quick test_let_type_error_no_name;
         ] );
       ( "clause-diagnostics",
         [
