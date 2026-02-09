@@ -48,20 +48,111 @@ specs 81–89 are not started.
 
 ## Phases
 
+**Priority: Spec 82 is next up** — highest-impact change, ready for
+implementation.
+
 ### Phase 1 — Error Reduction
 
 Targets the two largest error categories in `./tart check` validation.
 
 #### 1. [Spec 82](./specs/82-special-form-parser-extensions.md) — Special Form Parser Extensions
 
-Eliminates ~49% of all errors (7,171 UNDEFINED VARIABLE). No type system
-changes — purely form recognition in `check.ml` and `infer.ml`.
+Eliminates ~49% of all errors (7,171 UNDEFINED VARIABLE). Rather than
+hardcoding each form in OCaml, a **macro expansion pre-pass** rewrites unknown
+defining forms into forms the checker already understands (`defun`, `defvar`,
+`progn`). A curated `.el` file provides simplified macro definitions. The
+existing pure Elisp interpreter (`lib/interp/`) expands these before the type
+checker runs, keeping form knowledge in user-land.
 
-| File | Change |
-|:-----|:-------|
-| `lib/typing/check.ml` | Recognize `defsubst`, `cl-defgeneric`, `cl-defmethod`, `defmacro`, `define-minor-mode`, `defcustom`, `defgroup`, `defface` as top-level forms |
-| `lib/typing/infer.ml` | Add inference cases for `pcase-defmacro`, `gv-letplace`, `macroexp-let2`, `declare-function`, `set-advertised-calling-convention`, `gv-define-setter`, `gv-define-expander`, `cl--defalias`; fix `defcustom` first-arg parsing |
-| `test/fixtures/typing/` | Fixture pairs for each new form |
+**Design**: In `module_check.ml`, between environment setup and
+`Check.check_program` (around line 799). Create an interpreter, load curated
+macros from `typings/tart-macros.el`, single-step expand each top-level form,
+flatten any resulting `progn` into multiple top-level forms.
+
+| Step | File | Change |
+|:-----|:-----|:-------|
+| 1 | `lib/typing/dune` | Add `tart.interp` to libraries (no circular dep) |
+| 2 | `lib/interp/builtin.ml` | Add `keywordp` predicate (needed by `cl-defmethod` macro) |
+| 3 | `typings/tart-macros.el` | Curated macro definitions (new file, see table below) |
+| 4 | `lib/typing/module_check.ml` | `expand_defining_forms` + `flatten_toplevel_progn` pre-pass |
+| 5 | `test/fixtures/typing/special-forms/` | Fixture pairs for each macro category |
+
+**Macro table** (`typings/tart-macros.el`):
+
+| Macro | Expands to | Notes |
+|:------|:-----------|:------|
+| `defsubst` | `(defun ...)` | Identical structure |
+| `cl-defgeneric` | `(defun ...)` | Drop options after arglist |
+| `cl-defmethod` | `(defun ...)` | Skip qualifiers, strip specializers |
+| `defmacro` | `(defun ...)` | Treat as function for type checking |
+| `pcase-defmacro` | `(defun ...)` | Same as defmacro |
+| `define-minor-mode` | `(progn (defvar ...) (defun ...))` | Dual binding |
+| `defcustom` | `(defvar ...)` | Variable binding |
+| `defgroup` | `(defvar ...)` | Variable binding |
+| `defface` | `(defvar ...)` | Variable binding |
+| `gv-letplace` | `(let ...)` | Local binding form |
+| `macroexp-let2` | `(let ...)` | Local binding form |
+| `declare-function` | `(defvar ...)` | Just makes name known |
+| `gv-define-setter` | `(defun ...)` | Bind name as function |
+| `gv-define-expander` | `(defun ...)` | Bind name as function |
+| `cl--defalias` | `(defvar ...)` | Bind name |
+| `set-advertised-calling-convention` | `nil` | No-op |
+
+**`module_check.ml` additions**:
+
+```ocaml
+let rec flatten_toplevel_progn (sexp : Syntax.Sexp.t) : Syntax.Sexp.t list =
+  match sexp with
+  | List (Symbol ("progn", _) :: exprs, _) ->
+      List.concat_map flatten_toplevel_progn exprs
+  | _ -> [ sexp ]
+
+let expand_defining_forms (config : config) (sexps : Syntax.Sexp.t list)
+    : Syntax.Sexp.t list =
+  match config.stdlib_dir with
+  | None -> sexps
+  | Some stdlib_dir ->
+      let macro_file = Filename.concat stdlib_dir "tart-macros.el" in
+      if not (Sys.file_exists macro_file) then sexps
+      else
+        let global = Interp.Eval.make_interpreter () in
+        let macro_parse = Syntax.Read.parse_file macro_file in
+        Interp.Expand.load_macros global macro_parse.sexps;
+        List.concat_map
+          (fun sexp ->
+            if Interp.Expand.is_macro_call global sexp then
+              match Interp.Expand.expand_1 global sexp with
+              | Expanded expanded -> flatten_toplevel_progn expanded
+              | Expansion_error _ -> [ sexp ]
+            else [ sexp ])
+          sexps
+```
+
+Insert before `Check.check_program` call:
+
+```ocaml
+(* Step 4c: Expand defining-form macros *)
+let sexps = expand_defining_forms config sexps in
+```
+
+**Edge cases**:
+
+- `cl-defmethod` needs qualifier-skipping logic (`:before`, `:after`,
+  `:around`, `:extra "str"`). The `keywordp` builtin handles this.
+- `defmacro` macro defined *last* in the file — defensive ordering so
+  `load_macros` processes all other `(defmacro ...)` forms via the special
+  form path before a user-land `defmacro` macro is registered.
+
+**Test fixtures** (`test/fixtures/typing/special-forms/`):
+
+| Fixture | Tests |
+|:--------|:------|
+| `defsubst.el` / `.expected` | Define via defsubst, call it → PASS |
+| `cl-defmethod.el` / `.expected` | With qualifier and specializer → PASS |
+| `define-minor-mode.el` / `.expected` | Use mode variable and function → PASS |
+| `defcustom.el` / `.expected` | Reference the variable → PASS |
+| `binding-forms.el` / `.expected` | gv-letplace, macroexp-let2 → PASS |
+| `declaration-only.el` / `.expected` | declare-function etc. → PASS |
 
 #### 2. [Spec 81](./specs/81-nil-list-subtyping.md) — Nil-List Subtyping
 
