@@ -144,7 +144,8 @@ _Symbols whose behavior can't be captured soundly (dynamic dispatch, eval-based)
   `defmacro` body bindings and `defsubst` body bindings are not fully
   scoped. These account for the majority of errors when validating
   `seq.el` (422/482), `cl-lib.el` (155/235), `subr.el` (1466/2562),
-  and `simple.el` (1217/2675)
+  `simple.el` (1217/2675), `files.el` (1172/2325), and
+  `startup.el` (606/950)
 - **Suggested feature:** Parser support for these forms
 
 ### `defcustom` parser interpretation

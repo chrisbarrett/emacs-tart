@@ -80,10 +80,12 @@
 (defun frame-parameters (&optional frame) -> (list any))
 
 ;; (frame-parameter FRAME PARAMETER) - get a single parameter
-(defun frame-parameter (frame symbol) -> any)
+;; FRAME can be nil for the selected frame.
+(defun frame-parameter ((frame | nil) symbol) -> any)
 
 ;; (modify-frame-parameters FRAME ALIST) - modify parameters
-(defun modify-frame-parameters (frame (list any)) -> nil)
+;; FRAME can be nil for the selected frame.
+(defun modify-frame-parameters ((frame | nil) (list any)) -> nil)
 
 ;; ===========================================================================
 ;; Frame window relationship
