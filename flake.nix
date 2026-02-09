@@ -22,20 +22,19 @@
         };
 
         mkDevShell = emacs: pkgs.mkShell {
-          buildInputs = [
+          buildInputs = [ emacs ] ++ (with pkgs; [
             # OCaml toolchain
-            pkgs.opam
-            pkgs.pkg-config
+            opam
+            pkg-config
 
             # C deps for some OCaml packages
-            pkgs.gmp
-            pkgs.libev
+            gmp
+            libev
 
             # Project tools
-            emacs
-            pkgs.prek
-            pkgs.asciidoctor
-          ];
+            asciidoctor
+            prek
+          ]);
 
           shellHook = ''
             if [ ! -f "$HOME/.opam/config" ]; then
