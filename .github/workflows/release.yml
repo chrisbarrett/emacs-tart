@@ -104,7 +104,7 @@ jobs:
           echo "ref=${{ needs.preflight.outputs.tag }}" >> $GITHUB_OUTPUT
 
   build:
-    needs: test
+    needs: tag
     strategy:
       matrix:
         include:
@@ -125,16 +125,27 @@ jobs:
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ needs.tag.outputs.ref }}
 
       - uses: DeterminateSystems/determinate-nix-action@89ab342bd48ff7318caf8d39d6a330c7b1df8f2f # v3.15.2
 
       - uses: DeterminateSystems/magic-nix-cache-action@565684385bcd71bad329742eefe8d12f2e765b39 # v13
 
+      - name: Cache opam
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        with:
+          path: |
+            ~/.opam
+            _opam
+          key: opam-${{ runner.os }}-${{ hashFiles('tart.opam') }}
+          restore-keys: opam-${{ runner.os }}-
+
       - name: Build tart
-        run: nix build .#default
+        run: nix develop --command dune build
 
       - name: Rename binary
-        run: cp result/bin/tart tart-${{ matrix.os }}-${{ matrix.arch }}
+        run: cp _build/default/bin/main.exe tart-${{ matrix.os }}-${{ matrix.arch }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
