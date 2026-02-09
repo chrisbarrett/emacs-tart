@@ -151,7 +151,7 @@
 ;; ===========================================================================
 
 ;; (catch TAG &rest BODY) - establish catch point
-(defun catch (any &rest any) -> any)
+(defun catch (symbol &rest any) -> any)
 
 ;; (throw TAG VALUE) - non-local return
 (defun throw (any any) -> never)

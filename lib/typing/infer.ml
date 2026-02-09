@@ -588,6 +588,12 @@ let rec infer (env : Env.t) (sexp : Syntax.Sexp.t) : result =
   | List (Symbol ("progn", _) :: exprs, span) -> infer_progn env exprs span
   (* === Setq - assignment === *)
   | List (Symbol ("setq", _) :: rest, span) -> infer_setq env rest span
+  (* === Condition-case (Spec 85) === *)
+  | List
+      ( Symbol (("condition-case" | "condition-case-unless-debug"), _)
+        :: var :: body_expr :: handlers,
+        span ) ->
+      infer_condition_case env var body_expr handlers span
   (* === Cond === *)
   | List (Symbol ("cond", _) :: clauses, span) -> infer_cond env clauses span
   (* === And/Or === *)
@@ -1103,6 +1109,71 @@ and infer_setq env pairs span =
         process_pairs rest constraints undefineds last_ty
   in
   process_pairs pairs C.empty [] Prim.nil
+
+(** Infer the type of a condition-case expression (Spec 85).
+
+    condition-case binds an error variable in each handler and returns the union
+    of the body type and all handler body types.
+
+    {v
+      (condition-case VAR BODYFORM
+        (CONDITION HANDLER-BODY...)
+        ...)
+    v}
+
+    When VAR is non-nil, it is bound in each handler body to the error data,
+    which has type [(cons symbol any)]. *)
+and infer_condition_case env var body_expr handlers span =
+  let open Syntax.Sexp in
+  let result_ty = fresh_tvar (Env.current_level env) in
+
+  (* Infer the body expression type *)
+  let body_result = infer env body_expr in
+  let body_constraint = C.equal result_ty body_result.ty span in
+
+  (* Build handler environment: extend with error variable if non-nil *)
+  let handler_env =
+    match var with
+    | Symbol (name, _) when name <> "nil" ->
+        (* Error data is (cons symbol any) *)
+        let error_ty =
+          pair_of Prim.symbol (fresh_tvar (Env.current_level env))
+        in
+        Env.extend_mono name error_ty env
+    | _ -> env
+  in
+
+  (* Process each handler clause *)
+  let rec process_handlers handlers constraints undefineds clause_diags =
+    match handlers with
+    | [] -> (constraints, undefineds, clause_diags)
+    | List (_condition :: handler_body, _) :: rest ->
+        (* _condition is a symbol or list of symbols naming error conditions;
+           not used for typing *)
+        let handler_result = infer_progn handler_env handler_body span in
+        let handler_constraint = C.equal result_ty handler_result.ty span in
+        process_handlers rest
+          (C.combine handler_result.constraints
+             (C.add handler_constraint constraints))
+          (undefineds @ handler_result.undefineds)
+          (clause_diags @ handler_result.clause_diagnostics)
+    | List ([], _) :: rest ->
+        (* Empty handler clause - skip *)
+        process_handlers rest constraints undefineds clause_diags
+    | _ :: rest ->
+        (* Malformed handler - skip *)
+        process_handlers rest constraints undefineds clause_diags
+  in
+
+  let handler_constraints, handler_undefineds, handler_clause_diags =
+    process_handlers handlers (C.add body_constraint C.empty) [] []
+  in
+  {
+    ty = result_ty;
+    constraints = C.combine body_result.constraints handler_constraints;
+    undefineds = body_result.undefineds @ handler_undefineds;
+    clause_diagnostics = body_result.clause_diagnostics @ handler_clause_diags;
+  }
 
 (** Infer the type of a cond expression.
 
