@@ -106,8 +106,25 @@ val param_to_string : param -> string
 
 (** {1 Type variable operations} *)
 
+(** {1 Type Variable Bounds} *)
+
+val set_tvar_bound : tvar_id -> typ -> unit
+(** [set_tvar_bound id bound] records an upper bound on the type variable with
+    the given ID. Used for bounded quantification: when a tvar is unified with a
+    union from a rest parameter, the union becomes an upper bound rather than an
+    equality link. *)
+
+val get_tvar_bound : tvar_id -> typ option
+(** [get_tvar_bound id] returns the upper bound on the type variable, if any. *)
+
+val clear_tvar_bounds : unit -> unit
+(** [clear_tvar_bounds ()] removes all tvar bounds. Called by
+    [reset_tvar_counter]. *)
+
+(** {1 Type variable operations} *)
+
 val reset_tvar_counter : unit -> unit
-(** Reset the type variable counter (for testing). *)
+(** Reset the type variable counter and clear all tvar bounds (for testing). *)
 
 val fresh_tvar : int -> typ
 (** [fresh_tvar level] creates a fresh unbound type variable at the given level.

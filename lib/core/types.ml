@@ -81,8 +81,21 @@ and param =
 (** Global counter for fresh type variable IDs *)
 let tvar_counter = ref 0
 
+(** Side-table mapping tvar IDs to upper bounds.
+
+    Used for bounded quantification: when a type variable is unified with a
+    union from a rest parameter position, the union is recorded as an upper
+    bound rather than an equality link, allowing callers to pass any subtype. *)
+let tvar_bounds : (tvar_id, typ) Hashtbl.t = Hashtbl.create 16
+
+let set_tvar_bound id bound = Hashtbl.replace tvar_bounds id bound
+let get_tvar_bound id = Hashtbl.find_opt tvar_bounds id
+let clear_tvar_bounds () = Hashtbl.clear tvar_bounds
+
 (** Reset the type variable counter (for testing) *)
-let reset_tvar_counter () = tvar_counter := 0
+let reset_tvar_counter () =
+  tvar_counter := 0;
+  clear_tvar_bounds ()
 
 (** Create a fresh unbound type variable at the given level *)
 let fresh_tvar level =

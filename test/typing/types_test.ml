@@ -436,6 +436,71 @@ let test_row_equal () =
   Alcotest.(check bool) "different rows not equal" false (equal r1 r3)
 
 (* =============================================================================
+   Type Variable Bounds Tests
+   ============================================================================= *)
+
+let test_tvar_bound_roundtrip () =
+  reset_tvar_counter ();
+  let tv = fresh_tvar 0 in
+  match tv with
+  | TVar tv_ref -> (
+      match !tv_ref with
+      | Unbound (id, _) ->
+          Alcotest.(check (option string))
+            "no bound initially" None
+            (Option.map to_string (get_tvar_bound id));
+          set_tvar_bound id (TUnion [ Prim.int; Prim.string ]);
+          Alcotest.(check (option string))
+            "bound set" (Some "(Or int string)")
+            (Option.map to_string (get_tvar_bound id))
+      | Link _ -> Alcotest.fail "expected Unbound")
+  | _ -> Alcotest.fail "expected TVar"
+
+let test_tvar_bound_clear () =
+  reset_tvar_counter ();
+  let tv = fresh_tvar 0 in
+  match tv with
+  | TVar tv_ref -> (
+      match !tv_ref with
+      | Unbound (id, _) ->
+          set_tvar_bound id Prim.int;
+          Alcotest.(check (option string))
+            "bound before clear" (Some "int")
+            (Option.map to_string (get_tvar_bound id));
+          clear_tvar_bounds ();
+          Alcotest.(check (option string))
+            "bound after clear" None
+            (Option.map to_string (get_tvar_bound id))
+      | Link _ -> Alcotest.fail "expected Unbound")
+  | _ -> Alcotest.fail "expected TVar"
+
+let test_tvar_bound_reset_clears () =
+  reset_tvar_counter ();
+  set_tvar_bound 42 Prim.string;
+  Alcotest.(check (option string))
+    "bound before reset" (Some "string")
+    (Option.map to_string (get_tvar_bound 42));
+  reset_tvar_counter ();
+  Alcotest.(check (option string))
+    "bound after reset" None
+    (Option.map to_string (get_tvar_bound 42))
+
+let test_tvar_bound_overwrite () =
+  reset_tvar_counter ();
+  let tv = fresh_tvar 0 in
+  match tv with
+  | TVar tv_ref -> (
+      match !tv_ref with
+      | Unbound (id, _) ->
+          set_tvar_bound id Prim.int;
+          set_tvar_bound id Prim.string;
+          Alcotest.(check (option string))
+            "overwritten bound" (Some "string")
+            (Option.map to_string (get_tvar_bound id))
+      | Link _ -> Alcotest.fail "expected Unbound")
+  | _ -> Alcotest.fail "expected TVar"
+
+(* =============================================================================
    Test Suite
    ============================================================================= *)
 
@@ -531,5 +596,13 @@ let () =
           Alcotest.test_case "is open row" `Quick test_row_is_open;
           Alcotest.test_case "row truthy" `Quick test_row_truthy;
           Alcotest.test_case "row equal" `Quick test_row_equal;
+        ] );
+      ( "tvar-bounds",
+        [
+          Alcotest.test_case "roundtrip" `Quick test_tvar_bound_roundtrip;
+          Alcotest.test_case "clear" `Quick test_tvar_bound_clear;
+          Alcotest.test_case "reset clears bounds" `Quick
+            test_tvar_bound_reset_clears;
+          Alcotest.test_case "overwrite" `Quick test_tvar_bound_overwrite;
         ] );
     ]
