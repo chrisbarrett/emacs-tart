@@ -238,10 +238,11 @@
 ;; ===========================================================================
 
 ;; (add-hook HOOK FN &optional DEPTH LOCAL) - add function to hook
-(defun add-hook (symbol (symbol | (any -> any)) &optional (int | nil) bool) -> nil)
+;; FN is a symbol or function with any arity (hooks accept 0..N arg functions)
+(defun add-hook (symbol (symbol | ((&rest any) -> any)) &optional (int | nil) bool) -> nil)
 
 ;; (remove-hook HOOK FN &optional LOCAL) - remove function from hook
-(defun remove-hook (symbol (symbol | (any -> any)) &optional bool) -> nil)
+(defun remove-hook (symbol (symbol | ((&rest any) -> any)) &optional bool) -> nil)
 
 ;; (run-hooks &rest HOOKS) - run multiple hooks
 (defun run-hooks (&rest symbol) -> nil)

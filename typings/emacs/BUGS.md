@@ -144,9 +144,31 @@ _Symbols whose behavior can't be captured soundly (dynamic dispatch, eval-based)
   `defmacro` body bindings and `defsubst` body bindings are not fully
   scoped. These account for the majority of errors when validating
   `seq.el` (422/482), `cl-lib.el` (155/235), `subr.el` (1466/2562),
-  `simple.el` (1217/2675), `files.el` (1172/2325), and
-  `startup.el` (606/950)
+  `simple.el` (1217/2675), `files.el` (1172/2325),
+  `startup.el` (606/950), `minibuffer.el` (614/1526), and
+  `window.el` (1519/3673)
 - **Suggested feature:** Parser support for these forms
+
+### Function subtyping with rest parameters
+- **Location:** type system
+- **Issue:** A function type `() -> t` or `(a) -> t` is not recognized
+  as a subtype of `((&rest any) -> any)`. This means `add-hook` and
+  `remove-hook`, whose FN parameter is typed as
+  `(symbol | ((&rest any) -> any))`, still reject lambda expressions
+  with fixed arities. In `minibuffer.el`, 6 `add-hook` and
+  7 `remove-hook` calls fail because the lambda has 0–3 fixed params
+- **Suggested feature:** Subtyping rule `(a₁ ... aₙ) → r <: (&rest any) → any`
+
+### `car`/`cdr` on dynamically-typed values
+- **Location:** type system
+- **Issue:** `car` and `cdr` are typed for `(list a)` and `(cons a b)`,
+  but Emacs Lisp frequently applies them to values with inferred
+  union types like `(Or symbol keyword int t nil)`. In
+  `minibuffer.el` this accounts for 50 `car` and 22 `cdr` arity
+  errors; in `window.el`, 4 `car` errors. The root cause is that
+  variables bound via `let` with complex control flow get wide union
+  types rather than the narrower type the programmer intends
+- **Suggested feature:** `car`/`cdr` accepting `any` with `any` return
 
 ### `defcustom` parser interpretation
 - **Location:** parser
