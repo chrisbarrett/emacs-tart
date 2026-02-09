@@ -264,9 +264,14 @@ let extract_concrete_map_row ty =
     The [invariant] parameter controls whether Any acts as a wildcard. When true
     (inside type application arguments), Any must match exactly - this enforces
     invariance for parameterized types like [(list int)] not unifying with
-    [(list any)]. *)
-let rec unify ?(invariant = false) ?(context = Constraint_solving) t1 t2 loc :
-    unit internal_result =
+    [(list any)].
+
+    The [from_rest] parameter indicates whether this unification originates from
+    a rest-parameter position. When true and a type variable is unified with a
+    union type, the union is recorded as an upper bound rather than an equality
+    link (bounded quantification, Spec 87). *)
+let rec unify ?(invariant = false) ?(context = Constraint_solving)
+    ?(from_rest = false) t1 t2 loc : unit internal_result =
   let t1 = repr t1 in
   let t2 = repr t2 in
   Log.debug "Unify: %s ~ %s" (to_string t1) (to_string t2);
@@ -280,7 +285,12 @@ let rec unify ?(invariant = false) ?(context = Constraint_solving) t1 t2 loc :
        constraint-based contexts (vectors, function params, etc.)
        see the base type rather than a specific literal value.
        Direct inference (let bindings, bare expressions) still
-       preserves the literal since no tvar is involved. *)
+       preserves the literal since no tvar is involved.
+
+       Bounded quantification (Spec 87): when [from_rest] is true and [ty]
+       is a union, record the union as an upper bound instead of linking.
+       When a bounded tvar is later unified normally, check that the
+       concrete type is a subtype of the bound. *)
     | TVar tv, ty | ty, TVar tv -> (
         match !tv with
         | Link _ -> failwith "repr should have followed link"
@@ -292,9 +302,22 @@ let rec unify ?(invariant = false) ?(context = Constraint_solving) t1 t2 loc :
             match occurs_check id level link_ty loc with
             | Error (tv_id, ty, loc) -> Error (IOccursCheck (tv_id, ty, loc))
             | Ok () ->
-                Log.debug "Link: '_%d = %s" id (to_string link_ty);
-                tv := Link link_ty;
-                Ok ()))
+                if from_rest && is_union link_ty then (
+                  (* Rest-param union: record as upper bound, leave tvar unbound *)
+                  Log.debug "Bound: '_%d <: %s" id (to_string link_ty);
+                  set_tvar_bound id link_ty;
+                  Ok ())
+                else (
+                  (* Check existing upper bound before linking *)
+                  (match get_tvar_bound id with
+                  | None -> ()
+                  | Some _bound ->
+                      (* Bound will be checked after linking via
+                         check_bound_after_link *)
+                      ());
+                  Log.debug "Link: '_%d = %s" id (to_string link_ty);
+                  tv := Link link_ty;
+                  check_bound_after_link id link_ty loc)))
     (* Never is the bottom type - subtype of every type.
        never <: T for all T, so unification always succeeds. *)
     | TCon n, _ when n = Prim.never_name -> Ok ()
@@ -505,6 +528,74 @@ let rec unify ?(invariant = false) ?(context = Constraint_solving) t1 t2 loc :
     (* All other combinations are type mismatches *)
     | _ -> Error (ITypeMismatch (t1, t2, loc))
 
+(** Check that a concrete type satisfies an upper bound after linking.
+
+    When a bounded tvar (one that acquired an upper bound from rest-param
+    unification) is linked to a concrete type [S], verify that [S <: U] where
+    [U] is the bound. For union bounds, [S] must match at least one member of
+    the union. On success, the bound is cleared. On failure, returns a type
+    mismatch error. *)
+and check_bound_after_link id link_ty loc : unit internal_result =
+  match get_tvar_bound id with
+  | None -> Ok ()
+  | Some bound -> (
+      Log.debug "Check bound: '_%d = %s <: %s" id (to_string link_ty)
+        (to_string bound);
+      (* Use the existing unify logic: unify bound link_ty.
+         For TUnion bounds, the TUnion-vs-non-union arm in unify handles
+         S <: (A | B | C) by checking if S matches any member.
+         We do this speculatively to avoid mutating the bound's tvars. *)
+      let snapshot_bound = collect_tvar_refs_flat [] bound in
+      let snapshot_link = collect_tvar_refs_flat [] link_ty in
+      let snapshot = snapshot_bound @ snapshot_link in
+      match unify bound link_ty loc with
+      | Ok () ->
+          (* Restore — we don't want the bound check to permanently mutate
+             tvars inside the bound type. The tvar is already linked. *)
+          List.iter (fun (tv, saved) -> tv := saved) snapshot;
+          remove_tvar_bound id;
+          Ok ()
+      | Error _ ->
+          List.iter (fun (tv, saved) -> tv := saved) snapshot;
+          Error (ITypeMismatch (link_ty, bound, loc)))
+
+(** Collect tvar refs without deduplication (fast, for snapshots). *)
+and collect_tvar_refs_flat acc ty =
+  match ty with
+  | TVar tv -> (
+      let saved = !tv in
+      let acc = (tv, saved) :: acc in
+      match saved with
+      | Link ty' -> collect_tvar_refs_flat acc ty'
+      | Unbound _ -> acc)
+  | TCon _ -> acc
+  | TApp (con, args) ->
+      List.fold_left collect_tvar_refs_flat
+        (collect_tvar_refs_flat acc con)
+        args
+  | TArrow (params, ret) ->
+      let acc =
+        List.fold_left
+          (fun a p ->
+            match p with
+            | PPositional t | POptional t | PRest t | PKey (_, t) ->
+                collect_tvar_refs_flat a t
+            | PLiteral _ -> a)
+          acc params
+      in
+      collect_tvar_refs_flat acc ret
+  | TForall (_, body) -> collect_tvar_refs_flat acc body
+  | TUnion types | TTuple types ->
+      List.fold_left collect_tvar_refs_flat acc types
+  | TRow { row_fields; row_var } -> (
+      let acc =
+        List.fold_left
+          (fun a (_, t) -> collect_tvar_refs_flat a t)
+          acc row_fields
+      in
+      match row_var with None -> acc | Some v -> collect_tvar_refs_flat acc v)
+  | TLiteral _ -> acc
+
 and unify_list ?(invariant = false) ?(context = Constraint_solving) ts1 ts2 loc
     =
   List.fold_left2
@@ -643,7 +734,9 @@ and unify_param_lists ?(invariant = false) ?(context = Constraint_solving) ps1
   match (ps1, ps2) with
   (* Both empty - success *)
   | [], [] -> Ok ()
-  (* Left side has rest param at end - consume all remaining from right *)
+  (* Left side has rest param at end - consume all remaining from right.
+     Pass ~from_rest:true so that union rest element types produce upper
+     bounds instead of equality links (bounded quantification, Spec 87). *)
   | [ PRest elem_ty1 ], params2 ->
       Log.debug "Params: left &rest consuming %d right params"
         (List.length params2);
@@ -653,11 +746,13 @@ and unify_param_lists ?(invariant = false) ?(context = Constraint_solving) ps1
           let* () = acc in
           match p2 with
           | PPositional t2 | POptional t2 | PKey (_, t2) ->
-              unify ~invariant ~context elem_ty1 t2 loc
-          | PRest t2 -> unify ~invariant ~context elem_ty1 t2 loc
+              unify ~invariant ~context ~from_rest:true elem_ty1 t2 loc
+          | PRest t2 ->
+              unify ~invariant ~context ~from_rest:true elem_ty1 t2 loc
           | PLiteral _ -> Ok ())
         (Ok ()) params2
-  (* Right side has rest param at end - consume all remaining from left *)
+  (* Right side has rest param at end - consume all remaining from left.
+     Pass ~from_rest:true (see above). *)
   | params1, [ PRest elem_ty2 ] ->
       Log.debug "Params: right &rest consuming %d left params"
         (List.length params1);
@@ -666,8 +761,9 @@ and unify_param_lists ?(invariant = false) ?(context = Constraint_solving) ps1
           let* () = acc in
           match p1 with
           | PPositional t1 | POptional t1 | PKey (_, t1) ->
-              unify ~invariant ~context t1 elem_ty2 loc
-          | PRest t1 -> unify ~invariant ~context t1 elem_ty2 loc
+              unify ~invariant ~context ~from_rest:true t1 elem_ty2 loc
+          | PRest t1 ->
+              unify ~invariant ~context ~from_rest:true t1 elem_ty2 loc
           | PLiteral _ -> Ok ())
         (Ok ()) params1
   (* Non-rest params on both sides - unify element-wise *)
@@ -676,23 +772,29 @@ and unify_param_lists ?(invariant = false) ?(context = Constraint_solving) ps1
         (* Rest param not at the end - handle case by case *)
         match (p1, p2) with
         | PRest elem_ty1, _ ->
-            (* Left is rest, right is not - unify right with rest elem, continue *)
+            (* Left is rest, right is not - unify right with rest elem, continue.
+               Pass ~from_rest:true for bounded quantification (Spec 87). *)
             let t2 =
               match p2 with
               | PPositional t | POptional t | PKey (_, t) | PRest t -> t
               | PLiteral _ -> Prim.any
             in
-            let* () = unify ~invariant ~context elem_ty1 t2 loc in
+            let* () =
+              unify ~invariant ~context ~from_rest:true elem_ty1 t2 loc
+            in
             unify_param_lists ~invariant ~context ps1 rest2 loc
             (* Keep consuming with same rest *)
         | _, PRest elem_ty2 ->
-            (* Right is rest, left is not *)
+            (* Right is rest, left is not.
+               Pass ~from_rest:true for bounded quantification (Spec 87). *)
             let t1 =
               match p1 with
               | PPositional t | POptional t | PKey (_, t) | PRest t -> t
               | PLiteral _ -> Prim.any
             in
-            let* () = unify ~invariant ~context t1 elem_ty2 loc in
+            let* () =
+              unify ~invariant ~context ~from_rest:true t1 elem_ty2 loc
+            in
             unify_param_lists ~invariant ~context rest1 ps2 loc
             (* Keep consuming with same rest *)
         | _, _ ->
@@ -835,13 +937,36 @@ let rec collect_tvar_refs acc ty =
 (** Restore tvar refs to their saved states. *)
 let restore_tvars snapshot = List.iter (fun (tv, saved) -> tv := saved) snapshot
 
-(** Attempt unification speculatively. If it fails, all tvar mutations are
-    rolled back and the types remain unchanged. Returns [Ok ()] on success or
-    [Error] on failure. On success, the unification side-effects are committed
-    (tvars remain linked). *)
+(** Snapshot tvar bounds for tvars reachable from a tvar snapshot.
+
+    Collects the bound state (Some bound or None) for each unique tvar id in the
+    snapshot, so bounds can be restored on rollback. *)
+let snapshot_tvar_bounds (tvar_snapshot : (tvar ref * tvar) list) :
+    (tvar_id * typ option) list =
+  List.filter_map
+    (fun (_, saved) ->
+      match saved with
+      | Unbound (id, _) -> Some (id, get_tvar_bound id)
+      | Link _ -> None)
+    tvar_snapshot
+
+(** Restore tvar bounds from a snapshot. *)
+let restore_tvar_bounds (bound_snapshot : (tvar_id * typ option) list) : unit =
+  List.iter
+    (fun (id, saved_bound) ->
+      match saved_bound with
+      | Some b -> set_tvar_bound id b
+      | None -> remove_tvar_bound id)
+    bound_snapshot
+
+(** Attempt unification speculatively. If it fails, all tvar mutations and bound
+    changes are rolled back and the types remain unchanged. Returns [Ok ()] on
+    success or [Error] on failure. On success, the unification side-effects are
+    committed (tvars remain linked). *)
 let try_unify t1 t2 loc : unit result =
   Log.debug "Try-unify: %s ~ %s" (to_string t1) (to_string t2);
   let snapshot = collect_tvar_refs (collect_tvar_refs [] t1) t2 in
+  let bound_snapshot = snapshot_tvar_bounds snapshot in
   match unify t1 t2 loc with
   | Ok () ->
       Log.debug "Try-unify: success";
@@ -849,6 +974,7 @@ let try_unify t1 t2 loc : unit result =
   | Error e ->
       Log.debug "Try-unify: rollback";
       restore_tvars snapshot;
+      restore_tvar_bounds bound_snapshot;
       Error (to_external_error C.NoContext e)
 
 (** Attempt to unify two param lists speculatively. Rolls back on failure.
@@ -865,10 +991,12 @@ let try_unify_params ?(context = Constraint_solving) ps1 ps2 loc : unit result =
         | PLiteral _ -> acc)
       [] (ps1 @ ps2)
   in
+  let bound_snapshot = snapshot_tvar_bounds snapshot in
   match unify_param_lists ~context ps1 ps2 loc with
   | Ok () -> Ok ()
   | Error e ->
       restore_tvars snapshot;
+      restore_tvar_bounds bound_snapshot;
       Error (to_external_error C.NoContext e)
 
 (** Attempt to unify all types in a list with a single element variable
@@ -883,6 +1011,7 @@ let try_unify_all_to_element types elem_var loc : bool =
   let snapshot =
     List.fold_left collect_tvar_refs (collect_tvar_refs [] elem_var) types
   in
+  let bound_snapshot = snapshot_tvar_bounds snapshot in
   let ok =
     List.for_all
       (fun t ->
@@ -892,6 +1021,7 @@ let try_unify_all_to_element types elem_var loc : bool =
   if ok then true
   else (
     restore_tvars snapshot;
+    restore_tvar_bounds bound_snapshot;
     false)
 
 (** Check if two types are provably disjoint (empty intersection).

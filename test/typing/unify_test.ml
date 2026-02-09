@@ -567,6 +567,88 @@ let test_solve_all_multiple_errors () =
   Alcotest.(check int) "two errors" 2 (List.length errors)
 
 (* =============================================================================
+   Bounded Quantification Tests (Spec 87)
+   ============================================================================= *)
+
+(** Helper to get tvar_id from a type variable *)
+let get_tvar_id ty =
+  match ty with
+  | TVar tv -> ( match !tv with Unbound (id, _) -> Some id | Link _ -> None)
+  | _ -> None
+
+(** Test that rest-param unification with a union sets a bound, not a link. *)
+let test_rest_bound_sets_bound () =
+  setup ();
+  let tv = fresh () in
+  let union_ty = TUnion [ Prim.int; Prim.string ] in
+  (* Unify [PRest (int | string)] with [PPositional tv] — simulates a
+     caller passing tv to a &rest (int | string) function *)
+  let result =
+    Unify.try_unify_params [ PRest union_ty ] [ PPositional tv ] dummy_loc
+  in
+  Alcotest.(check bool) "unification succeeds" true (Result.is_ok result);
+  (* tv should remain unbound (not linked to the union) *)
+  let id = get_tvar_id tv in
+  Alcotest.(check bool) "tv still unbound" true (Option.is_some id);
+  (* tv should have the union as an upper bound *)
+  let bound = Option.bind id get_tvar_bound in
+  Alcotest.(check bool) "bound is set" true (Option.is_some bound);
+  Alcotest.(check string)
+    "bound is (int | string)" "(Or int string)"
+    (to_string (Option.get bound))
+
+(** Test that a bounded tvar can be unified with a valid subtype. *)
+let test_rest_bound_valid_subtype () =
+  setup ();
+  let tv = fresh () in
+  let union_ty = TUnion [ Prim.int; Prim.string ] in
+  let _ =
+    Unify.try_unify_params [ PRest union_ty ] [ PPositional tv ] dummy_loc
+  in
+  (* Now unify tv with int — should succeed since int <: (int | string) *)
+  let result = Unify.unify tv Prim.int dummy_loc in
+  Alcotest.(check bool) "int <: (int | string)" true (Result.is_ok result);
+  (* tv should now be linked to int *)
+  Alcotest.(check string) "tv = int" "int" (to_string tv)
+
+(** Test that a bounded tvar rejects types outside the bound. *)
+let test_rest_bound_invalid_type () =
+  setup ();
+  let tv = fresh () in
+  let union_ty = TUnion [ Prim.int; Prim.string ] in
+  let _ =
+    Unify.try_unify_params [ PRest union_ty ] [ PPositional tv ] dummy_loc
+  in
+  (* Now unify tv with float — should fail since float is not in (int | string) *)
+  let result = Unify.unify tv Prim.float dummy_loc in
+  Alcotest.(check bool)
+    "float not <: (int | string)" true (Result.is_error result)
+
+(** Test that speculative unify rollback restores bound state. *)
+let test_rest_bound_speculative_rollback () =
+  setup ();
+  let tv = fresh () in
+  let union_ty = TUnion [ Prim.int; Prim.string ] in
+  let _ =
+    Unify.try_unify_params [ PRest union_ty ] [ PPositional tv ] dummy_loc
+  in
+  (* Verify bound is set *)
+  let id = Option.get (get_tvar_id tv) in
+  Alcotest.(check bool)
+    "bound is set before" true
+    (Option.is_some (get_tvar_bound id));
+  (* Speculatively try to unify tv with float — should fail and rollback *)
+  let result = Unify.try_unify tv Prim.float dummy_loc in
+  Alcotest.(check bool) "try_unify fails" true (Result.is_error result);
+  (* tv should still be unbound with bound intact *)
+  Alcotest.(check bool)
+    "tv still unbound after rollback" true
+    (Option.is_some (get_tvar_id tv));
+  Alcotest.(check bool)
+    "bound restored after rollback" true
+    (Option.is_some (get_tvar_bound id))
+
+(* =============================================================================
    Test Suite
    ============================================================================= *)
 
@@ -689,5 +771,16 @@ let () =
           Alcotest.test_case "no errors" `Quick test_solve_all_no_errors;
           Alcotest.test_case "multiple errors" `Quick
             test_solve_all_multiple_errors;
+        ] );
+      ( "bounded quantification",
+        [
+          Alcotest.test_case "rest-param sets bound" `Quick
+            test_rest_bound_sets_bound;
+          Alcotest.test_case "bounded tvar accepts subtype" `Quick
+            test_rest_bound_valid_subtype;
+          Alcotest.test_case "bounded tvar rejects invalid" `Quick
+            test_rest_bound_invalid_type;
+          Alcotest.test_case "speculative rollback restores bound" `Quick
+            test_rest_bound_speculative_rollback;
         ] );
     ]

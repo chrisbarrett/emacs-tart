@@ -90,6 +90,7 @@ let tvar_bounds : (tvar_id, typ) Hashtbl.t = Hashtbl.create 16
 
 let set_tvar_bound id bound = Hashtbl.replace tvar_bounds id bound
 let get_tvar_bound id = Hashtbl.find_opt tvar_bounds id
+let remove_tvar_bound id = Hashtbl.remove tvar_bounds id
 let clear_tvar_bounds () = Hashtbl.clear tvar_bounds
 
 (** Reset the type variable counter (for testing) *)

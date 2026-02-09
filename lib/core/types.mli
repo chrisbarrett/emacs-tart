@@ -117,6 +117,10 @@ val set_tvar_bound : tvar_id -> typ -> unit
 val get_tvar_bound : tvar_id -> typ option
 (** [get_tvar_bound id] returns the upper bound on the type variable, if any. *)
 
+val remove_tvar_bound : tvar_id -> unit
+(** [remove_tvar_bound id] removes the upper bound from the type variable, if
+    any. Used when a bound check succeeds and the bound is no longer needed. *)
+
 val clear_tvar_bounds : unit -> unit
 (** [clear_tvar_bounds ()] removes all tvar bounds. Called by
     [reset_tvar_counter]. *)
