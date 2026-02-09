@@ -493,6 +493,8 @@ symbol constituents for `|' (union operator), `&' (`&optional',
 Each entry is (SYMBOL . METHOD) where METHOD is either `defun'
 for 2-space body indentation, or an integer for `lisp-indent-specform'.")
 
+(defvar calculate-lisp-indent-last-sexp)  ; defined by lisp-mode.el
+
 (defun tart-signature-indent-function (indent-point state)
   "Indent function for `tart-signature-mode'.
 Looks up `tart-signature-mode--indent-overrides' first, then
