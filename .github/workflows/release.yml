@@ -55,6 +55,15 @@ jobs:
 
       - uses: DeterminateSystems/magic-nix-cache-action@565684385bcd71bad329742eefe8d12f2e765b39 # v13
 
+      - name: Cache opam
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        with:
+          path: |
+            ~/.opam
+            _opam
+          key: opam-${{ runner.os }}-${{ hashFiles('tart.opam') }}
+          restore-keys: opam-${{ runner.os }}-
+
       - name: Build
         run: nix develop --command dune build
 
