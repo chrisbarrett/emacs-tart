@@ -133,18 +133,21 @@ parameters are supported:
 - Predicate `name-p`
 - Accessors for each slot
 
-### Local Type Aliases
+### Non-Exported Type Aliases
 
-`(let [...] ...)` introduces scoped type abbreviations that are not exported:
+`(let-type ...)` introduces a top-level type alias that is not exported. It
+supports the same syntax as `(type ...)` — aliases, parameterized aliases, and
+opaque types — but is excluded from `build_alias_context`/`build_opaque_context`,
+so `open`/`include` from other modules do not see these types:
 
 ```elisp
-(let [(type pair (cons int int))]
-  (defun swap-pair (pair) -> pair)
-  (defun make-pair (int int) -> pair))
-;; 'pair' is not visible outside the let
+(let-type pair (cons int int))
+(defun swap-pair (pair) -> pair)
+(defun make-pair (int int) -> pair)
+;; 'pair' is not visible outside this module
 ```
 
-Local aliases shadow within their scope only and do not conflict with imports.
+See [Spec 88](./88-let-type.md) for full details.
 
 ## Directives
 
