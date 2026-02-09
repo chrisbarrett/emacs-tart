@@ -45,8 +45,7 @@ jobs:
           path: |
             ~/.opam
             _opam
-          key: opam-${{ runner.os }}-${{ hashFiles('tart.opam') }}
-          restore-keys: opam-${{ runner.os }}-
+          key: opam-${{ runner.os }}-${{ hashFiles('dune-project', 'tart.opam') }}
 
       - name: Register problem matchers
         run: echo "::add-matcher::.github/matchers/ocaml.json"
@@ -77,8 +76,7 @@ jobs:
           path: |
             ~/.opam
             _opam
-          key: opam-${{ runner.os }}-${{ hashFiles('tart.opam') }}
-          restore-keys: opam-${{ runner.os }}-
+          key: opam-${{ runner.os }}-${{ hashFiles('dune-project', 'tart.opam') }}
 
       - name: Register problem matchers
         run: echo "::add-matcher::.github/matchers/ocaml.json"
