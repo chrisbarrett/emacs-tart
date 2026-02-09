@@ -1,87 +1,114 @@
-# Spec 76 — Validation Against Emacs lisp/
+# Spec 80 — Release Workflow
 
-Validate the tightened signatures from Iterations 1–3 by running `./tart check`
-against real Emacs Lisp source files. Fix signature bugs, document type system
-gaps, and add regression fixtures for any parser issues discovered.
-
-Derived from [Spec 76](./specs/76-typings-distribution.md) deferred items and
-[.ralph/IMPLEMENTATION_PLAN.md](./.ralph/IMPLEMENTATION_PLAN.md) Iteration 4.
-
-Source files are obtained by decompressing Emacs 30.2 `.el.gz` from the Nix
-store to `/tmp/tart-validation/`. The `--emacs-version 31.0` flag is used
-since typings target 31.0 (signatures are forward-compatible with 30.x for this
-validation pass).
+Rewrite `.github/workflows/release.yml` to match [Spec 80](./specs/80-release-workflow.md).
+The current workflow uses tag-push triggers and `nix build .#default`; the spec
+requires `workflow_dispatch` with automated version bumping, `nix develop`-based
+builds, and LLM-powered changelogs.
 
 ---
 
-## Task 1 — Validate seq.el and cl-lib.el
+## Task 1 — Replace trigger and add preflight job
 
-These two files exercise the polymorphic signatures added in Iteration 3.
+Rewrite the top of `release.yml`:
 
-Decompress from Nix store and run:
-```
-./tart check --emacs-version 31.0 /tmp/tart-validation/seq.el
-./tart check --emacs-version 31.0 /tmp/tart-validation/cl-lib.el
-```
+- Change trigger from `push: tags: ['v*']` to `workflow_dispatch` with a
+  `release_type` choice input (`major`, `minor`, `patch`; default `minor`).
+- Remove the `verify-main` job (no longer needed — `workflow_dispatch` runs on
+  the branch it is triggered from).
+- Add `preflight` job that:
+  1. Checks out at HEAD
+  2. Extracts current version from `lib/tart.ml` line 3
+     (`let version = "X.Y.Z"`)
+  3. Parses as semver, validates format
+  4. Computes new version based on `release_type` input
+  5. Sets job outputs: `version` and `tag` (`vX.Y.Z`)
 
-For each error:
-- **Signature bug** → fix the `.tart` file
-- **Type system gap** → document in `typings/emacs/BUGS.md`
-- **Parser issue** → add regression fixture under `test/fixtures/typing/`
+`preflight` runs in parallel with `test` (no `needs`).
 
-**Verify:** `nix develop --command dune test --force 2>&1`
-
----
-
-## Task 2 — Validate subr.el and simple.el
-
-These two files exercise the core lisp-core signatures tightened in Iteration 3.
-
-```
-./tart check --emacs-version 31.0 /tmp/tart-validation/subr.el
-./tart check --emacs-version 31.0 /tmp/tart-validation/simple.el
-```
-
-Same triage process: fix signature bugs, document gaps, add fixtures.
-
-**Verify:** `nix develop --command dune test --force 2>&1`
+**Verify:** YAML is valid (`python3 -c "import yaml; yaml.safe_load(open('.github/workflows/release.yml'))"`)
 
 ---
 
-## Task 3 — Validate files.el and startup.el
+## Task 2 — Update test job with opam cache
 
-These files heavily exercise fileio.tart, buffer.tart, and editfns.tart
-signatures from Iteration 2.
+Update the `test` job to:
 
-```
-./tart check --emacs-version 31.0 /tmp/tart-validation/files.el
-./tart check --emacs-version 31.0 /tmp/tart-validation/startup.el
-```
+- Remove `needs: verify-main` (it now runs at the top level, parallel with
+  `preflight`)
+- Add opam cache step (matching CI workflow):
+  - Key: `opam-${{ runner.os }}-${{ hashFiles('tart.opam') }}`
+  - Paths: `~/.opam`, `_opam`
+- Keep existing `nix develop --command dune build` and `dune test` steps
 
-Same triage process.
-
-**Verify:** `nix develop --command dune test --force 2>&1`
-
----
-
-## Task 4 — Validate minibuffer.el and window.el
-
-```
-./tart check --emacs-version 31.0 /tmp/tart-validation/minibuffer.el
-./tart check --emacs-version 31.0 /tmp/tart-validation/window.el
-```
-
-Same triage process.
-
-**Verify:** `nix develop --command dune test --force 2>&1`
+**Verify:** YAML is valid
 
 ---
 
-## Task 5 — Update BUGS.md and verify
+## Task 3 — Add tag job
 
-- Review all newly discovered gaps from Tasks 1–4
-- Consolidate entries in `typings/emacs/BUGS.md`
-- Run full test suite to confirm no regressions
-- Count remaining errors per file and document status
+Add a `tag` job with `needs: [preflight, test]` and
+`permissions: contents: write`:
 
-**Verify:** `nix develop --command dune test --force 2>&1`
+1. Checkout with `fetch-depth: 0`
+2. Update version in three files using `sed`:
+   - `lib/tart.ml`: `let version = "X.Y.Z"`
+   - `lisp/tart.el`: `;; Version: X.Y.Z`
+   - `lisp/tart-mode.el`: `;; Version: X.Y.Z`
+3. Configure git identity (`github-actions[bot]`)
+4. Commit: `Bump version to ${{ needs.preflight.outputs.version }}`
+5. Create annotated tag:
+   `git tag -a ${{ needs.preflight.outputs.tag }} -m "Release ..."`
+6. Push commit and tag to `main`
+7. Set output `ref` to the new tag for the build job to checkout
+
+**Verify:** YAML is valid
+
+---
+
+## Task 4 — Update build job to use dune
+
+Update the `build` job:
+
+- Change `needs: test` to `needs: tag`
+- Checkout at the tagged ref (`needs.tag.outputs.ref`)
+- Add opam cache step (same as test job)
+- Replace `nix build .#default` with `nix develop --command dune build`
+- Replace `cp result/bin/tart ...` with
+  `cp _build/default/bin/main.exe tart-${{ matrix.os }}-${{ matrix.arch }}`
+- Keep the existing matrix and upload-artifact steps
+
+**Verify:** YAML is valid
+
+---
+
+## Task 5 — Update release job with LLM changelog
+
+Rewrite the `release` job:
+
+- Change `needs: build` to `needs: [preflight, build]`
+- Add `environment: release` (provides `ANTHROPIC_API_KEY`)
+- Add checkout step with `fetch-depth: 0` at the tag ref
+- Add changelog generation step:
+  1. Detect previous tag: `git describe --tags --abbrev=0 HEAD^`
+  2. Extract commits: `git log --oneline PREV_TAG..HEAD`
+  3. Call Anthropic API with curl (prompt from spec)
+  4. Fallback to raw git log on API failure
+- Update release creation:
+  - Set explicit `tag_name`, `name`, and `body` (remove
+    `generate_release_notes: true`)
+  - Use tag from preflight outputs
+  - Use changelog as body
+- Keep existing prerelease detection and artifact download
+
+**Verify:** YAML is valid
+
+---
+
+## Task 6 — Final validation
+
+- Full YAML syntax validation
+- Verify the job DAG matches spec:
+  `preflight ∥ test → tag → build → release`
+- Verify all action SHAs match spec's pinned versions table
+- Verify permissions: `contents: write` only on `tag` and `release`
+- Run `nix develop --command dune test --force` to confirm no regressions
