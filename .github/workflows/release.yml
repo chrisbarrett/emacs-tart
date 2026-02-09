@@ -70,6 +70,39 @@ jobs:
       - name: Test
         run: nix develop --command dune test
 
+  tag:
+    needs: [preflight, test]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      ref: ${{ steps.push.outputs.ref }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Update version strings
+        run: |
+          VERSION="${{ needs.preflight.outputs.version }}"
+          sed -i "3s/.*/let version = \"${VERSION}\"/" lib/tart.ml
+          sed -i "s/^;; Version: .*$/;; Version: ${VERSION}/" lisp/tart.el
+          sed -i "s/^;; Version: .*$/;; Version: ${VERSION}/" lisp/tart-mode.el
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Commit and tag
+        id: push
+        run: |
+          git add lib/tart.ml lisp/tart.el lisp/tart-mode.el
+          git commit -m "Bump version to ${{ needs.preflight.outputs.version }}"
+          git tag -a "${{ needs.preflight.outputs.tag }}" -m "Release ${{ needs.preflight.outputs.version }}"
+          git push origin main --follow-tags
+          echo "ref=${{ needs.preflight.outputs.tag }}" >> $GITHUB_OUTPUT
+
   build:
     needs: test
     strategy:
