@@ -143,10 +143,10 @@ _Symbols whose behavior can't be captured soundly (dynamic dispatch, eval-based)
   `macroexp-let2`, `set-advertised-calling-convention`. Additionally,
   `defmacro` body bindings and `defsubst` body bindings are not fully
   scoped. These account for the majority of errors when validating
-  `seq.el` (422/482), `cl-lib.el` (155/235), `subr.el` (1466/2562),
-  `simple.el` (1217/2675), `files.el` (1172/2325),
-  `startup.el` (606/950), `minibuffer.el` (614/1526), and
-  `window.el` (1519/3673)
+  `seq.el` (422/482), `cl-lib.el` (155/237), `subr.el` (1466/2572),
+  `simple.el` (1217/2690), `files.el` (1172/2336),
+  `startup.el` (606/954), `minibuffer.el` (614/1530), and
+  `window.el` (1519/3707)
 - **Suggested feature:** Parser support for these forms
 
 ### Function subtyping with rest parameters
@@ -193,3 +193,24 @@ _Symbols that are typeable but awkward (excessive annotations at call sites)._
   because the constraint solver infers the full union as the parameter
   type. Kept as `(&rest any) -> string`
 - **Suggested feature:** Constraint solver union-avoidance heuristic
+
+## validation-status
+
+_Error counts from `./tart check --emacs-version 31.0` against Emacs 30.2 `.el` files._
+
+| file           | total | UNDEFINED VARIABLE | TYPE MISMATCH | WRONG ARITY | BRANCH MISMATCH | INFINITE TYPE | DISJOINT EQUALITY | WARNING | HINT |
+| :------------- | ----: | -----------------: | ------------: | ----------: | --------------: | ------------: | ----------------: | ------: | ---: |
+| seq.el         |   482 |                422 |            44 |          12 |               1 |             3 |                 0 |       0 |    0 |
+| cl-lib.el      |   237 |                155 |            66 |           7 |               5 |             2 |                 0 |       1 |    1 |
+| subr.el        | 2,572 |              1,466 |           925 |         127 |              28 |             8 |                 8 |       9 |    1 |
+| simple.el      | 2,690 |              1,217 |         1,341 |          53 |              44 |             2 |                 7 |      20 |    6 |
+| files.el       | 2,336 |              1,172 |         1,064 |          53 |              29 |             1 |                 6 |       8 |    3 |
+| startup.el     |   954 |                606 |           327 |           6 |               8 |             1 |                 2 |       0 |    4 |
+| minibuffer.el  | 1,530 |                614 |           758 |         118 |              17 |             8 |                11 |       4 |    0 |
+| window.el      | 3,707 |              1,519 |         2,081 |          31 |              15 |             0 |                27 |      33 |    1 |
+| **total**      | **14,508** |          **7,171** |     **6,606** |     **407** |         **147** |        **25** |            **61** |  **75** | **16** |
+
+UNDEFINED VARIABLE accounts for 49% of all errors and stems primarily from
+unsupported special forms (see above). TYPE MISMATCH (46%) includes
+nil-vs-list, heterogeneous list, car/cdr on unions, and function subtyping
+gaps documented in this file
