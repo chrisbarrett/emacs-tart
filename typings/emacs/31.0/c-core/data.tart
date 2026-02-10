@@ -121,7 +121,9 @@
 ;; ===========================================================================
 
 ;; (type-of OBJ) - return type symbol
-(defun type-of (any) -> symbol)
+(defun type-of
+  [tag] (((record tag)) -> tag)
+  ((_) -> symbol))
 
 ;; (cl-type-of OBJ) - CL-style type
 (defun cl-type-of (any) -> symbol)

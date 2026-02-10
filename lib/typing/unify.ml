@@ -296,7 +296,9 @@ let rec unify ?(invariant = false) ?(context = Constraint_solving)
         | Link _ -> failwith "repr should have followed link"
         | Unbound (id, level) -> (
             let link_ty =
-              match ty with TLiteral (_, base) -> base | _ -> ty
+              match ty with
+              | TLiteral (_, base) when context <> Clause_matching -> base
+              | _ -> ty
             in
             (* Occurs check before linking *)
             match occurs_check id level link_ty loc with

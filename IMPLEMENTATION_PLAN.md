@@ -11,7 +11,7 @@ Gap analysis of specs 81–93 against the codebase.
 | [83](specs/83-function-subtype-widening.md) | Function subtype widening | Done |
 | [84](specs/84-heterogeneous-list-inference.md) | Heterogeneous list inference | Done |
 | [85](specs/85-condition-case-return-typing.md) | Condition-case return typing | Done |
-| [86](specs/86-record-type-constructor.md) | Record type constructor | Partial |
+| [86](specs/86-record-type-constructor.md) | Record type constructor | Done |
 | [87](specs/87-bounded-quantification.md) | Bounded quantification | Done |
 | [88](specs/88-let-type.md) | Let-type | Done |
 | [89](specs/89-mutually-recursive-types.md) | Mutually recursive types | Done |
@@ -22,16 +22,10 @@ Gap analysis of specs 81–93 against the codebase.
 
 ## Priority 1: Critical Path
 
-- [ ] Update `type-of` signature for records — [Spec 86](specs/86-record-type-constructor.md).
-  The spec now specifies a multi-clause `type-of` that returns the
-  singleton tag type for records. The typings file at
-  `typings/emacs/31.0/c-core/data.tart:124` still has the old
-  `(defun type-of (any) -> symbol)`. Update to:
-  ```lisp
-  (defun type-of
-    [tag] (((record tag)) -> tag)
-    ((_) -> symbol))
-  ```
+- [x] Update `type-of` signature for records — [Spec 86](specs/86-record-type-constructor.md).
+  Updated to multi-clause polymorphic signature with record-tag clause.
+  Also fixed literal type preservation during clause matching in
+  `unify.ml` so that singleton tags are not widened to base types.
 
 ## Priority 2: Core Features
 
