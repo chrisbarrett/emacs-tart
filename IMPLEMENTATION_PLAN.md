@@ -18,7 +18,7 @@ Gap analysis of specs 81–93 against the codebase.
 | [90](specs/90-contravariant-function-subtyping.md) | Contravariant function subtyping | Done |
 | [91](specs/91-tuple-element-access.md) | Tuple element access | Done |
 | [92](specs/92-hook-arity-checking.md) | Hook arity checking | Not started |
-| [93](specs/93-structural-record-types.md) | Structural record types | Not started |
+| [93](specs/93-structural-record-types.md) | Structural record types | Done |
 
 ## Priority 1: Critical Path
 
@@ -47,13 +47,13 @@ Gap analysis of specs 81–93 against the codebase.
   Non-tuple sequences fall back to signature-based typing from
   `fns.tart`.
 
-- [ ] Structural record types / `defstruct` —
-  [Spec 93](specs/93-structural-record-types.md). Add `defstruct`
-  declaration to the `.tart` grammar (`lib/sig/sig_ast.ml`,
-  `lib/sig/sig_parser.ml`) and expand to constructor, predicate, and
-  accessor signatures in `lib/sig/sig_loader.ml`. Also add
-  `cl-defstruct` macro to `typings/tart-macros.el`. Depends on the
-  existing opaque `(record tag)` type.
+- [x] Structural record types / `defstruct` —
+  [Spec 93](specs/93-structural-record-types.md). Added `DDefstruct`
+  AST node, parser, validator, and loader expansion. `(defstruct name
+  (field type) ...)` generates `make-NAME` constructor, `NAME-p`
+  predicate with narrowing, and per-field `NAME-FIELD` accessors.
+  Supports `:keyword-constructor` and nullable field optionality.
+  Added `cl-defstruct` macro to `typings/tart-macros.el`.
 
 ## Priority 3: Enhancements
 

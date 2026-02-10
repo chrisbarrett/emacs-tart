@@ -657,7 +657,7 @@ let rec check_decl_kinds_with_scope (scope_env : Kind.env)
       (* let-type is a simple type decl at top level — no kind errors *)
       []
   | Sig.Sig_ast.DDefvar _ | Sig.Sig_ast.DOpen _ | Sig.Sig_ast.DInclude _
-  | Sig.Sig_ast.DImportStruct _ ->
+  | Sig.Sig_ast.DImportStruct _ | Sig.Sig_ast.DDefstruct _ ->
       (* These declarations don't have type parameters to kind-check *)
       []
 

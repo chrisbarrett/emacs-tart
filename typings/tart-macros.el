@@ -133,6 +133,23 @@
   nil)
 
 ;; ---------------------------------------------------------------------------
+;; Struct forms — rewrite cl-defstruct to progn of defun forms
+;; ---------------------------------------------------------------------------
+
+;; cl-defstruct: (cl-defstruct name &rest fields)
+;; Generates constructor, predicate, and accessor stubs so the parser sees
+;; the function names as defined.  Actual types come from .tart signatures.
+(defmacro cl-defstruct (name &rest fields)
+  `(progn
+     (defvar ,(intern (format "%s-p" name)) nil)
+     (defun ,(intern (format "make-%s" name)) (&rest _args) nil)
+     ,@(mapcar (lambda (field)
+                 `(defun ,(intern (format "%s-%s" name
+                                          (if (consp field) (car field) field)))
+                    (_obj) nil))
+               fields)))
+
+;; ---------------------------------------------------------------------------
 ;; defmacro itself — defined LAST (see file header comment)
 ;; Treat as defun for type checking purposes
 ;; ---------------------------------------------------------------------------

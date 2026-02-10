@@ -202,6 +202,14 @@ let validate_data ctx (d : data_decl) : unit result =
       validate_ctor ctx ctor)
     (Ok ()) d.data_ctors
 
+(** Validate a defstruct declaration *)
+let validate_defstruct ctx (d : struct_decl) : unit result =
+  List.fold_left
+    (fun acc (field : struct_field) ->
+      let* () = acc in
+      validate_type ctx field.sf_type)
+    (Ok ()) d.sd_fields
+
 (** Validate a single declaration *)
 let rec validate_decl ctx (decl : decl) : unit result =
   match decl with
@@ -222,6 +230,7 @@ let rec validate_decl ctx (decl : decl) : unit result =
           validate_decl scope_ctx inner_decl)
         (Ok ()) d.forall_decls
   | DLetType d -> validate_type_decl ctx d
+  | DDefstruct d -> validate_defstruct ctx d
 
 (** {1 Signature Validation} *)
 
@@ -239,6 +248,7 @@ let build_context (sig_file : signature) : tvar_context =
         List.fold_left add_decl_types ctx d.forall_decls
     | DLetType d ->
         List.fold_left (fun c b -> with_type c b.tb_name) ctx d.type_bindings
+    | DDefstruct d -> with_type ctx d.sd_name
     | _ -> ctx
   in
   List.fold_left add_decl_types empty_context sig_file.sig_decls

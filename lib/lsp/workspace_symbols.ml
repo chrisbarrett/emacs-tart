@@ -93,6 +93,7 @@ let kind_of_decl (decl : Sig.Sig_ast.decl) : Protocol.symbol_kind option =
   | Sig.Sig_ast.DType { type_bindings = []; _ } -> None
   | Sig.Sig_ast.DData _ -> Some Protocol.SKEnum
   | Sig.Sig_ast.DImportStruct _ -> Some Protocol.SKStruct
+  | Sig.Sig_ast.DDefstruct _ -> Some Protocol.SKStruct
   | Sig.Sig_ast.DLetType _ -> Some Protocol.SKTypeParameter
   | Sig.Sig_ast.DOpen _ | Sig.Sig_ast.DInclude _ | Sig.Sig_ast.DForall _ -> None
 
@@ -105,6 +106,7 @@ let name_of_decl (decl : Sig.Sig_ast.decl) : string option =
       match d.type_bindings with b :: _ -> Some b.tb_name | [] -> None)
   | Sig.Sig_ast.DData d -> Some d.data_name
   | Sig.Sig_ast.DImportStruct d -> Some d.struct_name
+  | Sig.Sig_ast.DDefstruct d -> Some d.sd_name
   | Sig.Sig_ast.DLetType d -> (
       match d.type_bindings with b :: _ -> Some b.tb_name | [] -> None)
   | Sig.Sig_ast.DOpen _ | Sig.Sig_ast.DInclude _ | Sig.Sig_ast.DForall _ -> None

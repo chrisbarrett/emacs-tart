@@ -121,6 +121,8 @@ type decl =
       (** [(forall [vars] ...)] - scoped type variable declarations *)
   | DLetType of type_decl
       (** [(let-type name ...)] — file-local type alias (not exported) *)
+  | DDefstruct of struct_decl
+      (** [(defstruct name ...)] - struct type with generated accessors *)
 
 and diagnostic_severity =
   | DiagError  (** Error: the usage is incorrect *)
@@ -237,6 +239,28 @@ and forall_decl = {
 
     The type variable [a] is shared across all declarations in the scope. *)
 
+and struct_field = {
+  sf_name : string;  (** Field name *)
+  sf_type : sig_type;  (** Field type *)
+}
+(** A single field in a struct declaration. *)
+
+and struct_decl = {
+  sd_name : string;  (** Struct name *)
+  sd_include : string option;  (** Parent struct name for inheritance *)
+  sd_keyword_ctor : bool;  (** Use keyword arguments in constructor *)
+  sd_fields : struct_field list;  (** Field declarations *)
+  sd_loc : span;
+}
+(** Struct declaration.
+
+    Example:
+    - [(defstruct person (name string) (age int))]
+    - [(defstruct person :keyword-constructor (name string) (age int))]
+    - [(defstruct dog (:include animal) (breed string))]
+
+    Generates constructor, predicate, and accessor functions. *)
+
 (** {1 Signature File} *)
 
 type signature = {
@@ -275,6 +299,7 @@ let decl_loc = function
   | DData d -> d.data_loc
   | DForall d -> d.forall_loc
   | DLetType d -> d.type_loc
+  | DDefstruct d -> d.sd_loc
 
 (** {1 Constructors} *)
 

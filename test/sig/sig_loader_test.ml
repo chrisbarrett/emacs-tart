@@ -1057,6 +1057,150 @@ let test_import_struct_types_distinct () =
     "type error for wrong struct type" true
     (List.length errors > 0)
 
+(** {1 Defstruct Tests (Spec 93)} *)
+
+(** Test that defstruct generates a constructor in the function namespace *)
+let test_defstruct_generates_constructor () =
+  let sig_src =
+    {|
+    (defstruct person
+      (name string)
+      (age int))
+  |}
+  in
+  let env = load_sig_str sig_src in
+  match Type_env.lookup_fn "make-person" env with
+  | None -> Alcotest.fail "make-person not found in fn namespace"
+  | Some scheme ->
+      let scheme_str = Type_env.scheme_to_string scheme in
+      Alcotest.(check bool)
+        "constructor returns record type" true
+        (try
+           let _ =
+             Str.search_forward (Str.regexp_string "record") scheme_str 0
+           in
+           true
+         with Not_found -> false)
+
+(** Test that defstruct constructor type-checks arguments *)
+let test_defstruct_constructor_type_check () =
+  let sig_src =
+    {|
+    (defstruct person
+      (name string)
+      (age int))
+  |}
+  in
+  let env = load_sig_str sig_src in
+  let ty, errors = check_expr_str ~env "(make-person \"Alice\" 30)" in
+  Alcotest.(check int) "no type errors" 0 (List.length errors);
+  let ty_str = Types.to_string ty in
+  Alcotest.(check bool)
+    "result is record type" true
+    (try
+       let _ = Str.search_forward (Str.regexp_string "record") ty_str 0 in
+       true
+     with Not_found -> false)
+
+(** Test that defstruct generates a predicate *)
+let test_defstruct_generates_predicate () =
+  let sig_src =
+    {|
+    (defstruct person
+      (name string)
+      (age int))
+  |}
+  in
+  let env = load_sig_str sig_src in
+  match Type_env.lookup_fn "person-p" env with
+  | None -> Alcotest.fail "person-p not found in fn namespace"
+  | Some _ -> ()
+
+(** Test that defstruct generates accessors *)
+let test_defstruct_generates_accessors () =
+  let sig_src =
+    {|
+    (defstruct person
+      (name string)
+      (age int))
+  |}
+  in
+  let env = load_sig_str sig_src in
+  (match Type_env.lookup_fn "person-name" env with
+  | None -> Alcotest.fail "person-name not found"
+  | Some _ -> ());
+  match Type_env.lookup_fn "person-age" env with
+  | None -> Alcotest.fail "person-age not found"
+  | Some _ -> ()
+
+(** Test that defstruct accessor types are correct *)
+let test_defstruct_accessor_types () =
+  let sig_src =
+    {|
+    (defstruct person
+      (name string)
+      (age int))
+  |}
+  in
+  let env = load_sig_str sig_src in
+  let ty1, errors1 =
+    check_expr_str ~env "(person-name (make-person \"Alice\" 30))"
+  in
+  Alcotest.(check int) "no type errors for name" 0 (List.length errors1);
+  Alcotest.(check string)
+    "name accessor returns string" "string" (Types.to_string ty1);
+  let ty2, errors2 =
+    check_expr_str ~env "(person-age (make-person \"Alice\" 30))"
+  in
+  Alcotest.(check int) "no type errors for age" 0 (List.length errors2);
+  Alcotest.(check string) "age accessor returns int" "int" (Types.to_string ty2)
+
+(** Test that defstruct with :keyword-constructor generates keyword params *)
+let test_defstruct_keyword_constructor () =
+  let sig_src =
+    {|
+    (defstruct config :keyword-constructor
+      (host string)
+      (port int))
+  |}
+  in
+  let env = load_sig_str sig_src in
+  match Type_env.lookup_fn "make-config" env with
+  | None -> Alcotest.fail "make-config not found"
+  | Some scheme ->
+      let scheme_str = Type_env.scheme_to_string scheme in
+      (* Keyword constructor should have &key host and port params *)
+      Alcotest.(check bool)
+        "has keyword params" true
+        (try
+           let _ = Str.search_forward (Str.regexp_string "&key") scheme_str 0 in
+           true
+         with Not_found -> false)
+
+(** Test that defstruct with nullable fields makes them optional *)
+let test_defstruct_optional_fields () =
+  let sig_src =
+    {|
+    (defstruct config
+      (host string)
+      (timeout (int | nil)))
+  |}
+  in
+  let env = load_sig_str sig_src in
+  match Type_env.lookup_fn "make-config" env with
+  | None -> Alcotest.fail "make-config not found"
+  | Some scheme ->
+      let scheme_str = Type_env.scheme_to_string scheme in
+      (* The nullable field should be optional *)
+      Alcotest.(check bool)
+        "has optional param" true
+        (try
+           let _ =
+             Str.search_forward (Str.regexp_string "&optional") scheme_str 0
+           in
+           true
+         with Not_found -> false)
+
 (** {1 Data Declaration Tests} *)
 
 (** Test that data declaration generates type. *)
@@ -2558,6 +2702,23 @@ let () =
           Alcotest.test_case "no slots" `Quick test_import_struct_no_slots;
           Alcotest.test_case "types distinct" `Quick
             test_import_struct_types_distinct;
+        ] );
+      ( "defstruct",
+        [
+          Alcotest.test_case "generates constructor" `Quick
+            test_defstruct_generates_constructor;
+          Alcotest.test_case "constructor type check" `Quick
+            test_defstruct_constructor_type_check;
+          Alcotest.test_case "generates predicate" `Quick
+            test_defstruct_generates_predicate;
+          Alcotest.test_case "generates accessors" `Quick
+            test_defstruct_generates_accessors;
+          Alcotest.test_case "accessor types" `Quick
+            test_defstruct_accessor_types;
+          Alcotest.test_case "keyword constructor" `Quick
+            test_defstruct_keyword_constructor;
+          Alcotest.test_case "optional fields" `Quick
+            test_defstruct_optional_fields;
         ] );
       ( "data-declarations",
         [

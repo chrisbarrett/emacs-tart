@@ -872,6 +872,62 @@ let parse_data (contents : Sexp.t list) (span : Loc.span) : decl result =
   | Sexp.Symbol ("data", _) :: _ -> error "Expected type name after data" span
   | _ -> error "Invalid data declaration syntax" span
 
+(** {1 Defstruct Parsing} *)
+
+(** Parse a struct field: (field-name type) *)
+let parse_struct_field (sexp : Sexp.t) : Sig_ast.struct_field result =
+  match sexp with
+  | Sexp.List ([ Sexp.Symbol (name, _); type_sexp ], _) -> (
+      match parse_sig_type type_sexp with
+      | Ok ty -> Ok { Sig_ast.sf_name = name; sf_type = ty }
+      | Error e -> Error e)
+  | _ -> error "Expected struct field (name type)" (Sexp.span_of sexp)
+
+(** Parse a defstruct declaration.
+
+    Syntax:
+    - (defstruct name (field1 type1) (field2 type2) ...)
+    - (defstruct name :keyword-constructor (field1 type1) ...)
+    - (defstruct name (:include parent) (field1 type1) ...) *)
+let parse_defstruct (contents : Sexp.t list) (span : Loc.span) : decl result =
+  match contents with
+  | Sexp.Symbol ("defstruct", _) :: Sexp.Symbol (name, _) :: rest -> (
+      (* Parse options before fields *)
+      let rec parse_options keyword_ctor include_parent = function
+        | Sexp.Keyword ("keyword-constructor", _) :: rest ->
+            parse_options true include_parent rest
+        | Sexp.List ([ Sexp.Keyword ("include", _); Sexp.Symbol (parent, _) ], _)
+          :: rest ->
+            parse_options keyword_ctor (Some parent) rest
+        | remaining -> (keyword_ctor, include_parent, remaining)
+      in
+      let keyword_ctor, include_parent, field_sexps =
+        parse_options false None rest
+      in
+      (* Parse fields *)
+      let rec parse_fields acc = function
+        | [] -> Ok (List.rev acc)
+        | sexp :: rest -> (
+            match parse_struct_field sexp with
+            | Ok field -> parse_fields (field :: acc) rest
+            | Error e -> Error e)
+      in
+      match parse_fields [] field_sexps with
+      | Ok fields ->
+          Ok
+            (DDefstruct
+               {
+                 sd_name = name;
+                 sd_include = include_parent;
+                 sd_keyword_ctor = keyword_ctor;
+                 sd_fields = fields;
+                 sd_loc = span;
+               })
+      | Error e -> Error e)
+  | Sexp.Symbol ("defstruct", _) :: _ ->
+      error "Expected struct name after defstruct" span
+  | _ -> error "Invalid defstruct syntax" span
+
 (** {1 Top-Level Parsing} *)
 
 (** Parse a single declaration *)
@@ -895,10 +951,12 @@ let rec parse_decl (sexp : Sexp.t) : decl result =
       parse_forall contents span
   | Sexp.List ((Sexp.Symbol ("let-type", _) :: _ as contents), span) ->
       parse_let_type contents span
+  | Sexp.List ((Sexp.Symbol ("defstruct", _) :: _ as contents), span) ->
+      parse_defstruct contents span
   | _ ->
       error
-        "Expected declaration (defun, defvar, type, data, let-type, open, \
-         include, import-struct, or forall)"
+        "Expected declaration (defun, defvar, type, data, defstruct, let-type, \
+         open, include, import-struct, or forall)"
         (Sexp.span_of sexp)
 
 (** Parse a forall declaration.

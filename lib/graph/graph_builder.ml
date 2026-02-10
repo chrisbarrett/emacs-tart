@@ -84,7 +84,8 @@ let rec extract_edges_from_decl (decl : Sig_ast.decl) : Graph.edge list =
   | Sig_ast.DForall { forall_decls; _ } ->
       List.concat_map extract_edges_from_decl forall_decls
   | Sig_ast.DDefun _ | Sig_ast.DDefvar _ | Sig_ast.DType _
-  | Sig_ast.DImportStruct _ | Sig_ast.DData _ | Sig_ast.DLetType _ ->
+  | Sig_ast.DImportStruct _ | Sig_ast.DData _ | Sig_ast.DLetType _
+  | Sig_ast.DDefstruct _ ->
       []
 
 let extract_from_signature (sig_ : Sig_ast.signature) : Graph.edge list =
