@@ -4,11 +4,12 @@
 
 Emacs Lisp records (created by `record` and `make-record`) are typed vectors
 with a type tag in slot 0. Tart currently types these functions as
-`-> truthy` because the return type depends on which TYPE symbol is passed —
-a form of dependent typing tart does not support. This spec introduces an
-opaque `(record tag)` type in the prelude and types `record`/`make-record`
-to return it, providing more precision than `truthy` without requiring
-dependent types.
+`-> truthy` because the return type depends on which symbol is passed as the
+tag. This spec introduces an opaque `(record tag)` type in the prelude and
+types `record`/`make-record` to return it. The tag type parameter carries a
+singleton literal symbol type (e.g., `'foo`), exploiting the one-to-one
+correspondence between atom types and their runtime values to thread the tag
+through the type system without dependent types.
 
 ## Record Type
 
@@ -78,9 +79,23 @@ Type predicate that narrows to `(record _)` in truthy branches.
 
 ### type-of
 
-The existing `type-of` signature is unchanged. It returns `symbol` for all
-inputs. For records, the returned symbol is the tag, but this dynamic
-relationship is not captured in the type system.
+Add a record-specific clause to the existing `type-of` signature:
+
+```lisp
+(defun type-of
+  [tag] (((record tag)) -> tag)
+  ((_) -> symbol))
+```
+
+The `tag` type parameter in `(record tag)` is a singleton literal symbol type
+(e.g., `'foo`). Since literal types carry their precise value, `type-of` can
+return the tag itself rather than the general `symbol` type. This exploits the
+singleton relationship between atom types and values — `'foo` at the type level
+corresponds to exactly one runtime value, so no dependent typing is needed.
+
+When the tag is a union of literals (e.g., `(record ('foo | 'bar))`), `type-of`
+returns the union `'foo | 'bar`. Precision is only lost when the tag is an
+unconstrained `symbol`.
 
 ## Signature File Updates
 
@@ -89,7 +104,8 @@ Update the following files:
 - `typings/tart-prelude.tart` — add `(type record [tag] #opaque)`
 - `typings/emacs/31.0/c-core/alloc.tart` — update `record` and `make-record`
   signatures
-- `typings/emacs/31.0/c-core/data.tart` — add/update `recordp` signature
+- `typings/emacs/31.0/c-core/data.tart` — add/update `recordp` and `type-of`
+  signatures
 
 ## Key Files
 
@@ -97,17 +113,16 @@ Update the following files:
 |:-----|:-----|
 | `typings/tart-prelude.tart` | Add `record` opaque type |
 | `typings/emacs/31.0/c-core/alloc.tart` | `record` and `make-record` signatures |
-| `typings/emacs/31.0/c-core/data.tart` | `recordp` predicate signature |
+| `typings/emacs/31.0/c-core/data.tart` | `recordp` and `type-of` signatures |
 | `lib/core/types.mli` | May need `TRecord` constructor if not using opaque type mechanism |
 
-## Deferred
+## Future Work
 
-- **Structural record types.** Tracking field types by position (e.g.
-  `(record foo {0: int, 1: string})`) would require positional field tracking
-  and is not part of this spec. The opaque type captures only the tag.
-- **cl-defstruct integration.** `cl-defstruct` generates record-based types
-  with named field accessors. Connecting these generated accessors to
-  positional record fields is deferred.
-- **Record field access typing.** Functions like `aref` on records could
-  return field-specific types if structural record types were available.
-  Deferred pending structural record types.
+- **Structural record types and `cl-defstruct` integration.**
+  [Spec 93](93-structural-record-types.md) — adds `defstruct` to the
+  `.tart` signature grammar, generating typed constructor, accessor, and
+  predicate signatures from field declarations. Also adds `cl-defstruct`
+  macro expansion.
+- **Positional field access via `aref`.** Typing `(aref record idx)` with
+  per-field precision requires tracking field positions in the type system,
+  beyond what opaque `(record tag)` provides.
