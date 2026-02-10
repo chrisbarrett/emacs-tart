@@ -15,7 +15,7 @@ Gap analysis of specs 81–93 against the codebase.
 | [87](specs/87-bounded-quantification.md) | Bounded quantification | Done |
 | [88](specs/88-let-type.md) | Let-type | Done |
 | [89](specs/89-mutually-recursive-types.md) | Mutually recursive types | Done |
-| [90](specs/90-contravariant-function-subtyping.md) | Contravariant function subtyping | Not started |
+| [90](specs/90-contravariant-function-subtyping.md) | Contravariant function subtyping | Done |
 | [91](specs/91-tuple-element-access.md) | Tuple element access | Not started |
 | [92](specs/92-hook-arity-checking.md) | Hook arity checking | Not started |
 | [93](specs/93-structural-record-types.md) | Structural record types | Not started |
@@ -29,12 +29,14 @@ Gap analysis of specs 81–93 against the codebase.
 
 ## Priority 2: Core Features
 
-- [ ] Contravariant function subtyping —
-  [Spec 90](specs/90-contravariant-function-subtyping.md). Add the
-  standard subtyping rule `(A -> R) <: (B -> R)` when `B <: A`
-  (contravariant params, covariant return) to `unify_param` in
-  `lib/typing/unify.ml`. Only the rest-parameter widening rule exists
-  today. Guard against applying contravariance to unresolved tvars.
+- [x] Contravariant function subtyping —
+  [Spec 90](specs/90-contravariant-function-subtyping.md). Added
+  contravariant retry to `unify_param` in `lib/typing/unify.ml`: when
+  invariant (equality) unification fails for same-kind parameters with
+  a type mismatch, speculatively retry with swapped direction to check
+  `p_expected <: p_actual`. Guarded against bare tvars on both sides to
+  prevent unsound inference. Return types are already covariant via
+  existing subtyping rules.
 
 - [ ] Tuple element access via `nth` intrinsic —
   [Spec 91](specs/91-tuple-element-access.md). Make `nth` a

@@ -845,13 +845,65 @@ and unify_param_lists ?(invariant = false) ?(context = Constraint_solving) ps1
         in
         Error (IArityMismatch (required_count, 0, loc))
 
+(** Check if a type is a bare (unresolved) type variable.
+
+    Used to guard the contravariant parameter retry: flipping unification
+    direction on unresolved tvars would produce unsound inference. *)
+and is_bare_tvar ty =
+  match repr ty with TVar { contents = Unbound _ } -> true | _ -> false
+
+(** Attempt contravariant retry for a same-kind parameter pair (Spec 90).
+
+    When invariant unification [unify t1 t2] fails in parameter position, retry
+    with swapped direction [unify t2 t1] to check [t1 <: t2]. This implements
+    the standard contravariant subtyping rule for function parameters: a
+    function accepting wider types is substitutable for one accepting narrower
+    types.
+
+    The retry is speculative — tvar mutations are rolled back on failure.
+    Guards:
+    - At least one side must be concrete (not a bare tvar)
+    - The initial failure must be a type mismatch (not arity) *)
+and try_contravariant_param ~invariant ~context t1 t2 loc original_error =
+  if is_bare_tvar t1 && is_bare_tvar t2 then Error original_error
+  else
+    let snapshot = collect_tvar_refs_flat (collect_tvar_refs_flat [] t1) t2 in
+    match unify ~invariant ~context t2 t1 loc with
+    | Ok () ->
+        Log.debug "Contravariant param retry: %s <: %s" (to_string t1)
+          (to_string t2);
+        Ok ()
+    | Error _ ->
+        List.iter (fun (tv, saved) -> tv := saved) snapshot;
+        Error original_error
+
 and unify_param ?(invariant = false) ?(context = Constraint_solving) p1 p2 loc =
   match (p1, p2) with
-  | PPositional t1, PPositional t2 -> unify ~invariant ~context t1 t2 loc
-  | POptional t1, POptional t2 -> unify ~invariant ~context t1 t2 loc
-  | PRest t1, PRest t2 -> unify ~invariant ~context t1 t2 loc
+  | PPositional t1, PPositional t2 -> (
+      match unify ~invariant ~context t1 t2 loc with
+      | Ok () -> Ok ()
+      | Error (ITypeMismatch _ as e) ->
+          try_contravariant_param ~invariant ~context t1 t2 loc e
+      | Error _ as e -> e)
+  | POptional t1, POptional t2 -> (
+      match unify ~invariant ~context t1 t2 loc with
+      | Ok () -> Ok ()
+      | Error (ITypeMismatch _ as e) ->
+          try_contravariant_param ~invariant ~context t1 t2 loc e
+      | Error _ as e -> e)
+  | PRest t1, PRest t2 -> (
+      match unify ~invariant ~context t1 t2 loc with
+      | Ok () -> Ok ()
+      | Error (ITypeMismatch _ as e) ->
+          try_contravariant_param ~invariant ~context t1 t2 loc e
+      | Error _ as e -> e)
   | PKey (n1, t1), PKey (n2, t2) ->
-      if n1 = n2 then unify ~invariant ~context t1 t2 loc
+      if n1 = n2 then
+        match unify ~invariant ~context t1 t2 loc with
+        | Ok () -> Ok ()
+        | Error (ITypeMismatch _ as e) ->
+            try_contravariant_param ~invariant ~context t1 t2 loc e
+        | Error _ as e -> e
       else
         Error
           (ITypeMismatch
