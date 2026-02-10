@@ -16,7 +16,7 @@ Gap analysis of specs 81–93 against the codebase.
 | [88](specs/88-let-type.md) | Let-type | Done |
 | [89](specs/89-mutually-recursive-types.md) | Mutually recursive types | Done |
 | [90](specs/90-contravariant-function-subtyping.md) | Contravariant function subtyping | Done |
-| [91](specs/91-tuple-element-access.md) | Tuple element access | Not started |
+| [91](specs/91-tuple-element-access.md) | Tuple element access | Done |
 | [92](specs/92-hook-arity-checking.md) | Hook arity checking | Not started |
 | [93](specs/93-structural-record-types.md) | Structural record types | Not started |
 
@@ -38,12 +38,14 @@ Gap analysis of specs 81–93 against the codebase.
   prevent unsound inference. Return types are already covariant via
   existing subtyping rules.
 
-- [ ] Tuple element access via `nth` intrinsic —
-  [Spec 91](specs/91-tuple-element-access.md). Make `nth` a
-  type-checker intrinsic in `lib/typing/infer.ml`. When the sequence
-  is a `TTuple` and the index is a literal integer, return the precise
-  element type. Non-literal indices fall back to union of all elements
-  plus nil.
+- [x] Tuple element access via `nth` and `elt` intrinsics —
+  [Spec 91](specs/91-tuple-element-access.md). Added `nth` and `elt`
+  as type-checker intrinsics in `lib/typing/infer.ml`. When the
+  sequence is a `TTuple` and the index is a literal integer, returns
+  the precise element type. Out-of-bounds literals return `nil`.
+  Non-literal indices return the union of all element types plus `nil`.
+  Non-tuple sequences fall back to signature-based typing from
+  `fns.tart`.
 
 - [ ] Structural record types / `defstruct` —
   [Spec 93](specs/93-structural-record-types.md). Add `defstruct`

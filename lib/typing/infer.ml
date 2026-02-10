@@ -635,6 +635,11 @@ let rec infer (env : Env.t) (sexp : Syntax.Sexp.t) : result =
   (* === List intrinsic: heterogeneous list inference (Spec 84) === *)
   | List (Symbol ("list", _) :: args, span) ->
       infer_list_intrinsic env args span
+  (* === Tuple element access intrinsics (Spec 91) === *)
+  | List (Symbol ("nth", fn_span) :: [ index; seq ], span) ->
+      infer_nth_intrinsic env index seq fn_span span
+  | List (Symbol ("elt", fn_span) :: [ seq; index ], span) ->
+      infer_elt_intrinsic env index seq fn_span span
   (* === Function application (catch-all for lists) === *)
   | List (fn :: args, span) -> infer_application env fn args span
   | List ([], _span) ->
@@ -1156,6 +1161,67 @@ and infer_list_intrinsic env args span =
     undefineds = all_undefineds;
     clause_diagnostics = all_clause_diags;
   }
+
+(** Infer tuple element access for [nth] (Spec 91).
+
+    When the sequence is a [TTuple] and the index is a literal integer, returns
+    the precise element type. Out-of-bounds literals return [nil]. A non-literal
+    index on a tuple returns the union of all element types plus [nil]. For
+    non-tuple sequences, falls back to the generic signature from [fns.tart]. *)
+and infer_nth_intrinsic env index seq fn_span span =
+  let open Syntax.Sexp in
+  let index_result = infer env index in
+  let seq_result = infer env seq in
+  let constraints = C.combine index_result.constraints seq_result.constraints in
+  let undefineds = index_result.undefineds @ seq_result.undefineds in
+  let clause_diagnostics =
+    index_result.clause_diagnostics @ seq_result.clause_diagnostics
+  in
+  match repr seq_result.ty with
+  | TTuple elems -> (
+      match index with
+      | Int (n, _) ->
+          let ty =
+            if n >= 0 && n < List.length elems then List.nth elems n
+            else Prim.nil
+          in
+          { ty; constraints; undefineds; clause_diagnostics }
+      | _ ->
+          let ty = TUnion (elems @ [ Prim.nil ]) in
+          { ty; constraints; undefineds; clause_diagnostics })
+  | _ ->
+      (* Fall back to signature-based typing for non-tuple sequences *)
+      infer_application env (Symbol ("nth", fn_span)) [ index; seq ] span
+
+(** Infer tuple element access for [elt] (Spec 91).
+
+    Like {!infer_nth_intrinsic} but [elt] does not return [nil] for valid
+    indices (it signals an error for out-of-bounds access). Argument order is
+    reversed compared to [nth]: [(elt SEQUENCE N)]. *)
+and infer_elt_intrinsic env index seq fn_span span =
+  let open Syntax.Sexp in
+  let index_result = infer env index in
+  let seq_result = infer env seq in
+  let constraints = C.combine index_result.constraints seq_result.constraints in
+  let undefineds = index_result.undefineds @ seq_result.undefineds in
+  let clause_diagnostics =
+    index_result.clause_diagnostics @ seq_result.clause_diagnostics
+  in
+  match repr seq_result.ty with
+  | TTuple elems -> (
+      match index with
+      | Int (n, _) ->
+          let ty =
+            if n >= 0 && n < List.length elems then List.nth elems n
+            else Prim.nil
+          in
+          { ty; constraints; undefineds; clause_diagnostics }
+      | _ ->
+          let ty = TUnion (elems @ [ Prim.nil ]) in
+          { ty; constraints; undefineds; clause_diagnostics })
+  | _ ->
+      (* Fall back to signature-based typing for non-tuple sequences *)
+      infer_application env (Symbol ("elt", fn_span)) [ seq; index ] span
 
 (** Infer the type of a condition-case expression (Spec 85).
 
