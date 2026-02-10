@@ -117,10 +117,12 @@ tuple degenerates to a regular list since there is no heterogeneity to capture.
 | `lib/core/types.mli` | `TTuple` type constructor definition |
 | `typings/emacs/31.0/c-core/alloc.tart` | Current `list` signature (becomes fallback) |
 
-## Deferred
+## Future Work
 
-- **Tuple element access.** Accessing individual elements of a tuple by index
-  (e.g. `(nth 0 tuple)`) with precise per-element typing is not part of this
-  spec. Tuples accessed via `car`/`cdr` use the existing list-typed fallback.
-- **Tuple pattern matching.** Destructuring tuples via `pcase` with per-element
-  type narrowing is deferred.
+- **Tuple element access.**
+  [Spec 91](91-tuple-element-access.md) — accessing individual elements
+  of a tuple by index (e.g. `(nth 0 tuple)`) with precise per-element
+  typing. Tuples accessed via `car`/`cdr` use the existing list-typed
+  fallback.
+- **Tuple pattern matching.** Destructuring tuples via `pcase` with
+  per-element type narrowing.

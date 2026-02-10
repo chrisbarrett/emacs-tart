@@ -112,13 +112,13 @@ the direction moot: every type is a subtype of `any`.
 | `lib/core/types.mli` | Function type representation (`TArrow`, param list types) |
 | `typings/emacs/31.0/c-core/eval.tart` | `add-hook`/`remove-hook` signatures |
 
-## Deferred
+## Future Work
 
-- **Full contravariant function subtyping.** This spec adds only the
-  rest-parameter widening rule, not general function subtyping. Full
-  contravariant parameter / covariant return subtyping for all function types
-  is a separate, larger change.
-- **Arity checking at hook call sites.** When a hook is invoked via
-  `run-hook-with-args`, the arguments passed should match the arity of each
-  registered function. This requires tracking hook function types, which is
-  out of scope.
+- **Full contravariant function subtyping.**
+  [Spec 90](90-contravariant-function-subtyping.md) — general
+  `(A -> R) <: (B -> R)` when `B <: A` (contravariant parameters,
+  covariant return). This spec covers only the rest-parameter widening rule.
+- **Arity checking at hook call sites.**
+  [Spec 92](92-hook-arity-checking.md) — validating `run-hook-with-args`
+  argument counts against registered hook functions via typed hook
+  variables.
