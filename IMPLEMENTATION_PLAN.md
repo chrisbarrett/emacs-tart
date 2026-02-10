@@ -17,7 +17,7 @@ Gap analysis of specs 81–93 against the codebase.
 | [89](specs/89-mutually-recursive-types.md) | Mutually recursive types | Done |
 | [90](specs/90-contravariant-function-subtyping.md) | Contravariant function subtyping | Done |
 | [91](specs/91-tuple-element-access.md) | Tuple element access | Done |
-| [92](specs/92-hook-arity-checking.md) | Hook arity checking | Not started |
+| [92](specs/92-hook-arity-checking.md) | Hook arity checking | Done |
 | [93](specs/93-structural-record-types.md) | Structural record types | Done |
 
 ## Priority 1: Critical Path
@@ -57,13 +57,19 @@ Gap analysis of specs 81–93 against the codebase.
 
 ## Priority 3: Enhancements
 
-- [ ] Hook arity checking —
-  [Spec 92](specs/92-hook-arity-checking.md). Make `add-hook` and
-  `run-hook-with-args` intrinsics that extract the hook contract from
-  typed hook variables `(list F)` and validate function arity.
-  Requires typed hook variable declarations in typings files. Depends
-  on Spec 90 (contravariant subtyping) for full function-type
-  compatibility checks.
+- [x] Hook arity checking —
+  [Spec 92](specs/92-hook-arity-checking.md). Added `add-hook`,
+  `run-hook-with-args`, `run-hook-with-args-until-success`, and
+  `run-hook-with-args-until-failure` as type-checker intrinsics in
+  `lib/typing/infer.ml`. When the first argument is a quoted symbol,
+  looks up the hook variable type and extracts the function contract
+  from `(list F)` where `F` is a `TArrow`. For `add-hook`, constrains
+  the function argument against the hook contract. For
+  `run-hook-with-args` variants, constrains each argument against the
+  corresponding parameter type. The `((nil) -> R)` convention for
+  zero-argument hooks is normalised to `(() -> R)`. Falls back to
+  standard application when the hook name is not quoted, the variable
+  is not found, or the hook type is `(list any)` (opt-out).
 
 ## Discovered Issues
 

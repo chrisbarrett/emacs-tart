@@ -640,6 +640,17 @@ let rec infer (env : Env.t) (sexp : Syntax.Sexp.t) : result =
       infer_nth_intrinsic env index seq fn_span span
   | List (Symbol ("elt", fn_span) :: [ seq; index ], span) ->
       infer_elt_intrinsic env index seq fn_span span
+  (* === Hook arity checking intrinsics (Spec 92) === *)
+  | List (Symbol (("add-hook" as name), fn_span) :: args, span) ->
+      infer_add_hook_intrinsic env name args fn_span span
+  | List
+      ( Symbol
+          ( (( "run-hook-with-args" | "run-hook-with-args-until-success"
+             | "run-hook-with-args-until-failure" ) as name),
+            fn_span )
+        :: args,
+        span ) ->
+      infer_run_hook_with_args_intrinsic env name args fn_span span
   (* === Function application (catch-all for lists) === *)
   | List (fn :: args, span) -> infer_application env fn args span
   | List ([], _span) ->
@@ -1222,6 +1233,171 @@ and infer_elt_intrinsic env index seq fn_span span =
   | _ ->
       (* Fall back to signature-based typing for non-tuple sequences *)
       infer_application env (Symbol ("elt", fn_span)) [ seq; index ] span
+
+(** Extract the hook contract from a hook variable type.
+
+    If the variable's type is [(list F)] where [F] is a function type
+    ([TArrow]), returns [Some F] with the parameters normalized. The tart
+    convention uses [((nil) -> any)] to denote zero-argument hooks; this
+    function normalises a single [PPositional nil] to an empty parameter list so
+    that it matches zero-argument lambdas. Returns [None] for non-list or
+    non-function element types (opt-out). *)
+and extract_hook_contract (ty : typ) : typ option =
+  let list_name = intrinsic "List" in
+  match repr ty with
+  | TApp (list_con, [ elem_ty ]) when equal (repr list_con) (TCon list_name)
+    -> (
+      match repr elem_ty with
+      | TArrow (params, ret) ->
+          (* Normalise ((nil) -> R) convention to (() -> R) *)
+          let normalised_params =
+            match params with
+            | [ PPositional p ] when equal (repr p) Prim.nil -> []
+            | _ -> params
+          in
+          Some (TArrow (normalised_params, ret))
+      | _ -> None)
+  | _ -> None
+
+(** Infer [add-hook] with hook contract validation (Spec 92).
+
+    When the first argument is a quoted symbol, looks up the hook variable's
+    type. If the hook is typed as [(list F)] where [F] is a function type,
+    constrains the function argument to be a subtype of [F]. Falls back to the
+    standard [add-hook] signature when the hook name is not a quoted symbol or
+    the hook type does not carry a function contract. *)
+and infer_add_hook_intrinsic env name args fn_span span =
+  let open Syntax.Sexp in
+  match args with
+  | List ([ Symbol ("quote", _); Symbol (hook_name, _) ], _) :: fn_arg :: _ -> (
+      match Env.lookup_var hook_name env with
+      | Some scheme -> (
+          let hook_ty = Env.instantiate scheme env in
+          match extract_hook_contract hook_ty with
+          | Some (TArrow (contract_params, contract_ret)) ->
+              (* Infer all arguments normally via standard application *)
+              let base_result =
+                infer_application env (Symbol (name, fn_span)) args span
+              in
+              (* Infer the fn argument to get its type *)
+              let fn_result = infer env fn_arg in
+              (* Build a constraint: fn_arg's type = hook contract *)
+              let hook_arrow = TArrow (contract_params, contract_ret) in
+              let fn_arg_span = Syntax.Sexp.span_of fn_arg in
+              let context =
+                C.FunctionArg
+                  {
+                    fn_name = hook_name;
+                    fn_type = hook_arrow;
+                    arg_index = 1;
+                    arg_expr_source = get_expr_source fn_arg;
+                  }
+              in
+              let hook_constraint =
+                C.equal ~context fn_result.ty hook_arrow fn_arg_span
+              in
+              {
+                base_result with
+                constraints =
+                  C.add hook_constraint
+                    (C.combine base_result.constraints fn_result.constraints);
+                undefineds = base_result.undefineds @ fn_result.undefineds;
+                clause_diagnostics =
+                  base_result.clause_diagnostics @ fn_result.clause_diagnostics;
+              }
+          | _ ->
+              (* Hook contract not a function type — skip validation *)
+              infer_application env (Symbol (name, fn_span)) args span)
+      | None ->
+          (* Hook variable not found — skip validation *)
+          infer_application env (Symbol (name, fn_span)) args span)
+  | _ ->
+      (* First arg not a quoted symbol — skip validation *)
+      infer_application env (Symbol (name, fn_span)) args span
+
+(** Infer [run-hook-with-args] and variants with hook contract validation (Spec
+    92).
+
+    When the first argument is a quoted symbol, looks up the hook variable's
+    type. If the hook is typed as [(list (P1 P2 ... -> R))], validates each
+    subsequent argument against the corresponding parameter type [Pi]. Falls
+    back to the standard signature when the hook name is not a quoted symbol or
+    the hook type does not carry a function contract. *)
+and infer_run_hook_with_args_intrinsic env name args fn_span span =
+  let open Syntax.Sexp in
+  match args with
+  | List ([ Symbol ("quote", _); Symbol (hook_name, _) ], _) :: hook_args -> (
+      match Env.lookup_var hook_name env with
+      | Some scheme -> (
+          let hook_ty = Env.instantiate scheme env in
+          match extract_hook_contract hook_ty with
+          | Some (TArrow (contract_params, _contract_ret)) ->
+              (* Infer all arguments normally via standard application *)
+              let base_result =
+                infer_application env (Symbol (name, fn_span)) args span
+              in
+              (* Infer each hook arg and constrain against contract params *)
+              let extra_constraints =
+                List.mapi
+                  (fun i arg_expr ->
+                    let arg_result = infer env arg_expr in
+                    let param_ty =
+                      if i < List.length contract_params then
+                        match List.nth contract_params i with
+                        | PPositional ty | POptional ty -> Some ty
+                        | PRest ty -> Some ty
+                        | PKey (_, ty) -> Some ty
+                        | PLiteral _ -> None
+                      else None
+                    in
+                    match param_ty with
+                    | Some expected_ty ->
+                        let arg_span = Syntax.Sexp.span_of arg_expr in
+                        let hook_arrow =
+                          TArrow (contract_params, _contract_ret)
+                        in
+                        let context =
+                          C.FunctionArg
+                            {
+                              fn_name = hook_name;
+                              fn_type = hook_arrow;
+                              arg_index = i + 1;
+                              arg_expr_source = get_expr_source arg_expr;
+                            }
+                        in
+                        Some
+                          ( C.equal ~context arg_result.ty expected_ty arg_span,
+                            arg_result )
+                    | None -> None)
+                  hook_args
+              in
+              let valid_constraints =
+                List.filter_map Fun.id extra_constraints
+              in
+              let all_constraints =
+                List.fold_left
+                  (fun acc (c, r) -> C.combine (C.add c acc) r.constraints)
+                  base_result.constraints valid_constraints
+              in
+              let all_undefineds =
+                base_result.undefineds
+                @ List.concat_map (fun (_, r) -> r.undefineds) valid_constraints
+              in
+              let all_clause_diags =
+                base_result.clause_diagnostics
+                @ List.concat_map
+                    (fun (_, r) -> r.clause_diagnostics)
+                    valid_constraints
+              in
+              {
+                base_result with
+                constraints = all_constraints;
+                undefineds = all_undefineds;
+                clause_diagnostics = all_clause_diags;
+              }
+          | _ -> infer_application env (Symbol (name, fn_span)) args span)
+      | None -> infer_application env (Symbol (name, fn_span)) args span)
+  | _ -> infer_application env (Symbol (name, fn_span)) args span
 
 (** Infer the type of a condition-case expression (Spec 85).
 
