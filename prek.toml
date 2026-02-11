@@ -1,6 +1,6 @@
 [[repos]]
 repo = "builtin"
-hooks = {
+hooks = [
   {id = "check-added-large-files"},
   {id = "check-case-conflict"},
   {id = "check-json"},
@@ -9,7 +9,7 @@ hooks = {
   {id = "fix-byte-order-marker"},
   {id = "trailing-whitespace"},
   {id = "end-of-file-fixer"},
-}
+]
 
 [[repos]]
 repo = "local"
@@ -17,6 +17,7 @@ repo = "local"
 [[repos.hooks]]
 id = "dune-build"
 name = "dune build"
+language = "system"
 entry = "nix develop -c dune build"
 pass_filenames = false
 files = '\.(ml|mli|mll|mly)$'
@@ -24,6 +25,7 @@ files = '\.(ml|mli|mll|mly)$'
 [[repos.hooks]]
 id = "dune-test"
 name = "dune test"
+language = "system"
 entry = "nix develop -c dune test"
 pass_filenames = false
 files = '\.(ml|mli|mll|mly)$'
@@ -31,6 +33,7 @@ files = '\.(ml|mli|mll|mly)$'
 [[repos.hooks]]
 id = "dune-fmt"
 name = "dune fmt"
+language = "system"
 entry = "nix develop -c dune fmt"
 pass_filenames = false
 files = '\.(ml|mli)$'

@@ -2,19 +2,38 @@
 repo = "local"
 
 [[repos.hooks]]
-id = "elisp-remove-elc"
-name = "elisp remove elc files"
-files = { glob = "*.el" }
-pass_filenames = false
-entry = "rm -f *.elc"
-
-[[repos.hooks]]
 id = "elisp-byte-compile"
-name = "elisp byte compile"
+name = "elisp byte compilation"
+language = "system"
 files = { glob = "*.el" }
 entry = """
 nix develop -c emacs -Q --batch \
+  --directory . \
   --eval "(setq byte-compile-error-on-warn t)" \
-  --directory "/Users/chris/src/chrisbarrett/emacs-tart/lisp/" \
-  -L . -f batch-byte-compile
+  --eval "(setq load-prefer-newer t)" \
+  --funcall batch-byte-compile
 """
+
+[[repos.hooks]]
+id = "elisp-test"
+name = "elisp tests"
+language = "system"
+files = { glob = "*.el" }
+pass_filenames = false
+entry = """
+nix develop -c emacs -Q --batch \
+  --directory . \
+  --eval "(setq byte-compile-error-on-warn t)" \
+  --eval "(setq load-prefer-newer t)" \
+  --load tart-tests.el \
+  --load tart-mode-tests.el \
+  --funcall ert-run-tests-batch-and-exit
+"""
+
+[[repos.hooks]]
+id = "elisp-remove-elc"
+name = "elisp remove elc files"
+language = "system"
+files = { glob = "*.el" }
+pass_filenames = false
+entry = "rm -f *.elc"

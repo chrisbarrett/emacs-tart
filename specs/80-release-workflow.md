@@ -238,4 +238,3 @@ After triggering a release workflow:
 | Build failure (any platform) | `release` job does not run, tag exists but no release |
 | Changelog API failure | Falls back to raw git log, release still created |
 | Tag already exists | Git push fails, workflow terminates |
-

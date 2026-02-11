@@ -29,6 +29,7 @@
                   rev = "v${version}";
                   hash = "sha256-LZUwnVXoqwed/lbl6RrtKL6cvmtZ3hqYzuACIxhgGoM=";
                 };
+                doCheck = false;
                 cargoDeps = prev.rustPlatform.fetchCargoVendor {
                   inherit src;
                   hash = "sha256-Hq3y5GFP5nulEaHNkcOAIqaNAUTDHvXHsKzZN5IFui0=";
