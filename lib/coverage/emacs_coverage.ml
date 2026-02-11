@@ -1,9 +1,10 @@
-(** Emacs C layer coverage analysis.
+(** Emacs coverage analysis for C and Elisp layers.
 
-    Compares C definitions (DEFUNs, DEFVARs, DEFSYMs) scanned from Emacs source
-    against loaded typings to determine type coverage.
+    Compares C definitions (DEFUNs, DEFVARs, DEFSYMs) and Elisp definitions
+    (defun, defvar, etc.) scanned from Emacs source against loaded typings to
+    determine type coverage.
 
-    See Spec 29, R8 for requirements. *)
+    See Spec 29, R8 and Spec 95 for requirements. *)
 
 (** {1 Types} *)
 
@@ -147,3 +148,178 @@ let private_definitions (result : c_coverage_result) : c_coverage_item list =
   |> List.filter (fun item -> C_scanner.is_private item.definition.name)
   |> List.sort (fun a b ->
       String.compare a.definition.C_scanner.name b.definition.C_scanner.name)
+
+(** {1 Elisp Layer Types} *)
+
+type elisp_coverage_item = {
+  definition : Definition_extractor.definition;
+  status : coverage_status;
+}
+(** A single Elisp definition with its coverage status. *)
+
+type elisp_file_result = { filename : string; items : elisp_coverage_item list }
+(** Coverage results for a single Elisp file. *)
+
+type elisp_coverage_result = {
+  file_results : elisp_file_result list;
+  source_dir : string;
+  emacs_version : string;
+}
+(** Results from Elisp layer coverage analysis. *)
+
+type elisp_coverage_summary = {
+  elisp_total_public : int;
+  elisp_covered_public : int;
+  elisp_uncovered_public : int;
+  elisp_total_private : int;
+}
+(** Summary statistics for Elisp layer coverage. *)
+
+(** {1 Elisp Typings Loading} *)
+
+(** Build a type environment from versioned lisp-core typings. *)
+let load_lisp_typings ~(typings_root : string)
+    ~(version : Sig.Emacs_version.version) : Core.Type_env.t =
+  let search_path =
+    Sig.Search_path.empty
+    |> Sig.Search_path.with_typings_root typings_root
+    |> Sig.Search_path.with_emacs_version version
+  in
+  Sig.Search_path.load_lisp_core ~search_path Core.Type_env.empty
+
+(** {1 Elisp Coverage Calculation} *)
+
+(** Scan all .el files under the lisp/ subdirectory of [source_dir]. *)
+let scan_elisp_files (source_dir : string) :
+    Definition_extractor.extraction_result list =
+  let lisp_dir = Filename.concat source_dir "lisp" in
+  if not (Sys.file_exists lisp_dir && Sys.is_directory lisp_dir) then []
+  else
+    let files = Sys.readdir lisp_dir in
+    files |> Array.to_list
+    |> List.filter (fun f -> Filename.check_suffix f ".el")
+    |> List.sort String.compare
+    |> List.filter_map (fun f ->
+        let path = Filename.concat lisp_dir f in
+        Definition_extractor.extract_from_file path)
+
+(** Calculate coverage for Elisp definitions.
+
+    [Spec 95 R1-R4]: Scan lisp/*.el files and compare definitions against
+    lisp-core typings. Files without matching typings show 0/N public coverage.
+
+    @param source_dir Path to the Emacs source directory
+    @param emacs_version Version string for the report header
+    @param typings_root Root directory for versioned typings
+    @param version Emacs version for typings lookup *)
+let calculate_elisp_coverage ~(source_dir : string) ~(emacs_version : string)
+    ~(typings_root : string) ~(version : Sig.Emacs_version.version) :
+    elisp_coverage_result =
+  let env = load_lisp_typings ~typings_root ~version in
+  let extraction_results = scan_elisp_files source_dir in
+  let file_results =
+    List.map
+      (fun (result : Definition_extractor.extraction_result) ->
+        let items =
+          List.map
+            (fun (def : Definition_extractor.definition) ->
+              let status =
+                if has_signature env def.name then Covered else Uncovered
+              in
+              { definition = def; status })
+            result.definitions
+        in
+        { filename = result.filename; items })
+      extraction_results
+  in
+  { file_results; source_dir; emacs_version }
+
+(** {1 Elisp Summary Statistics} *)
+
+(** Compute summary statistics from Elisp coverage results. *)
+let elisp_summarize (result : elisp_coverage_result) : elisp_coverage_summary =
+  let all_items = List.concat_map (fun fr -> fr.items) result.file_results in
+  let public_items =
+    List.filter (fun item -> not item.definition.is_private) all_items
+  in
+  let private_items =
+    List.filter (fun item -> item.definition.is_private) all_items
+  in
+  let covered =
+    List.filter (fun item -> item.status = Covered) public_items |> List.length
+  in
+  let total_public = List.length public_items in
+  {
+    elisp_total_public = total_public;
+    elisp_covered_public = covered;
+    elisp_uncovered_public = total_public - covered;
+    elisp_total_private = List.length private_items;
+  }
+
+(** Calculate Elisp coverage percentage (0.0 to 100.0). *)
+let elisp_coverage_percentage (summary : elisp_coverage_summary) : float =
+  if summary.elisp_total_public = 0 then 100.0
+  else
+    float_of_int summary.elisp_covered_public
+    /. float_of_int summary.elisp_total_public
+    *. 100.0
+
+(** {1 Elisp Filtering} *)
+
+(** Get all uncovered public Elisp definitions, sorted alphabetically. *)
+let elisp_uncovered_public (result : elisp_coverage_result) :
+    elisp_coverage_item list =
+  result.file_results
+  |> List.concat_map (fun fr -> fr.items)
+  |> List.filter (fun item ->
+      (not item.definition.is_private) && item.status = Uncovered)
+  |> List.sort (fun a b -> String.compare a.definition.name b.definition.name)
+
+(** Get all covered public Elisp definitions, sorted alphabetically. *)
+let elisp_covered_public (result : elisp_coverage_result) :
+    elisp_coverage_item list =
+  result.file_results
+  |> List.concat_map (fun fr -> fr.items)
+  |> List.filter (fun item ->
+      (not item.definition.is_private) && item.status = Covered)
+  |> List.sort (fun a b -> String.compare a.definition.name b.definition.name)
+
+(** Get all private Elisp definitions, sorted alphabetically. *)
+let elisp_private_definitions (result : elisp_coverage_result) :
+    elisp_coverage_item list =
+  result.file_results
+  |> List.concat_map (fun fr -> fr.items)
+  |> List.filter (fun item -> item.definition.is_private)
+  |> List.sort (fun a b -> String.compare a.definition.name b.definition.name)
+
+(** {1 Combined Summary} *)
+
+type combined_summary = {
+  c_summary : c_coverage_summary;
+  elisp_summary : elisp_coverage_summary;
+  total_public : int;
+  total_covered : int;
+  total_uncovered : int;
+  total_private : int;
+}
+(** Aggregate summary across C and Elisp layers. *)
+
+(** Combine C and Elisp coverage summaries. *)
+let combine_summaries (c : c_coverage_summary) (e : elisp_coverage_summary) :
+    combined_summary =
+  {
+    c_summary = c;
+    elisp_summary = e;
+    total_public = c.total_public + e.elisp_total_public;
+    total_covered = c.covered_public + e.elisp_covered_public;
+    total_uncovered = c.uncovered_public + e.elisp_uncovered_public;
+    total_private = c.total_private + e.elisp_total_private;
+  }
+
+(** Calculate combined coverage percentage (0.0 to 100.0). *)
+let combined_coverage_percentage (summary : combined_summary) : float =
+  if summary.total_public = 0 then 100.0
+  else
+    float_of_int summary.total_covered
+    /. float_of_int summary.total_public
+    *. 100.0

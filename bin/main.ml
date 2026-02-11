@@ -891,19 +891,15 @@ let run_emacs_coverage emacs_source emacs_version_opt =
       Tart.Log.verbose "Sample matches:";
       let covered = Tart.Emacs_coverage.covered_public result in
       List.iteri
-        (fun i item ->
+        (fun i (item : Tart.Emacs_coverage.c_coverage_item) ->
           if i < 5 then
-            Tart.Log.verbose "  %s: COVERED (%s:%d)"
-              item.Tart.Emacs_coverage.definition.name
-              item.Tart.Emacs_coverage.definition.file
-              item.Tart.Emacs_coverage.definition.line)
+            Tart.Log.verbose "  %s: COVERED (%s:%d)" item.definition.name
+              item.definition.file item.definition.line)
         covered;
       let uncovered_items = Tart.Emacs_coverage.uncovered_public result in
       List.iteri
-        (fun i item ->
-          if i < 5 then
-            Tart.Log.verbose "  %s: UNCOVERED"
-              item.Tart.Emacs_coverage.definition.name)
+        (fun i (item : Tart.Emacs_coverage.c_coverage_item) ->
+          if i < 5 then Tart.Log.verbose "  %s: UNCOVERED" item.definition.name)
         uncovered_items;
       Tart.Log.verbose "Match complete: %d/%d DEFUNs covered (%.1f%%)"
         summary.covered_public summary.total_public percentage;
@@ -921,8 +917,8 @@ let run_emacs_coverage emacs_source emacs_version_opt =
       if private_defs <> [] then (
         Printf.printf "Private symbols excluded: %d\n" summary.total_private;
         List.iter
-          (fun item ->
-            Printf.printf "  %s\n" item.Tart.Emacs_coverage.definition.name)
+          (fun (item : Tart.Emacs_coverage.c_coverage_item) ->
+            Printf.printf "  %s\n" item.definition.name)
           (List.filteri (fun i _ -> i < 10) private_defs);
         if List.length private_defs > 10 then
           Printf.printf "  ... and %d more\n" (List.length private_defs - 10);
@@ -932,8 +928,8 @@ let run_emacs_coverage emacs_source emacs_version_opt =
       if uncovered <> [] then (
         print_endline "Uncovered public:";
         List.iter
-          (fun item ->
-            Printf.printf "  %s\n" item.Tart.Emacs_coverage.definition.name)
+          (fun (item : Tart.Emacs_coverage.c_coverage_item) ->
+            Printf.printf "  %s\n" item.definition.name)
           uncovered)
 
 (* ============================================================================
