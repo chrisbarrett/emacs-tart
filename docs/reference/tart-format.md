@@ -4,12 +4,10 @@ Canonical reference for tart's `.tart` signature file format.
 
 ## Overview
 
-`.tart` files declare the **public interface** of Elisp modules--functions,
-values and their types.
-
-Only what appears in a `.tart` file is visible to consumers. This helps you work
-with all your implementation details in a type-safe way while being deliberate
-about what constitutes the stable 'public' API.
+`.tart` files declare the **public interface** of Elisp modules — functions,
+variables, and their types. Only what appears in a `.tart` file is visible to
+consumers, letting you keep implementation details private while exposing a
+type-safe public API.
 
 Type checking is available for any `.el` file via LSP. When code uses `require`
 or autoloaded functions, tart searches for corresponding `.tart` files. A
@@ -18,18 +16,23 @@ signature verification.
 
 ## File Structure
 
+A `.tart` file consists of optional directives followed by declarations. The
+module name comes from the filename: `foo.tart` provides types for `foo`.
+
 ```elisp
+;; Directives (imports)
 (open 'module)                             ; Import types for use in signatures
 (include 'module)                          ; Inline and re-export declarations
 
-(defun name [vars] params -> ret)          ; Function (callable)
+;; Declarations
+(defun name [vars] (params) -> ret)        ; Function (callable)
 (defvar variable-name type)                ; Variable declaration
 (type name)                                ; Opaque type
 (type name [vars] def)                     ; Type alias
-(import-struct name)                       ; Import cl-defstruct
+(let-type name def)                        ; File-local type alias (not exported)
+(defstruct name (field type) ...)          ; Struct declaration
+(forall [vars] decl ...)                   ; Scoped type variables
 ```
-
-The module name comes from the filename: `foo.tart` provides types for `foo`.
 
 ## Grammar
 
@@ -40,58 +43,289 @@ directive    ::= open_decl | include_decl
 open_decl    ::= "(open '" symbol ')'
 include_decl ::= "(include '" symbol ')'
 
-declaration  ::= func_decl | var_decl | type_decl | struct_import
+declaration  ::= func_decl | var_decl | type_decl | let_type_decl
+               | struct_decl | forall_decl
 
 func_decl    ::= '(defun' symbol '[' bind* ']' param-group '->' type ')'
                | '(defun' symbol param-group '->' type ')'
                | '(defun' symbol '[' bind* ']' clause+ ')'
                | '(defun' symbol clause+ ')'
 clause       ::= '(' param-group '->' type ')'
+               | '(' param-group '->' type ':' diagnostic ')'
+
 var_decl     ::= '(defvar' symbol type ')'
+
 type_decl    ::= '(type' symbol ')'                          ; opaque
                | '(type' symbol '[' bind* ']' ')'            ; opaque + phantom
                | '(type' symbol type ')'                     ; alias
                | '(type' symbol '[' bind* ']' type ')'       ; alias + quantified
-struct_import ::= '(import-struct' symbol ')'
+               | '(type' type_binding type_binding+ ')'      ; mutually recursive
+
+let_type_decl ::= '(let-type' symbol ')'
+                | '(let-type' symbol '[' bind* ']' ')'
+                | '(let-type' symbol type ')'
+                | '(let-type' symbol '[' bind* ']' type ')'
+                | '(let-type' type_binding type_binding+ ')'
+
+type_binding  ::= symbol '[' bind* ']'? type
+
+struct_decl  ::= '(defstruct' symbol field_decl+ ')'
+               | '(defstruct' symbol ':keyword-constructor' field_decl+ ')'
+field_decl   ::= '(' symbol type ')'
+
+forall_decl  ::= '(forall' '[' bind* ']' declaration+ ')'
 
 bind         ::= symbol | '(' symbol ':' type ')'
-param-group  ::= '(' param* ')'                              ; always parenthesized
+param-group  ::= '(' param* ')'
 param        ::= type | '&optional' type | '&rest' type | '&key' keyword type
-type         ::= symbol                                      ; type name or variable
-               | '_'                                         ; inferred type (fresh tvar)
+type         ::= symbol
+               | '_'                                          ; inferred type (fresh tvar)
                | '(' symbol type+ ')'                        ; type application
                | '(' type '|' type ('|' type)* ')'           ; union
+               | '(' type '-' type ')'                       ; type subtraction
                | '(' param-group '->' type ')'               ; function value
                | '(' '[' bind* ']' param-group '->' type ')' ; polymorphic function value
+               | '{' field_entry* ('&' symbol)? '}'          ; row type
                | literal
+field_entry  ::= symbol type
 literal      ::= integer | string | quoted-symbol | keyword
+diagnostic   ::= string                                      ; message for clause
 ```
 
-**Note on param groups:** Params are always wrapped in parentheses. This avoids
-ambiguity between `(foo bar)` as two params vs a type application. Type
-applications inside a param group need their own parens: `((list int))` for a
-single param of type `(list int)`.
+> [!NOTE]
+> Param groups are **always** parenthesized. This avoids ambiguity between
+> `(foo bar)` as two params vs a type application. Type applications inside a
+> param group need their own parens: `((list int))` for a single param of type
+> `(list int)`.
 
-## Lisp-2 Calling Convention
+## Declarations
 
-Elisp separates functions and values into different namespaces:
+### Function Declarations (`defun`)
 
-| Declaration        | Calling convention              | Example                             |
-| ------------------ | ------------------------------- | ----------------------------------- |
-| `defun`            | Direct: `(f args...)`           | `(defun add (int int) -> int)`      |
-| `defvar` with `->` | Indirect: `(funcall f args...)` | `(defvar handler ((string) -> nil))`|
-
-The `->` is infix, separating parameters from return type. Params are always
-grouped in parentheses.
+Functions declared with `defun` are directly callable as `(name args...)`:
 
 ```elisp
-;; Function slot (callable)
-(defun add (int int) -> int)              ; two params
-(defun identity [a] (a) -> a)             ; one param
+(defun my-add (int int) -> int)
+(defun my-identity [a] (a) -> a)
+(defun my-map [a b] (((a -> b)) (list a)) -> (list b))
+```
 
-;; Value slot (requires funcall)
-(defvar handler ((string) -> nil))        ; monomorphic function value
-(defvar id-fn ([a] (a) -> a))             ; polymorphic function value
+The first parameter to `my-map` is an arrow type `((a -> b))`, meaning it is a
+function **value** that must be called with `funcall` inside the implementation.
+
+#### Multi-Clause Functions
+
+Functions can have multiple `(params -> return)` clauses, tried in order
+(pattern-matching semantics). Use multi-clause signatures for type predicates
+and overloaded functions:
+
+```elisp
+;; Type predicate: narrows argument to string in conditionals
+(defun stringp
+  ((string) -> t)
+  ((_) -> nil))
+
+;; Inverted predicate: atom is anything that's not a cons
+(defun atom
+  (((cons any any)) -> nil)
+  ((_) -> t))
+
+;; Polymorphic with multiple clauses
+(defun car [a b]
+  (((cons a b)) -> a)
+  ((nil) -> nil))
+```
+
+#### Clause Diagnostics
+
+A clause can attach a diagnostic message that tart emits when that clause
+matches. Use this for deprecation warnings, usage notes, or error guidance:
+
+```elisp
+clause       ::= '(' param-group '->' type ':' diagnostic ')'
+```
+
+```elisp
+;; Deprecation warning on a single-clause function
+(defun interactive-p () -> bool
+  : "interactive-p is deprecated; use called-interactively-p")
+
+;; Warning only on the fallback clause
+(defun my-convert
+  ((string) -> int)
+  ((_) -> nil : "my-convert only accepts strings"))
+```
+
+When a call matches a clause with a diagnostic, tart reports the message as a
+warning (or error/note depending on severity).
+
+#### Inferred Types (`_`)
+
+Any type symbol starting with `_` is an **inferred type variable** — a fresh
+type variable that participates in HM unification. Each `_` occurrence is
+independent. These are **not** `any`:
+
+```elisp
+(defun foo
+  ((string int) -> string)
+  ((_ _) -> nil))           ;; two independent fresh tvars
+```
+
+`_foo`, `_bar`, etc. are also valid wildcard names.
+
+### Variable Declarations (`defvar`)
+
+```elisp
+(defvar my-default-value string)
+(defvar my-counter int)
+```
+
+### Type Declarations (`type`)
+
+The `type` declaration has four single-binding forms and a multi-binding form
+for mutual recursion.
+
+**Opaque type** — no definition, creates an abstract type:
+
+```elisp
+(type buffer)
+```
+
+**Opaque type with phantom parameters:**
+
+```elisp
+(type handle [a])
+(type tagged [tag])
+```
+
+**Type alias:**
+
+```elisp
+(type int-list (list int))
+(type callback ((string) -> nil))
+(type status (:pending | :complete | :failed))
+```
+
+**Type alias with quantifier:**
+
+```elisp
+(type option [(a : truthy)] (a | nil))
+(type result [a e] ((ok a) | (err e)))
+(type predicate [a] ((a) -> bool))
+```
+
+**Mutually recursive types** — multiple bindings in a single form make all names
+visible to each other:
+
+```elisp
+(type tree   [a] (leaf a | node (forest a))
+      forest [a] (list (tree a)))
+```
+
+Without multi-binding, the second name would not exist when the first is
+defined. Opaque types cannot appear in multi-binding forms (they have no body to
+reference).
+
+### Local Type Aliases (`let-type`)
+
+`let-type` is identical to `type` in every way except that it is **not
+exported**. Modules that `open` or `include` this file do not see `let-type`
+names. Use it for internal abbreviations that keep signatures readable without
+polluting the public namespace:
+
+```elisp
+;; Internal shorthand (not exported)
+(let-type pair (cons int int))
+(let-type wrapper [a] (list a))
+(let-type internal-handle)
+
+;; Mutually recursive (not exported)
+(let-type internal-tree   (leaf int | node internal-forest)
+          internal-forest (list internal-tree))
+```
+
+All forms that `type` supports are valid under `let-type`, including
+multi-binding for mutual recursion.
+
+### Struct Declarations (`defstruct`)
+
+`defstruct` generates typed constructor, predicate, and accessor signatures from
+field declarations:
+
+```elisp
+(defstruct person
+  (name string)
+  (age int)
+  (email (string | nil)))
+```
+
+This generates the following signatures:
+
+```elisp
+;; Constructor
+(defun make-person (string int (string | nil)) -> (record person))
+
+;; Predicate
+(defun person-p
+  (((record person)) -> t)
+  ((_) -> nil))
+
+;; Accessors
+(defun person-name ((record person)) -> string)
+(defun person-age ((record person)) -> int)
+(defun person-email ((record person)) -> (string | nil))
+```
+
+Use `:keyword-constructor` to generate a keyword-argument constructor:
+
+```elisp
+(defstruct person :keyword-constructor
+  (name string)
+  (age int))
+
+;; Generates:
+;; (defun make-person (&key (:name string) (:age int)) -> (record person))
+```
+
+### Forall Declarations (`forall`)
+
+`forall` scopes type variables across multiple declarations. Use it when several
+declarations share the same type variable but are not individually polymorphic:
+
+```elisp
+(forall [a]
+  (defun iter-next ((iter a)) -> (a | nil))
+  (defun iter-peek ((iter a)) -> (a | nil))
+  (defun iter-reset ((iter a)) -> nil))
+```
+
+Without `forall`, each `defun` would need its own `[a]` quantifier. `forall`
+binds the variables once and makes them available to all enclosed declarations.
+
+### Open (Import Types)
+
+`(open 'module)` brings type names from another module into scope for use in
+type expressions. The imported names are not re-exported:
+
+```elisp
+;; my-collection.tart
+(open 'seq)
+
+(defun my-flatten [a] ((seq (seq a))) -> (list a))
+(defun my-frequencies [a] ((seq a)) -> (hash-table a int))
+```
+
+### Include (Re-export)
+
+`(include 'module)` inlines all declarations from another `.tart` file, making
+them part of this module's interface:
+
+```elisp
+;; my-extended-seq.tart
+(include 'seq)
+
+(defun seq-partition [a] (int (seq a)) -> (list (list a)))
+(defun seq-interleave [a] ((seq a) (seq a)) -> (list a))
 ```
 
 ## Type Syntax
@@ -99,7 +333,7 @@ grouped in parentheses.
 ### Primitive Types
 
 | Type      | Description           | Truthy? |
-| --------- | --------------------- | ------- |
+| :-------- | :-------------------- | :------ |
 | `int`     | Integers              | Yes     |
 | `float`   | Floating-point        | Yes     |
 | `num`     | Numeric               | Yes     |
@@ -109,22 +343,23 @@ grouped in parentheses.
 | `nil`     | Only `nil`            | No      |
 | `t`       | Only `t`              | Yes     |
 | `truthy`  | Anything except `nil` | Yes     |
-| `never`   | Bottom type (errors)  | Yes     |
+| `never`   | Bottom type (errors)  | N/A     |
 
-### Standard Library Types
+### Prelude Types
 
-Defined in the standard library, not primitives:
+Defined in the [prelude][prelude], not primitives:
 
 ```elisp
 (type bool (nil | t))
 (type any (truthy | nil))
 (type option [(a : truthy)] (a | nil))
+(type is [a] (a - nil))
 ```
 
 ### Type Variables and Quantification
 
 Type variables must be explicitly quantified. A symbol is a type variable if and
-only if it appears in a quantifier `[...]`.
+only if it appears in a quantifier `[...]`:
 
 ```elisp
 ;; Explicit quantification required
@@ -135,11 +370,10 @@ only if it appears in a quantifier `[...]`.
 (defun bad (a) -> a)
 ```
 
-Quantifiers can include bounds using `(var : type)`:
+Quantifiers can include upper bounds using `(var : type)`:
 
 ```elisp
 (type option [(a : truthy)] (a | nil))
-
 (defun unwrap-or [(a : truthy)] ((a | nil) a) -> a)
 ```
 
@@ -182,11 +416,20 @@ The `|` operator binds tighter than `->`:
 (defun bar [a] ((a | nil)) -> a)      ; takes union param
 ```
 
+### Type Subtraction
+
+Type subtraction removes a type from a union using `-`:
+
+```elisp
+(type is [a] (a - nil))               ; removes nil from a
+((int | string | nil) - nil)          ; => (int | string)
+((truthy | nil) - nil)                ; => truthy
+```
+
 ### Function Types
 
-Elisp functions are **not curried**; parameters are grouped.
-
-Arrow types use infix `->`. Params are always in parentheses:
+Elisp functions are **not curried**; parameters are grouped. Arrow types use
+infix `->` with params always in parentheses:
 
 ```elisp
 (int) -> int                           ; one param
@@ -212,28 +455,37 @@ go at the start of the arrow type:
 (defvar handler ((string) -> nil))    ; monomorphic function value
 ```
 
-### Parameter Kinds
-
-| Syntax           | Meaning                    |
-| ---------------- | -------------------------- |
-| `type`           | Required positional        |
-| `&optional type` | Optional (caller may omit) |
-| `&rest type`     | Rest args (element type)   |
-| `&key :k type`   | Keyword argument           |
-
 ### Type Constructors
 
 ```elisp
 (list a)                              ; homogeneous list
 (vector a)                            ; homogeneous vector
-(pair a b)                            ; cons cell
-(tuple a b c)                         ; fixed-length tuple
+(cons a b)                            ; cons cell
 (hash-table k v)                      ; hash table
+(record tag)                          ; struct record with type tag
+```
+
+### Row Types
+
+Row types describe record-like structures with named fields. They use curly
+braces:
+
+```elisp
+{name string age int}                 ; closed row: exactly these fields
+{name string & r}                     ; open row: at least name, r captures rest
+```
+
+A **closed** row has a fixed set of fields. An **open** row uses `& var` to
+introduce a row variable, enabling row polymorphism — the function accepts any
+record with at least the named fields:
+
+```elisp
+(defun get-name [r] ({name string & r}) -> string)
 ```
 
 ### Option Type
 
-`option` is defined in the standard library with a truthy constraint:
+`option` is defined in the [prelude][prelude] with a truthy constraint:
 
 ```elisp
 (type option [(a : truthy)] (a | nil))
@@ -244,237 +496,94 @@ This ensures the inner type is distinguishable from `nil`:
 ```elisp
 (option string)         ; valid
 (option int)            ; valid
-(option (list a))       ; valid
-(option nil)            ; INVALID - a : truthy not satisfied
-(option bool)           ; INVALID - bool includes nil
-(option (option a))     ; INVALID - option includes nil
+(option nil)            ; INVALID — a : truthy not satisfied
+(option bool)           ; INVALID — bool includes nil
+(option (option a))     ; INVALID — option includes nil
 ```
 
-## Declarations
+## Lisp-2 Calling Convention
 
-### Function Declarations
+Elisp separates functions and values into different namespaces:
 
-Functions declared with `defun` are directly callable as `(name args...)`:
+| Declaration        | Calling convention              | Example                              |
+| :----------------- | :------------------------------ | :----------------------------------- |
+| `defun`            | Direct: `(f args...)`           | `(defun add (int int) -> int)`       |
+| `defvar` with `->` | Indirect: `(funcall f args...)` | `(defvar handler ((string) -> nil))` |
+
+The `->` is infix, separating parameters from return type. Params are always
+grouped in parentheses:
 
 ```elisp
-(defun my-add (int int) -> int)
-(defun my-identity [a] (a) -> a)
-(defun my-map [a b] (((a -> b)) (list a)) -> (list b))
+;; Function slot (callable)
+(defun add (int int) -> int)              ; two params
+(defun identity [a] (a) -> a)             ; one param
+
+;; Value slot (requires funcall)
+(defvar handler ((string) -> nil))        ; monomorphic function value
+(defvar id-fn ([a] (a) -> a))             ; polymorphic function value
 ```
 
-Note: The first parameter to `my-map` is an arrow type `((a -> b))`, meaning it's
-a function **value** that must be called with `funcall` inside the
-implementation.
+## Parameter Kinds
 
-#### Multi-Clause Functions
-
-Functions can have multiple `(params -> return)` clauses, tried in order
-(pattern-matching semantics). Used for type predicates and overloaded
-signatures:
-
-```elisp
-;; Type predicate: narrows argument to string in conditionals
-(defun stringp
-  ((string) -> t)
-  ((_) -> nil))
-
-;; Inverted: atom is anything that's not a cons
-(defun atom
-  (((cons any any)) -> nil)
-  ((_) -> t))
-
-;; Polymorphic with multiple clauses
-(defun car [a b]
-  (((cons a b)) -> a)
-  ((nil) -> nil))
-```
-
-#### Inferred Types (`_`)
-
-Any type symbol starting with `_` is an **inferred type variable**--a fresh
-tvar that participates in HM unification, not `any`. Each `_` occurrence is
-independent:
-
-```elisp
-(defun foo
-  ((string int) -> string)
-  ((_ _) -> nil))           ;; two independent fresh tvars
-```
-
-`_foo`, `_bar` etc. are also valid wildcard names.
-
-### Variable Declarations
-
-```elisp
-(defvar my-default-value string)
-(defvar my-counter int)
-```
-
-### Type Declarations
-
-The `type` declaration has four forms:
-
-**Opaque type** (no definition = abstract):
-
-```elisp
-(type buffer)
-```
-
-**Opaque type with phantom parameters:**
-
-```elisp
-(type handle [a])
-(type tagged [tag])
-```
-
-**Type alias:**
-
-```elisp
-(type int-list (list int))
-(type callback ((string) -> nil))
-(type status (:pending | :complete | :failed))
-```
-
-**Type alias with quantifier:**
-
-```elisp
-(type option [(a : truthy)] (a | nil))
-(type result [a e] ((ok a) | (err e)))
-(type predicate [a] ((a) -> bool))
-```
-
-The quantifier form `(type name [vars] def)` is equivalent to
-`(type name ([vars] def))` -- the quantifier binds to the entire definition.
-
-### Opaque Types
-
-A `type` declaration with no definition creates an abstract type with hidden
-representation. Consumers can pass values around but cannot inspect or construct
-them except via declared functions.
-
-```elisp
-;; buffer-manager.tart
-(type buffer)                             ; abstract type (no definition = opaque)
-
-(defun buffer-create (string) -> buffer)
-(defun buffer-name (buffer) -> string)
-(defun buffer-kill (buffer) -> nil)
-```
-
-Each opaque declaration creates a distinct type--`buffer` and `handle` below are
-not interchangeable:
-
-```elisp
-(type buffer)
-(type handle)
-```
-
-Use opaque types for:
-
-- Wrapping external resources (buffers, processes, windows)
-- Enforcing API boundaries (consumers must use your functions)
-- Hiding implementation details that may change
-
-### Struct Imports
-
-```elisp
-;; Given (cl-defstruct person name age) in .el file:
-(import-struct person)
-
-;; Generates:
-;; - Type: person
-;; - Constructor: make-person
-;; - Predicate: person-p
-;; - Accessors: person-name, person-age
-```
-
-### Open (Import Types)
-
-`(open 'module)` brings type names from another module into scope for use in
-type expressions. The imported names are not re-exported.
-
-```elisp
-;; my-collection.tart
-(open 'seq)  ; seq types now available for use in signatures
-
-(defun my-flatten [a] ((seq (seq a))) -> (list a))
-(defun my-frequencies [a] ((seq a)) -> (hash-table a int))
-```
-
-Use `open` when you need to reference types from other modules in your
-signatures.
-
-### Include (Re-export)
-
-`(include 'module)` inlines all declarations from another `.tart` file, making
-them part of this module's interface.
-
-```elisp
-;; my-extended-seq.tart
-(include 'seq)  ; re-export everything from seq
-
-;; Plus additional functions
-(defun seq-partition [a] (int (seq a)) -> (list (list a)))
-(defun seq-interleave [a] ((seq a) (seq a)) -> (list a))
-```
-
-Use `include` to extend or re-export another module's type interface.
+| Syntax           | Meaning                    |
+| :--------------- | :------------------------- |
+| `type`           | Required positional        |
+| `&optional type` | Optional (caller may omit) |
+| `&rest type`     | Rest args (element type)   |
+| `&key :k type`   | Keyword argument           |
 
 ## Complete Example
 
 ```elisp
 ;; my-utils.tart
-(open 'seq)  ; import seq for use in signatures
+(open 'seq)
 
-;; Type aliases
-(type int-list (list int))
+;; File-local abbreviation (not exported)
+(let-type str-list (list string))
+
+;; Exported types
 (type result [a e] ((ok a) | (err e)))
-
-;; Opaque type (no definition)
 (type handle)
 
-;; Function declarations (directly callable)
+;; Struct
+(defstruct config
+  (host string)
+  (port int))
+
+;; Functions
 (defun my-utils-trim (string) -> string)
-(defun my-utils-split (string string) -> (list string))
+(defun my-utils-split (string string) -> str-list)
 (defun my-utils-identity [a] (a) -> a)
+
+;; Scoped type variables
+(forall [a]
+  (defun my-utils-wrap (a) -> (list a))
+  (defun my-utils-unwrap ((list a)) -> a))
 
 ;; Variable (non-function)
 (defvar my-utils-default-separator string)
 
 ;; Variable holding a function value (requires funcall)
 (defvar my-utils-error-handler ((string) -> nil))
-(defvar my-utils-transform ([a] (a) -> a))
 ```
 
 ## Signature Search Path
 
 When a module is required, tart searches for `.tart` files in order:
 
-1. **Sibling file**: `module.tart` next to `module.el` (highest priority)
-2. **Search path**: Directories in `tart-type-path` (user/community types)
-3. **Bundled stdlib**: `stdlib/module.tart` shipped with tart
+1. **Sibling file** — `module.tart` next to `module.el` (highest priority)
+2. **Bundled typings** — [`typings/`][typings] shipped with tart
 
-This allows providing types for any module, including third-party packages that
-don't ship their own type definitions.
-
-### Search Path Configuration
-
-```elisp
-;; In Emacs config
-(setq tart-type-path '("~/.config/emacs/tart/" "/path/to/community-types/"))
-```
+The sibling file takes priority, allowing project-local signatures to override
+bundled ones.
 
 ### Example: Providing Types for External Packages
 
-```
-~/.config/emacs/tart/
-├── seq.tart              ; types for seq.el
-├── dash.tart             ; types for dash.el
-└── magit-section.tart    ; types for magit-section.el
-```
+Place a `.tart` file next to the `.el` file or in a directory on the search
+path:
 
 ```elisp
-;; ~/.config/emacs/tart/seq.tart
+;; seq.tart (sibling to seq.el, or in typings/)
 (defun seq-map [a b] (((a -> b)) (seq a)) -> (list b))
 (defun seq-filter [a] (((a -> bool)) (seq a)) -> (list a))
 (defun seq-reduce [a b] (((b a -> b)) b (seq a)) -> b)
@@ -482,10 +591,13 @@ don't ship their own type definitions.
 ```
 
 The filename determines the module: `seq.tart` provides types for
-`(require 'seq)`. The first match in the search order wins, allowing user
-overrides of bundled types.
+`(require 'seq)`.
 
 ## See Also
 
-- [DESIGN.md](../../DESIGN.md) - Type system reference
-- [Spec 07](../../specs/07-signature-files.md) - Parser implementation spec
+- [Type System Reference](type-system.md)
+- [Writing Typings](writing-typings.md)
+- [Getting Started](../getting-started.md)
+
+[prelude]: ../../typings/tart-prelude.tart
+[typings]: ../../typings/

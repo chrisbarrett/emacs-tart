@@ -166,8 +166,12 @@ You can also use the `tart` macro for type annotations.
 
 ## Documentation
 
-- **[Getting Started](docs/getting-started.adoc)** -- Tutorial for new users
-- **[Library Authors Guide](docs/library-authors.adoc)** -- Writing `.tart`
-  files
-- **[Tooling Setup](docs/tooling-setup.adoc)** -- Editor configuration
-- **[CLI Reference](docs/cli-reference.adoc)** -- Command-line usage
+- **[Getting Started](docs/getting-started.md)** -- Tutorial for new users
+- **[Writing Typings](docs/reference/writing-typings.md)** -- Writing `.tart`
+  files and inline annotations
+- **[Tooling Setup](docs/tooling-setup.md)** -- Editor configuration
+- **[CLI Reference](docs/cli-reference.md)** -- Command-line usage
+- **[Type System Reference](docs/reference/type-system.md)** -- Full type
+  system documentation
+- **[.tart Format Reference](docs/reference/tart-format.md)** -- Grammar and
+  syntax reference
