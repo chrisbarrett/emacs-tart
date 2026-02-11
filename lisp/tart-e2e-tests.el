@@ -282,3 +282,7 @@
 
 (provide 'tart-e2e-tests)
 ;;; tart-e2e-tests.el ends here
+
+;; Local Variables:
+;; no-byte-compile: t
+;; End:

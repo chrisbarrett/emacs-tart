@@ -105,3 +105,7 @@
   (should t))
 
 ;;; tart-tests.el ends here
+
+;; Local Variables:
+;; no-byte-compile: t
+;; End:

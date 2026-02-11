@@ -219,3 +219,7 @@ Called automatically after each test."
 
 (provide 'tart-test-helpers)
 ;;; tart-test-helpers.el ends here
+
+;; Local Variables:
+;; no-byte-compile: t
+;; End:
