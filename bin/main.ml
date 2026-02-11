@@ -833,7 +833,8 @@ let run_coverage format fail_under exclude paths =
   | None -> ()
 
 (** Emacs-coverage subcommand: measure C and Elisp layer coverage *)
-let run_emacs_coverage emacs_source emacs_version_opt color_mode format =
+let run_emacs_coverage emacs_source emacs_version_opt color_mode format
+    sort_column reverse_flag min_pct max_pct positional_args =
   let source_result = Tart.Emacs_source.discover ~explicit_path:emacs_source in
   match source_result with
   | Tart.Emacs_source.NotFound _ | Tart.Emacs_source.InvalidPath _ ->
@@ -922,7 +923,20 @@ let run_emacs_coverage emacs_source emacs_version_opt color_mode format =
       (* Build file_row list from both layers *)
       let c_rows = Tart.Coverage_table.rows_of_c_result c_result in
       let elisp_rows = Tart.Coverage_table.rows_of_elisp_result elisp_result in
-      let rows = Tart.Coverage_table.default_sort (c_rows @ elisp_rows) in
+      let all_rows = c_rows @ elisp_rows in
+
+      (* Sort *)
+      let rows =
+        Tart.Coverage_table.sort_rows ~column:sort_column ~reverse:reverse_flag
+          all_rows
+      in
+
+      (* Filter by percentage *)
+      let rows = Tart.Coverage_table.filter_rows ?min_pct ?max_pct rows in
+
+      (* Filter by positional arguments *)
+      let has_positional = positional_args <> [] in
+      let rows = Tart.Coverage_table.match_positional positional_args rows in
 
       (* Render output *)
       let table_color =
@@ -939,10 +953,22 @@ let run_emacs_coverage emacs_source emacs_version_opt color_mode format =
       let config =
         Tart.Coverage_table.{ color = table_color; format = table_format }
       in
-      print_string
-        (Tart.Coverage_table.render_table ~config ~emacs_version:version_str
-           rows);
-      if table_format = Tart.Coverage_table.Human then print_newline ()
+      if has_positional then
+        match table_format with
+        | Tart.Coverage_table.Human ->
+            print_string
+              (Tart.Coverage_table.render_drilldown_human ~config
+                 ~emacs_version:version_str rows);
+            print_newline ()
+        | Tart.Coverage_table.Json ->
+            print_string
+              (Tart.Coverage_table.render_drilldown_json
+                 ~emacs_version:version_str rows)
+      else (
+        print_string
+          (Tart.Coverage_table.render_table ~config ~emacs_version:version_str
+             rows);
+        if table_format = Tart.Coverage_table.Human then print_newline ())
 
 (* ============================================================================
    Cmdliner Argument Definitions
@@ -1244,6 +1270,46 @@ let color_arg =
   in
   Arg.(value & opt color_mode_enum `Auto & info [ "color" ] ~docv:"MODE" ~doc)
 
+let sort_column_enum =
+  Arg.enum
+    [
+      ("default", Tart.Coverage_table.Default);
+      ("name", Tart.Coverage_table.Name);
+      ("coverage", Tart.Coverage_table.Coverage);
+      ("public", Tart.Coverage_table.Public);
+      ("private", Tart.Coverage_table.Private);
+    ]
+
+let sort_arg =
+  let doc =
+    "Sort by column. $(docv) is $(b,default), $(b,name), $(b,coverage), \
+     $(b,public), or $(b,private). Bare --sort implies coverage."
+  in
+  Arg.(
+    value
+    & opt ~vopt:Tart.Coverage_table.Coverage sort_column_enum
+        Tart.Coverage_table.Default
+    & info [ "sort" ] ~docv:"COLUMN" ~doc)
+
+let reverse_arg =
+  let doc = "Reverse the sort order." in
+  Arg.(value & flag & info [ "reverse" ] ~doc)
+
+let min_percentage_arg =
+  let doc = "Only show files with coverage >= $(docv)%." in
+  Arg.(value & opt (some float) None & info [ "min-percentage" ] ~docv:"N" ~doc)
+
+let max_percentage_arg =
+  let doc = "Only show files with coverage <= $(docv)%." in
+  Arg.(value & opt (some float) None & info [ "max-percentage" ] ~docv:"M" ~doc)
+
+let emacs_coverage_positional_arg =
+  let doc =
+    "Filter by filename, glob, or feature name. Glob if contains * or ?; \
+     filename if contains .el or .c; feature name otherwise."
+  in
+  Arg.(value & pos_all string [] & info [] ~docv:"PATTERN" ~doc)
+
 let emacs_coverage_cmd =
   let doc = "Measure Emacs C and Elisp layer type coverage" in
   let man =
@@ -1256,14 +1322,18 @@ let emacs_coverage_cmd =
   in
   let info = Cmd.info "emacs-coverage" ~doc ~man in
   let run log_level log_format verbose_flag emacs_source emacs_version_opt
-      color_mode format =
+      color_mode format sort_column reverse_flag min_pct max_pct positional_args
+      =
     setup_logging ~log_level ~log_format ~verbose_flag;
     run_emacs_coverage emacs_source emacs_version_opt color_mode format
+      sort_column reverse_flag min_pct max_pct positional_args
   in
   Cmd.v info
     Term.(
       const run $ log_level_arg $ log_format_arg $ verbose_flag_arg
-      $ emacs_source_arg $ emacs_version_arg $ color_arg $ format_arg)
+      $ emacs_source_arg $ emacs_version_arg $ color_arg $ format_arg $ sort_arg
+      $ reverse_arg $ min_percentage_arg $ max_percentage_arg
+      $ emacs_coverage_positional_arg)
 
 (* ============================================================================
    Corpus Subcommands

@@ -16,8 +16,8 @@ let contains ~sub s =
     true
   with Not_found -> false
 
-let make_row ?(private_count = 0) ?(uncovered_names = []) filename
-    public_covered public_total =
+let make_row ?(private_count = 0) ?(uncovered_names = [])
+    ?(uncovered_details = []) filename public_covered public_total =
   let coverage_pct =
     if public_total = 0 then 100.0
     else float_of_int public_covered /. float_of_int public_total *. 100.0
@@ -29,6 +29,7 @@ let make_row ?(private_count = 0) ?(uncovered_names = []) filename
     public_total;
     coverage_pct;
     uncovered_names;
+    uncovered_details;
   }
 
 (** {1 Table Alignment Tests} *)
@@ -376,6 +377,282 @@ let test_rows_of_elisp_result () =
   Alcotest.(check (list string))
     "uncovered names" [ "other-func" ] row.uncovered_names
 
+(** {1 sort_rows Tests} *)
+
+let test_sort_by_name () =
+  let rows =
+    [ make_row "data.c" 1 2; make_row "alloc.c" 3 4; make_row "buffer.el" 5 6 ]
+  in
+  let sorted = sort_rows ~column:Name ~reverse:false rows in
+  let names = List.map (fun r -> r.filename) sorted in
+  Alcotest.(check (list string))
+    "alphabetical"
+    [ "alloc.c"; "buffer.el"; "data.c" ]
+    names
+
+let test_sort_by_coverage () =
+  let rows =
+    [ make_row "high.c" 9 10; make_row "low.c" 1 10; make_row "mid.c" 5 10 ]
+  in
+  let sorted = sort_rows ~column:Coverage ~reverse:false rows in
+  let names = List.map (fun r -> r.filename) sorted in
+  Alcotest.(check (list string))
+    "ascending coverage"
+    [ "low.c"; "mid.c"; "high.c" ]
+    names
+
+let test_sort_by_public () =
+  let rows =
+    [ make_row "a.c" 10 20; make_row "b.c" 5 20; make_row "c.c" 15 20 ]
+  in
+  let sorted = sort_rows ~column:Public ~reverse:false rows in
+  let names = List.map (fun r -> r.filename) sorted in
+  Alcotest.(check (list string))
+    "ascending public covered" [ "b.c"; "a.c"; "c.c" ] names
+
+let test_sort_by_private () =
+  let rows =
+    [
+      make_row ~private_count:3 "a.c" 1 2;
+      make_row ~private_count:1 "b.c" 1 2;
+      make_row ~private_count:5 "c.c" 1 2;
+    ]
+  in
+  let sorted = sort_rows ~column:Private ~reverse:false rows in
+  let names = List.map (fun r -> r.filename) sorted in
+  Alcotest.(check (list string))
+    "ascending private" [ "b.c"; "a.c"; "c.c" ] names
+
+let test_sort_reverse () =
+  let rows =
+    [ make_row "high.c" 9 10; make_row "low.c" 1 10; make_row "mid.c" 5 10 ]
+  in
+  let sorted = sort_rows ~column:Coverage ~reverse:true rows in
+  let names = List.map (fun r -> r.filename) sorted in
+  Alcotest.(check (list string))
+    "descending coverage"
+    [ "high.c"; "mid.c"; "low.c" ]
+    names
+
+let test_sort_default_matches_default_sort () =
+  let rows =
+    [
+      make_row "simple.el" 1 2; make_row "alloc.c" 3 4; make_row "buffer.c" 5 6;
+    ]
+  in
+  let sorted1 = default_sort rows in
+  let sorted2 = sort_rows ~column:Default ~reverse:false rows in
+  let names1 = List.map (fun r -> r.filename) sorted1 in
+  let names2 = List.map (fun r -> r.filename) sorted2 in
+  Alcotest.(check (list string)) "same as default_sort" names1 names2
+
+(** {1 filter_rows Tests} *)
+
+let test_filter_min_pct () =
+  let rows =
+    [ make_row "high.c" 9 10; make_row "low.c" 1 10; make_row "mid.c" 5 10 ]
+  in
+  let filtered = filter_rows ~min_pct:50.0 rows in
+  let names = List.map (fun r -> r.filename) filtered in
+  Alcotest.(check (list string)) "min 50%" [ "high.c"; "mid.c" ] names
+
+let test_filter_max_pct () =
+  let rows =
+    [ make_row "high.c" 9 10; make_row "low.c" 1 10; make_row "mid.c" 5 10 ]
+  in
+  let filtered = filter_rows ~max_pct:50.0 rows in
+  let names = List.map (fun r -> r.filename) filtered in
+  Alcotest.(check (list string)) "max 50%" [ "low.c"; "mid.c" ] names
+
+let test_filter_range () =
+  let rows =
+    [ make_row "high.c" 9 10; make_row "low.c" 1 10; make_row "mid.c" 5 10 ]
+  in
+  let filtered = filter_rows ~min_pct:20.0 ~max_pct:60.0 rows in
+  let names = List.map (fun r -> r.filename) filtered in
+  Alcotest.(check (list string)) "20-60%" [ "mid.c" ] names
+
+let test_filter_no_constraints () =
+  let rows = [ make_row "a.c" 1 10; make_row "b.c" 9 10 ] in
+  let filtered = filter_rows rows in
+  Alcotest.(check int) "all rows" 2 (List.length filtered)
+
+(** {1 Positional Matching Tests} *)
+
+let test_match_glob_star () =
+  let rows =
+    [
+      make_row "buffer.c" 1 2; make_row "buffer.el" 3 4; make_row "alloc.c" 5 6;
+    ]
+  in
+  let matched = match_positional [ "buf*" ] rows in
+  let names = List.map (fun r -> r.filename) matched in
+  Alcotest.(check (list string)) "glob buf*" [ "buffer.c"; "buffer.el" ] names
+
+let test_match_glob_question () =
+  let rows =
+    [ make_row "data.c" 1 2; make_row "dafa.c" 3 4; make_row "alloc.c" 5 6 ]
+  in
+  let matched = match_positional [ "da?a.c" ] rows in
+  let names = List.map (fun r -> r.filename) matched in
+  Alcotest.(check (list string)) "glob da?a.c" [ "data.c"; "dafa.c" ] names
+
+let test_match_filename_exact () =
+  let rows =
+    [
+      make_row "buffer.c" 1 2; make_row "buffer.el" 3 4; make_row "alloc.c" 5 6;
+    ]
+  in
+  let matched = match_positional [ "buffer.c" ] rows in
+  let names = List.map (fun r -> r.filename) matched in
+  Alcotest.(check (list string)) "exact filename" [ "buffer.c" ] names
+
+let test_match_feature_name () =
+  let rows =
+    [
+      make_row "buffer.c" 1 2; make_row "buffer.el" 3 4; make_row "alloc.c" 5 6;
+    ]
+  in
+  let matched = match_positional [ "buffer" ] rows in
+  let names = List.map (fun r -> r.filename) matched in
+  Alcotest.(check (list string))
+    "feature name"
+    [ "buffer.c"; "buffer.el" ]
+    names
+
+let test_match_multiple_args () =
+  let rows =
+    [ make_row "buffer.c" 1 2; make_row "alloc.c" 3 4; make_row "data.c" 5 6 ]
+  in
+  let matched = match_positional [ "buffer"; "data.c" ] rows in
+  let names = List.map (fun r -> r.filename) matched in
+  Alcotest.(check (list string)) "multiple args" [ "buffer.c"; "data.c" ] names
+
+let test_match_empty_args () =
+  let rows = [ make_row "buffer.c" 1 2; make_row "alloc.c" 3 4 ] in
+  let matched = match_positional [] rows in
+  Alcotest.(check int) "no filter" 2 (List.length matched)
+
+(** {1 Drill-Down Tests} *)
+
+let make_detail file line col identifier = { file; line; col; identifier }
+
+let test_drilldown_human_basic () =
+  let details =
+    [ make_detail "data.c" 10 0 "cdr"; make_detail "data.c" 20 0 "foo" ]
+  in
+  let rows =
+    [
+      make_row ~uncovered_names:[ "cdr"; "foo" ] ~uncovered_details:details
+        "data.c" 1 3;
+    ]
+  in
+  let output =
+    render_drilldown_human ~config:no_color_config ~emacs_version:"31.0" rows
+  in
+  (* Table part *)
+  Alcotest.(check bool)
+    "has table header" true
+    (contains ~sub:"FILENAME" output);
+  (* Drill-down lines *)
+  Alcotest.(check bool)
+    "has cdr line" true
+    (contains ~sub:"data.c:10:0: cdr" output);
+  Alcotest.(check bool)
+    "has foo line" true
+    (contains ~sub:"data.c:20:0: foo" output)
+
+let test_drilldown_human_no_uncovered () =
+  let rows = [ make_row "data.c" 3 3 ] in
+  let output =
+    render_drilldown_human ~config:no_color_config ~emacs_version:"31.0" rows
+  in
+  (* Should just be the table, no blank line or drilldown *)
+  Alcotest.(check bool)
+    "has table header" true
+    (contains ~sub:"FILENAME" output);
+  Alcotest.(check bool) "no double newline" false (contains ~sub:"\n\n" output)
+
+let test_drilldown_json_structure () =
+  let details =
+    [
+      make_detail "buffer.c" 42 0 "get-buffer";
+      make_detail "buffer.c" 100 5 "set-buffer";
+    ]
+  in
+  let rows =
+    [
+      make_row
+        ~uncovered_names:[ "get-buffer"; "set-buffer" ]
+        ~uncovered_details:details "buffer.c" 5 7;
+    ]
+  in
+  let output = render_drilldown_json ~emacs_version:"31.0" rows in
+  Alcotest.(check bool)
+    "has uncovered_details" true
+    (contains ~sub:"\"uncovered_details\":" output);
+  Alcotest.(check bool)
+    "has file field" true
+    (contains ~sub:"\"file\": \"buffer.c\"" output);
+  Alcotest.(check bool) "has line 42" true (contains ~sub:"\"line\": 42" output);
+  Alcotest.(check bool) "has col 5" true (contains ~sub:"\"col\": 5" output);
+  Alcotest.(check bool)
+    "has identifier" true
+    (contains ~sub:"\"identifier\": \"set-buffer\"" output);
+  (* Also has normal parts *)
+  Alcotest.(check bool)
+    "has files array" true
+    (contains ~sub:"\"files\":" output);
+  Alcotest.(check bool) "has totals" true (contains ~sub:"\"totals\":" output)
+
+let test_drilldown_json_empty_details () =
+  let rows = [ make_row "data.c" 3 3 ] in
+  let output = render_drilldown_json ~emacs_version:"31.0" rows in
+  Alcotest.(check bool)
+    "has uncovered_details" true
+    (contains ~sub:"\"uncovered_details\": [\n  ]" output)
+
+let test_drilldown_human_sorted_by_file_line () =
+  let details_a =
+    [ make_detail "buffer.c" 50 0 "zeta"; make_detail "buffer.c" 10 0 "alpha" ]
+  in
+  let details_b = [ make_detail "alloc.c" 5 0 "xmalloc" ] in
+  let rows =
+    [
+      make_row ~uncovered_names:[ "alpha"; "zeta" ] ~uncovered_details:details_a
+        "buffer.c" 1 3;
+      make_row ~uncovered_names:[ "xmalloc" ] ~uncovered_details:details_b
+        "alloc.c" 0 1;
+    ]
+  in
+  let output =
+    render_drilldown_human ~config:no_color_config ~emacs_version:"31.0" rows
+  in
+  (* Details should be sorted: alloc.c:5 then buffer.c:10 then buffer.c:50 *)
+  let lines = String.split_on_char '\n' output in
+  let detail_lines =
+    List.filter
+      (fun l ->
+        contains ~sub:": " l
+        && (not (contains ~sub:"FILENAME" l))
+        && not (contains ~sub:"/" l))
+      lines
+  in
+  (* Check the order of detail lines *)
+  Alcotest.(check int) "three detail lines" 3 (List.length detail_lines);
+  let first = List.nth detail_lines 0 in
+  let second = List.nth detail_lines 1 in
+  let third = List.nth detail_lines 2 in
+  Alcotest.(check bool)
+    "first is alloc" true
+    (contains ~sub:"alloc.c:5:0: xmalloc" first);
+  Alcotest.(check bool)
+    "second is buffer:10" true
+    (contains ~sub:"buffer.c:10:0: alpha" second);
+  Alcotest.(check bool)
+    "third is buffer:50" true
+    (contains ~sub:"buffer.c:50:0: zeta" third)
+
 (** {1 Test Suites} *)
 
 let alignment_tests =
@@ -404,6 +681,31 @@ let sort_tests =
     Alcotest.test_case "alphabetical" `Quick
       test_default_sort_alphabetical_within_group;
     Alcotest.test_case "empty" `Quick test_default_sort_empty;
+    Alcotest.test_case "sort by name" `Quick test_sort_by_name;
+    Alcotest.test_case "sort by coverage" `Quick test_sort_by_coverage;
+    Alcotest.test_case "sort by public" `Quick test_sort_by_public;
+    Alcotest.test_case "sort by private" `Quick test_sort_by_private;
+    Alcotest.test_case "sort reverse" `Quick test_sort_reverse;
+    Alcotest.test_case "sort default = default_sort" `Quick
+      test_sort_default_matches_default_sort;
+  ]
+
+let filter_tests =
+  [
+    Alcotest.test_case "min percentage" `Quick test_filter_min_pct;
+    Alcotest.test_case "max percentage" `Quick test_filter_max_pct;
+    Alcotest.test_case "range" `Quick test_filter_range;
+    Alcotest.test_case "no constraints" `Quick test_filter_no_constraints;
+  ]
+
+let positional_tests =
+  [
+    Alcotest.test_case "glob star" `Quick test_match_glob_star;
+    Alcotest.test_case "glob question" `Quick test_match_glob_question;
+    Alcotest.test_case "exact filename" `Quick test_match_filename_exact;
+    Alcotest.test_case "feature name" `Quick test_match_feature_name;
+    Alcotest.test_case "multiple args" `Quick test_match_multiple_args;
+    Alcotest.test_case "empty args" `Quick test_match_empty_args;
   ]
 
 let json_tests =
@@ -413,6 +715,18 @@ let json_tests =
     Alcotest.test_case "totals" `Quick test_json_totals;
     Alcotest.test_case "empty rows" `Quick test_json_empty_rows;
     Alcotest.test_case "escaping" `Quick test_json_escaping;
+  ]
+
+let drilldown_tests =
+  [
+    Alcotest.test_case "human basic" `Quick test_drilldown_human_basic;
+    Alcotest.test_case "human no uncovered" `Quick
+      test_drilldown_human_no_uncovered;
+    Alcotest.test_case "json structure" `Quick test_drilldown_json_structure;
+    Alcotest.test_case "json empty details" `Quick
+      test_drilldown_json_empty_details;
+    Alcotest.test_case "human sorted by file:line" `Quick
+      test_drilldown_human_sorted_by_file_line;
   ]
 
 let row_construction_tests =
@@ -427,6 +741,9 @@ let () =
       ("alignment", alignment_tests);
       ("color", color_tests);
       ("sort", sort_tests);
+      ("filter", filter_tests);
+      ("positional", positional_tests);
       ("json", json_tests);
+      ("drilldown", drilldown_tests);
       ("row-construction", row_construction_tests);
     ]
