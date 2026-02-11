@@ -21,7 +21,7 @@
 (test
  (name emacs_source_test)
  (modules emacs_source_test)
- (libraries coverage str alcotest))
+ (libraries coverage sig unix str alcotest))
 
 (test
  (name c_scanner_test)

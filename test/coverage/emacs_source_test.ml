@@ -100,7 +100,141 @@ let test_format_error_found () =
   let msg = format_error (Found { source_dir = "/path"; version = "31.0" }) in
   Alcotest.(check string) "no error for Found" "" msg
 
+(** {1 Auto-Version Integration Tests} *)
+
+(** Create a temporary typings directory tree for testing fallback chain. *)
+let with_temp_typings_dir versions f =
+  let tmpdir = Filename.temp_file "typings_" "" in
+  Sys.remove tmpdir;
+  Unix.mkdir tmpdir 0o755;
+  let cleanup () =
+    let rec remove_dir dir =
+      if Sys.is_directory dir then (
+        Array.iter
+          (fun fn ->
+            let path = Filename.concat dir fn in
+            if Sys.is_directory path then remove_dir path else Sys.remove path)
+          (Sys.readdir dir);
+        Unix.rmdir dir)
+      else Sys.remove dir
+    in
+    try remove_dir tmpdir with _ -> ()
+  in
+  Fun.protect ~finally:cleanup (fun () ->
+      List.iter
+        (fun ver_str ->
+          let ver_dir = Filename.concat tmpdir ver_str in
+          Unix.mkdir ver_dir 0o755;
+          let c_core_dir = Filename.concat ver_dir "c-core" in
+          Unix.mkdir c_core_dir 0o755)
+        versions;
+      f tmpdir)
+
+let test_detected_version_selects_typings () =
+  (* Simulate: Emacs reports version "31.0.50", typings exist for "31.0" *)
+  let detected = "31.0.50" in
+  match Sig.Emacs_version.parse_version detected with
+  | None -> Alcotest.fail "should parse 31.0.50"
+  | Some version ->
+      with_temp_typings_dir [ "31.0" ] (fun typings_root ->
+          match Sig.Search_path.find_typings_dir ~typings_root ~version with
+          | Some dir ->
+              Alcotest.(check string)
+                "falls back to 31.0"
+                (Filename.concat typings_root "31.0")
+                dir
+          | None -> Alcotest.fail "should find 31.0 via fallback")
+
+let test_detected_version_exact_match () =
+  (* Simulate: Emacs reports "31.0", typings exist for "31.0" exactly *)
+  let detected = "31.0" in
+  match Sig.Emacs_version.parse_version detected with
+  | None -> Alcotest.fail "should parse 31.0"
+  | Some version ->
+      with_temp_typings_dir [ "31.0" ] (fun typings_root ->
+          match Sig.Search_path.find_typings_dir ~typings_root ~version with
+          | Some dir ->
+              Alcotest.(check string)
+                "selects exact 31.0"
+                (Filename.concat typings_root "31.0")
+                dir
+          | None -> Alcotest.fail "should find exact 31.0")
+
+let test_detected_version_falls_back_to_latest () =
+  (* Simulate: Emacs reports "99.0", only "latest" typings exist *)
+  let detected = "99.0" in
+  match Sig.Emacs_version.parse_version detected with
+  | None -> Alcotest.fail "should parse 99.0"
+  | Some version ->
+      with_temp_typings_dir [ "latest" ] (fun typings_root ->
+          match Sig.Search_path.find_typings_dir ~typings_root ~version with
+          | Some dir ->
+              Alcotest.(check string)
+                "falls back to latest"
+                (Filename.concat typings_root "latest")
+                dir
+          | None -> Alcotest.fail "should find latest via fallback")
+
+let test_override_version_ignores_detected () =
+  (* Simulate: detected "31.0.50" but user passes --emacs-version 30.1 *)
+  let override = "30.1" in
+  match Sig.Emacs_version.parse_version override with
+  | None -> Alcotest.fail "should parse 30.1"
+  | Some version ->
+      with_temp_typings_dir [ "30.1"; "31.0" ] (fun typings_root ->
+          match Sig.Search_path.find_typings_dir ~typings_root ~version with
+          | Some dir ->
+              Alcotest.(check string)
+                "uses override 30.1"
+                (Filename.concat typings_root "30.1")
+                dir
+          | None -> Alcotest.fail "should find 30.1")
+
+let test_unparseable_version_uses_default () =
+  (* Simulate: detected version is "unknown", should use latest as fallback *)
+  let detected = "unknown" in
+  match Sig.Emacs_version.parse_version detected with
+  | Some _ -> Alcotest.fail "should not parse 'unknown'"
+  | None ->
+      (* When parsing fails, main.ml falls back to Emacs_version.latest *)
+      let version = Sig.Emacs_version.latest in
+      with_temp_typings_dir [ "latest" ] (fun typings_root ->
+          match Sig.Search_path.find_typings_dir ~typings_root ~version with
+          | Some dir ->
+              Alcotest.(check string)
+                "uses latest as default"
+                (Filename.concat typings_root "latest")
+                dir
+          | None -> Alcotest.fail "should find latest")
+
+let test_fallback_chain_order () =
+  (* Version 31.0.50 should try 31.0.50 -> 31.0 -> 31 -> latest *)
+  let detected = "31.0.50" in
+  match Sig.Emacs_version.parse_version detected with
+  | None -> Alcotest.fail "should parse"
+  | Some version ->
+      let candidates = Sig.Search_path.version_fallback_candidates version in
+      Alcotest.(check (list string))
+        "correct chain"
+        [ "31.0.50"; "31.0"; "31"; "latest" ]
+        candidates
+
 (** {1 Test Suites} *)
+
+let auto_version_tests =
+  [
+    Alcotest.test_case "detected version selects typings" `Quick
+      test_detected_version_selects_typings;
+    Alcotest.test_case "exact version match" `Quick
+      test_detected_version_exact_match;
+    Alcotest.test_case "falls back to latest" `Quick
+      test_detected_version_falls_back_to_latest;
+    Alcotest.test_case "override ignores detected" `Quick
+      test_override_version_ignores_detected;
+    Alcotest.test_case "unparseable uses default" `Quick
+      test_unparseable_version_uses_default;
+    Alcotest.test_case "fallback chain order" `Quick test_fallback_chain_order;
+  ]
 
 let validation_tests =
   [
@@ -136,4 +270,5 @@ let () =
       ("from_path", from_path_tests);
       ("discover", discover_tests);
       ("error_format", error_format_tests);
+      ("auto_version", auto_version_tests);
     ]
