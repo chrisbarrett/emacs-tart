@@ -113,3 +113,54 @@ val format_resolution_error : resolution_error -> string
 
 val resolved_version_to_string : resolved_version -> string
 (** Convert a resolved version to a display string. *)
+
+(** {1 Source Acquisition} *)
+
+(** Errors from source acquisition. *)
+type acquisition_error =
+  | Download_failed of string  (** Tarball download or extraction failed *)
+  | Clone_failed of string  (** Git clone failed *)
+  | Fetch_failed of string  (** Git fetch failed *)
+  | Cache_error of string  (** Cache directory operation failed *)
+
+val acquisition_error_to_string : acquisition_error -> string
+(** Format an acquisition error as a human-readable string. *)
+
+val sources_cache_dir : unit -> string
+(** Root directory for cached Emacs source trees. Returns
+    [$XDG_CACHE_HOME/tart/emacs-sources/]. *)
+
+val source_cache_path : string -> string
+(** [source_cache_path key] returns the full cache path for version key [key].
+*)
+
+val cache_key_of_resolved : resolved_version -> string
+(** Cache directory name for a resolved version. Release → version string (e.g.,
+    ["29.4"]), Dev → ["dev"], Commit → the SHA string. *)
+
+val acquire_source :
+  ?run_download:(url:string -> dest:string -> (string, string) result) ->
+  ?run_clone:(branch:string option -> dest:string -> (string, string) result) ->
+  ?run_fetch:(sha:string -> cwd:string -> (string, string) result) ->
+  ?cache_root:string ->
+  resolved_version ->
+  (string, acquisition_error) result
+(** Acquire Emacs source for a resolved version.
+
+    Downloads, clones, or fetches the source tree and caches it under
+    {!sources_cache_dir}[/{key}/]. Returns the path to the cached source tree.
+
+    - Release versions: try tarball first, fall back to shallow clone. Immutable
+      once cached (R1, R4).
+    - Dev versions: shallow clone on first use; [git fetch] on subsequent runs
+      (R2, R4).
+    - Commit SHAs: shallow clone + fetch specific commit. Immutable once cached
+      (R3, R4).
+
+    All writes are atomic (R6): acquisition happens in a temp directory, then
+    renamed to the final cache path.
+
+    @param run_download Override download for testing.
+    @param run_clone Override clone for testing.
+    @param run_fetch Override fetch for testing.
+    @param cache_root Override the cache root directory for testing. *)

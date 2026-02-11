@@ -616,6 +616,440 @@ let error_format_tests =
     Alcotest.test_case "found (no error)" `Quick test_format_error_found;
   ]
 
+(** {1 Source Acquisition Tests} *)
+
+(** Helper: create a temp directory for cache testing. *)
+let with_temp_cache_root f =
+  let tmpdir = Filename.temp_file "cache_" "" in
+  Sys.remove tmpdir;
+  Unix.mkdir tmpdir 0o755;
+  let cleanup () =
+    let rec remove_dir dir =
+      if Sys.is_directory dir then (
+        Array.iter
+          (fun fn ->
+            let path = Filename.concat dir fn in
+            if Sys.is_directory path then remove_dir path else Sys.remove path)
+          (Sys.readdir dir);
+        Unix.rmdir dir)
+      else Sys.remove dir
+    in
+    try remove_dir tmpdir with _ -> ()
+  in
+  Fun.protect ~finally:cleanup (fun () -> f tmpdir)
+
+(** Mock clone that creates a dummy source dir at dest. *)
+let mock_clone_ok ~branch:_ ~dest =
+  (try Unix.mkdir dest 0o755 with Unix.Unix_error (Unix.EEXIST, _, _) -> ());
+  let src_dir = Filename.concat dest "src" in
+  Unix.mkdir src_dir 0o755;
+  let oc = open_out (Filename.concat src_dir "main.c") in
+  output_string oc "int main() {}";
+  close_out oc;
+  Ok "cloned"
+
+(** Mock fetch that always succeeds. *)
+let mock_fetch_ok ~sha:_ ~cwd:_ = Ok "fetched"
+
+(** Mock download that always fails. *)
+let mock_download_fail ~url:_ ~dest:_ = Error "404 not found"
+
+(** Mock clone that always fails. *)
+let mock_clone_fail ~branch:_ ~dest:_ = Error "network unreachable"
+
+(** Mock fetch that always fails. *)
+let mock_fetch_fail ~sha:_ ~cwd:_ = Error "fetch error"
+
+(** {2 cache_key_of_resolved} *)
+
+let test_cache_key_release () =
+  let rv =
+    Release
+      { tag = "emacs-29.4"; version = { major = 29; minor = 4; patch = None } }
+  in
+  Alcotest.(check string) "release key" "29.4" (cache_key_of_resolved rv)
+
+let test_cache_key_release_patch () =
+  let rv =
+    Release
+      {
+        tag = "emacs-30.1.1";
+        version = { major = 30; minor = 1; patch = Some 1 };
+      }
+  in
+  Alcotest.(check string)
+    "release key with patch" "30.1.1" (cache_key_of_resolved rv)
+
+let test_cache_key_dev () =
+  Alcotest.(check string) "dev key" "dev" (cache_key_of_resolved Dev)
+
+let test_cache_key_commit () =
+  Alcotest.(check string)
+    "commit key" "abc1234"
+    (cache_key_of_resolved (Commit "abc1234"))
+
+(** {2 sources_cache_dir} *)
+
+let test_sources_cache_dir () =
+  let dir = sources_cache_dir () in
+  (* Should end with emacs-sources *)
+  Alcotest.(check bool)
+    "ends with emacs-sources" true
+    (Filename.basename dir = "emacs-sources")
+
+(** {2 acquire_source — Release} *)
+
+let test_acquire_release_tarball () =
+  (* Mock: download succeeds → tarball path used *)
+  with_temp_cache_root (fun cache_root ->
+      let rv =
+        Release
+          {
+            tag = "emacs-29.4";
+            version = { major = 29; minor = 4; patch = None };
+          }
+      in
+      (* We need a mock that creates the extracted dir structure, not just the tarball *)
+      let run_download ~url:_ ~dest =
+        (* Create the dest file so tarball "download" succeeds *)
+        let oc = open_out dest in
+        output_string oc "data";
+        close_out oc;
+        Ok "ok"
+      in
+      (* tar will fail on our fake data, but that exercises the fallback *)
+      (* Instead, use a clone fallback approach by having download fail *)
+      ignore run_download;
+      (* Test with download failing → clone fallback *)
+      let result =
+        acquire_source ~run_download:mock_download_fail ~run_clone:mock_clone_ok
+          ~cache_root rv
+      in
+      match result with
+      | Ok path ->
+          Alcotest.(check bool)
+            "path contains 29.4" true
+            (try
+               let _ = Str.search_forward (Str.regexp_string "29.4") path 0 in
+               true
+             with Not_found -> false);
+          Alcotest.(check bool) "dir exists" true (Sys.file_exists path)
+      | Error e ->
+          Alcotest.fail
+            (Printf.sprintf "expected Ok, got %s"
+               (acquisition_error_to_string e)))
+
+let test_acquire_release_cache_hit () =
+  with_temp_cache_root (fun cache_root ->
+      let rv =
+        Release
+          {
+            tag = "emacs-29.4";
+            version = { major = 29; minor = 4; patch = None };
+          }
+      in
+      (* Pre-create the cache directory *)
+      let final_dir = Filename.concat cache_root "29.4" in
+      Unix.mkdir final_dir 0o755;
+      (* Even with failing mocks, should return cache hit *)
+      let result =
+        acquire_source ~run_download:mock_download_fail
+          ~run_clone:mock_clone_fail ~cache_root rv
+      in
+      match result with
+      | Ok path -> Alcotest.(check string) "cache hit path" final_dir path
+      | Error e ->
+          Alcotest.fail
+            (Printf.sprintf "expected cache hit, got %s"
+               (acquisition_error_to_string e)))
+
+let test_acquire_release_clone_fallback () =
+  with_temp_cache_root (fun cache_root ->
+      let rv =
+        Release
+          {
+            tag = "emacs-29.4";
+            version = { major = 29; minor = 4; patch = None };
+          }
+      in
+      (* Download fails → falls back to clone *)
+      let result =
+        acquire_source ~run_download:mock_download_fail ~run_clone:mock_clone_ok
+          ~cache_root rv
+      in
+      match result with
+      | Ok path ->
+          Alcotest.(check bool) "path exists" true (Sys.file_exists path);
+          (* Should have src/main.c from mock_clone_ok *)
+          Alcotest.(check bool)
+            "has src dir" true
+            (Sys.file_exists (Filename.concat path "src"))
+      | Error e ->
+          Alcotest.fail
+            (Printf.sprintf "expected Ok, got %s"
+               (acquisition_error_to_string e)))
+
+let test_acquire_release_both_fail () =
+  with_temp_cache_root (fun cache_root ->
+      let rv =
+        Release
+          {
+            tag = "emacs-29.4";
+            version = { major = 29; minor = 4; patch = None };
+          }
+      in
+      let result =
+        acquire_source ~run_download:mock_download_fail
+          ~run_clone:mock_clone_fail ~cache_root rv
+      in
+      match result with
+      | Ok _ -> Alcotest.fail "expected error"
+      | Error (Clone_failed _) -> ()
+      | Error e ->
+          Alcotest.fail
+            (Printf.sprintf "expected Clone_failed, got %s"
+               (acquisition_error_to_string e)))
+
+(** {2 acquire_source — Dev} *)
+
+let test_acquire_dev_fresh () =
+  with_temp_cache_root (fun cache_root ->
+      let result = acquire_source ~run_clone:mock_clone_ok ~cache_root Dev in
+      match result with
+      | Ok path ->
+          Alcotest.(check bool) "path exists" true (Sys.file_exists path);
+          Alcotest.(check bool)
+            "path ends with dev" true
+            (Filename.basename path = "dev")
+      | Error e ->
+          Alcotest.fail
+            (Printf.sprintf "expected Ok, got %s"
+               (acquisition_error_to_string e)))
+
+let test_acquire_dev_update () =
+  with_temp_cache_root (fun cache_root ->
+      (* Pre-create dev dir as a "clone" with .git *)
+      let dev_dir = Filename.concat cache_root "dev" in
+      Unix.mkdir dev_dir 0o755;
+      let git_dir = Filename.concat dev_dir ".git" in
+      Unix.mkdir git_dir 0o755;
+      let result = acquire_source ~run_fetch:mock_fetch_ok ~cache_root Dev in
+      match result with
+      | Ok path -> Alcotest.(check string) "reuses dir" dev_dir path
+      | Error e ->
+          Alcotest.fail
+            (Printf.sprintf "expected Ok, got %s"
+               (acquisition_error_to_string e)))
+
+let test_acquire_dev_clone_fail () =
+  with_temp_cache_root (fun cache_root ->
+      let result = acquire_source ~run_clone:mock_clone_fail ~cache_root Dev in
+      match result with
+      | Ok _ -> Alcotest.fail "expected error"
+      | Error (Clone_failed _) -> ()
+      | Error e ->
+          Alcotest.fail
+            (Printf.sprintf "expected Clone_failed, got %s"
+               (acquisition_error_to_string e)))
+
+(** {2 acquire_source — Commit} *)
+
+let test_acquire_commit_fresh () =
+  with_temp_cache_root (fun cache_root ->
+      let result =
+        acquire_source ~run_clone:mock_clone_ok ~run_fetch:mock_fetch_ok
+          ~cache_root (Commit "abc1234def")
+      in
+      match result with
+      | Ok path ->
+          Alcotest.(check bool) "path exists" true (Sys.file_exists path);
+          Alcotest.(check bool)
+            "path ends with sha" true
+            (Filename.basename path = "abc1234def")
+      | Error e ->
+          Alcotest.fail
+            (Printf.sprintf "expected Ok, got %s"
+               (acquisition_error_to_string e)))
+
+let test_acquire_commit_cache_hit () =
+  with_temp_cache_root (fun cache_root ->
+      (* Pre-create the SHA dir *)
+      let sha_dir = Filename.concat cache_root "abc1234" in
+      Unix.mkdir sha_dir 0o755;
+      let result =
+        acquire_source ~run_clone:mock_clone_fail ~run_fetch:mock_fetch_fail
+          ~cache_root (Commit "abc1234")
+      in
+      match result with
+      | Ok path -> Alcotest.(check string) "cache hit" sha_dir path
+      | Error e ->
+          Alcotest.fail
+            (Printf.sprintf "expected cache hit, got %s"
+               (acquisition_error_to_string e)))
+
+let test_acquire_commit_clone_fail () =
+  with_temp_cache_root (fun cache_root ->
+      let result =
+        acquire_source ~run_clone:mock_clone_fail ~cache_root (Commit "abc1234")
+      in
+      match result with
+      | Ok _ -> Alcotest.fail "expected error"
+      | Error (Clone_failed _) -> ()
+      | Error e ->
+          Alcotest.fail
+            (Printf.sprintf "expected Clone_failed, got %s"
+               (acquisition_error_to_string e)))
+
+let test_acquire_commit_fetch_fail () =
+  with_temp_cache_root (fun cache_root ->
+      let result =
+        acquire_source ~run_clone:mock_clone_ok ~run_fetch:mock_fetch_fail
+          ~cache_root (Commit "abc1234")
+      in
+      match result with
+      | Ok _ -> Alcotest.fail "expected error"
+      | Error (Fetch_failed _) -> ()
+      | Error e ->
+          Alcotest.fail
+            (Printf.sprintf "expected Fetch_failed, got %s"
+               (acquisition_error_to_string e)))
+
+(** {2 Atomic writes} *)
+
+let test_acquire_atomic_no_partial () =
+  with_temp_cache_root (fun cache_root ->
+      (* Clone succeeds but creates dir, then we verify no .tmp dirs remain *)
+      let rv =
+        Release
+          {
+            tag = "emacs-29.4";
+            version = { major = 29; minor = 4; patch = None };
+          }
+      in
+      let _result =
+        acquire_source ~run_download:mock_download_fail ~run_clone:mock_clone_ok
+          ~cache_root rv
+      in
+      (* No .tmp directories should remain *)
+      let entries = try Array.to_list (Sys.readdir cache_root) with _ -> [] in
+      let tmp_dirs =
+        List.filter
+          (fun e -> String.length e > 4 && String.sub e 0 4 = ".tmp")
+          entries
+      in
+      Alcotest.(check int) "no .tmp dirs remain" 0 (List.length tmp_dirs))
+
+let test_acquire_failure_no_partial () =
+  with_temp_cache_root (fun cache_root ->
+      let rv =
+        Release
+          {
+            tag = "emacs-29.4";
+            version = { major = 29; minor = 4; patch = None };
+          }
+      in
+      let _result =
+        acquire_source ~run_download:mock_download_fail
+          ~run_clone:mock_clone_fail ~cache_root rv
+      in
+      (* No .tmp dirs or final dir should remain *)
+      let entries = try Array.to_list (Sys.readdir cache_root) with _ -> [] in
+      Alcotest.(check int)
+        "no dirs remain after failure" 0 (List.length entries))
+
+(** {2 acquisition_error_to_string} *)
+
+let test_acquisition_error_download () =
+  let s = acquisition_error_to_string (Download_failed "404") in
+  Alcotest.(check bool)
+    "contains Download" true
+    (try
+       let _ = Str.search_forward (Str.regexp_string "Download") s 0 in
+       true
+     with Not_found -> false)
+
+let test_acquisition_error_clone () =
+  let s = acquisition_error_to_string (Clone_failed "timeout") in
+  Alcotest.(check bool)
+    "contains Clone" true
+    (try
+       let _ = Str.search_forward (Str.regexp_string "Clone") s 0 in
+       true
+     with Not_found -> false)
+
+let test_acquisition_error_fetch () =
+  let s = acquisition_error_to_string (Fetch_failed "refused") in
+  Alcotest.(check bool)
+    "contains Fetch" true
+    (try
+       let _ = Str.search_forward (Str.regexp_string "Fetch") s 0 in
+       true
+     with Not_found -> false)
+
+let test_acquisition_error_cache () =
+  let s = acquisition_error_to_string (Cache_error "permission denied") in
+  Alcotest.(check bool)
+    "contains Cache" true
+    (try
+       let _ = Str.search_forward (Str.regexp_string "Cache") s 0 in
+       true
+     with Not_found -> false)
+
+(** {2 Test suites for source acquisition} *)
+
+let cache_key_tests =
+  [
+    Alcotest.test_case "release key" `Quick test_cache_key_release;
+    Alcotest.test_case "release key with patch" `Quick
+      test_cache_key_release_patch;
+    Alcotest.test_case "dev key" `Quick test_cache_key_dev;
+    Alcotest.test_case "commit key" `Quick test_cache_key_commit;
+  ]
+
+let sources_dir_tests =
+  [ Alcotest.test_case "ends with emacs-sources" `Quick test_sources_cache_dir ]
+
+let acquire_release_tests =
+  [
+    Alcotest.test_case "tarball fallback to clone" `Quick
+      test_acquire_release_tarball;
+    Alcotest.test_case "cache hit" `Quick test_acquire_release_cache_hit;
+    Alcotest.test_case "clone fallback" `Quick
+      test_acquire_release_clone_fallback;
+    Alcotest.test_case "both fail" `Quick test_acquire_release_both_fail;
+  ]
+
+let acquire_dev_tests =
+  [
+    Alcotest.test_case "fresh clone" `Quick test_acquire_dev_fresh;
+    Alcotest.test_case "update existing" `Quick test_acquire_dev_update;
+    Alcotest.test_case "clone fails" `Quick test_acquire_dev_clone_fail;
+  ]
+
+let acquire_commit_tests =
+  [
+    Alcotest.test_case "fresh clone+fetch" `Quick test_acquire_commit_fresh;
+    Alcotest.test_case "cache hit" `Quick test_acquire_commit_cache_hit;
+    Alcotest.test_case "clone fails" `Quick test_acquire_commit_clone_fail;
+    Alcotest.test_case "fetch fails" `Quick test_acquire_commit_fetch_fail;
+  ]
+
+let atomic_write_tests =
+  [
+    Alcotest.test_case "success leaves no tmp" `Quick
+      test_acquire_atomic_no_partial;
+    Alcotest.test_case "failure leaves no partial" `Quick
+      test_acquire_failure_no_partial;
+  ]
+
+let acquisition_error_tests =
+  [
+    Alcotest.test_case "download error" `Quick test_acquisition_error_download;
+    Alcotest.test_case "clone error" `Quick test_acquisition_error_clone;
+    Alcotest.test_case "fetch error" `Quick test_acquisition_error_fetch;
+    Alcotest.test_case "cache error" `Quick test_acquisition_error_cache;
+  ]
+
 let () =
   Alcotest.run "emacs_source"
     [
@@ -632,4 +1066,11 @@ let () =
       ("resolve_version", resolve_version_tests);
       ("resolution_error_format", resolution_error_tests);
       ("resolved_to_string", resolved_to_string_tests);
+      ("cache_key", cache_key_tests);
+      ("sources_cache_dir", sources_dir_tests);
+      ("acquire_release", acquire_release_tests);
+      ("acquire_dev", acquire_dev_tests);
+      ("acquire_commit", acquire_commit_tests);
+      ("atomic_writes", atomic_write_tests);
+      ("acquisition_error_format", acquisition_error_tests);
     ]

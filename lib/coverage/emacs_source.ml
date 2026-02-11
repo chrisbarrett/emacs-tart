@@ -466,3 +466,322 @@ let resolved_version_to_string (rv : resolved_version) : string =
       Printf.sprintf "%s (%s)" tag (Sig.Emacs_version.version_to_string version)
   | Dev -> "main (development HEAD)"
   | Commit sha -> Printf.sprintf "commit %s" sha
+
+(** {1 Source Acquisition} *)
+
+module Log = Tart_log.Log
+
+(** Errors from source acquisition. *)
+type acquisition_error =
+  | Download_failed of string
+  | Clone_failed of string
+  | Fetch_failed of string
+  | Cache_error of string
+
+let acquisition_error_to_string = function
+  | Download_failed msg -> Printf.sprintf "Download failed: %s" msg
+  | Clone_failed msg -> Printf.sprintf "Clone failed: %s" msg
+  | Fetch_failed msg -> Printf.sprintf "Fetch failed: %s" msg
+  | Cache_error msg -> Printf.sprintf "Cache error: %s" msg
+
+(** Root directory for cached Emacs source trees. *)
+let sources_cache_dir () =
+  Filename.concat (Cache.Content_cache.cache_dir ()) "emacs-sources"
+
+(** Final cache path for a given version key. *)
+let source_cache_path (key : string) : string =
+  Filename.concat (sources_cache_dir ()) key
+
+(** Cache key for a resolved version. *)
+let cache_key_of_resolved (rv : resolved_version) : string =
+  match rv with
+  | Release { version; _ } -> Sig.Emacs_version.version_to_string version
+  | Dev -> "dev"
+  | Commit sha -> sha
+
+(** Recursively create directories. *)
+let rec mkdir_p dir =
+  if not (Sys.file_exists dir) then begin
+    mkdir_p (Filename.dirname dir);
+    try Unix.mkdir dir 0o755 with Unix.Unix_error (Unix.EEXIST, _, _) -> ()
+  end
+
+(** Recursively remove a directory tree. *)
+let rec rm_rf path =
+  try
+    if Sys.is_directory path then begin
+      let entries = Sys.readdir path in
+      Array.iter (fun e -> rm_rf (Filename.concat path e)) entries;
+      Unix.rmdir path
+    end
+    else Unix.unlink path
+  with Sys_error _ | Unix.Unix_error _ -> ()
+
+(** Run a shell command, capturing stdout+stderr. Returns Ok output or Error. *)
+let run_cmd cmd =
+  Log.debug "source: running %s" cmd;
+  try
+    let ic = Unix.open_process_in cmd in
+    let buf = Buffer.create 4096 in
+    (try
+       while true do
+         Buffer.add_channel buf ic 1
+       done
+     with End_of_file -> ());
+    let output = Buffer.contents buf in
+    let status = Unix.close_process_in ic in
+    match status with
+    | Unix.WEXITED 0 ->
+        Log.debug "source: cmd ok";
+        Ok (String.trim output)
+    | Unix.WEXITED code ->
+        let msg = Printf.sprintf "exited %d: %s" code (String.trim output) in
+        Log.debug "source: %s" msg;
+        Error msg
+    | Unix.WSIGNALED n -> Error (Printf.sprintf "killed by signal %d" n)
+    | Unix.WSTOPPED n -> Error (Printf.sprintf "stopped by signal %d" n)
+  with
+  | Unix.Unix_error (err, _, _) ->
+      Error (Printf.sprintf "exec failed: %s" (Unix.error_message err))
+  | exn ->
+      Error (Printf.sprintf "unexpected error: %s" (Printexc.to_string exn))
+
+(** Run a git command with optional working directory. *)
+let run_git ?cwd args =
+  let cmd =
+    match cwd with
+    | Some dir ->
+        Printf.sprintf "git -C %s %s 2>&1" (Filename.quote dir)
+          (String.concat " " (List.map Filename.quote args))
+    | None ->
+        Printf.sprintf "git %s 2>&1"
+          (String.concat " " (List.map Filename.quote args))
+  in
+  run_cmd cmd
+
+(** Atomically install a temp directory as the final cache path.
+
+    @param tmp_dir temporary directory with acquired source
+    @param final_dir target cache path *)
+let atomic_install ~tmp_dir ~final_dir =
+  try
+    mkdir_p (Filename.dirname final_dir);
+    Unix.rename tmp_dir final_dir;
+    Ok final_dir
+  with
+  | Unix.Unix_error (err, _, _) ->
+      rm_rf tmp_dir;
+      Error
+        (Cache_error
+           (Printf.sprintf "rename failed: %s" (Unix.error_message err)))
+  | exn ->
+      rm_rf tmp_dir;
+      Error
+        (Cache_error
+           (Printf.sprintf "install failed: %s" (Printexc.to_string exn)))
+
+(** Download and extract a release tarball.
+
+    @param run_download Injectable download function for testing.
+    @param version The version string (e.g., "29.4").
+    @param tmp_dir Temporary directory to extract into. *)
+let download_tarball ?run_download ~version ~tmp_dir () =
+  let url =
+    Printf.sprintf "https://ftp.gnu.org/gnu/emacs/emacs-%s.tar.xz" version
+  in
+  let tarball = Filename.concat tmp_dir "emacs.tar.xz" in
+  Log.verbose "source: downloading %s" url;
+  let download_result =
+    match run_download with
+    | Some f -> f ~url ~dest:tarball
+    | None ->
+        let cmd =
+          Printf.sprintf "curl -fsSL -o %s %s 2>&1" (Filename.quote tarball)
+            (Filename.quote url)
+        in
+        run_cmd cmd
+  in
+  match download_result with
+  | Error msg -> Error (Download_failed (Printf.sprintf "%s: %s" url msg))
+  | Ok _ -> (
+      (* Extract the tarball *)
+      let extract_cmd =
+        Printf.sprintf "tar xf %s -C %s --strip-components=1 2>&1"
+          (Filename.quote tarball) (Filename.quote tmp_dir)
+      in
+      match run_cmd extract_cmd with
+      | Error msg ->
+          Error (Download_failed (Printf.sprintf "tar extract: %s" msg))
+      | Ok _ ->
+          (* Remove the tarball to save space *)
+          (try Unix.unlink tarball with Unix.Unix_error _ -> ());
+          Ok tmp_dir)
+
+(** Shallow-clone the Emacs git repository.
+
+    @param run_clone Injectable clone function for testing.
+    @param branch Optional branch/tag to clone.
+    @param tmp_dir Temporary directory to clone into. *)
+let shallow_clone ?run_clone ?branch ~tmp_dir () =
+  Log.verbose "source: shallow cloning emacs%s to %s"
+    (match branch with Some b -> Printf.sprintf " (branch %s)" b | None -> "")
+    tmp_dir;
+  let result =
+    match run_clone with
+    | Some f -> f ~branch ~dest:tmp_dir
+    | None ->
+        let branch_args =
+          match branch with Some b -> [ "--branch"; b ] | None -> []
+        in
+        run_git
+          ([ "clone"; "--depth"; "1" ]
+          @ branch_args
+          @ [ emacs_repo_url; tmp_dir ])
+  in
+  match result with Error msg -> Error (Clone_failed msg) | Ok _ -> Ok tmp_dir
+
+(** Fetch a specific commit into an existing clone.
+
+    @param run_fetch Injectable fetch function for testing.
+    @param sha The commit SHA to fetch.
+    @param clone_dir The directory of the existing clone. *)
+let fetch_commit ?run_fetch ~sha ~clone_dir () =
+  Log.verbose "source: fetching commit %s" sha;
+  let fetch_result =
+    match run_fetch with
+    | Some f -> f ~sha ~cwd:clone_dir
+    | None -> run_git ~cwd:clone_dir [ "fetch"; "--depth"; "1"; "origin"; sha ]
+  in
+  match fetch_result with
+  | Error msg -> Error (Fetch_failed msg)
+  | Ok _ -> (
+      (* When run_fetch is injected the mock handles the full operation,
+         so skip the real checkout that requires an actual git repo. *)
+      match run_fetch with
+      | Some _ -> Ok clone_dir
+      | None -> (
+          match run_git ~cwd:clone_dir [ "checkout"; "FETCH_HEAD" ] with
+          | Error msg ->
+              Error (Fetch_failed (Printf.sprintf "checkout: %s" msg))
+          | Ok _ -> Ok clone_dir))
+
+(** Update an existing dev clone by fetching latest HEAD.
+
+    @param run_fetch Injectable fetch function for testing.
+    @param clone_dir The directory of the existing clone. *)
+let update_dev_clone ?run_fetch ~clone_dir () =
+  Log.verbose "source: updating dev clone at %s" clone_dir;
+  let fetch_result =
+    match run_fetch with
+    | Some f -> f ~sha:"HEAD" ~cwd:clone_dir
+    | None ->
+        run_git ~cwd:clone_dir [ "fetch"; "--depth"; "1"; "origin"; "main" ]
+  in
+  match fetch_result with
+  | Error msg -> Error (Fetch_failed msg)
+  | Ok _ -> (
+      (* When run_fetch is injected the mock handles the full operation,
+         so skip the real reset that requires an actual git repo. *)
+      match run_fetch with
+      | Some _ -> Ok clone_dir
+      | None -> (
+          match run_git ~cwd:clone_dir [ "reset"; "--hard"; "origin/main" ] with
+          | Error msg -> Error (Fetch_failed (Printf.sprintf "reset: %s" msg))
+          | Ok _ -> Ok clone_dir))
+
+(** Acquire source for a resolved version.
+
+    Downloads, clones, or fetches the Emacs source tree and caches it under
+    [$XDG_CACHE_HOME/tart/emacs-sources/{key}/].
+
+    Release versions are cached immutably. Development versions run [git fetch]
+    on each invocation. Arbitrary SHAs require an initial clone then fetch.
+
+    All writes are atomic: acquisition happens in a temp directory under the
+    cache root, then renamed to the final path.
+
+    @param run_download Override download for testing.
+    @param run_clone Override clone for testing.
+    @param run_fetch Override fetch for testing.
+    @param cache_root Override cache root for testing. *)
+let acquire_source ?run_download ?run_clone ?run_fetch ?cache_root
+    (rv : resolved_version) : (string, acquisition_error) result =
+  let root =
+    match cache_root with Some r -> r | None -> sources_cache_dir ()
+  in
+  let key = cache_key_of_resolved rv in
+  let final_dir = Filename.concat root key in
+  match rv with
+  | Release { version; tag } -> (
+      if
+        (* R4: Release versions are immutable once cached *)
+        Sys.file_exists final_dir
+      then (
+        Log.verbose "source: cache hit for %s at %s" key final_dir;
+        Ok final_dir)
+      else
+        (* R6: Atomic writes via temp dir + rename *)
+        let tmp_dir =
+          Printf.sprintf "%s/.tmp-%s-%d" root key (Unix.getpid ())
+        in
+        (try rm_rf tmp_dir with _ -> ());
+        mkdir_p tmp_dir;
+        let version_str = Sig.Emacs_version.version_to_string version in
+        (* R1: Try tarball first, fall back to shallow clone *)
+        match
+          download_tarball ?run_download ~version:version_str ~tmp_dir ()
+        with
+        | Ok _ -> atomic_install ~tmp_dir ~final_dir
+        | Error _ -> (
+            Log.verbose "source: tarball unavailable, falling back to git clone";
+            rm_rf tmp_dir;
+            mkdir_p (Filename.dirname tmp_dir);
+            match shallow_clone ?run_clone ~branch:tag ~tmp_dir () with
+            | Ok _ -> atomic_install ~tmp_dir ~final_dir
+            | Error e ->
+                rm_rf tmp_dir;
+                Error e))
+  | Dev -> (
+      if Sys.file_exists final_dir then (
+        (* R4: Dev versions run git fetch each invocation *)
+        Log.verbose "source: updating dev clone at %s" final_dir;
+        match update_dev_clone ?run_fetch ~clone_dir:final_dir () with
+        | Ok _ -> Ok final_dir
+        | Error e -> Error e)
+      else
+        (* Fresh clone *)
+        let tmp_dir =
+          Printf.sprintf "%s/.tmp-%s-%d" root key (Unix.getpid ())
+        in
+        (try rm_rf tmp_dir with _ -> ());
+        mkdir_p (Filename.dirname tmp_dir);
+        match shallow_clone ?run_clone ~tmp_dir () with
+        | Ok _ -> atomic_install ~tmp_dir ~final_dir
+        | Error e ->
+            rm_rf tmp_dir;
+            Error e)
+  | Commit sha -> (
+      if
+        (* R4: SHA commits are immutable once cached *)
+        Sys.file_exists final_dir
+      then (
+        Log.verbose "source: cache hit for commit %s at %s" sha final_dir;
+        Ok final_dir)
+      else
+        (* R3: Clone then fetch the specific commit *)
+        let tmp_dir =
+          Printf.sprintf "%s/.tmp-%s-%d" root key (Unix.getpid ())
+        in
+        (try rm_rf tmp_dir with _ -> ());
+        mkdir_p (Filename.dirname tmp_dir);
+        (* Need an initial clone, then fetch the specific SHA *)
+        match shallow_clone ?run_clone ~tmp_dir () with
+        | Error e ->
+            rm_rf tmp_dir;
+            Error e
+        | Ok _ -> (
+            match fetch_commit ?run_fetch ~sha ~clone_dir:tmp_dir () with
+            | Ok _ -> atomic_install ~tmp_dir ~final_dir
+            | Error e ->
+                rm_rf tmp_dir;
+                Error e))

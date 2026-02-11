@@ -862,143 +862,273 @@ let run_coverage color_mode format sort_column reverse_flag min_pct max_pct
       if percentage < float_of_int threshold then exit 1
   | None -> ()
 
-(** Emacs-coverage subcommand: measure C and Elisp layer coverage *)
-let run_emacs_coverage emacs_source emacs_version_opt color_mode format
-    sort_column reverse_flag min_pct max_pct positional_args =
-  let source_result = Tart.Emacs_source.discover ~explicit_path:emacs_source in
-  match source_result with
-  | Tart.Emacs_source.NotFound _ | Tart.Emacs_source.InvalidPath _ ->
-      prerr_endline (Tart.Emacs_source.format_error source_result);
-      exit 1
-  | Tart.Emacs_source.Found { source_dir; version = detected_version } ->
-      let typings_root = find_typings_root () in
+(** Shared coverage rendering logic for the emacs-coverage subcommand.
 
-      Tart.Log.verbose "Detecting Emacs version...";
-      Tart.Log.verbose "Emacs source: %s" source_dir;
-      Tart.Log.verbose "Detected version (from source): %s" detected_version;
+    Takes a resolved source_dir, version info, and rendering options and
+    computes + renders coverage output. *)
+let render_emacs_coverage ~source_dir ~version_str ~version ~color_mode ~format
+    ~sort_column ~reverse_flag ~min_pct ~max_pct ~positional_args =
+  let typings_root = find_typings_root () in
 
-      let version_str, version =
-        match emacs_version_opt with
-        | Some v ->
-            Tart.Log.verbose "Using override version: %s"
-              (Tart.Emacs_version.version_to_string v);
-            (Tart.Emacs_version.version_to_string v, v)
-        | None -> (
-            match Tart.Emacs_version.parse_version detected_version with
-            | Some v -> (detected_version, v)
-            | None ->
-                Tart.Log.verbose "Could not parse version, using default: %s"
-                  (Tart.Emacs_version.version_to_string
-                     Tart.Emacs_version.latest);
-                ( Tart.Emacs_version.version_to_string Tart.Emacs_version.latest,
-                  Tart.Emacs_version.latest ))
-      in
+  let fallback_chain = Tart.Search_path.version_fallback_candidates version in
+  Tart.Log.verbose "Version fallback chain: %s"
+    (String.concat " -> " fallback_chain);
 
-      let fallback_chain =
-        Tart.Search_path.version_fallback_candidates version
-      in
-      Tart.Log.verbose "Version fallback chain: %s"
-        (String.concat " -> " fallback_chain);
+  (match Tart.Search_path.find_typings_dir ~typings_root ~version with
+  | Some dir ->
+      let selected_version = Filename.basename dir in
+      Tart.Log.verbose "Using typings version: %s" selected_version
+  | None -> Tart.Log.verbose "No typings directory found");
 
-      (match Tart.Search_path.find_typings_dir ~typings_root ~version with
-      | Some dir ->
-          let selected_version = Filename.basename dir in
-          Tart.Log.verbose "Using typings version: %s" selected_version
-      | None -> Tart.Log.verbose "No typings directory found");
+  log_typings_loading ~typings_root ~version;
 
-      log_typings_loading ~typings_root ~version;
+  (* C layer coverage *)
+  let src_dir = Filename.concat source_dir "src" in
+  let definitions = scan_c_source_verbose ~src_dir in
 
-      (* C layer coverage *)
-      let src_dir = Filename.concat source_dir "src" in
-      let definitions = scan_c_source_verbose ~src_dir in
+  let c_result =
+    Tart.Emacs_coverage.calculate_coverage ~source_dir
+      ~emacs_version:version_str ~typings_root ~version definitions
+  in
+  let c_summary = Tart.Emacs_coverage.summarize c_result in
+  let c_percentage = Tart.Emacs_coverage.coverage_percentage c_summary in
 
-      let c_result =
-        Tart.Emacs_coverage.calculate_coverage ~source_dir
-          ~emacs_version:version_str ~typings_root ~version definitions
-      in
-      let c_summary = Tart.Emacs_coverage.summarize c_result in
-      let c_percentage = Tart.Emacs_coverage.coverage_percentage c_summary in
+  Tart.Log.verbose "Matching symbols against typings...";
+  Tart.Log.verbose "Sample matches:";
+  let covered = Tart.Emacs_coverage.covered_public c_result in
+  List.iteri
+    (fun i (item : Tart.Emacs_coverage.c_coverage_item) ->
+      if i < 5 then
+        Tart.Log.verbose "  %s: COVERED (%s:%d)" item.definition.name
+          item.definition.file item.definition.line)
+    covered;
+  let uncovered_items = Tart.Emacs_coverage.uncovered_public c_result in
+  List.iteri
+    (fun i (item : Tart.Emacs_coverage.c_coverage_item) ->
+      if i < 5 then Tart.Log.verbose "  %s: UNCOVERED" item.definition.name)
+    uncovered_items;
+  Tart.Log.verbose "Match complete: %d/%d DEFUNs covered (%.1f%%)"
+    c_summary.covered_public c_summary.total_public c_percentage;
 
-      Tart.Log.verbose "Matching symbols against typings...";
-      Tart.Log.verbose "Sample matches:";
-      let covered = Tart.Emacs_coverage.covered_public c_result in
-      List.iteri
-        (fun i (item : Tart.Emacs_coverage.c_coverage_item) ->
-          if i < 5 then
-            Tart.Log.verbose "  %s: COVERED (%s:%d)" item.definition.name
-              item.definition.file item.definition.line)
-        covered;
-      let uncovered_items = Tart.Emacs_coverage.uncovered_public c_result in
-      List.iteri
-        (fun i (item : Tart.Emacs_coverage.c_coverage_item) ->
-          if i < 5 then Tart.Log.verbose "  %s: UNCOVERED" item.definition.name)
-        uncovered_items;
-      Tart.Log.verbose "Match complete: %d/%d DEFUNs covered (%.1f%%)"
-        c_summary.covered_public c_summary.total_public c_percentage;
+  (* Elisp layer coverage *)
+  Tart.Log.verbose "Scanning Elisp layer...";
+  let elisp_result =
+    Tart.Emacs_coverage.calculate_elisp_coverage ~source_dir
+      ~emacs_version:version_str ~typings_root ~version
+  in
+  let elisp_summary = Tart.Emacs_coverage.elisp_summarize elisp_result in
+  let elisp_percentage =
+    Tart.Emacs_coverage.elisp_coverage_percentage elisp_summary
+  in
+  Tart.Log.verbose "Elisp layer: %d/%d covered (%.1f%%)"
+    elisp_summary.elisp_covered_public elisp_summary.elisp_total_public
+    elisp_percentage;
 
-      (* Elisp layer coverage *)
-      Tart.Log.verbose "Scanning Elisp layer...";
-      let elisp_result =
-        Tart.Emacs_coverage.calculate_elisp_coverage ~source_dir
-          ~emacs_version:version_str ~typings_root ~version
-      in
-      let elisp_summary = Tart.Emacs_coverage.elisp_summarize elisp_result in
-      let elisp_percentage =
-        Tart.Emacs_coverage.elisp_coverage_percentage elisp_summary
-      in
-      Tart.Log.verbose "Elisp layer: %d/%d covered (%.1f%%)"
-        elisp_summary.elisp_covered_public elisp_summary.elisp_total_public
-        elisp_percentage;
+  (* Build file_row list from both layers *)
+  let c_rows = Tart.Coverage_table.rows_of_c_result c_result in
+  let elisp_rows = Tart.Coverage_table.rows_of_elisp_result elisp_result in
+  let all_rows = c_rows @ elisp_rows in
 
-      (* Build file_row list from both layers *)
-      let c_rows = Tart.Coverage_table.rows_of_c_result c_result in
-      let elisp_rows = Tart.Coverage_table.rows_of_elisp_result elisp_result in
-      let all_rows = c_rows @ elisp_rows in
+  (* Sort *)
+  let rows =
+    Tart.Coverage_table.sort_rows ~column:sort_column ~reverse:reverse_flag
+      all_rows
+  in
 
-      (* Sort *)
-      let rows =
-        Tart.Coverage_table.sort_rows ~column:sort_column ~reverse:reverse_flag
-          all_rows
-      in
+  (* Filter by percentage *)
+  let rows = Tart.Coverage_table.filter_rows ?min_pct ?max_pct rows in
 
-      (* Filter by percentage *)
-      let rows = Tart.Coverage_table.filter_rows ?min_pct ?max_pct rows in
+  (* Filter by positional arguments *)
+  let has_positional = positional_args <> [] in
+  let rows = Tart.Coverage_table.match_positional positional_args rows in
 
-      (* Filter by positional arguments *)
-      let has_positional = positional_args <> [] in
-      let rows = Tart.Coverage_table.match_positional positional_args rows in
-
-      (* Render output *)
-      let table_color =
-        match color_mode with
-        | `Auto -> Tart.Coverage_table.Auto
-        | `Always -> Tart.Coverage_table.Always
-        | `Off -> Tart.Coverage_table.Off
-      in
-      let table_format =
-        match format with
-        | Human -> Tart.Coverage_table.Human
-        | Json -> Tart.Coverage_table.Json
-      in
-      let config =
-        Tart.Coverage_table.{ color = table_color; format = table_format }
-      in
-      if has_positional then
-        match table_format with
-        | Tart.Coverage_table.Human ->
-            print_string
-              (Tart.Coverage_table.render_drilldown_human ~config
-                 ~emacs_version:version_str rows);
-            print_newline ()
-        | Tart.Coverage_table.Json ->
-            print_string
-              (Tart.Coverage_table.render_drilldown_json
-                 ~emacs_version:version_str rows)
-      else (
+  (* Render output *)
+  let table_color =
+    match color_mode with
+    | `Auto -> Tart.Coverage_table.Auto
+    | `Always -> Tart.Coverage_table.Always
+    | `Off -> Tart.Coverage_table.Off
+  in
+  let table_format =
+    match format with
+    | Human -> Tart.Coverage_table.Human
+    | Json -> Tart.Coverage_table.Json
+  in
+  let config =
+    Tart.Coverage_table.{ color = table_color; format = table_format }
+  in
+  if has_positional then
+    match table_format with
+    | Tart.Coverage_table.Human ->
         print_string
-          (Tart.Coverage_table.render_table ~config ~emacs_version:version_str
-             rows);
-        if table_format = Tart.Coverage_table.Human then print_newline ())
+          (Tart.Coverage_table.render_drilldown_human ~config
+             ~emacs_version:version_str rows);
+        print_newline ()
+    | Tart.Coverage_table.Json ->
+        print_string
+          (Tart.Coverage_table.render_drilldown_json ~emacs_version:version_str
+             rows)
+  else (
+    print_string
+      (Tart.Coverage_table.render_table ~config ~emacs_version:version_str rows);
+    if table_format = Tart.Coverage_table.Human then print_newline ())
+
+(** Extract version string and parsed version from a resolved version. *)
+let version_of_resolved (rv : Tart.Emacs_source.resolved_version) :
+    string * Tart.Emacs_version.version =
+  match rv with
+  | Tart.Emacs_source.Release { version; _ } ->
+      (Tart.Emacs_version.version_to_string version, version)
+  | Tart.Emacs_source.Dev ->
+      ( Tart.Emacs_version.version_to_string Tart.Emacs_version.latest,
+        Tart.Emacs_version.latest )
+  | Tart.Emacs_source.Commit _ ->
+      ( Tart.Emacs_version.version_to_string Tart.Emacs_version.latest,
+        Tart.Emacs_version.latest )
+
+(** Check if a resolved version matches a detected local version string.
+
+    Used for R3: skip remote fetch when the resolved version matches the
+    locally-installed Emacs. *)
+let resolved_matches_local (rv : Tart.Emacs_source.resolved_version)
+    (detected : string) : bool =
+  match rv with
+  | Tart.Emacs_source.Release { version = resolved_v; _ } -> (
+      match Tart.Emacs_version.parse_version detected with
+      | Some detected_v ->
+          resolved_v.major = detected_v.major
+          && resolved_v.minor = detected_v.minor
+      | None -> false)
+  | Tart.Emacs_source.Dev | Tart.Emacs_source.Commit _ -> false
+
+(** Emacs-coverage subcommand: measure C and Elisp layer coverage.
+
+    Orchestrates version resolution and source acquisition per Spec 101:
+    - R2: [--emacs-source PATH] overrides all fetching.
+    - R1: [--emacs-version V] resolves and acquires remote sources when needed.
+    - R3: Local version match skips fetch.
+    - R4: No Emacs and no [--emacs-version] exits with code 1.
+    - R5: Verbose logging of resolution, cache status, source path.
+    - R6: Resolved version selects typings via fallback chain. *)
+let run_emacs_coverage emacs_source emacs_version_raw color_mode format
+    sort_column reverse_flag min_pct max_pct positional_args =
+  let render ~source_dir ~version_str ~version =
+    render_emacs_coverage ~source_dir ~version_str ~version ~color_mode ~format
+      ~sort_column ~reverse_flag ~min_pct ~max_pct ~positional_args
+  in
+  match emacs_source with
+  | Some _ -> (
+      (* R2: --emacs-source overrides everything — no remote fetch *)
+      let source_result =
+        Tart.Emacs_source.discover ~explicit_path:emacs_source
+      in
+      match source_result with
+      | Tart.Emacs_source.NotFound _ | Tart.Emacs_source.InvalidPath _ ->
+          prerr_endline (Tart.Emacs_source.format_error source_result);
+          exit 1
+      | Tart.Emacs_source.Found { source_dir; version = detected_version } ->
+          Tart.Log.verbose "Emacs source (explicit): %s" source_dir;
+          Tart.Log.verbose "Detected version: %s" detected_version;
+          (* If --emacs-version also provided, use it for typings selection only.
+             No network call — parse as a plain version string. *)
+          let version_str, version =
+            match emacs_version_raw with
+            | Some raw -> (
+                match Tart.Emacs_version.parse_version raw with
+                | Some v ->
+                    Tart.Log.verbose "Using version override: %s"
+                      (Tart.Emacs_version.version_to_string v);
+                    (Tart.Emacs_version.version_to_string v, v)
+                | None ->
+                    Tart.Log.verbose
+                      "Could not parse version %S, using detected: %s" raw
+                      detected_version;
+                    ( detected_version,
+                      Option.value
+                        (Tart.Emacs_version.parse_version detected_version)
+                        ~default:Tart.Emacs_version.latest ))
+            | None -> (
+                match Tart.Emacs_version.parse_version detected_version with
+                | Some v -> (detected_version, v)
+                | None ->
+                    ( Tart.Emacs_version.version_to_string
+                        Tart.Emacs_version.latest,
+                      Tart.Emacs_version.latest ))
+          in
+          render ~source_dir ~version_str ~version)
+  | None -> (
+      (* No explicit source path — try auto-detection first *)
+      let local_result = Tart.Emacs_source.detect () in
+      match emacs_version_raw with
+      | Some raw -> (
+          (* --emacs-version provided: resolve it *)
+          Tart.Log.verbose "Resolving version specifier: %s" raw;
+          match Tart.Emacs_source.resolve_version raw with
+          | Error err ->
+              prerr_endline (Tart.Emacs_source.format_resolution_error err);
+              exit 2
+          | Ok rv ->
+              Tart.Log.verbose "Resolved version: %s"
+                (Tart.Emacs_source.resolved_version_to_string rv);
+              let version_str, version = version_of_resolved rv in
+              (* R3: If resolved matches locally-detected version, use local *)
+              let use_local =
+                match local_result with
+                | Tart.Emacs_source.Found { source_dir = _; version = detected }
+                  ->
+                    resolved_matches_local rv detected
+                | _ -> false
+              in
+              if use_local then
+                match local_result with
+                | Tart.Emacs_source.Found { source_dir; version = detected } ->
+                    Tart.Log.verbose
+                      "Resolved version matches local Emacs (%s), using local \
+                       source"
+                      detected;
+                    Tart.Log.verbose "Emacs source: %s" source_dir;
+                    render ~source_dir ~version_str ~version
+                | _ -> assert false (* use_local guarantees Found *)
+              else (
+                (* R1: Acquire remote sources *)
+                Tart.Log.verbose "Acquiring Emacs source for %s..."
+                  (Tart.Emacs_source.resolved_version_to_string rv);
+                match Tart.Emacs_source.acquire_source rv with
+                | Error err ->
+                    Printf.eprintf "Error: %s\n"
+                      (Tart.Emacs_source.acquisition_error_to_string err);
+                    exit 1
+                | Ok source_dir ->
+                    Tart.Log.verbose "Emacs source: %s" source_dir;
+                    render ~source_dir ~version_str ~version))
+      | None -> (
+          (* No --emacs-version, no --emacs-source: rely on auto-detection *)
+          match local_result with
+          | Tart.Emacs_source.NotFound _ | Tart.Emacs_source.InvalidPath _ ->
+              (* R4: No Emacs and no --emacs-version → exit 1 *)
+              prerr_endline (Tart.Emacs_source.format_error local_result);
+              Printf.eprintf
+                "\n\
+                 Hint: Use --emacs-version to specify a version, or \
+                 --emacs-source to provide a source directory.\n";
+              exit 1
+          | Tart.Emacs_source.Found { source_dir; version = detected_version }
+            ->
+              Tart.Log.verbose "Emacs source (auto-detected): %s" source_dir;
+              Tart.Log.verbose "Detected version: %s" detected_version;
+              let version_str, version =
+                match Tart.Emacs_version.parse_version detected_version with
+                | Some v -> (detected_version, v)
+                | None ->
+                    Tart.Log.verbose
+                      "Could not parse version, using default: %s"
+                      (Tart.Emacs_version.version_to_string
+                         Tart.Emacs_version.latest);
+                    ( Tart.Emacs_version.version_to_string
+                        Tart.Emacs_version.latest,
+                      Tart.Emacs_version.latest )
+              in
+              render ~source_dir ~version_str ~version))
 
 (* ============================================================================
    Cmdliner Argument Definitions
@@ -1335,6 +1465,15 @@ let emacs_source_arg =
   let doc = "Path to Emacs source directory." in
   Arg.(value & opt (some dir) None & info [ "emacs-source" ] ~docv:"PATH" ~doc)
 
+let emacs_version_raw_arg =
+  let doc =
+    "Emacs version specifier. $(docv) can be a version (e.g., 29, 29.1, \
+     29.1.2), $(b,latest), $(b,dev), or a git SHA (7+ hex chars). When the \
+     version differs from the local Emacs, sources are fetched automatically."
+  in
+  Arg.(
+    value & opt (some string) None & info [ "emacs-version" ] ~docv:"VER" ~doc)
+
 let color_mode_enum =
   Arg.enum [ ("auto", `Auto); ("always", `Always); ("off", `Off) ]
 
@@ -1393,21 +1532,25 @@ let emacs_coverage_cmd =
       `P
         "Scan Emacs C and Elisp source for definitions, then report how many \
          have type signatures in a per-file table.";
+      `P
+        "When $(b,--emacs-version) specifies a version that differs from the \
+         locally-installed Emacs (or no Emacs is installed), sources are \
+         fetched automatically and cached.";
     ]
   in
   let info = Cmd.info "emacs-coverage" ~doc ~man in
-  let run log_level log_format verbose_flag emacs_source emacs_version_opt
+  let run log_level log_format verbose_flag emacs_source emacs_version_raw
       color_mode format sort_column reverse_flag min_pct max_pct positional_args
       =
     setup_logging ~log_level ~log_format ~verbose_flag;
-    run_emacs_coverage emacs_source emacs_version_opt color_mode format
+    run_emacs_coverage emacs_source emacs_version_raw color_mode format
       sort_column reverse_flag min_pct max_pct positional_args
   in
   Cmd.v info
     Term.(
       const run $ log_level_arg $ log_format_arg $ verbose_flag_arg
-      $ emacs_source_arg $ emacs_version_arg $ color_arg $ format_arg $ sort_arg
-      $ reverse_arg $ min_percentage_arg $ max_percentage_arg
+      $ emacs_source_arg $ emacs_version_raw_arg $ color_arg $ format_arg
+      $ sort_arg $ reverse_arg $ min_percentage_arg $ max_percentage_arg
       $ emacs_coverage_positional_arg)
 
 (* ============================================================================
