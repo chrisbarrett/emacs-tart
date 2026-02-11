@@ -1,0 +1,20 @@
+[[repos]]
+repo = "local"
+
+[[repos.hooks]]
+id = "elisp-remove-elc"
+name = "elisp remove elc files"
+files = { glob = "*.el" }
+pass_filenames = false
+entry = "rm -f *.elc"
+
+[[repos.hooks]]
+id = "elisp-byte-compile"
+name = "elisp byte compile"
+files = { glob = "*.el" }
+entry = """
+nix develop -c emacs -Q --batch \
+  --eval "(setq byte-compile-error-on-warn t)" \
+  --directory "/Users/chris/src/chrisbarrett/emacs-tart/lisp/" \
+  -L . -f batch-byte-compile
+"""

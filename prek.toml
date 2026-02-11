@@ -1,0 +1,36 @@
+[[repos]]
+repo = "builtin"
+hooks = {
+  {id = "check-added-large-files"},
+  {id = "check-case-conflict"},
+  {id = "check-json"},
+  {id = "check-merge-conflict"},
+  {id = "check-symlinks"},
+  {id = "fix-byte-order-marker"},
+  {id = "trailing-whitespace"},
+  {id = "end-of-file-fixer"},
+}
+
+[[repos]]
+repo = "local"
+
+[[repos.hooks]]
+id = "dune-build"
+name = "dune build"
+entry = "nix develop -c dune build"
+pass_filenames = false
+files = '\.(ml|mli|mll|mly)$'
+
+[[repos.hooks]]
+id = "dune-test"
+name = "dune test"
+entry = "nix develop -c dune test"
+pass_filenames = false
+files = '\.(ml|mli|mll|mly)$'
+
+[[repos.hooks]]
+id = "dune-fmt"
+name = "dune fmt"
+entry = "nix develop -c dune fmt"
+pass_filenames = false
+files = '\.(ml|mli)$'

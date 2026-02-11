@@ -18,7 +18,24 @@
       let
         pkgs = import nixpkgs {
           inherit system;
-          overlays = [ emacs-overlay.overlays.default ];
+          overlays = [
+            emacs-overlay.overlays.default
+            (_: prev: {
+              prek = prev.prek.overrideAttrs (old: rec {
+                version = "0.3.2";
+                src = prev.fetchFromGitHub {
+                  owner = "j178";
+                  repo = "prek";
+                  rev = "v${version}";
+                  hash = "sha256-LZUwnVXoqwed/lbl6RrtKL6cvmtZ3hqYzuACIxhgGoM=";
+                };
+                cargoDeps = prev.rustPlatform.fetchCargoVendor {
+                  inherit src;
+                  hash = "sha256-Hq3y5GFP5nulEaHNkcOAIqaNAUTDHvXHsKzZN5IFui0=";
+                };
+              });
+            })
+          ];
         };
 
         mkDevShell = emacs: pkgs.mkShell {
