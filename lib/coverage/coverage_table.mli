@@ -49,12 +49,13 @@ val default_sort : file_row list -> file_row list
 
 (** {1 Rendering} *)
 
-val render_table : config:table_config -> file_row list -> string
+val render_table :
+  config:table_config -> emacs_version:string -> file_row list -> string
 (** Render a coverage table in the configured format.
 
     [R1]: Columns are FILENAME, PRIVATE, PUBLIC, COVERAGE. [R3]: Color
     thresholds: green ≥ 95%, yellow ≥ 50%, red < 50%. [R4]: Color controlled by
-    [config.color]. *)
+    [config.color]. In JSON mode, [emacs_version] is included in the output. *)
 
 val render_json : emacs_version:string -> file_row list -> string
 (** Render coverage data as JSON.

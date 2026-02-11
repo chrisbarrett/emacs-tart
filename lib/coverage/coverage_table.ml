@@ -314,9 +314,10 @@ let render_json ~(emacs_version : string) (rows : file_row list) : string =
 (** {1 Table Rendering} *)
 
 (** Render a coverage table in the configured format. *)
-let render_table ~(config : table_config) (rows : file_row list) : string =
+let render_table ~(config : table_config) ~(emacs_version : string)
+    (rows : file_row list) : string =
   match config.format with
   | Human ->
       let use_color = should_color config in
       render_human ~use_color rows
-  | Json -> render_json ~emacs_version:"unknown" rows
+  | Json -> render_json ~emacs_version rows

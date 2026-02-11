@@ -832,8 +832,8 @@ let run_coverage format fail_under exclude paths =
       if percentage < float_of_int threshold then exit 1
   | None -> ()
 
-(** Emacs-coverage subcommand: measure C layer coverage *)
-let run_emacs_coverage emacs_source emacs_version_opt =
+(** Emacs-coverage subcommand: measure C and Elisp layer coverage *)
+let run_emacs_coverage emacs_source emacs_version_opt color_mode format =
   let source_result = Tart.Emacs_source.discover ~explicit_path:emacs_source in
   match source_result with
   | Tart.Emacs_source.NotFound _ | Tart.Emacs_source.InvalidPath _ ->
@@ -877,60 +877,72 @@ let run_emacs_coverage emacs_source emacs_version_opt =
 
       log_typings_loading ~typings_root ~version;
 
+      (* C layer coverage *)
       let src_dir = Filename.concat source_dir "src" in
       let definitions = scan_c_source_verbose ~src_dir in
 
-      let result =
+      let c_result =
         Tart.Emacs_coverage.calculate_coverage ~source_dir
           ~emacs_version:version_str ~typings_root ~version definitions
       in
-      let summary = Tart.Emacs_coverage.summarize result in
-      let percentage = Tart.Emacs_coverage.coverage_percentage summary in
+      let c_summary = Tart.Emacs_coverage.summarize c_result in
+      let c_percentage = Tart.Emacs_coverage.coverage_percentage c_summary in
 
       Tart.Log.verbose "Matching symbols against typings...";
       Tart.Log.verbose "Sample matches:";
-      let covered = Tart.Emacs_coverage.covered_public result in
+      let covered = Tart.Emacs_coverage.covered_public c_result in
       List.iteri
         (fun i (item : Tart.Emacs_coverage.c_coverage_item) ->
           if i < 5 then
             Tart.Log.verbose "  %s: COVERED (%s:%d)" item.definition.name
               item.definition.file item.definition.line)
         covered;
-      let uncovered_items = Tart.Emacs_coverage.uncovered_public result in
+      let uncovered_items = Tart.Emacs_coverage.uncovered_public c_result in
       List.iteri
         (fun i (item : Tart.Emacs_coverage.c_coverage_item) ->
           if i < 5 then Tart.Log.verbose "  %s: UNCOVERED" item.definition.name)
         uncovered_items;
       Tart.Log.verbose "Match complete: %d/%d DEFUNs covered (%.1f%%)"
-        summary.covered_public summary.total_public percentage;
+        c_summary.covered_public c_summary.total_public c_percentage;
 
-      print_endline "=== C Layer Coverage ===";
-      Printf.printf "Emacs source: %s\n" source_dir;
-      Printf.printf "Emacs version: %s\n" version_str;
-      Printf.printf "Files scanned: %d\n" result.files_scanned;
-      Printf.printf "Total public symbols: %d\n" summary.total_public;
-      Printf.printf "Covered: %d (%.1f%%)\n" summary.covered_public percentage;
-      Printf.printf "Uncovered: %d\n" summary.uncovered_public;
-      print_newline ();
+      (* Elisp layer coverage *)
+      Tart.Log.verbose "Scanning Elisp layer...";
+      let elisp_result =
+        Tart.Emacs_coverage.calculate_elisp_coverage ~source_dir
+          ~emacs_version:version_str ~typings_root ~version
+      in
+      let elisp_summary = Tart.Emacs_coverage.elisp_summarize elisp_result in
+      let elisp_percentage =
+        Tart.Emacs_coverage.elisp_coverage_percentage elisp_summary
+      in
+      Tart.Log.verbose "Elisp layer: %d/%d covered (%.1f%%)"
+        elisp_summary.elisp_covered_public elisp_summary.elisp_total_public
+        elisp_percentage;
 
-      let private_defs = Tart.Emacs_coverage.private_definitions result in
-      if private_defs <> [] then (
-        Printf.printf "Private symbols excluded: %d\n" summary.total_private;
-        List.iter
-          (fun (item : Tart.Emacs_coverage.c_coverage_item) ->
-            Printf.printf "  %s\n" item.definition.name)
-          (List.filteri (fun i _ -> i < 10) private_defs);
-        if List.length private_defs > 10 then
-          Printf.printf "  ... and %d more\n" (List.length private_defs - 10);
-        print_newline ());
+      (* Build file_row list from both layers *)
+      let c_rows = Tart.Coverage_table.rows_of_c_result c_result in
+      let elisp_rows = Tart.Coverage_table.rows_of_elisp_result elisp_result in
+      let rows = Tart.Coverage_table.default_sort (c_rows @ elisp_rows) in
 
-      let uncovered = Tart.Emacs_coverage.uncovered_public result in
-      if uncovered <> [] then (
-        print_endline "Uncovered public:";
-        List.iter
-          (fun (item : Tart.Emacs_coverage.c_coverage_item) ->
-            Printf.printf "  %s\n" item.definition.name)
-          uncovered)
+      (* Render output *)
+      let table_color =
+        match color_mode with
+        | `Auto -> Tart.Coverage_table.Auto
+        | `Always -> Tart.Coverage_table.Always
+        | `Off -> Tart.Coverage_table.Off
+      in
+      let table_format =
+        match format with
+        | Human -> Tart.Coverage_table.Human
+        | Json -> Tart.Coverage_table.Json
+      in
+      let config =
+        Tart.Coverage_table.{ color = table_color; format = table_format }
+      in
+      print_string
+        (Tart.Coverage_table.render_table ~config ~emacs_version:version_str
+           rows);
+      if table_format = Tart.Coverage_table.Human then print_newline ()
 
 (* ============================================================================
    Cmdliner Argument Definitions
@@ -1222,25 +1234,36 @@ let emacs_source_arg =
   let doc = "Path to Emacs source directory." in
   Arg.(value & opt (some dir) None & info [ "emacs-source" ] ~docv:"PATH" ~doc)
 
+let color_mode_enum =
+  Arg.enum [ ("auto", `Auto); ("always", `Always); ("off", `Off) ]
+
+let color_arg =
+  let doc =
+    "Color output mode. $(docv) is $(b,auto) (default), $(b,always), or \
+     $(b,off)."
+  in
+  Arg.(value & opt color_mode_enum `Auto & info [ "color" ] ~docv:"MODE" ~doc)
+
 let emacs_coverage_cmd =
-  let doc = "Measure Emacs C layer type coverage" in
+  let doc = "Measure Emacs C and Elisp layer type coverage" in
   let man =
     [
       `S Manpage.s_description;
       `P
-        "Scan Emacs C source for DEFUN, DEFVAR, and DEFSYM declarations, then \
-         report how many have type signatures.";
+        "Scan Emacs C and Elisp source for definitions, then report how many \
+         have type signatures in a per-file table.";
     ]
   in
   let info = Cmd.info "emacs-coverage" ~doc ~man in
-  let run log_level log_format verbose_flag emacs_source emacs_version_opt =
+  let run log_level log_format verbose_flag emacs_source emacs_version_opt
+      color_mode format =
     setup_logging ~log_level ~log_format ~verbose_flag;
-    run_emacs_coverage emacs_source emacs_version_opt
+    run_emacs_coverage emacs_source emacs_version_opt color_mode format
   in
   Cmd.v info
     Term.(
       const run $ log_level_arg $ log_format_arg $ verbose_flag_arg
-      $ emacs_source_arg $ emacs_version_arg)
+      $ emacs_source_arg $ emacs_version_arg $ color_arg $ format_arg)
 
 (* ============================================================================
    Corpus Subcommands

@@ -35,7 +35,9 @@ let make_row ?(private_count = 0) ?(uncovered_names = []) filename
 
 let test_table_header () =
   let rows = [ make_row "alloc.c" 30 45 ] in
-  let output = render_table ~config:no_color_config rows in
+  let output =
+    render_table ~config:no_color_config ~emacs_version:"31.0" rows
+  in
   Alcotest.(check bool)
     "has FILENAME header" true
     (contains ~sub:"FILENAME" output);
@@ -49,7 +51,9 @@ let test_table_header () =
 
 let test_table_data_row () =
   let rows = [ make_row ~private_count:5 "alloc.c" 30 45 ] in
-  let output = render_table ~config:no_color_config rows in
+  let output =
+    render_table ~config:no_color_config ~emacs_version:"31.0" rows
+  in
   Alcotest.(check bool) "has filename" true (contains ~sub:"alloc.c" output);
   Alcotest.(check bool) "has private count" true (contains ~sub:"5" output);
   Alcotest.(check bool) "has public ratio" true (contains ~sub:"30/45" output);
@@ -62,7 +66,9 @@ let test_table_multiple_rows () =
       make_row ~private_count:0 "data.c" 3 6;
     ]
   in
-  let output = render_table ~config:no_color_config rows in
+  let output =
+    render_table ~config:no_color_config ~emacs_version:"31.0" rows
+  in
   Alcotest.(check bool) "has first file" true (contains ~sub:"alloc.c" output);
   Alcotest.(check bool) "has second file" true (contains ~sub:"data.c" output);
   Alcotest.(check bool) "has 100%" true (contains ~sub:"100.0%" output);
@@ -75,7 +81,9 @@ let test_table_alignment () =
       make_row ~private_count:0 "x.c" 1 2;
     ]
   in
-  let output = render_table ~config:no_color_config rows in
+  let output =
+    render_table ~config:no_color_config ~emacs_version:"31.0" rows
+  in
   let lines = String.split_on_char '\n' output in
   (* All lines should have the same visible width *)
   match lines with
@@ -87,7 +95,7 @@ let test_table_alignment () =
   | _ -> Alcotest.fail "expected at least 3 lines"
 
 let test_empty_table () =
-  let output = render_table ~config:no_color_config [] in
+  let output = render_table ~config:no_color_config ~emacs_version:"31.0" [] in
   Alcotest.(check bool) "has headers" true (contains ~sub:"FILENAME" output);
   let lines = String.split_on_char '\n' output in
   Alcotest.(check int) "only header line" 1 (List.length lines)
@@ -96,42 +104,44 @@ let test_empty_table () =
 
 let test_color_green () =
   let rows = [ make_row "alloc.c" 100 100 ] in
-  let output = render_table ~config:color_config rows in
+  let output = render_table ~config:color_config ~emacs_version:"31.0" rows in
   (* Green ANSI code: \027[32m *)
   Alcotest.(check bool) "has green" true (contains ~sub:"\027[32m" output);
   Alcotest.(check bool) "has reset" true (contains ~sub:"\027[0m" output)
 
 let test_color_yellow () =
   let rows = [ make_row "alloc.c" 50 100 ] in
-  let output = render_table ~config:color_config rows in
+  let output = render_table ~config:color_config ~emacs_version:"31.0" rows in
   Alcotest.(check bool) "has yellow" true (contains ~sub:"\027[33m" output)
 
 let test_color_red () =
   let rows = [ make_row "alloc.c" 10 100 ] in
-  let output = render_table ~config:color_config rows in
+  let output = render_table ~config:color_config ~emacs_version:"31.0" rows in
   Alcotest.(check bool) "has red" true (contains ~sub:"\027[31m" output)
 
 let test_no_color () =
   let rows = [ make_row "alloc.c" 10 100 ] in
-  let output = render_table ~config:no_color_config rows in
+  let output =
+    render_table ~config:no_color_config ~emacs_version:"31.0" rows
+  in
   Alcotest.(check bool) "no ANSI codes" false (contains ~sub:"\027[" output)
 
 let test_color_threshold_boundary_95 () =
   (* Exactly 95% → green *)
   let rows = [ make_row "x.c" 95 100 ] in
-  let output = render_table ~config:color_config rows in
+  let output = render_table ~config:color_config ~emacs_version:"31.0" rows in
   Alcotest.(check bool) "95% is green" true (contains ~sub:"\027[32m" output)
 
 let test_color_threshold_boundary_50 () =
   (* Exactly 50% → yellow *)
   let rows = [ make_row "x.c" 50 100 ] in
-  let output = render_table ~config:color_config rows in
+  let output = render_table ~config:color_config ~emacs_version:"31.0" rows in
   Alcotest.(check bool) "50% is yellow" true (contains ~sub:"\027[33m" output)
 
 let test_color_threshold_boundary_49 () =
   (* 49% → red *)
   let rows = [ make_row "x.c" 49 100 ] in
-  let output = render_table ~config:color_config rows in
+  let output = render_table ~config:color_config ~emacs_version:"31.0" rows in
   Alcotest.(check bool) "49% is red" true (contains ~sub:"\027[31m" output)
 
 (** {1 Sort Tests} *)
