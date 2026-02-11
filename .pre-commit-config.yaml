@@ -1,4 +1,15 @@
 repos:
+  - repo: builtin
+    hooks:
+      - id: check-added-large-files
+      - id: check-case-conflict
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-symlinks
+      - id: fix-byte-order-marker
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+
   - repo: local
     hooks:
       - id: dune-build
