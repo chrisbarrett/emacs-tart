@@ -75,6 +75,7 @@ module Coverage_report = Coverage.Coverage_report
 module Report_format = Coverage.Report_format
 module Emacs_source = Coverage.Emacs_source
 module C_scanner = Coverage.C_scanner
+module Coverage_table = Coverage.Coverage_table
 module Emacs_coverage = Coverage.Emacs_coverage
 
 module Emacs_reader = Oracle.Emacs_reader

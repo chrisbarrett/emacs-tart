@@ -1,4 +1,4 @@
 (library
  (name coverage)
  (public_name tart.coverage)
- (libraries syntax str core sig tart_log))
+ (libraries syntax str core sig tart_log unix))
