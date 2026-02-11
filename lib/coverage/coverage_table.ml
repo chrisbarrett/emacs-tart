@@ -177,6 +177,84 @@ let rows_of_elisp_result (result : Emacs_coverage.elisp_coverage_result) :
       })
     result.file_results
 
+(** Build table rows from package coverage results, one row per [.el] file. *)
+let rows_of_coverage_result (result : Coverage_report.coverage_result) :
+    file_row list =
+  let tbl : (string, Coverage_report.coverage_item list) Hashtbl.t =
+    Hashtbl.create 16
+  in
+  List.iter
+    (fun (item : Coverage_report.coverage_item) ->
+      let file = Filename.basename item.source_file in
+      let prev =
+        match Hashtbl.find_opt tbl file with Some l -> l | None -> []
+      in
+      Hashtbl.replace tbl file (item :: prev))
+    result.items;
+  Hashtbl.fold
+    (fun filename items acc ->
+      let private_count =
+        List.length
+          (List.filter
+             (fun (i : Coverage_report.coverage_item) ->
+               i.definition.is_private)
+             items)
+      in
+      let public_items =
+        List.filter
+          (fun (i : Coverage_report.coverage_item) ->
+            not i.definition.is_private)
+          items
+      in
+      let public_total = List.length public_items in
+      let public_covered =
+        List.length
+          (List.filter
+             (fun (i : Coverage_report.coverage_item) ->
+               i.status = Coverage_report.Covered)
+             public_items)
+      in
+      let coverage_pct =
+        if public_total = 0 then 100.0
+        else float_of_int public_covered /. float_of_int public_total *. 100.0
+      in
+      let uncovered_items =
+        public_items
+        |> List.filter (fun (i : Coverage_report.coverage_item) ->
+            i.status = Coverage_report.Uncovered)
+      in
+      let uncovered_names =
+        uncovered_items
+        |> List.map (fun (i : Coverage_report.coverage_item) ->
+            i.definition.name)
+        |> List.sort String.compare
+      in
+      let uncovered_details =
+        uncovered_items
+        |> List.map (fun (i : Coverage_report.coverage_item) ->
+            let pos = i.definition.span.start_pos in
+            {
+              file = Filename.basename i.source_file;
+              line = pos.line;
+              col = pos.col;
+              identifier = i.definition.name;
+            })
+        |> List.sort (fun a b ->
+            let c = String.compare a.file b.file in
+            if c <> 0 then c else compare a.line b.line)
+      in
+      {
+        filename;
+        private_count;
+        public_covered;
+        public_total;
+        coverage_pct;
+        uncovered_names;
+        uncovered_details;
+      }
+      :: acc)
+    tbl []
+
 (** {1 Sorting} *)
 
 (** File extension for sorting: [.c] sorts before [.el]. *)

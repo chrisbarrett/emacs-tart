@@ -58,6 +58,9 @@ val rows_of_elisp_result : Emacs_coverage.elisp_coverage_result -> file_row list
 (** Build table rows from Elisp layer coverage results, one row per [.el] file.
 *)
 
+val rows_of_coverage_result : Coverage_report.coverage_result -> file_row list
+(** Build table rows from package coverage results, one row per [.el] file. *)
+
 (** {1 Sorting} *)
 
 val default_sort : file_row list -> file_row list

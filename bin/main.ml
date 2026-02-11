@@ -800,7 +800,8 @@ let run_lsp port =
       exit exit_code
 
 (** Coverage subcommand: measure type coverage *)
-let run_coverage format fail_under exclude paths =
+let run_coverage color_mode format sort_column reverse_flag min_pct max_pct
+    fail_under exclude paths =
   let config = { Tart.File_scanner.exclude_patterns = exclude } in
   let files = Tart.File_scanner.scan_paths ~config paths in
   if files = [] then (
@@ -818,13 +819,42 @@ let run_coverage format fail_under exclude paths =
   let result = Tart.Coverage_report.analyze_files ~search_path files in
   let summary = Tart.Coverage_report.summarize result in
 
-  let verbose =
-    match Tart.Log.level () with
-    | Tart.Log.Verbose | Tart.Log.Debug -> true
-    | _ -> false
+  (* Build per-file rows from coverage result *)
+  let rows = Tart.Coverage_table.rows_of_coverage_result result in
+
+  (* Sort *)
+  let rows =
+    Tart.Coverage_table.sort_rows ~column:sort_column ~reverse:reverse_flag rows
   in
-  let output_config = { Tart.Report_format.format; verbose } in
-  print_endline (Tart.Report_format.format_report ~config:output_config result);
+
+  (* Filter by percentage *)
+  let rows = Tart.Coverage_table.filter_rows ?min_pct ?max_pct rows in
+
+  (* Render output — always drill-down for package coverage (Spec 98 R1) *)
+  let table_color =
+    match color_mode with
+    | `Auto -> Tart.Coverage_table.Auto
+    | `Always -> Tart.Coverage_table.Always
+    | `Off -> Tart.Coverage_table.Off
+  in
+  let table_format =
+    match format with
+    | `Human -> Tart.Coverage_table.Human
+    | `Json -> Tart.Coverage_table.Json
+  in
+  let table_config =
+    Tart.Coverage_table.{ color = table_color; format = table_format }
+  in
+  let emacs_version = Tart.Emacs_version.version_to_string version in
+  (match table_format with
+  | Tart.Coverage_table.Human ->
+      print_string
+        (Tart.Coverage_table.render_drilldown_human ~config:table_config
+           ~emacs_version rows);
+      print_newline ()
+  | Tart.Coverage_table.Json ->
+      print_string
+        (Tart.Coverage_table.render_drilldown_json ~emacs_version rows));
 
   match fail_under with
   | Some threshold ->
@@ -1195,15 +1225,13 @@ let lsp_cmd =
       $ lsp_port_arg)
 
 (* Coverage subcommand *)
-let coverage_format_enum =
-  Arg.enum
-    [ ("human", Tart.Report_format.Human); ("json", Tart.Report_format.Json) ]
+let coverage_format_enum = Arg.enum [ ("human", `Human); ("json", `Json) ]
 
 let coverage_format_arg =
   let doc = "Output format. $(docv) is either 'human' or 'json'." in
   Arg.(
     value
-    & opt coverage_format_enum Tart.Report_format.Human
+    & opt coverage_format_enum `Human
     & info [ "format" ] ~docv:"FORMAT" ~doc)
 
 let coverage_fail_under_conv =
@@ -1234,6 +1262,49 @@ let coverage_paths_arg =
   let doc = "Paths to scan for .el files (default: current directory)." in
   Arg.(value & pos_all string [ "." ] & info [] ~docv:"PATH" ~doc)
 
+let coverage_color_arg =
+  let doc =
+    "Color output mode. $(docv) is $(b,auto) (default), $(b,always), or \
+     $(b,off)."
+  in
+  Arg.(
+    value
+    & opt
+        (Arg.enum [ ("auto", `Auto); ("always", `Always); ("off", `Off) ])
+        `Auto
+    & info [ "color" ] ~docv:"MODE" ~doc)
+
+let coverage_sort_arg =
+  let doc =
+    "Sort by column. $(docv) is $(b,default), $(b,name), $(b,coverage), \
+     $(b,public), or $(b,private). Bare --sort implies coverage."
+  in
+  Arg.(
+    value
+    & opt ~vopt:Tart.Coverage_table.Coverage
+        (Arg.enum
+           [
+             ("default", Tart.Coverage_table.Default);
+             ("name", Tart.Coverage_table.Name);
+             ("coverage", Tart.Coverage_table.Coverage);
+             ("public", Tart.Coverage_table.Public);
+             ("private", Tart.Coverage_table.Private);
+           ])
+        Tart.Coverage_table.Default
+    & info [ "sort" ] ~docv:"COLUMN" ~doc)
+
+let coverage_reverse_arg =
+  let doc = "Reverse the sort order." in
+  Arg.(value & flag & info [ "reverse" ] ~doc)
+
+let coverage_min_percentage_arg =
+  let doc = "Only show files with coverage >= $(docv)%." in
+  Arg.(value & opt (some float) None & info [ "min-percentage" ] ~docv:"N" ~doc)
+
+let coverage_max_percentage_arg =
+  let doc = "Only show files with coverage <= $(docv)%." in
+  Arg.(value & opt (some float) None & info [ "max-percentage" ] ~docv:"M" ~doc)
+
 let coverage_cmd =
   let doc = "Measure type signature coverage" in
   let man =
@@ -1241,19 +1312,23 @@ let coverage_cmd =
       `S Manpage.s_description;
       `P
         "Scan Elisp files and report what percentage of definitions have type \
-         signatures.";
+         signatures in a per-file table with drill-down.";
     ]
   in
   let info = Cmd.info "coverage" ~doc ~man in
-  let run log_level log_format verbose_flag format fail_under exclude paths =
+  let run log_level log_format verbose_flag color_mode format sort_column
+      reverse_flag min_pct max_pct fail_under exclude paths =
     setup_logging ~log_level ~log_format ~verbose_flag;
-    run_coverage format fail_under exclude paths
+    run_coverage color_mode format sort_column reverse_flag min_pct max_pct
+      fail_under exclude paths
   in
   Cmd.v info
     Term.(
       const run $ log_level_arg $ log_format_arg $ verbose_flag_arg
-      $ coverage_format_arg $ coverage_fail_under_arg $ coverage_exclude_arg
-      $ coverage_paths_arg)
+      $ coverage_color_arg $ coverage_format_arg $ coverage_sort_arg
+      $ coverage_reverse_arg $ coverage_min_percentage_arg
+      $ coverage_max_percentage_arg $ coverage_fail_under_arg
+      $ coverage_exclude_arg $ coverage_paths_arg)
 
 (* Emacs-coverage subcommand *)
 let emacs_source_arg =

@@ -2,6 +2,7 @@
 
 open Coverage.Coverage_table
 module Emacs_coverage = Coverage.Emacs_coverage
+module Coverage_report = Coverage.Coverage_report
 module C_scanner = Coverage.C_scanner
 module Definition_extractor = Coverage.Definition_extractor
 
@@ -653,6 +654,115 @@ let test_drilldown_human_sorted_by_file_line () =
     "third is buffer:50" true
     (contains ~sub:"buffer.c:50:0: zeta" third)
 
+(** {1 Package Coverage Row Construction Tests} *)
+
+let dummy_span file line : Syntax.Location.span =
+  let pos = { Syntax.Location.file; line; col = 0; offset = 0 } in
+  { start_pos = pos; end_pos = pos }
+
+let make_coverage_item ?(is_private = false) name kind status source_file line =
+  Coverage_report.
+    {
+      definition =
+        {
+          Definition_extractor.name;
+          kind;
+          span = dummy_span source_file line;
+          is_private;
+        };
+      source_file;
+      status;
+    }
+
+let test_rows_of_coverage_result_basic () =
+  let items =
+    [
+      make_coverage_item "my-func" Definition_extractor.Function
+        Coverage_report.Covered "/path/to/foo.el" 10;
+      make_coverage_item "other-func" Definition_extractor.Function
+        Coverage_report.Uncovered "/path/to/foo.el" 20;
+      make_coverage_item "my--private" Definition_extractor.Function
+        Coverage_report.Uncovered "/path/to/foo.el" 30 ~is_private:true;
+    ]
+  in
+  let result : Coverage_report.coverage_result = { items; files_scanned = 1 } in
+  let rows = rows_of_coverage_result result in
+  Alcotest.(check int) "one row per file" 1 (List.length rows);
+  let row = List.hd rows in
+  Alcotest.(check string) "filename" "foo.el" row.filename;
+  Alcotest.(check int) "private" 1 row.private_count;
+  Alcotest.(check int) "public covered" 1 row.public_covered;
+  Alcotest.(check int) "public total" 2 row.public_total;
+  Alcotest.(check (list string))
+    "uncovered names" [ "other-func" ] row.uncovered_names
+
+let test_rows_of_coverage_result_multiple_files () =
+  let items =
+    [
+      make_coverage_item "func-a" Definition_extractor.Function
+        Coverage_report.Covered "/path/to/alpha.el" 1;
+      make_coverage_item "func-b" Definition_extractor.Function
+        Coverage_report.Uncovered "/path/to/beta.el" 1;
+      make_coverage_item "func-c" Definition_extractor.Function
+        Coverage_report.Covered "/path/to/beta.el" 5;
+    ]
+  in
+  let result : Coverage_report.coverage_result = { items; files_scanned = 2 } in
+  let rows =
+    rows_of_coverage_result result
+    |> List.sort (fun a b -> String.compare a.filename b.filename)
+  in
+  Alcotest.(check int) "two rows" 2 (List.length rows);
+  let alpha = List.hd rows in
+  let beta = List.nth rows 1 in
+  Alcotest.(check string) "alpha filename" "alpha.el" alpha.filename;
+  Alcotest.(check int) "alpha covered" 1 alpha.public_covered;
+  Alcotest.(check int) "alpha total" 1 alpha.public_total;
+  Alcotest.(check string) "beta filename" "beta.el" beta.filename;
+  Alcotest.(check int) "beta covered" 1 beta.public_covered;
+  Alcotest.(check int) "beta total" 2 beta.public_total
+
+let test_rows_of_coverage_result_uncovered_details () =
+  let items =
+    [
+      make_coverage_item "missing-fn" Definition_extractor.Function
+        Coverage_report.Uncovered "/path/to/bar.el" 42;
+    ]
+  in
+  let result : Coverage_report.coverage_result = { items; files_scanned = 1 } in
+  let rows = rows_of_coverage_result result in
+  Alcotest.(check int) "one row" 1 (List.length rows);
+  let row = List.hd rows in
+  Alcotest.(check int) "one detail" 1 (List.length row.uncovered_details);
+  let detail = List.hd row.uncovered_details in
+  Alcotest.(check string) "detail file" "bar.el" detail.file;
+  Alcotest.(check int) "detail line" 42 detail.line;
+  Alcotest.(check string) "detail identifier" "missing-fn" detail.identifier
+
+let test_rows_of_coverage_result_all_covered () =
+  let items =
+    [
+      make_coverage_item "ok-fn" Definition_extractor.Function
+        Coverage_report.Covered "/path/to/good.el" 1;
+    ]
+  in
+  let result : Coverage_report.coverage_result = { items; files_scanned = 1 } in
+  let rows = rows_of_coverage_result result in
+  let row = List.hd rows in
+  Alcotest.(check int) "covered" 1 row.public_covered;
+  Alcotest.(check int) "total" 1 row.public_total;
+  let expected_pct = 100.0 in
+  Alcotest.(check (float 0.1)) "100% coverage" expected_pct row.coverage_pct;
+  Alcotest.(check (list string)) "no uncovered" [] row.uncovered_names;
+  Alcotest.(check int) "no details" 0 (List.length row.uncovered_details)
+
+let test_rows_of_coverage_result_empty () =
+  let result : Coverage_report.coverage_result =
+    { items = []; files_scanned = 0 }
+  in
+  let rows = rows_of_coverage_result result in
+  Alcotest.(check int) "no rows" 0 (List.length rows)
+
 (** {1 Test Suites} *)
 
 let alignment_tests =
@@ -735,6 +845,19 @@ let row_construction_tests =
     Alcotest.test_case "Elisp result rows" `Quick test_rows_of_elisp_result;
   ]
 
+let package_coverage_tests =
+  [
+    Alcotest.test_case "basic row construction" `Quick
+      test_rows_of_coverage_result_basic;
+    Alcotest.test_case "multiple files" `Quick
+      test_rows_of_coverage_result_multiple_files;
+    Alcotest.test_case "uncovered details" `Quick
+      test_rows_of_coverage_result_uncovered_details;
+    Alcotest.test_case "all covered" `Quick
+      test_rows_of_coverage_result_all_covered;
+    Alcotest.test_case "empty result" `Quick test_rows_of_coverage_result_empty;
+  ]
+
 let () =
   Alcotest.run "coverage_table"
     [
@@ -746,4 +869,5 @@ let () =
       ("json", json_tests);
       ("drilldown", drilldown_tests);
       ("row-construction", row_construction_tests);
+      ("package-coverage", package_coverage_tests);
     ]
