@@ -52,6 +52,9 @@
             # Project tools
             asciidoctor
             prek
+
+            # Convenience alias
+            (pkgs.writeShellScriptBin "tart" ''dune exec tart -- "$@"'')
           ]);
 
           shellHook = ''
