@@ -53,7 +53,8 @@ let matches_exclude ~(patterns : string list) (filename : string) : bool =
 (** {1 File Discovery} *)
 
 (** Check if a file is an Emacs Lisp source file. *)
-let is_elisp_file (path : string) : bool = Filename.check_suffix path ".el"
+let is_elisp_file (path : string) : bool =
+  Filename.check_suffix path ".el" && Filename.basename path <> ".dir-locals.el"
 
 (** List all .el files in a directory recursively. *)
 let rec scan_directory ~(config : scan_config) (dir : string) : string list =

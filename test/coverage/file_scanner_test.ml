@@ -42,6 +42,16 @@ let test_is_elisp_file_with_path () =
     ".el file with path" true
     (is_elisp_file "/path/to/foo.el")
 
+let test_is_elisp_file_dir_locals () =
+  Alcotest.(check bool)
+    ".dir-locals.el excluded" false
+    (is_elisp_file ".dir-locals.el")
+
+let test_is_elisp_file_dir_locals_with_path () =
+  Alcotest.(check bool)
+    ".dir-locals.el with path excluded" false
+    (is_elisp_file "/path/to/.dir-locals.el")
+
 (** {1 Directory Scanning} *)
 
 let test_scan_paths_empty_returns_cwd () =
@@ -89,6 +99,10 @@ let file_type_tests =
     Alcotest.test_case "is elisp true" `Quick test_is_elisp_file_true;
     Alcotest.test_case "is elisp false" `Quick test_is_elisp_file_false;
     Alcotest.test_case "is elisp with path" `Quick test_is_elisp_file_with_path;
+    Alcotest.test_case "dir-locals excluded" `Quick
+      test_is_elisp_file_dir_locals;
+    Alcotest.test_case "dir-locals with path excluded" `Quick
+      test_is_elisp_file_dir_locals_with_path;
   ]
 
 let scanning_tests =

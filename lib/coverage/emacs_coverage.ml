@@ -197,7 +197,7 @@ let scan_elisp_files (source_dir : string) :
   else
     let files = Sys.readdir lisp_dir in
     files |> Array.to_list
-    |> List.filter (fun f -> Filename.check_suffix f ".el")
+    |> List.filter File_scanner.is_elisp_file
     |> List.sort String.compare
     |> List.filter_map (fun f ->
         let path = Filename.concat lisp_dir f in
