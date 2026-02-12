@@ -93,7 +93,7 @@
 
 (ert-deftest tart-test-skip-unless-version-expands ()
   "The `tart-test-skip-unless-version' macro should expand to a version check."
-  (let ((expansion (macroexpand '(tart-test-skip-unless-version 29))))
+  (let ((expansion (macroexpand-1 '(tart-test-skip-unless-version 29))))
     (should (equal expansion
                    '(when (< emacs-major-version 29)
                       (ert-skip (format "Requires Emacs %d+" 29)))))))

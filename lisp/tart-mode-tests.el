@@ -65,6 +65,8 @@
   "Installed versions lists installed binaries."
   (let* ((temp-dir (make-temp-file "emacs-test" t))
          (user-emacs-directory temp-dir)
+         (tart-directory-style 'emacs)
+         (tart-install-directory 'default)
          (bin-dir (expand-file-name "tart/bin/" temp-dir)))
     (unwind-protect
         (progn
@@ -135,6 +137,8 @@
   "Binary available returns t when binary exists."
   (let* ((temp-dir (make-temp-file "emacs-test" t))
          (user-emacs-directory temp-dir)
+         (tart-directory-style 'emacs)
+         (tart-install-directory 'default)
          (bin-dir (expand-file-name "tart/bin/" temp-dir))
          (binary (expand-file-name "tart-0.1.0" bin-dir))
          (tart-executable 'managed)

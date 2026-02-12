@@ -683,11 +683,15 @@ searches `exec-path' for relative paths."
 
 (defvar url-http-end-of-headers)  ; defined by url.el
 
+(defun tart--github-api-url (endpoint)
+  "Return the GitHub API URL for ENDPOINT."
+  (format "https://api.github.com/repos/%s/%s" tart--github-repo endpoint))
+
 (defun tart--github-request (endpoint callback)
   "Make async GitHub API request to ENDPOINT, calling CALLBACK with parsed JSON.
 CALLBACK receives two arguments: the parsed JSON on success, or nil and an
 error message string on failure."
-  (let ((url (format "https://api.github.com/repos/%s/%s" tart--github-repo endpoint))
+  (let ((url (tart--github-api-url endpoint))
         (url-request-extra-headers '(("Accept" . "application/vnd.github+json")
                                      ("X-GitHub-Api-Version" . "2022-11-28"))))
     (url-retrieve
